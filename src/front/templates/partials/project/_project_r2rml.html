@@ -1,0 +1,26 @@
+<!-- JS: /static/project/js/project-r2rml.js -->
+<!-- R2RML Section -->
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-link-45deg me-2"></i>R2RML Mapping (Turtle Format)</h4>
+        <p class="text-muted mb-0 small">Auto-generated R2RML from entity and relationship mappings</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="copyR2RMLBtn">
+            <i class="bi bi-clipboard me-1"></i> Copy
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="downloadR2RMLBtn">
+            <i class="bi bi-download me-1"></i> Download
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="regenerateR2RMLBtn" title="Regenerate R2RML from current mappings">
+            <i class="bi bi-arrow-clockwise me-1"></i> Regenerate
+        </button>
+    </div>
+</div>
+<div class="card h-100">
+    <div class="card-body d-flex flex-column">
+        <textarea class="form-control font-monospace flex-grow-1" id="r2rmlPreview" readonly 
+                  style="min-height: 400px; background-color: #1e1e1e; color: #d4d4d4; font-size: 12px;"
+                  placeholder="R2RML mapping will be generated automatically when you have entity and relationship mappings configured..."></textarea>
+    </div>
+</div>

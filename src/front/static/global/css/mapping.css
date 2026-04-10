@@ -1,0 +1,801 @@
+/* ==========================================================================
+   Mapping Page Specific Styles
+   ========================================================================== */
+
+/* ==========================================================================
+   Design Section - Full Height Canvas (for Mapping Visual Designer)
+   ========================================================================== */
+
+/* Make design section content fill available height */
+.sidebar-content:has(#design-section.active) {
+    overflow: hidden;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+}
+
+#design-section.active {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
+}
+
+#design-section .content-section {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+}
+
+#design-section .section-header {
+    flex-shrink: 0;
+    margin-bottom: 0.5rem;
+}
+
+/* Designer canvas container with sliding panel */
+.mapping-designer-container {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    gap: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Designer Loading Overlay */
+.mapping-designer-container .designer-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(248, 249, 250, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    border-radius: 8px;
+}
+
+
+/* Designer canvas - Designer card takes available space, shrinks when panel opens */
+#mappingMapCard {
+    flex: 1;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    transition: flex 0.2s ease-out;
+}
+
+/* When panel is open, map takes less space */
+.mapping-designer-container.panel-open #mappingMapCard {
+    flex: 0.55;
+}
+
+/* Legacy canvas ID support */
+#mapping-designer-canvas {
+    flex: 1;
+    min-height: 200px;
+    height: 100% !important;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+}
+
+/* ==========================================================================
+   Mapping Bottom Panel (Sliding Panel for Entity/Relationship Mapping)
+   ========================================================================== */
+.mapping-right-panel {
+    position: relative;
+    width: 100%;
+    height: 0;
+    min-height: 0;
+    background: #fff;
+    border-top: 1px solid #dee2e6;
+    overflow: hidden;
+    transition: height 0.2s ease-out, min-height 0.2s ease-out, flex 0.2s ease-out;
+    display: flex;
+    flex-direction: row; /* Horizontal layout for bottom panel */
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+    flex-shrink: 0;
+}
+
+.mapping-designer-container.panel-open .mapping-right-panel {
+    flex: 0.45;
+    height: auto;
+    min-height: 280px;
+    max-height: 50%;
+}
+
+/* ==========================================================================
+   Shared Panel Styles (Designer bottom panel + Manual bottom panel)
+   ========================================================================== */
+
+/* Panel Header - Left sidebar in bottom panel */
+.mapping-right-panel .panel-header,
+.manual-bottom-panel .panel-header {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background: #f8f9fa;
+    border-right: 1px solid #dee2e6;
+    flex-shrink: 0;
+    width: auto;
+    min-width: 50px;
+}
+
+.mapping-right-panel .panel-header h6,
+.manual-bottom-panel .panel-header h6 {
+    margin: 0;
+    font-size: 0.85rem;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0.5rem 0;
+}
+
+.mapping-right-panel .panel-close-btn,
+.manual-bottom-panel .panel-close-btn {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.8rem;
+    line-height: 1;
+}
+
+/* Close button positioned at top-right corner of the panel */
+.mapping-right-panel .panel-close-btn-corner,
+.manual-bottom-panel .panel-close-btn-corner {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 10;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    line-height: 1;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    opacity: 0.8;
+    transition: opacity 0.15s;
+}
+
+.mapping-right-panel .panel-close-btn-corner:hover,
+.manual-bottom-panel .panel-close-btn-corner:hover {
+    opacity: 1;
+    background: #f8f9fa;
+}
+
+/* Panel Body - Main content area */
+.mapping-right-panel .panel-body,
+.manual-bottom-panel .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0.75rem;
+}
+
+/* Panel Footer - Right sidebar in bottom panel */
+.mapping-right-panel .panel-footer,
+.manual-bottom-panel .panel-footer {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: #f8f9fa;
+    border-left: 1px solid #dee2e6;
+    flex-shrink: 0;
+    min-width: 80px;
+}
+
+.mapping-right-panel .panel-footer .d-flex,
+.manual-bottom-panel .panel-footer .d-flex {
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Panel Action Buttons - Uniform sizing */
+.panel-action-btn {
+    min-width: 105px;
+    text-align: center;
+    white-space: nowrap;
+    justify-content: center;
+}
+
+/* Panel Tabs */
+.mapping-right-panel .panel-tabs,
+.manual-bottom-panel .panel-tabs {
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem 0;
+    flex-shrink: 0;
+}
+
+.mapping-right-panel .panel-tabs .nav-item,
+.manual-bottom-panel .panel-tabs .nav-item {
+    margin: 0;
+}
+
+.mapping-right-panel .panel-tabs .nav-link,
+.manual-bottom-panel .panel-tabs .nav-link {
+    border: 1px solid transparent;
+    border-radius: 0.375rem 0.375rem 0 0;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.75rem;
+    color: #6c757d;
+    background: transparent;
+    transition: all 0.15s ease;
+}
+
+.mapping-right-panel .panel-tabs .nav-link:hover:not(:disabled),
+.manual-bottom-panel .panel-tabs .nav-link:hover:not(:disabled) {
+    color: #495057;
+    background: #e9ecef;
+    border-color: #dee2e6 #dee2e6 transparent;
+}
+
+.mapping-right-panel .panel-tabs .nav-link.active,
+.manual-bottom-panel .panel-tabs .nav-link.active {
+    color: #212529;
+    background: #fff;
+    border-color: #dee2e6 #dee2e6 #fff;
+    font-weight: 500;
+}
+
+.mapping-right-panel .panel-tabs .nav-link:disabled,
+.manual-bottom-panel .panel-tabs .nav-link:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Panel Tab Content */
+.mapping-right-panel .tab-content,
+.manual-bottom-panel .tab-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Ensure tab panes align content to top and fill height */
+.mapping-right-panel .tab-pane,
+.manual-bottom-panel .tab-pane {
+    display: none;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    height: 100%;
+    min-height: 0;
+}
+
+.mapping-right-panel .tab-pane.show.active,
+.manual-bottom-panel .tab-pane.show.active {
+    display: flex;
+    flex: 1;
+}
+
+/* SQL tab - textarea should fill available space */
+.mapping-right-panel #ep-sql-pane,
+.mapping-right-panel #rp-sql-pane,
+.manual-bottom-panel #ep-sql-pane,
+.manual-bottom-panel #rp-sql-pane {
+    height: 100%;
+}
+
+.mapping-right-panel #ep-sql-pane textarea,
+.mapping-right-panel #rp-sql-pane textarea,
+.manual-bottom-panel #ep-sql-pane textarea,
+.manual-bottom-panel #rp-sql-pane textarea {
+    flex: 1;
+    min-height: 80px;
+}
+
+/* Compact form controls in panel */
+.mapping-right-panel .form-label,
+.manual-bottom-panel .form-label {
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+.mapping-right-panel .form-control-sm,
+.mapping-right-panel .form-select-sm,
+.manual-bottom-panel .form-control-sm,
+.manual-bottom-panel .form-select-sm {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.mapping-right-panel textarea.form-control-sm,
+.manual-bottom-panel textarea.form-control-sm {
+    min-height: 60px;
+}
+
+.mapping-right-panel .btn-sm,
+.manual-bottom-panel .btn-sm {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Panel mapping table - height managed by flex layout */
+
+.mapping-right-panel .table,
+.manual-bottom-panel .table {
+    font-size: 0.75rem;
+}
+
+.mapping-right-panel .table th,
+.mapping-right-panel .table td,
+.manual-bottom-panel .table th,
+.manual-bottom-panel .table td {
+    padding: 0.35rem 0.5rem;
+}
+
+.mapping-right-panel .table th .badge,
+.manual-bottom-panel .table th .badge {
+    font-size: 0.65rem;
+}
+
+/* Panel Column Menu */
+.panel-col-menu {
+    min-width: 160px;
+    max-height: 250px;
+    overflow-y: auto;
+    font-size: 0.8rem;
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.2);
+}
+
+.panel-col-menu .dropdown-item {
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+}
+
+.panel-col-menu .dropdown-item:hover {
+    background: #f8f9fa;
+}
+
+.panel-col-menu .dropdown-item.active {
+    background: #e7f1ff;
+    color: #0d6efd;
+}
+
+/* Column header click styles */
+.mapping-right-panel th[data-col],
+.manual-bottom-panel th[data-col] {
+    cursor: pointer;
+    vertical-align: top;
+    text-align: center;
+    min-width: 80px;
+}
+
+.mapping-right-panel th[data-col]:hover,
+.manual-bottom-panel th[data-col]:hover {
+    background-color: #e9ecef;
+}
+
+/* Read-only mode adjustments for design section */
+body.read-only-mode #design-section.active {
+    height: calc(100% - 40px) !important;
+}
+
+/* ==========================================================================
+   Summary Detail Lists (entities & relationships in Information tab)
+   ========================================================================== */
+.summary-detail-list {
+    max-height: 264px;            /* ~8 rows × 33px */
+    overflow-y: auto;
+    border: 1px solid #e9ecef;
+    border-radius: 0.375rem;
+    padding: 2px 0;
+}
+
+.summary-detail-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 0.82rem;
+    border-bottom: 1px solid #f1f3f5;
+}
+
+.summary-detail-row .summary-detail-name {
+    flex: 1;
+    min-width: 0;
+}
+
+.summary-detail-row.excluded {
+    opacity: 0.5;
+}
+
+.summary-detail-row .exclude-cb {
+    flex-shrink: 0;
+    cursor: pointer;
+    margin: 0;
+    width: 14px;
+    height: 14px;
+}
+
+.summary-detail-row:last-child {
+    border-bottom: none;
+}
+
+.summary-detail-row:hover {
+    background-color: #f8f9fa;
+}
+
+.summary-detail-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 8px;
+}
+
+/* ==========================================================================
+   Mapping Progress Bar
+   ========================================================================== */
+.mapping-progress {
+    height: 8px;
+}
+
+/* ==========================================================================
+   Validation Warnings List
+   ========================================================================== */
+.validation-warnings-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* ==========================================================================
+   Success Icon (large)
+   ========================================================================== */
+.success-icon-large {
+    font-size: 4rem;
+}
+
+/* ==========================================================================
+   SQL Preview Block
+   ========================================================================== */
+.sql-preview-block {
+    font-size: 0.75rem;
+    word-break: break-all;
+}
+
+/* ==========================================================================
+   Entity Emoji Display
+   ========================================================================== */
+.entity-emoji {
+    font-size: 1.2rem;
+    margin-right: 4px;
+}
+
+/* ==========================================================================
+   Mapping Cards
+   ========================================================================== */
+.mapping-card {
+    transition: border-color 0.2s ease;
+}
+
+.mapping-card:hover {
+    border-color: #6c757d;
+}
+
+.mapping-card.border-success {
+    border-left-width: 3px;
+}
+
+/* ==========================================================================
+   Entity/Property Section - Full Height Layout (only when active)
+   ========================================================================== */
+#entities-section.active,
+#relationships-section.active {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 120px);
+    min-height: 500px;
+}
+
+#entities-section.active > .row,
+#relationships-section.active > .row {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+}
+
+#entities-section.active > .row > [class*="col-"],
+#relationships-section.active > .row > [class*="col-"] {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#entities-section.active .card,
+#relationships-section.active .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#entities-section.active .card-body,
+#relationships-section.active .card-body {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+/* ==========================================================================
+   Entity/Property Lists
+   ========================================================================== */
+#unmappedEntitiesList,
+#mappedEntitiesList,
+#unmappedPropertiesList,
+#mappedPropertiesList {
+    height: 100%;
+    overflow-y: auto;
+}
+
+/* ==========================================================================
+   R2RML Preview
+   ========================================================================== */
+#r2rmlPreview {
+    font-size: 0.85rem;
+    min-height: 400px;
+    background-color: #1e1e1e !important;
+    color: #d4d4d4 !important;
+    border: 1px solid #333;
+}
+
+#r2rmlPreview:read-only {
+    background-color: #1e1e1e !important;
+    color: #d4d4d4 !important;
+}
+
+#r2rmlPreview::placeholder {
+    color: #6c757d;
+}
+
+/* ==========================================================================
+   Query Results Table
+   ========================================================================== */
+#queryResultsContainer,
+#entityQueryResultsContainer {
+    max-height: 250px;
+    overflow: hidden;
+}
+
+#queryResultsContainer .card,
+#entityQueryResultsContainer .card {
+    margin-bottom: 0;
+}
+
+#queryResultsContainer .table-responsive,
+#entityQueryResultsContainer .table-responsive {
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+#queryResultsTable,
+#entityQueryResultsTable {
+    font-size: 0.8rem;
+    margin-bottom: 0;
+}
+
+#queryResultsTable th,
+#entityQueryResultsTable th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+#queryResultsTable td,
+#entityQueryResultsTable td {
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#queryResultsTable code,
+#entityQueryResultsTable code {
+    font-size: 0.75rem;
+}
+
+/* ==========================================================================
+   Attribute Mapping Rows
+   ========================================================================== */
+.attribute-mapping-row {
+    padding: 8px 12px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.attribute-mapping-row:hover {
+    background-color: #e9ecef;
+}
+
+.attribute-mapping-row .attribute-column-select {
+    font-size: 0.875rem;
+}
+
+/* ==========================================================================
+   Modal Styling Overrides
+   ========================================================================== */
+.modal-xl {
+    max-width: 1000px;
+}
+
+/* ==========================================================================
+   Disabled Menu Items
+   ========================================================================== */
+.sidebar-nav .nav-link.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+    color: #999;
+}
+
+/* ==========================================================================
+   Badge Styling
+   ========================================================================== */
+.badge.bg-secondary {
+    background-color: #6c757d !important;
+}
+
+.badge.bg-success {
+    background-color: #28a745 !important;
+}
+
+/* ==========================================================================
+   Alert Styling for Mapping Status
+   ========================================================================== */
+#mappingCompletionStatus {
+    margin-bottom: 0;
+}
+
+#mappingCompletionStatus .progress {
+    border-radius: 4px;
+}
+
+/* ==========================================================================
+   Mapping Modal - Tabbed Navigation (Entity & Relationship)
+   ========================================================================== */
+
+/* Greyscale tabs with spacing */
+#addEntityMappingModal .entity-mapping-tabs,
+#addRelationshipMappingModal .rel-mapping-tabs {
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    gap: 0.5rem;
+}
+
+#addEntityMappingModal .entity-mapping-tabs .nav-item,
+#addRelationshipMappingModal .rel-mapping-tabs .nav-item {
+    margin: 0;
+}
+
+#addEntityMappingModal .entity-mapping-tabs .nav-link,
+#addRelationshipMappingModal .rel-mapping-tabs .nav-link {
+    border: 1px solid transparent;
+    border-radius: 0.375rem 0.375rem 0 0;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    color: #6c757d;
+    background: transparent;
+    transition: all 0.15s ease;
+}
+
+#addEntityMappingModal .entity-mapping-tabs .nav-link:hover:not(:disabled),
+#addRelationshipMappingModal .rel-mapping-tabs .nav-link:hover:not(:disabled) {
+    color: #495057;
+    background: #e9ecef;
+    border-color: #dee2e6 #dee2e6 transparent;
+}
+
+#addEntityMappingModal .entity-mapping-tabs .nav-link.active,
+#addRelationshipMappingModal .rel-mapping-tabs .nav-link.active {
+    color: #212529;
+    background: #fff;
+    border-color: #dee2e6 #dee2e6 #fff;
+    font-weight: 500;
+}
+
+#addEntityMappingModal .entity-mapping-tabs .nav-link:disabled,
+#addRelationshipMappingModal .rel-mapping-tabs .nav-link:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+#addEntityMappingModal .entity-mapping-tabs .nav-link .badge,
+#addRelationshipMappingModal .rel-mapping-tabs .nav-link .badge {
+    font-size: 0.7rem;
+    padding: 0.2em 0.45em;
+}
+
+/* ==========================================================================
+   Mapping Modal - Column Mapping Grid (Entity & Relationship)
+   ========================================================================== */
+
+#entityResultsMappingTable th,
+#relResultsMappingTable th {
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+    min-width: 120px;
+}
+
+#entityResultsMappingTable th:hover,
+#relResultsMappingTable th:hover {
+    background: #e9ecef;
+}
+
+#entityResultsMappingTable th .column-name,
+#relResultsMappingTable th .column-name {
+    font-weight: 600;
+    display: block;
+}
+
+#entityResultsMappingTable th .column-mapping,
+#relResultsMappingTable th .column-mapping {
+    margin-top: 4px;
+}
+
+#entityResultsMappingTable th .mapping-badge,
+#relResultsMappingTable th .mapping-badge {
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+
+#entityResultsMappingTable th .mapping-dropdown,
+#relResultsMappingTable th .mapping-dropdown {
+    position: fixed;
+    z-index: 9999;
+    min-width: 180px;
+    max-height: 300px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.2);
+    display: none;
+}
+
+#entityResultsMappingTable th .mapping-dropdown.show,
+#relResultsMappingTable th .mapping-dropdown.show {
+    display: block;
+}
+
+#entityResultsMappingTable th .mapping-dropdown .dropdown-item,
+#relResultsMappingTable th .mapping-dropdown .dropdown-item {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+#entityResultsMappingTable th .mapping-dropdown .dropdown-item:hover,
+#relResultsMappingTable th .mapping-dropdown .dropdown-item:hover {
+    background: #f8f9fa;
+}
+
+#entityResultsMappingTable th .mapping-dropdown .dropdown-item.active,
+#relResultsMappingTable th .mapping-dropdown .dropdown-item.active {
+    background: #e7f1ff;
+    color: #0d6efd;
+}

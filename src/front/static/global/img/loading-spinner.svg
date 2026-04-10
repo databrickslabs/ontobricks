@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none">
+  <!-- OntoBricks Animated Loading Spinner -->
+
+  <!-- Rotating node ring -->
+  <g class="ob-spinner-ring">
+    <!-- Connection lines (octagonal ring) -->
+    <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
+      <line x1="40" y1="10" x2="61" y2="19"/>
+      <line x1="61" y1="19" x2="70" y2="40"/>
+      <line x1="70" y1="40" x2="61" y2="61"/>
+      <line x1="61" y1="61" x2="40" y2="70"/>
+      <line x1="40" y1="70" x2="19" y2="61"/>
+      <line x1="19" y1="61" x2="10" y2="40"/>
+      <line x1="10" y1="40" x2="19" y2="19"/>
+      <line x1="19" y1="19" x2="40" y2="10"/>
+    </g>
+
+    <!-- Nodes (colored balls) -->
+    <circle cx="40" cy="10" r="5" fill="#FF3621"/>
+    <circle cx="61" cy="19" r="5" fill="#6366F1"/>
+    <circle cx="70" cy="40" r="5" fill="#4ECDC4"/>
+    <circle cx="61" cy="61" r="5" fill="#F59E0B"/>
+    <circle cx="40" cy="70" r="5" fill="#FF3621"/>
+    <circle cx="19" cy="61" r="5" fill="#6366F1"/>
+    <circle cx="10" cy="40" r="5" fill="#4ECDC4"/>
+    <circle cx="19" cy="19" r="5" fill="#F59E0B"/>
+  </g>
+
+  <!-- Databricks logo center (static) -->
+  <g transform="translate(40, 40)">
+    <g class="ob-center">
+      <path d="M0 -12 L10 -6 L0 0 L-10 -6 Z" fill="#FF3621"/>
+      <path d="M0 -5 L10 1 L0 7 L-10 1 Z" fill="#FF3621" opacity="0.85"/>
+      <path d="M0 2 L10 8 L0 14 L-10 8 Z" fill="#FF3621" opacity="0.7"/>
+    </g>
+  </g>
+</svg>

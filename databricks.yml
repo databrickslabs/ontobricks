@@ -1,0 +1,97 @@
+# OntoBricks — Databricks Asset Bundle
+# Deploys the main OntoBricks app and the MCP companion server.
+#
+# The runtime configuration (command, env vars) is defined in each app's
+# own app.yaml file — not duplicated here. The DAB handles resource
+# bindings and deployment targets only.
+#
+# Usage:
+#   databricks bundle validate
+#   databricks bundle deploy                  # deploy dev (default)
+#   databricks bundle deploy -t prod          # deploy prod
+#   databricks bundle run ontobricks_app      # start the main app
+#   databricks bundle run mcp_ontobricks_app  # start the MCP server
+
+bundle:
+  name: ontobricks_bundle
+
+variables:
+  warehouse_id:
+    description: "SQL Warehouse ID for query execution"
+    default: "d2096aa075ad44a3"
+  registry_catalog:
+    description: "Unity Catalog catalog for the project registry"
+    default: "benoit_cayla"
+  registry_schema:
+    description: "Unity Catalog schema for the project registry"
+    default: "ontobricks_deployed"
+  registry_volume:
+    description: "Volume name for the project registry"
+    default: "registry"
+  admin_user:
+    description: "User with CAN_MANAGE on both apps (used in prod target)"
+    default: "benoit.cayla@databricks.com"
+
+resources:
+  apps:
+    # ── Main OntoBricks App ─────────────────────────────────────
+    ontobricks_app:
+      name: "ontobricks"
+      description: "OntoBricks — Knowledge Graph Builder for Databricks"
+      source_code_path: .
+      resources:
+        - name: sql-warehouse
+          description: "SQL Warehouse for executing queries and metadata operations"
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: volume
+          description: "Unity Catalog Volume for the OntoBricks project registry"
+          uc_securable:
+            securable_type: "VOLUME"
+            securable_full_name: "${var.registry_catalog}.${var.registry_schema}.${var.registry_volume}"
+            permission: WRITE_VOLUME
+
+    # ── MCP Companion Server ────────────────────────────────────
+    mcp_ontobricks_app:
+      name: "mcp-ontobricks"
+      description: "OntoBricks MCP Server — Knowledge Graph tools for Databricks Playground"
+      source_code_path: ./src/mcp-server
+      resources:
+        - name: sql-warehouse
+          description: "SQL Warehouse for MCP server operations"
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: volume
+          description: "Unity Catalog Volume for reading the project registry"
+          uc_securable:
+            securable_type: "VOLUME"
+            securable_full_name: "${var.registry_catalog}.${var.registry_schema}.${var.registry_volume}"
+            permission: WRITE_VOLUME
+
+targets:
+  dev:
+    mode: development
+    default: true
+    # In development mode, DAB auto-grants CAN_MANAGE to the deploying user.
+    # The 'users' group gets CAN_USE so the app is accessible to all workspace users.
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    resources:
+      apps:
+        ontobricks_app:
+          permissions:
+            - level: CAN_MANAGE
+              user_name: ${var.admin_user}
+            - level: CAN_USE
+              group_name: users
+        mcp_ontobricks_app:
+          permissions:
+            - level: CAN_MANAGE
+              user_name: ${var.admin_user}
+            - level: CAN_USE
+              group_name: users

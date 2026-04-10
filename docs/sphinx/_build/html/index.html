@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>OntoBricks Documentation &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
+    <script src="_static/documentation_options.js?v=01f34227"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="OntoBricks Documentation" href="guides/documentation.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+      <li>Next: <a href="guides/documentation.html" title="next chapter">OntoBricks Documentation</a></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="ontobricks-documentation">
+<h1>OntoBricks Documentation<a class="headerlink" href="#ontobricks-documentation" title="Link to this heading">¶</a></h1>
+<p><strong>Knowledge Graph Builder for Databricks</strong></p>
+<p>OntoBricks is a web-based application that turns Databricks tables into a
+knowledge graph. Design ontologies using OWL or import industry standards
+(FIBO, CDISC, IOF), map them to tables via R2RML, materialize triples into a
+Delta or LadybugDB triple store, query them through a typed GraphQL API, and
+explore your knowledge graph visually.</p>
+<p><strong>Topic guides</strong> (Markdown in <code class="docutils literal notranslate"><span class="pre">docs/</span></code>, included here via MyST) are the
+canonical narrative documentation. <strong>Developer overviews</strong> below are short
+RST summaries; see the architecture guide for the full design document.</p>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="guides/documentation.html">OntoBricks Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/documentation.html#topic-index">Topic Index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/documentation.html#assets">Assets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/documentation.html#generated-api-docs-sphinx">Generated API Docs (Sphinx)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/documentation.html#quick-links">Quick Links</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="guides/get-started.html">Getting Started with OntoBricks</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/get-started.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/get-started.html#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/get-started.html#configuration">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/get-started.html#running-the-application">Running the Application</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/get-started.html#permission-management-databricks-app-only">Permission Management (Databricks App Only)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/get-started.html#first-steps-in-ontobricks">First Steps in OntoBricks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/get-started.html#common-commands">Common Commands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/get-started.html#understanding-the-navigation">Understanding the Navigation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/get-started.html#ontology-sidebar-navigation">Ontology Sidebar Navigation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/get-started.html#troubleshooting">Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/get-started.html#next-steps">Next Steps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/get-started.html#environment-variables-full-reference">Environment variables (full reference)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="guides/deployment.html">OntoBricks Deployment Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#local-development-setup">1. Local Development Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#databricks-apps-deployment-dab">2. Databricks Apps Deployment (DAB)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#permission-management">3. Permission Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#deploying-to-a-new-workspace">4. Deploying to a New Workspace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#triple-store-backend-configuration">5. Triple Store Backend Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#mcp-server-deployment-databricks-playground">6. MCP Server Deployment (Databricks Playground)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#mlflow-agent-observability">7. MLflow Agent Observability</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#dab-reference">8. DAB Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#full-deployment-checklist">9. Full Deployment Checklist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#troubleshooting">10. Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#production-considerations">11. Production Considerations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="guides/architecture.html">OntoBricks Architecture</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#semantic-web-standards-stack">Semantic Web Standards Stack</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#key-standards-explained">Key Standards Explained</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#application-architecture">Application Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#module-structure">Module Structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#ontoviz-component-architecture">OntoViz Component Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#user-interface-architecture">User Interface Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#data-flow">Data Flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#unity-catalog-versioning">Unity Catalog Versioning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#triple-store-backends">Triple Store Backends</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#reasoning-engine">Reasoning Engine</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#shacl-data-quality">SHACL Data Quality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#technology-stack">Technology Stack</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#logging">Logging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#mlflow-observability">MLflow Observability</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#security-considerations">Security Considerations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#external-rest-api">External REST API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#extension-points">Extension Points</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#references">References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#component-guides-merged">Component guides (merged)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#agentic-architecture">Agentic Architecture</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="guides/user-guide.html">OntoBricks User Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#application-workflow">Application Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#step-1-design-ontology">Step 1: Design Ontology</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#step-2-map-data-sources-mapping">Step 2: Map Data Sources (Mapping)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#step-3-digital-twin-sync-explore">Step 3: Digital Twin (Sync &amp; Explore)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#project-management-version-control">Project Management &amp; Version Control</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#graphql-api">GraphQL API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#mcp-server-databricks-playground">MCP Server (Databricks Playground)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#example-hr-domain">Example: HR Domain</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#troubleshooting">Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#keyboard-shortcuts">Keyboard Shortcuts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#support">Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#automated-triple-store-pipeline-merged">Automated triple-store pipeline (merged)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#automated-triple-store-creation">Automated Triple Store Creation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#ontology-import-merged">Ontology import (merged)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/user-guide.html#importing-ontologies">Importing Ontologies</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="guides/api.html">OntoBricks External REST API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/api.html#base-url">Base URL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/api.html#authentication">Authentication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/api.html#response-format">Response Format</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/api.html#endpoints">Endpoints</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/api.html#graphql-api">GraphQL API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/api.html#digital-twin-api">Digital Twin API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/api.html#example-usage">Example Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/api.html#error-codes">Error Codes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/api.html#notes">Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/api.html#internal-rest-api-reference-merged">Internal REST API reference (merged)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/api.html#ontobricks-api-reference">OntoBricks API Reference</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="guides/mcp.html">OntoBricks MCP Server</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/mcp.html#workflow">Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/mcp.html#available-tools">Available Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/mcp.html#available-resources">Available Resources</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/mcp.html#databricks-playground-custom-mcp-server">Databricks Playground (Custom MCP Server)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/mcp.html#standalone-local-usage">Standalone / Local Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/mcp.html#client-configuration">Client Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/mcp.html#testing-with-mcp-inspector">Testing with MCP Inspector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/mcp.html#text-formatting-pipeline">Text Formatting Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/mcp.html#dependencies-src-mcp-server-pyproject-toml">Dependencies (src/mcp-server/pyproject.toml)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/development.html#ontobricks-dependencies">OntoBricks Dependencies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/development.html#ontobricks-test-campaign">OntoBricks Test Campaign</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/development.html#ontobricks-permission-rights-management">OntoBricks — Permission &amp; Rights Management</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="guides/product.html">Product &amp; go-to-market</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/product.html#ontobricks-value-proposition-deck">OntoBricks – Value Proposition Deck</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/product.html#ontobricks-field-engineering-innovation-project">OntoBricks — Field Engineering Innovation Project</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="guides/examples.html">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/examples.html#example-family-tree-ontology-mapping">Example: Family Tree Ontology Mapping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/examples.html#example-customer-journey-ontology-energy-provider">Example: Customer Journey Ontology (Energy Provider)</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="overview/architecture.html">Architecture Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="overview/architecture.html#layers">Layers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="overview/architecture.html#key-design-decisions">Key Design Decisions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="overview/architecture.html#package-map">Package Map</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="overview/getting-started.html">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="overview/getting-started.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="overview/getting-started.html#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="overview/getting-started.html#running-the-application">Running the Application</a></li>
+<li class="toctree-l2"><a class="reference internal" href="overview/getting-started.html#running-tests">Running Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="overview/getting-started.html#building-this-documentation">Building This Documentation</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api/app.html">OntoBricks Application Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/app.html#subpackages">Subpackages</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.fastapi.html">FastAPI application (UI server)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/app.fastapi.html#module-shared.fastapi.main">Application factory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.fastapi.html#module-shared.fastapi.health">Health</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.fastapi.html#module-front.fastapi.dependencies">Dependencies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.fastapi.html#graphql-routes">GraphQL routes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/api_external.html#module-api.constants">Constants (versioning, paths, OpenAPI metadata)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/api_external.html#module-api.external_app">External Sub-Application</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/api_external.html#module-api.routers">Routers package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/api_external.html#module-api.routers.v1">API v1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/api_external.html#module-api.service">API Service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/api_external.html#module-api.routers.projects">Projects API (list &amp; artifacts)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/api_external.html#module-api.routers.digitaltwin">Digital Twin API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/api_external.html#graphql-mounted-on-external-app">GraphQL (mounted on external app)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.html#module-back.core.helpers">Helpers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.html#module-back.core.logging">Logging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.html#module-back.core.task_manager">Task Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.html#subpackages">Subpackages</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.databricks.html#module-back.core.databricks.constants">Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.databricks.html#module-back.core.databricks.DatabricksAuth">Authentication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.databricks.html#module-back.core.databricks.DatabricksClient">Client (Facade)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.databricks.html#module-back.core.databricks.SQLWarehouse">SQL Warehouse</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.databricks.html#module-back.core.databricks.UnityCatalog">Unity Catalog</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.databricks.html#module-back.core.databricks.VolumeFileService">Volume File Service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.databricks.html#module-back.core.databricks.WorkspaceService">Workspace Service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.databricks.html#module-back.core.databricks.DashboardService">Dashboard Service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.databricks.html#module-back.core.databricks.MetadataService">Metadata Service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.databricks.html#module-back.core.databricks.UCProjectIO">UC Project I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.graphql.html#module-back.core.graphql.GraphQLSchemaBuilder">Schema Builder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.graphql.html#module-back.core.graphql.SchemaMetadata">Metadata and resolvers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.industry.html#cdisc">CDISC</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.industry.html#fibo">FIBO</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.industry.html#iof">IOF</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.reasoning.html#module-back.core.reasoning.constants">Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.reasoning.html#module-back.core.reasoning.models">Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.reasoning.html#module-back.core.reasoning.ReasoningService">Reasoning Service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.reasoning.html#module-back.core.reasoning.OWLRLReasoner">OWL RL Reasoner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.reasoning.html#module-back.core.reasoning.SWRLEngine">SWRL Engine</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.reasoning.html#module-back.core.reasoning.SWRLBuiltinRegistry">SWRL Built-in Registry</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.reasoning.html#module-back.core.reasoning.SWRLParser">SWRL Parser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.reasoning.html#module-back.core.reasoning.SWRLSQLTranslator">SWRL SQL Translator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.reasoning.html#module-back.core.reasoning.SWRLCypherTranslator">SWRL Cypher Translator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.reasoning.html#module-back.core.reasoning.SWRLFlatCypherTranslator">SWRL Flat Cypher Translator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.reasoning.html#module-back.core.reasoning.DecisionTableEngine">Decision Table Engine</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.reasoning.html#module-back.core.reasoning.SPARQLRuleEngine">SPARQL Rule Engine</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.reasoning.html#module-back.core.reasoning.AggregateRuleEngine">Aggregate Rule Engine</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/app.objects.html#subpackages">Subpackages</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.sqlwizard.html#back.core.sqlwizard.SchemaContext"><code class="docutils literal notranslate"><span class="pre">SchemaContext</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService"><code class="docutils literal notranslate"><span class="pre">SQLWizardService</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.sqlwizard.html#back.core.sqlwizard.models.SchemaContext"><code class="docutils literal notranslate"><span class="pre">SchemaContext</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.SQLWizardService"><code class="docutils literal notranslate"><span class="pre">SQLWizardService</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.triplestore.html#module-back.core.triplestore.constants">Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.triplestore.html#module-back.core.triplestore.TripleStoreBackend">Abstract Base</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.triplestore.html#module-back.core.triplestore.TripleStoreFactory">Factory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.triplestore.html#module-back.core.triplestore.IncrementalBuildService">Incremental build</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.w3c.html#module-back.core.w3c.owl.OntologyGenerator">OWL (Web Ontology Language)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.w3c.html#module-back.core.w3c.rdfs.RDFSParser">RDFS (RDF Schema)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.w3c.html#module-back.core.w3c.r2rml.R2RMLGenerator">R2RML (RDB to RDF Mapping Language)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.w3c.html#module-back.core.w3c.sparql.SparqlTranslator">SPARQL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.core.w3c.html#module-back.core.w3c.shacl.SHACLService">SHACL (Shapes Constraint Language)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/app.frontend.html#module-front.routes.home">HTML routes (Jinja2)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.frontend.html#module-api.routers.internal.home">Internal JSON API routers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.frontend.html#module-back.services.home">Services</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/app.config.html#module-shared.config.settings">Environment settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.config.html#module-shared.config.constants">Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/app.config.html#menu-configuration">Menu configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/agents.html#module-agents.llm_utils">LLM Utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/agents.html#module-agents.tracing">Tracing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/agents.html#module-agents.agent_auto_assignment">Auto Assignment Agent</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/agents.html#module-agents.agent_auto_icon_assign">Auto Icon Assignment Agent</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/agents.html#module-agents.agent_ontology_assistant">Ontology Assistant Agent</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/agents.html#module-agents.agent_owl_generator">OWL Generator Agent</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/agents.html#module-agents.tools.context">Shared Tools</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
+</ul>
+</div>
+</section>
+<section id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

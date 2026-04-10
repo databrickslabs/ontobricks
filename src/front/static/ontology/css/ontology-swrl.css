@@ -1,0 +1,289 @@
+/* SWRL Visual Graph Editor styles */
+
+/* ── Editor layout (split view inside fullscreen modal) ── */
+
+.swrl-editor-layout {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+}
+
+.swrl-graph-pane {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    overflow: hidden;
+}
+
+.swrl-graph-pane svg {
+    display: block;
+}
+
+.swrl-graph-hint {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,.9);
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-size: .8rem;
+    color: #6c757d;
+    pointer-events: none;
+    z-index: 5;
+    white-space: nowrap;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+
+.swrl-rule-pane {
+    width: 340px;
+    min-width: 300px;
+    max-width: 400px;
+    border-left: 1px solid #dee2e6;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+.swrl-pane-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.swrl-pane-footer {
+    padding: 10px 16px;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fafbfc;
+}
+
+/* ── IF / THEN headings ── */
+
+.swrl-if-heading { color: #0d6efd; }
+.swrl-then-heading { color: #dc3545; }
+
+.swrl-badge-if-count {
+    background: #0d6efd;
+    color: #fff;
+    font-size: .65rem;
+    min-width: 20px;
+}
+.swrl-badge-then-count {
+    background: #dc3545;
+    color: #fff;
+    font-size: .65rem;
+    min-width: 20px;
+}
+
+/* ── Atom badges in the rule pane ── */
+
+.swrl-atom-badge {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    font-size: .78rem;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    gap: 6px;
+}
+
+.swrl-atom-badge.if-atom {
+    background: #e8f0fe;
+    border-left: 3px solid #0d6efd;
+    color: #1a3a6b;
+}
+
+.swrl-atom-badge.then-atom {
+    background: #fce8e8;
+    border-left: 3px solid #dc3545;
+    color: #6b1a1a;
+}
+
+.swrl-atom-badge .swrl-atom-remove {
+    margin-left: auto;
+    cursor: pointer;
+    opacity: .5;
+    transition: opacity .15s;
+    flex-shrink: 0;
+}
+
+.swrl-atom-badge .swrl-atom-remove:hover {
+    opacity: 1;
+}
+
+.swrl-atom-badge .swrl-atom-type {
+    font-size: .55rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: .04em;
+    border-radius: 2px;
+    padding: 1px 4px;
+    flex-shrink: 0;
+}
+
+.swrl-atom-badge.if-atom .swrl-atom-type {
+    background: #0d6efd;
+    color: #fff;
+}
+.swrl-atom-badge.then-atom .swrl-atom-type {
+    background: #dc3545;
+    color: #fff;
+}
+
+/* ── SWRL preview block ── */
+
+.swrl-preview-block {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-radius: .375rem;
+    padding: 10px 12px;
+    font-size: .8rem;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    min-height: 40px;
+    word-break: break-all;
+}
+
+.swrl-preview-block .swrl-arrow {
+    color: #fbbf24;
+    font-weight: 700;
+    margin: 0 4px;
+}
+
+/* ── Context menu ── */
+
+.swrl-context-menu {
+    position: fixed;
+    z-index: 2000;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.15);
+    min-width: 160px;
+    padding: 4px 0;
+    font-size: .82rem;
+}
+
+.swrl-ctx-item {
+    padding: 7px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: background .1s;
+}
+.swrl-ctx-item:hover { background: #f1f5f9; }
+
+.swrl-ctx-if { color: #0d6efd; }
+.swrl-ctx-if:hover { background: #e8f0fe; }
+
+.swrl-ctx-then { color: #dc3545; }
+.swrl-ctx-then:hover { background: #fce8e8; }
+
+.swrl-ctx-remove { color: #6c757d; }
+.swrl-ctx-remove:hover { background: #f8f9fa; }
+
+/* ── Graph node selection highlights ── */
+
+.swrl-node-if .map-node-hitarea {
+    stroke: #0d6efd !important;
+    stroke-width: 3px !important;
+    fill: rgba(13, 110, 253, .08) !important;
+}
+
+.swrl-node-then .map-node-hitarea {
+    stroke: #dc3545 !important;
+    stroke-width: 3px !important;
+    fill: rgba(220, 53, 69, .08) !important;
+}
+
+.swrl-node-if .map-node-icon,
+.swrl-node-then .map-node-icon {
+    filter: drop-shadow(0 0 4px rgba(0,0,0,.2));
+}
+
+/* Variable label shown on selected nodes */
+.swrl-var-label {
+    font-size: 9px;
+    font-style: italic;
+    fill: #6c757d;
+    pointer-events: none;
+}
+.swrl-node-if .swrl-var-label { fill: #0d6efd; }
+.swrl-node-then .swrl-var-label { fill: #dc3545; }
+
+/* ── Graph link selection highlights ── */
+
+.swrl-link-if {
+    stroke: #0d6efd !important;
+    stroke-width: 2.5px !important;
+}
+
+.swrl-link-then {
+    stroke: #dc3545 !important;
+    stroke-width: 2.5px !important;
+    stroke-dasharray: 6,3 !important;
+}
+
+/* Link hit areas for click targets */
+.swrl-link-hitarea {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 16px;
+    cursor: pointer;
+    pointer-events: stroke;
+}
+.swrl-link-hitarea:hover {
+    stroke: rgba(0,0,0,.06);
+}
+
+/* Link labels on the graph */
+.swrl-link-label {
+    font-size: 10px;
+    fill: #6c757d;
+    text-anchor: middle;
+    pointer-events: none;
+}
+
+/* ── Map legend (within graph editor) ── */
+
+.swrl-legend {
+    position: absolute;
+    bottom: 50px;
+    left: 16px;
+    background: rgba(255,255,255,.92);
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: .7rem;
+    color: #6c757d;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    pointer-events: none;
+    z-index: 5;
+}
+
+.swrl-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 3px;
+}
+.swrl-legend-item:last-child { margin-bottom: 0; }
+
+.swrl-legend-swatch {
+    width: 16px;
+    height: 3px;
+    border-radius: 1px;
+    flex-shrink: 0;
+}
+
+/* ── Node hover in graph ── */
+
+.swrl-graph-pane .map-node { cursor: pointer; }
+.swrl-graph-pane .map-node:hover .map-node-hitarea {
+    fill: rgba(0,0,0,.04);
+}

@@ -1,0 +1,360 @@
+/**
+ * OntoBricks - query-visualization.css
+ * Shared styles used by Knowledge Graph detail panels, filter panes, and entity views
+ */
+
+/* Graph Wrapper (contains graph + filter pane vertically) */
+.graph-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 300px;
+}
+
+/* Horizontal Resize Handle (for bottom filter pane) */
+.resize-handle-horizontal {
+    height: 8px;
+    cursor: row-resize;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background-color 0.15s;
+}
+
+.resize-handle-horizontal:hover,
+.resize-handle-horizontal.active {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.resize-handle-horizontal .resize-handle-bar {
+    height: 4px;
+    width: 40px;
+    background: #dee2e6;
+    border-radius: 2px;
+    transition: background-color 0.15s;
+}
+
+.resize-handle-horizontal:hover .resize-handle-bar,
+.resize-handle-horizontal.active .resize-handle-bar {
+    background: #adb5bd;
+}
+
+/* Vertical Resize Handle */
+.resize-handle {
+    width: 8px;
+    cursor: col-resize;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background-color 0.15s;
+}
+
+.resize-handle:hover,
+.resize-handle.active {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.resize-handle-bar {
+    width: 4px;
+    height: 40px;
+    background: #dee2e6;
+    border-radius: 2px;
+    transition: background-color 0.15s;
+}
+
+.resize-handle:hover .resize-handle-bar,
+.resize-handle.active .resize-handle-bar {
+    background: #adb5bd;
+}
+
+/* Filter Pane (bottom) */
+.filter-pane {
+    height: 140px;
+    min-height: 120px;
+    max-height: 220px;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    flex-shrink: 0;
+}
+
+.filter-pane .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 0;
+}
+
+.filter-pane .card-header {
+    padding: 0.4rem 0.75rem;
+    background: #f8f9fa;
+}
+
+.filter-pane .card-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem 0.75rem;
+}
+
+/* Filter Sections */
+.filter-section {
+    margin-bottom: 0.75rem;
+}
+
+.filter-section:last-child {
+    margin-bottom: 0;
+}
+
+.filter-section-title {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: #6c757d;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.5rem;
+    background: #e9ecef;
+    border: 1px solid #dee2e6;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+}
+
+.filter-chip:hover {
+    background: #dee2e6;
+}
+
+.filter-chip.active {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: white;
+}
+
+.filter-chip .chip-icon {
+    font-size: 0.85rem;
+}
+
+.filter-chip .chip-count {
+    background: rgba(0,0,0,0.1);
+    padding: 0.1rem 0.35rem;
+    border-radius: 10px;
+    font-size: 0.65rem;
+    font-weight: 600;
+}
+
+.filter-chip.active .chip-count {
+    background: rgba(255,255,255,0.2);
+}
+
+/* Entity Details Styling */
+.entity-details-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #6c757d;
+    text-align: center;
+}
+
+.entity-details-placeholder i {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    opacity: 0.5;
+}
+
+.entity-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #dee2e6;
+    margin-bottom: 0.75rem;
+}
+
+.entity-detail-icon {
+    font-size: 2rem;
+}
+
+.entity-detail-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.entity-detail-title h6 {
+    margin: 0;
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.entity-detail-title small {
+    color: #6c757d;
+    font-size: 0.75rem;
+    word-break: break-all;
+}
+
+.entity-detail-section {
+    margin-bottom: 1rem;
+}
+
+.entity-detail-section h6 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.entity-detail-item {
+    display: flex;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.85rem;
+}
+
+.entity-detail-item:last-child {
+    border-bottom: none;
+}
+
+.entity-detail-item .detail-key {
+    flex: 0 0 40%;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.entity-detail-item .detail-value {
+    flex: 1;
+    word-break: break-word;
+}
+
+.entity-relationship-item {
+    padding: 0.35rem 0.5rem;
+    background: #f8f9fa;
+    border-radius: 4px;
+    margin-bottom: 0.35rem;
+    font-size: 0.8rem;
+}
+
+.entity-relationship-item .rel-direction {
+    color: #6c757d;
+}
+
+.entity-relationship-item .rel-predicate {
+    font-weight: 500;
+    color: #495057;
+}
+
+.entity-relationship-item .rel-target {
+    color: #0d6efd;
+    cursor: pointer;
+}
+
+.entity-relationship-item .rel-target:hover {
+    text-decoration: underline;
+}
+
+/* Toggle button for filter pane */
+.filter-toggle-btn {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.filter-toggle-btn:hover {
+    opacity: 1;
+}
+
+/* Search Pane Styles */
+.filter-pane .search-field {
+    min-width: 100px;
+}
+
+.filter-pane .search-field.flex-grow-1 {
+    min-width: 150px;
+}
+
+.filter-pane .form-label {
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.filter-pane .form-select-sm,
+.filter-pane .form-control-sm {
+    font-size: 0.8rem;
+}
+
+/* Right-click context menu on graph nodes */
+.graph-context-menu {
+    position: fixed;
+    z-index: 9999;
+    min-width: 160px;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.18);
+    padding: 4px 0;
+    font-size: 0.85rem;
+    display: none;
+}
+
+.graph-context-menu .ctx-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    cursor: pointer;
+    color: #212529;
+    white-space: nowrap;
+    transition: background .12s;
+}
+
+.graph-context-menu .ctx-item:hover {
+    background: #e9ecef;
+}
+
+.graph-context-menu .ctx-item i {
+    width: 16px;
+    text-align: center;
+    color: #6c757d;
+}
+
+.graph-context-menu .ctx-divider {
+    height: 1px;
+    background: #dee2e6;
+    margin: 4px 0;
+}
+
+.graph-context-menu .ctx-header {
+    padding: 4px 14px 2px;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    color: #6c757d;
+    font-weight: 600;
+    pointer-events: none;
+}

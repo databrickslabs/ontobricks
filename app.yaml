@@ -1,0 +1,60 @@
+# OntoBricks - Databricks Apps Configuration
+# See: https://docs.databricks.com/en/dev-tools/databricks-apps/configuration.html
+
+# Command to run the application (FastAPI with uvicorn)
+# uv manages dependencies from pyproject.toml
+# Databricks Apps sets DATABRICKS_APP_PORT automatically
+# MCP endpoint is exposed at /mcp (Streamable HTTP transport)
+command:
+  - "uv"
+  - "run"
+  - "python"
+  - "run.py"
+
+# Environment variables
+env:
+  # SQL Warehouse ID — injected from the configured resource,
+  # with a static fallback for MCP / session-less API calls
+  - name: DATABRICKS_SQL_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT
+    value: "66e8366e84d57752"
+  # Default catalog for Unity Catalog operations
+  - name: DATABRICKS_CATALOG
+    value: "main"
+  # Default schema for operations
+  - name: DATABRICKS_SCHEMA
+    value: "default"
+  # Default fully-qualified Delta triple store table (catalog.schema.table)
+  # Used as fallback when no project session is active (e.g. MCP API calls)
+  - name: DATABRICKS_TRIPLESTORE_TABLE
+    value: "benoit_cayla.ontobricks.cust360auto_triplestore"
+  # Project Registry — injected from the configured Volume resource.
+  # The path looks like /Volumes/<catalog>/<schema>/<volume>.
+  - name: REGISTRY_VOLUME_PATH
+    valueFrom: volume
+  # Static fallbacks used for local dev / MCP when no resource is bound
+  - name: REGISTRY_CATALOG
+    value: "benoit_cayla"
+  - name: REGISTRY_SCHEMA
+    value: "ontobricks"
+  - name: REGISTRY_VOLUME
+    value: "OntoBricksRegistry"
+  # App name for permission management (must match the deployed app name)
+  - name: ONTOBRICKS_APP_NAME
+    value: "ontobricks"
+  # MLflow — ensure traces are persisted to the workspace tracking server
+  - name: MLFLOW_TRACKING_URI
+    value: "databricks"
+
+# Resources that this app uses
+# Configure these resources in the Databricks Apps UI after deployment
+resources:
+  - name: sql-warehouse
+    description: "SQL Warehouse for executing queries and metadata operations"
+    sql_warehouse:
+      permission: CAN_USE
+  - name: volume
+    description: "Unity Catalog Volume for the OntoBricks project registry"
+    volume:
+      permission: CAN_READ_WRITE

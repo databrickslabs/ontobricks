@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>app.core.reasoning.service &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/documentation.html">OntoBricks documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.html"><code class="docutils literal notranslate"><span class="pre">app</span></code> – Application Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.fastapi.html"><code class="docutils literal notranslate"><span class="pre">app.fastapi</span></code> — FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">app.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">app.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">app.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">app.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">app.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">app.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">app.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">app.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">app.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.html.html"><code class="docutils literal notranslate"><span class="pre">app.html</span></code> – Web UI Routers &amp; Services</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">app.config</span></code> – Application Constants &amp; Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for app.core.reasoning.service</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Reasoning service — orchestrates T-Box, SWRL, Graph, and Constraint checking.&quot;&quot;&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">app.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">app.core.reasoning.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">InferredTriple</span><span class="p">,</span> <span class="n">ReasoningResult</span><span class="p">,</span> <span class="n">RuleViolation</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">app.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_GRAPH_NAME</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_local_name</span><span class="p">(</span><span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract the local name from a URI (fragment or last path segment).&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="s2">&quot;#&quot;</span> <span class="ow">in</span> <span class="n">uri</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_namespace_parts</span><span class="p">(</span><span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Derive ``(data_ns, sep)`` from *base_uri*.</span>
+
+<span class="sd">    ``data_ns`` is the namespace with a trailing ``/`` used by R2RML</span>
+<span class="sd">    for data-property predicates.  ``sep`` is the separator (``#`` or</span>
+<span class="sd">    empty) for building ontology-class URIs.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">sep</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span> <span class="k">if</span> <span class="n">base_uri</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">base_uri</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;#&quot;</span>
+    <span class="n">data_ns</span> <span class="o">=</span> <span class="n">base_uri</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;/&quot;</span> <span class="k">if</span> <span class="n">base_uri</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">data_ns</span><span class="p">,</span> <span class="n">sep</span>
+
+
+<div class="viewcode-block" id="ReasoningService">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#app.core.reasoning.service.ReasoningService">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ReasoningService</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Orchestrate all reasoning phases over a project&#39;s ontology and data.</span>
+
+<span class="sd">    Phases (in order):</span>
+
+<span class="sd">    - **T-Box** — OWL 2 RL closure via owlrl on the ontology graph.</span>
+<span class="sd">    - **SWRL** — Rule execution (violation and materialisation) on the</span>
+<span class="sd">      triple-store backend (SQL or Cypher).</span>
+<span class="sd">    - **Graph** — Structural reasoning (Cypher variable-length paths or SQL</span>
+<span class="sd">      recursive CTEs: transitive closure, symmetric expansion, etc.).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">project_session</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">triplestore_backend</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_project</span> <span class="o">=</span> <span class="n">project_session</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_store</span> <span class="o">=</span> <span class="n">triplestore_backend</span>
+
+    <span class="c1"># -- Public API -------------------------------------------------------</span>
+
+<div class="viewcode-block" id="ReasoningService.run_full_reasoning">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#app.core.reasoning.service.ReasoningService.run_full_reasoning">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_full_reasoning</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">options</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ReasoningResult</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run all enabled reasoning phases and merge results.&quot;&quot;&quot;</span>
+        <span class="n">opts</span> <span class="o">=</span> <span class="n">options</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">ReasoningResult</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">opts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tbox&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                <span class="n">tbox_result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_tbox_reasoning</span><span class="p">()</span>
+                <span class="n">tbox_stats</span> <span class="o">=</span> <span class="n">tbox_result</span><span class="o">.</span><span class="n">stats</span> <span class="ow">or</span> <span class="p">{}</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">tbox_result</span><span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;tbox_duration_seconds&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;tbox_inferred_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tbox_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;inferred_count&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tbox_result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">))</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;tbox_violations_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">tbox_result</span><span class="o">.</span><span class="n">violations</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">tbox_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;skipped&quot;</span><span class="p">):</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;tbox_skipped&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;tbox_reason&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tbox_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reason&quot;</span><span class="p">,</span> <span class="s2">&quot;No OWL content available&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;T-Box reasoning failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;tbox_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;tbox_skipped&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;tbox_reason&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Disabled by user&quot;</span>
+
+        <span class="k">if</span> <span class="n">opts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;swrl&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                <span class="n">swrl_result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_swrl_rules</span><span class="p">(</span>
+                    <span class="n">materialize</span><span class="o">=</span><span class="n">opts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;materialize&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+                <span class="p">)</span>
+                <span class="n">swrl_stats</span> <span class="o">=</span> <span class="n">swrl_result</span><span class="o">.</span><span class="n">stats</span> <span class="ow">or</span> <span class="p">{}</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">swrl_result</span><span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;swrl_duration_seconds&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;swrl_inferred_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">swrl_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;inferred_count&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">swrl_result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">))</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;swrl_violations_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">swrl_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;violations_count&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">swrl_result</span><span class="o">.</span><span class="n">violations</span><span class="p">))</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;swrl_rules_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">swrl_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rules_count&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">swrl_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;skipped&quot;</span><span class="p">):</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;swrl_skipped&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;swrl_reason&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">swrl_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reason&quot;</span><span class="p">,</span> <span class="s2">&quot;No SWRL rules or backend&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;SWRL reasoning failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;swrl_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;swrl_skipped&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;swrl_reason&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Disabled by user&quot;</span>
+
+        <span class="k">if</span> <span class="n">opts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;graph&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                <span class="n">graph_result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_graph_reasoning</span><span class="p">(</span><span class="n">opts</span><span class="p">)</span>
+                <span class="n">graph_stats</span> <span class="o">=</span> <span class="n">graph_result</span><span class="o">.</span><span class="n">stats</span> <span class="ow">or</span> <span class="p">{}</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">graph_result</span><span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;graph_duration_seconds&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;graph_inferred_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">graph_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;inferred_count&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">graph_result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">))</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;graph_violations_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">graph_result</span><span class="o">.</span><span class="n">violations</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">graph_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;skipped&quot;</span><span class="p">):</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;graph_skipped&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;graph_reason&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">graph_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reason&quot;</span><span class="p">,</span> <span class="s2">&quot;No triple store backend&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Graph reasoning failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;graph_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;graph_skipped&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;graph_reason&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Disabled by user&quot;</span>
+
+        <span class="k">if</span> <span class="n">opts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;constraints&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                <span class="n">cst_result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_constraint_checks</span><span class="p">()</span>
+                <span class="n">cst_stats</span> <span class="o">=</span> <span class="n">cst_result</span><span class="o">.</span><span class="n">stats</span> <span class="ow">or</span> <span class="p">{}</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">cst_result</span><span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;constraints_duration_seconds&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;constraints_violations_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cst_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;violations_count&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">cst_result</span><span class="o">.</span><span class="n">violations</span><span class="p">))</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;constraints_checked&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cst_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;constraints_checked&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">cst_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;skipped&quot;</span><span class="p">):</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;constraints_skipped&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;constraints_reason&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cst_stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reason&quot;</span><span class="p">,</span> <span class="s2">&quot;No constraints&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Constraint checks failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;constraints_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;constraints_skipped&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;constraints_reason&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Disabled by user&quot;</span>
+
+        <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;total_duration_seconds&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;total_inferred&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">)</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;total_violations&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+
+<div class="viewcode-block" id="ReasoningService.run_tbox_reasoning">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#app.core.reasoning.service.ReasoningService.run_tbox_reasoning">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_tbox_reasoning</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ReasoningResult</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run OWL 2 RL deductive closure on the project ontology.&quot;&quot;&quot;</span>
+        <span class="n">owl_content</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_owl_content</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">owl_content</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;No OWL content available for T-Box reasoning&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">ReasoningResult</span><span class="p">(</span><span class="n">stats</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;phase&quot;</span><span class="p">:</span> <span class="s2">&quot;tbox&quot;</span><span class="p">,</span> <span class="s2">&quot;skipped&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="s2">&quot;No OWL content generated yet&quot;</span><span class="p">})</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">owlrl</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_owlrl</span>  <span class="c1"># noqa: F401</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">ImportError</span><span class="p">,</span> <span class="ne">ModuleNotFoundError</span><span class="p">):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;owlrl package is not installed — T-Box reasoning unavailable&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">ReasoningResult</span><span class="p">(</span><span class="n">stats</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;phase&quot;</span><span class="p">:</span> <span class="s2">&quot;tbox&quot;</span><span class="p">,</span> <span class="s2">&quot;skipped&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="s2">&quot;owlrl package not installed (pip install owlrl)&quot;</span><span class="p">,</span>
+            <span class="p">})</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">app.core.reasoning.owlrl_reasoner</span><span class="w"> </span><span class="kn">import</span> <span class="n">OWLRLReasoner</span>
+        <span class="n">reasoner</span> <span class="o">=</span> <span class="n">OWLRLReasoner</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">reasoner</span><span class="o">.</span><span class="n">compute_closure</span><span class="p">(</span><span class="n">owl_content</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ReasoningService.run_swrl_rules">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#app.core.reasoning.service.ReasoningService.run_swrl_rules">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_swrl_rules</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">materialize</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ReasoningResult</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Execute SWRL rules against the triple store.&quot;&quot;&quot;</span>
+        <span class="n">rules</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_swrl_rules</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">rules</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">ReasoningResult</span><span class="p">(</span><span class="n">stats</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;phase&quot;</span><span class="p">:</span> <span class="s2">&quot;swrl&quot;</span><span class="p">,</span> <span class="s2">&quot;skipped&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="s2">&quot;No SWRL rules defined in ontology&quot;</span><span class="p">})</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;No triple-store backend for SWRL execution&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">ReasoningResult</span><span class="p">(</span><span class="n">stats</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;phase&quot;</span><span class="p">:</span> <span class="s2">&quot;swrl&quot;</span><span class="p">,</span> <span class="s2">&quot;skipped&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="s2">&quot;No triple-store backend available&quot;</span><span class="p">})</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">app.core.reasoning.swrl_engine</span><span class="w"> </span><span class="kn">import</span> <span class="n">SWRLEngine</span>
+        <span class="n">ontology</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_ontology_dict</span><span class="p">()</span>
+        <span class="n">engine</span> <span class="o">=</span> <span class="n">SWRLEngine</span><span class="p">(</span><span class="n">ontology</span><span class="o">=</span><span class="n">ontology</span><span class="p">)</span>
+        <span class="n">table_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_graph_name</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">engine</span><span class="o">.</span><span class="n">execute_rules</span><span class="p">(</span>
+            <span class="n">rules</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">materialize</span><span class="o">=</span><span class="n">materialize</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ReasoningService.run_graph_reasoning">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#app.core.reasoning.service.ReasoningService.run_graph_reasoning">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_graph_reasoning</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">options</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ReasoningResult</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run graph-structural reasoning (transitive closure, etc.).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">ReasoningResult</span><span class="p">(</span><span class="n">stats</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;phase&quot;</span><span class="p">:</span> <span class="s2">&quot;graph&quot;</span><span class="p">,</span> <span class="s2">&quot;skipped&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="s2">&quot;No triple-store backend available&quot;</span><span class="p">})</span>
+
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">ReasoningResult</span><span class="p">()</span>
+        <span class="n">table_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_graph_name</span><span class="p">()</span>
+        <span class="n">ontology</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_ontology_dict</span><span class="p">()</span>
+
+        <span class="n">transitive_props</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_find_properties_by_characteristic</span><span class="p">(</span><span class="n">ontology</span><span class="p">,</span> <span class="s2">&quot;transitive&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Graph reasoning: </span><span class="si">%d</span><span class="s2"> transitive properties found</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                     <span class="nb">len</span><span class="p">(</span><span class="n">transitive_props</span><span class="p">),</span>
+                     <span class="sa">f</span><span class="s2">&quot; (</span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">transitive_props</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span> <span class="k">if</span> <span class="n">transitive_props</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">prop_uri</span> <span class="ow">in</span> <span class="n">transitive_props</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">transitive_closure</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Transitive closure for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%d</span><span class="s2"> inferred&quot;</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">rows</span><span class="p">))</span>
+                <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">InferredTriple</span><span class="p">(</span>
+                        <span class="n">subject</span><span class="o">=</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                        <span class="n">predicate</span><span class="o">=</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">),</span>
+                        <span class="nb">object</span><span class="o">=</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                        <span class="n">provenance</span><span class="o">=</span><span class="s2">&quot;graph:transitive&quot;</span><span class="p">,</span>
+                    <span class="p">))</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Transitive closure for </span><span class="si">%s</span><span class="s2"> failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+        <span class="n">symmetric_props</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_find_properties_by_characteristic</span><span class="p">(</span><span class="n">ontology</span><span class="p">,</span> <span class="s2">&quot;symmetric&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Graph reasoning: </span><span class="si">%d</span><span class="s2"> symmetric properties found</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                     <span class="nb">len</span><span class="p">(</span><span class="n">symmetric_props</span><span class="p">),</span>
+                     <span class="sa">f</span><span class="s2">&quot; (</span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">symmetric_props</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span> <span class="k">if</span> <span class="n">symmetric_props</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">prop_uri</span> <span class="ow">in</span> <span class="n">symmetric_props</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">symmetric_expand</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Symmetric expand for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%d</span><span class="s2"> inferred&quot;</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">rows</span><span class="p">))</span>
+                <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">InferredTriple</span><span class="p">(</span>
+                        <span class="n">subject</span><span class="o">=</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                        <span class="n">predicate</span><span class="o">=</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">),</span>
+                        <span class="nb">object</span><span class="o">=</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                        <span class="n">provenance</span><span class="o">=</span><span class="s2">&quot;graph:symmetric&quot;</span><span class="p">,</span>
+                    <span class="p">))</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Symmetric expand for </span><span class="si">%s</span><span class="s2"> failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+        <span class="n">result</span><span class="o">.</span><span class="n">stats</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;phase&quot;</span><span class="p">:</span> <span class="s2">&quot;graph&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;inferred_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">),</span>
+            <span class="s2">&quot;duration_seconds&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+        <span class="p">}</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Graph reasoning complete: </span><span class="si">%d</span><span class="s2"> inferred triples (</span><span class="si">%.3f</span><span class="s2">s)&quot;</span><span class="p">,</span>
+                     <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">),</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+
+<div class="viewcode-block" id="ReasoningService.run_constraint_checks">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#app.core.reasoning.service.ReasoningService.run_constraint_checks">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_constraint_checks</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ReasoningResult</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Validate instance data against ontology constraints.</span>
+
+<span class="sd">        Supports cardinality, value checks, functional / inverseFunctional,</span>
+<span class="sd">        and global rules (noOrphans, requireLabels).  Runs Cypher queries</span>
+<span class="sd">        on the LadybugDB flat store.</span>
+
+<span class="sd">        Falls back to legacy ``constraints`` if ``shacl_shapes`` is empty.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ontology</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_ontology_dict</span><span class="p">()</span>
+        <span class="n">constraints</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;constraints&quot;</span><span class="p">,</span> <span class="p">[])</span>
+
+        <span class="n">shacl_shapes</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;shacl_shapes&quot;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">if</span> <span class="n">shacl_shapes</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">constraints</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="kn">from</span><span class="w"> </span><span class="nn">app.core.w3c.shacl</span><span class="w"> </span><span class="kn">import</span> <span class="n">SHACLService</span>
+                <span class="n">svc</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="p">(</span><span class="n">base_uri</span><span class="o">=</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
+                <span class="n">constraints</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">migrate_legacy_constraints</span><span class="p">([])</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Using </span><span class="si">%d</span><span class="s2"> SHACL shapes for constraint checking (via migration path)&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">shacl_shapes</span><span class="p">))</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not migrate SHACL shapes for reasoning: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">constraints</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">shacl_shapes</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">ReasoningResult</span><span class="p">(</span><span class="n">stats</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;phase&quot;</span><span class="p">:</span> <span class="s2">&quot;constraints&quot;</span><span class="p">,</span> <span class="s2">&quot;skipped&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="s2">&quot;No constraints or SHACL shapes defined in ontology&quot;</span><span class="p">,</span>
+            <span class="p">})</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">ReasoningResult</span><span class="p">(</span><span class="n">stats</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;phase&quot;</span><span class="p">:</span> <span class="s2">&quot;constraints&quot;</span><span class="p">,</span> <span class="s2">&quot;skipped&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="s2">&quot;No triple-store backend available&quot;</span><span class="p">,</span>
+            <span class="p">})</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">app.core.triplestore.ladybugdb.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">LadybugBase</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="p">,</span> <span class="n">LadybugBase</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">ReasoningResult</span><span class="p">(</span><span class="n">stats</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;phase&quot;</span><span class="p">:</span> <span class="s2">&quot;constraints&quot;</span><span class="p">,</span> <span class="s2">&quot;skipped&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="s2">&quot;Constraint checks require LadybugDB backend&quot;</span><span class="p">,</span>
+            <span class="p">})</span>
+
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">ReasoningResult</span><span class="p">()</span>
+        <span class="n">table_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_graph_name</span><span class="p">()</span>
+        <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">_node_table</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+        <span class="n">base_uri</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">data_ns</span><span class="p">,</span> <span class="n">sep</span> <span class="o">=</span> <span class="n">_namespace_parts</span><span class="p">(</span><span class="n">base_uri</span><span class="p">)</span>
+        <span class="n">checked</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="n">SKIP_TYPES</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;transitive&quot;</span><span class="p">,</span> <span class="s2">&quot;symmetric&quot;</span><span class="p">,</span> <span class="s2">&quot;asymmetric&quot;</span><span class="p">,</span> <span class="s2">&quot;reflexive&quot;</span><span class="p">,</span> <span class="s2">&quot;irreflexive&quot;</span><span class="p">,</span>
+        <span class="p">}</span>
+
+        <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">constraints</span><span class="p">:</span>
+            <span class="n">ctype</span> <span class="o">=</span> <span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">ctype</span> <span class="ow">or</span> <span class="n">ctype</span> <span class="ow">in</span> <span class="n">SKIP_TYPES</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">violations</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_check_one_constraint</span><span class="p">(</span>
+                    <span class="n">c</span><span class="p">,</span> <span class="n">ctype</span><span class="p">,</span> <span class="n">conn</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">sep</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">violations</span><span class="p">)</span>
+                <span class="n">checked</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Constraint check &#39;</span><span class="si">%s</span><span class="s2">&#39; failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">ctype</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+        <span class="n">result</span><span class="o">.</span><span class="n">stats</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;phase&quot;</span><span class="p">:</span> <span class="s2">&quot;constraints&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;violations_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="p">),</span>
+            <span class="s2">&quot;constraints_checked&quot;</span><span class="p">:</span> <span class="n">checked</span><span class="p">,</span>
+            <span class="s2">&quot;constraints_total&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">constraints</span><span class="p">),</span>
+            <span class="s2">&quot;duration_seconds&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+        <span class="p">}</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Constraint checks: </span><span class="si">%d</span><span class="s2"> checked, </span><span class="si">%d</span><span class="s2"> violations (</span><span class="si">%.3f</span><span class="s2">s)&quot;</span><span class="p">,</span>
+                     <span class="n">checked</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="p">),</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check_one_constraint</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+        <span class="n">ctype</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">conn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">RuleViolation</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Dispatch a single constraint to the appropriate checker.&quot;&quot;&quot;</span>
+        <span class="n">RDF_TYPE</span> <span class="o">=</span> <span class="s2">&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#type&quot;</span>
+        <span class="n">RDFS_LABEL</span> <span class="o">=</span> <span class="s2">&quot;http://www.w3.org/2000/01/rdf-schema#label&quot;</span>
+
+        <span class="n">cardinality_types</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;minCardinality&quot;</span><span class="p">,</span> <span class="s2">&quot;maxCardinality&quot;</span><span class="p">,</span> <span class="s2">&quot;exactCardinality&quot;</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">ctype</span> <span class="ow">in</span> <span class="n">cardinality_types</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_check_cardinality</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">ctype</span><span class="p">,</span> <span class="n">conn</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">sep</span><span class="p">,</span> <span class="n">RDF_TYPE</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ctype</span> <span class="o">==</span> <span class="s2">&quot;functional&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_check_functional</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">conn</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">sep</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ctype</span> <span class="o">==</span> <span class="s2">&quot;inverseFunctional&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_check_inverse_functional</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">conn</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">sep</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ctype</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;valueCheck&quot;</span><span class="p">,</span> <span class="s2">&quot;entityValueCheck&quot;</span><span class="p">,</span> <span class="s2">&quot;entityLabelCheck&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_check_value</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">conn</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">sep</span><span class="p">,</span> <span class="n">RDF_TYPE</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ctype</span> <span class="o">==</span> <span class="s2">&quot;globalRule&quot;</span><span class="p">:</span>
+            <span class="n">rule_name</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ruleName&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">rule_name</span> <span class="o">==</span> <span class="s2">&quot;noOrphans&quot;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_check_no_orphans</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">RDF_TYPE</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">rule_name</span> <span class="o">==</span> <span class="s2">&quot;requireLabels&quot;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_check_require_labels</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">RDFS_LABEL</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[]</span>
+
+    <span class="c1"># -- Cardinality -------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check_cardinality</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">ctype</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">rdf_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">RuleViolation</span><span class="p">]:</span>
+        <span class="n">class_uri</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;className&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">prop_name</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">card_val</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;cardinalityValue&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+        <span class="n">prop_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_normalize_property_uri</span><span class="p">(</span><span class="n">prop_name</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">sep</span><span class="p">,</span> <span class="n">prop_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">class_uri</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">prop_uri</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="n">subjects_result</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) WHERE t.predicate = $p AND t.object = $cls &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS s&quot;</span><span class="p">,</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;p&quot;</span><span class="p">:</span> <span class="n">rdf_type</span><span class="p">,</span> <span class="s2">&quot;cls&quot;</span><span class="p">:</span> <span class="n">class_uri</span><span class="p">},</span>
+        <span class="p">)</span>
+        <span class="n">subjects</span> <span class="o">=</span> <span class="p">[</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">subjects_result</span><span class="p">]</span>
+        <span class="n">violations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">RuleViolation</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">subj</span> <span class="ow">in</span> <span class="n">subjects</span><span class="p">:</span>
+            <span class="n">cnt_result</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) WHERE t.subject = $s AND t.predicate = $pred &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN COUNT(t) AS cnt&quot;</span><span class="p">,</span>
+                <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;s&quot;</span><span class="p">:</span> <span class="n">subj</span><span class="p">,</span> <span class="s2">&quot;pred&quot;</span><span class="p">:</span> <span class="n">prop_uri</span><span class="p">},</span>
+            <span class="p">)</span>
+            <span class="n">cnt_row</span> <span class="o">=</span> <span class="n">cnt_result</span><span class="o">.</span><span class="n">get_next</span><span class="p">()</span>
+            <span class="n">cnt</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">cnt_row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="n">cnt_row</span> <span class="k">else</span> <span class="mi">0</span>
+
+            <span class="n">violated</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">if</span> <span class="n">ctype</span> <span class="o">==</span> <span class="s2">&quot;minCardinality&quot;</span> <span class="ow">and</span> <span class="n">cnt</span> <span class="o">&lt;</span> <span class="n">card_val</span><span class="p">:</span>
+                <span class="n">violated</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">elif</span> <span class="n">ctype</span> <span class="o">==</span> <span class="s2">&quot;maxCardinality&quot;</span> <span class="ow">and</span> <span class="n">cnt</span> <span class="o">&gt;</span> <span class="n">card_val</span><span class="p">:</span>
+                <span class="n">violated</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">elif</span> <span class="n">ctype</span> <span class="o">==</span> <span class="s2">&quot;exactCardinality&quot;</span> <span class="ow">and</span> <span class="n">cnt</span> <span class="o">!=</span> <span class="n">card_val</span><span class="p">:</span>
+                <span class="n">violated</span> <span class="o">=</span> <span class="kc">True</span>
+
+            <span class="k">if</span> <span class="n">violated</span><span class="p">:</span>
+                <span class="n">local_subj</span> <span class="o">=</span> <span class="n">_local_name</span><span class="p">(</span><span class="n">subj</span><span class="p">)</span>
+                <span class="n">local_prop</span> <span class="o">=</span> <span class="n">_local_name</span><span class="p">(</span><span class="n">prop_uri</span><span class="p">)</span>
+                <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">RuleViolation</span><span class="p">(</span>
+                    <span class="n">rule_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ctype</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">local_prop</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="n">card_val</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
+                    <span class="n">subject</span><span class="o">=</span><span class="n">subj</span><span class="p">,</span>
+                    <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">local_subj</span><span class="si">}</span><span class="s2"> has </span><span class="si">{</span><span class="n">cnt</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">local_prop</span><span class="si">}</span><span class="s2"> (expected </span><span class="si">{</span><span class="n">ctype</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;Cardinality&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">card_val</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
+                    <span class="n">check_type</span><span class="o">=</span><span class="s2">&quot;cardinality&quot;</span><span class="p">,</span>
+                <span class="p">))</span>
+        <span class="k">return</span> <span class="n">violations</span>
+
+    <span class="c1"># -- Functional / Inverse Functional -----------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check_functional</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">RuleViolation</span><span class="p">]:</span>
+        <span class="n">prop_name</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">prop_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_normalize_property_uri</span><span class="p">(</span><span class="n">prop_name</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">sep</span><span class="p">,</span> <span class="n">prop_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">prop_uri</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) WHERE t.predicate = $pred &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN t.subject AS s, COUNT(DISTINCT t.object) AS cnt&quot;</span><span class="p">,</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pred&quot;</span><span class="p">:</span> <span class="n">prop_uri</span><span class="p">},</span>
+        <span class="p">)</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="p">[(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">]</span>
+        <span class="n">violations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">RuleViolation</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">local</span> <span class="o">=</span> <span class="n">_local_name</span><span class="p">(</span><span class="n">prop_uri</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">subj</span><span class="p">,</span> <span class="n">cnt</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">cnt</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">RuleViolation</span><span class="p">(</span>
+                    <span class="n">rule_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;functional(</span><span class="si">{</span><span class="n">local</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
+                    <span class="n">subject</span><span class="o">=</span><span class="n">subj</span><span class="p">,</span>
+                    <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Functional property </span><span class="si">{</span><span class="n">local</span><span class="si">}</span><span class="s2"> has </span><span class="si">{</span><span class="n">cnt</span><span class="si">}</span><span class="s2"> distinct values&quot;</span><span class="p">,</span>
+                    <span class="n">check_type</span><span class="o">=</span><span class="s2">&quot;functional&quot;</span><span class="p">,</span>
+                <span class="p">))</span>
+        <span class="k">return</span> <span class="n">violations</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check_inverse_functional</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">RuleViolation</span><span class="p">]:</span>
+        <span class="n">prop_name</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">prop_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_normalize_property_uri</span><span class="p">(</span><span class="n">prop_name</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">sep</span><span class="p">,</span> <span class="n">prop_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">prop_uri</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) WHERE t.predicate = $pred &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN t.object AS o, COUNT(DISTINCT t.subject) AS cnt&quot;</span><span class="p">,</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;pred&quot;</span><span class="p">:</span> <span class="n">prop_uri</span><span class="p">},</span>
+        <span class="p">)</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="p">[(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">]</span>
+        <span class="n">violations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">RuleViolation</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">local</span> <span class="o">=</span> <span class="n">_local_name</span><span class="p">(</span><span class="n">prop_uri</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">obj</span><span class="p">,</span> <span class="n">cnt</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">cnt</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">RuleViolation</span><span class="p">(</span>
+                    <span class="n">rule_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;inverseFunctional(</span><span class="si">{</span><span class="n">local</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
+                    <span class="n">subject</span><span class="o">=</span><span class="n">obj</span><span class="p">,</span>
+                    <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Inverse-functional property </span><span class="si">{</span><span class="n">local</span><span class="si">}</span><span class="s2">: value mapped by </span><span class="si">{</span><span class="n">cnt</span><span class="si">}</span><span class="s2"> subjects&quot;</span><span class="p">,</span>
+                    <span class="n">check_type</span><span class="o">=</span><span class="s2">&quot;inverseFunctional&quot;</span><span class="p">,</span>
+                <span class="p">))</span>
+        <span class="k">return</span> <span class="n">violations</span>
+
+    <span class="c1"># -- Value checks ------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check_value</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">rdf_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">RuleViolation</span><span class="p">]:</span>
+        <span class="n">class_uri</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;className&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">attr_name</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;attributeName&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">check_type</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;checkType&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">check_value</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;checkValue&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">class_uri</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">attr_name</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">attr_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_normalize_property_uri</span><span class="p">(</span><span class="n">attr_name</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">sep</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
+
+        <span class="n">subjects_result</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) WHERE t.predicate = $p AND t.object = $cls &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS s&quot;</span><span class="p">,</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;p&quot;</span><span class="p">:</span> <span class="n">rdf_type</span><span class="p">,</span> <span class="s2">&quot;cls&quot;</span><span class="p">:</span> <span class="n">class_uri</span><span class="p">},</span>
+        <span class="p">)</span>
+        <span class="n">subjects</span> <span class="o">=</span> <span class="p">[</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">subjects_result</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">subjects</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="n">violations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">RuleViolation</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">local_attr</span> <span class="o">=</span> <span class="n">_local_name</span><span class="p">(</span><span class="n">attr_uri</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">subj</span> <span class="ow">in</span> <span class="n">subjects</span><span class="p">:</span>
+            <span class="n">vals_result</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) WHERE t.subject = $s AND t.predicate = $pred &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN t.object AS val&quot;</span><span class="p">,</span>
+                <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;s&quot;</span><span class="p">:</span> <span class="n">subj</span><span class="p">,</span> <span class="s2">&quot;pred&quot;</span><span class="p">:</span> <span class="n">attr_uri</span><span class="p">},</span>
+            <span class="p">)</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">vals_result</span><span class="p">]</span>
+            <span class="n">local_subj</span> <span class="o">=</span> <span class="n">_local_name</span><span class="p">(</span><span class="n">subj</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">check_type</span> <span class="o">==</span> <span class="s2">&quot;notNull&quot;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">values</span> <span class="ow">or</span> <span class="nb">all</span><span class="p">(</span><span class="ow">not</span> <span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span><span class="p">):</span>
+                    <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">RuleViolation</span><span class="p">(</span>
+                        <span class="n">rule_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;notNull(</span><span class="si">{</span><span class="n">local_attr</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
+                        <span class="n">subject</span><span class="o">=</span><span class="n">subj</span><span class="p">,</span>
+                        <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">local_subj</span><span class="si">}</span><span class="s2"> has no value for </span><span class="si">{</span><span class="n">local_attr</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">check_type</span><span class="o">=</span><span class="s2">&quot;value&quot;</span><span class="p">,</span>
+                    <span class="p">))</span>
+                <span class="k">continue</span>
+
+            <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+                <span class="n">failed</span> <span class="o">=</span> <span class="kc">False</span>
+                <span class="k">if</span> <span class="n">check_type</span> <span class="o">==</span> <span class="s2">&quot;startsWith&quot;</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">val</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">check_value</span><span class="p">):</span>
+                    <span class="n">failed</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">elif</span> <span class="n">check_type</span> <span class="o">==</span> <span class="s2">&quot;endsWith&quot;</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">val</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="n">check_value</span><span class="p">):</span>
+                    <span class="n">failed</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">elif</span> <span class="n">check_type</span> <span class="o">==</span> <span class="s2">&quot;contains&quot;</span> <span class="ow">and</span> <span class="n">check_value</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">val</span><span class="p">:</span>
+                    <span class="n">failed</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">elif</span> <span class="n">check_type</span> <span class="o">==</span> <span class="s2">&quot;equals&quot;</span> <span class="ow">and</span> <span class="n">val</span> <span class="o">!=</span> <span class="n">check_value</span><span class="p">:</span>
+                    <span class="n">failed</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">elif</span> <span class="n">check_type</span> <span class="o">==</span> <span class="s2">&quot;notEquals&quot;</span> <span class="ow">and</span> <span class="n">val</span> <span class="o">==</span> <span class="n">check_value</span><span class="p">:</span>
+                    <span class="n">failed</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">elif</span> <span class="n">check_type</span> <span class="o">==</span> <span class="s2">&quot;matches&quot;</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">check_value</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
+                        <span class="n">failed</span> <span class="o">=</span> <span class="kc">True</span>
+
+                <span class="k">if</span> <span class="n">failed</span><span class="p">:</span>
+                    <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">RuleViolation</span><span class="p">(</span>
+                        <span class="n">rule_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">check_type</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">local_attr</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
+                        <span class="n">subject</span><span class="o">=</span><span class="n">subj</span><span class="p">,</span>
+                        <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">local_subj</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">local_attr</span><span class="si">}</span><span class="s2"> = &#39;</span><span class="si">{</span><span class="n">val</span><span class="si">}</span><span class="s2">&#39; fails </span><span class="si">{</span><span class="n">check_type</span><span class="si">}</span><span class="s2"> &#39;</span><span class="si">{</span><span class="n">check_value</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+                        <span class="n">check_type</span><span class="o">=</span><span class="s2">&quot;value&quot;</span><span class="p">,</span>
+                    <span class="p">))</span>
+        <span class="k">return</span> <span class="n">violations</span>
+
+    <span class="c1"># -- Global rules ------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check_no_orphans</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">rdf_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">RuleViolation</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Find subjects that appear as subject but have no rdf:type.&quot;&quot;&quot;</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE NOT EXISTS </span><span class="se">{{</span><span class="s2"> MATCH (t2:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE t2.subject = t.subject AND t2.predicate = $p </span><span class="se">}}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS s&quot;</span><span class="p">,</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;p&quot;</span><span class="p">:</span> <span class="n">rdf_type</span><span class="p">},</span>
+        <span class="p">)</span>
+        <span class="n">subjects</span> <span class="o">=</span> <span class="p">[</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">]</span>
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="n">RuleViolation</span><span class="p">(</span>
+                <span class="n">rule_name</span><span class="o">=</span><span class="s2">&quot;noOrphans&quot;</span><span class="p">,</span>
+                <span class="n">subject</span><span class="o">=</span><span class="n">subj</span><span class="p">,</span>
+                <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_local_name</span><span class="p">(</span><span class="n">subj</span><span class="p">)</span><span class="si">}</span><span class="s2"> has no rdf:type assertion&quot;</span><span class="p">,</span>
+                <span class="n">check_type</span><span class="o">=</span><span class="s2">&quot;global&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">subj</span> <span class="ow">in</span> <span class="n">subjects</span>
+        <span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check_require_labels</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">rdf_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">rdfs_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">RuleViolation</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Find typed subjects that have no rdfs:label.&quot;&quot;&quot;</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) WHERE t.predicate = $rdftype &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;AND NOT EXISTS </span><span class="se">{{</span><span class="s2"> MATCH (t2:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE t2.subject = t.subject AND t2.predicate = $lbl </span><span class="se">}}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS s&quot;</span><span class="p">,</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;rdftype&quot;</span><span class="p">:</span> <span class="n">rdf_type</span><span class="p">,</span> <span class="s2">&quot;lbl&quot;</span><span class="p">:</span> <span class="n">rdfs_label</span><span class="p">},</span>
+        <span class="p">)</span>
+        <span class="n">subjects</span> <span class="o">=</span> <span class="p">[</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">]</span>
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="n">RuleViolation</span><span class="p">(</span>
+                <span class="n">rule_name</span><span class="o">=</span><span class="s2">&quot;requireLabels&quot;</span><span class="p">,</span>
+                <span class="n">subject</span><span class="o">=</span><span class="n">subj</span><span class="p">,</span>
+                <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_local_name</span><span class="p">(</span><span class="n">subj</span><span class="p">)</span><span class="si">}</span><span class="s2"> has no rdfs:label&quot;</span><span class="p">,</span>
+                <span class="n">check_type</span><span class="o">=</span><span class="s2">&quot;global&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">subj</span> <span class="ow">in</span> <span class="n">subjects</span>
+        <span class="p">]</span>
+
+<div class="viewcode-block" id="ReasoningService.materialize_inferred">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#app.core.reasoning.service.ReasoningService.materialize_inferred">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">materialize_inferred</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">result</span><span class="p">:</span> <span class="n">ReasoningResult</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Insert inferred triples into the triplestore.</span>
+
+<span class="sd">        Returns the number of triples inserted.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+
+        <span class="n">table_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_graph_name</span><span class="p">()</span>
+        <span class="n">triples</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">subject</span><span class="p">,</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">predicate</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">object</span><span class="p">}</span>
+            <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span>
+            <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">subject</span> <span class="ow">and</span> <span class="n">t</span><span class="o">.</span><span class="n">subject</span> <span class="o">!=</span> <span class="s2">&quot;(batch)&quot;</span>
+        <span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">triples</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+
+        <span class="n">count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">insert_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">triples</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Materialised </span><span class="si">%d</span><span class="s2"> inferred triples into </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">count</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">count</span></div>
+
+
+<div class="viewcode-block" id="ReasoningService.materialize_to_delta">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#app.core.reasoning.service.ReasoningService.materialize_to_delta">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">materialize_to_delta</span><span class="p">(</span>
+        <span class="n">client</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Materialise inferred triples into a Databricks Delta table.</span>
+
+<span class="sd">        Performs CREATE TABLE IF NOT EXISTS, DELETE FROM, then INSERT INTO.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            client: A ``DatabricksClient`` instance with SQL Warehouse access.</span>
+<span class="sd">            table_name: Fully-qualified Delta table (catalog.schema.table).</span>
+<span class="sd">            triples: List of dicts with ``subject``, ``predicate``, ``object`` keys.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Number of triples inserted.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">app.core.triplestore.delta.store</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeltaTripleStore</span>
+
+        <span class="n">store</span> <span class="o">=</span> <span class="n">DeltaTripleStore</span><span class="p">(</span><span class="n">client</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Materialise to Delta: ensuring table </span><span class="si">%s</span><span class="s2"> exists&quot;</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span>
+        <span class="n">store</span><span class="o">.</span><span class="n">create_table</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Materialise to Delta: clearing existing rows in </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">execute_statement</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DELETE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Materialise to Delta: inserting </span><span class="si">%d</span><span class="s2"> triples into </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">),</span> <span class="n">table_name</span><span class="p">)</span>
+        <span class="n">count</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">insert_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">triples</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Materialise to Delta: done — </span><span class="si">%d</span><span class="s2"> triples written to </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">count</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">count</span></div>
+
+
+    <span class="c1"># -- Internal helpers -------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_owl_content</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Retrieve generated OWL Turtle from the project session.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;generated_owl&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="o">.</span><span class="n">generated_owl</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;_data&quot;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;generated&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;owl&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_swrl_rules</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;swrl_rules&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="n">ontology</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ontology</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;swrl_rules&quot;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">return</span> <span class="p">[]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_ontology_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
+        <span class="n">ontology</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ontology</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">ontology</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;_data&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">return</span> <span class="p">{}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_graph_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">info</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">info</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="n">DEFAULT_GRAPH_NAME</span>
+        <span class="n">version</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;current_version&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;1&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_V</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_normalize_property_uri</span><span class="p">(</span><span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Normalize a property URI to the data namespace used by R2RML.</span>
+
+<span class="sd">        Mirrors the logic in ``SWRLEngine._build_uri_map`` so that</span>
+<span class="sd">        predicate URIs match those stored in the triple store.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">uri</span> <span class="ow">and</span> <span class="n">name</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">data_ns</span> <span class="o">+</span> <span class="n">name</span><span class="p">)</span> <span class="k">if</span> <span class="n">data_ns</span> <span class="k">else</span> <span class="p">(</span><span class="n">base_uri</span> <span class="o">+</span> <span class="n">sep</span> <span class="o">+</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">data_ns</span> <span class="ow">and</span> <span class="n">uri</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">data_ns</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">data_ns</span> <span class="o">+</span> <span class="n">_local_name</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">uri</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_find_properties_by_characteristic</span><span class="p">(</span><span class="n">ontology</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">characteristic</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract property URIs with *characteristic* (normalized to data namespace).&quot;&quot;&quot;</span>
+        <span class="n">base_uri</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">data_ns</span><span class="p">,</span> <span class="n">sep</span> <span class="o">=</span> <span class="n">_namespace_parts</span><span class="p">(</span><span class="n">base_uri</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">target</span> <span class="o">=</span> <span class="n">characteristic</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">prop</span> <span class="ow">in</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="n">chars</span> <span class="o">=</span> <span class="n">prop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;characteristics&quot;</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">chars</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="n">target</span> <span class="ow">in</span> <span class="p">[</span><span class="n">c</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">chars</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="nb">str</span><span class="p">)]:</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="n">prop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">prop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;localName&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="n">uri</span> <span class="o">=</span> <span class="n">ReasoningService</span><span class="o">.</span><span class="n">_normalize_property_uri</span><span class="p">(</span>
+                    <span class="n">prop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span> <span class="n">data_ns</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">sep</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">uri</span><span class="p">:</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

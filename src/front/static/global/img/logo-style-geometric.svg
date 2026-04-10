@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Geometric/Angular tech style -->
+  
+  <!-- Sharp angular layers -->
+  <polygon points="8,44 32,54 56,44 56,50 32,60 8,50" fill="#FF3621"/>
+  <polygon points="8,34 32,44 56,34 56,40 32,50 8,40" fill="#6366F1"/>
+  <polygon points="8,24 32,34 56,24 56,30 32,40 8,30" fill="#4ECDC4"/>
+  
+  <!-- Hexagonal nodes -->
+  <polygon points="32,6 38,9 38,15 32,18 26,15 26,9" fill="#1E293B"/>
+  <polygon points="16,12 20,14 20,18 16,20 12,18 12,14" fill="#FF3621"/>
+  <polygon points="48,12 52,14 52,18 48,20 44,18 44,14" fill="#4ECDC4"/>
+  
+  <!-- Angular connections -->
+  <line x1="26" y1="12" x2="20" y2="14" stroke="#1E293B" stroke-width="2"/>
+  <line x1="38" y1="12" x2="44" y2="14" stroke="#1E293B" stroke-width="2"/>
+</svg>

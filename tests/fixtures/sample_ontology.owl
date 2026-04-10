@@ -1,0 +1,48 @@
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix : <http://test.org/ontology#> .
+@prefix ontobricks: <http://ontobricks.com/schema#> .
+
+<http://test.org/ontology> a owl:Ontology ;
+    rdfs:label "TestOntology" ;
+    rdfs:comment "A test ontology for unit tests" .
+
+:Customer a owl:Class ;
+    rdfs:label "Customer" ;
+    rdfs:comment "A customer entity" ;
+    ontobricks:icon "👤" .
+
+:Order a owl:Class ;
+    rdfs:label "Order" ;
+    rdfs:comment "A sales order" ;
+    ontobricks:icon "📦" .
+
+:Product a owl:Class ;
+    rdfs:label "Product" ;
+    rdfs:comment "A product" ;
+    rdfs:subClassOf :Order .
+
+:hasOrder a owl:ObjectProperty ;
+    rdfs:label "has Order" ;
+    rdfs:comment "Links customer to order" ;
+    rdfs:domain :Customer ;
+    rdfs:range :Order .
+
+:firstName a owl:DatatypeProperty ;
+    rdfs:label "firstName" ;
+    rdfs:domain :Customer ;
+    rdfs:range xsd:string .
+
+:lastName a owl:DatatypeProperty ;
+    rdfs:label "lastName" ;
+    rdfs:domain :Customer ;
+    rdfs:range xsd:string .
+
+:orderDate a owl:DatatypeProperty ;
+    rdfs:label "orderDate" ;
+    rdfs:domain :Order ;
+    rdfs:range xsd:string .
+
+:hasOrder a owl:FunctionalProperty .

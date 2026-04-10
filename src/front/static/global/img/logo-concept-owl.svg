@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Stylized Owl face (OWL = Web Ontology Language) with brick pattern -->
+  
+  <!-- Head shape / brick outline -->
+  <path d="M12 20 L32 10 L52 20 L52 48 L32 56 L12 48 Z" fill="#1E293B"/>
+  
+  <!-- Eyes (like data nodes) -->
+  <circle cx="22" cy="30" r="8" fill="#FF3621"/>
+  <circle cx="42" cy="30" r="8" fill="#FF3621"/>
+  <circle cx="22" cy="30" r="4" fill="white"/>
+  <circle cx="42" cy="30" r="4" fill="white"/>
+  <circle cx="22" cy="30" r="2" fill="#1E293B"/>
+  <circle cx="42" cy="30" r="2" fill="#1E293B"/>
+  
+  <!-- Beak (triangle) -->
+  <path d="M32 34 L28 42 L36 42 Z" fill="#F59E0B"/>
+  
+  <!-- Eyebrows / connection lines -->
+  <path d="M14 22 L22 20 L30 24" stroke="#4ECDC4" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M50 22 L42 20 L34 24" stroke="#4ECDC4" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>

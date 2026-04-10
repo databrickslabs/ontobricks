@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>back.core.reasoning.SWRLBuiltinRegistry &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for back.core.reasoning.SWRLBuiltinRegistry</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;SWRL built-in registry — maps built-in names to SQL / Cypher expressions.</span>
+
+<span class="sd">Each built-in has a ``name``, ``arity``, ``category``, and templates for</span>
+<span class="sd">both SQL and Cypher translation.  Templates use positional placeholders</span>
+<span class="sd">``{0}``, ``{1}``, ... that the translator fills with bound variable</span>
+<span class="sd">references or literal values.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span>
+
+
+<div class="viewcode-block" id="SWRLBuiltin">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">SWRLBuiltin</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Descriptor for a single SWRL built-in predicate.&quot;&quot;&quot;</span>
+
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">arity</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">category</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">sql_template</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">cypher_template</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">cast_numeric</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+
+
+
+<div class="viewcode-block" id="SWRLBuiltinRegistry">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SWRLBuiltinRegistry</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Class-based registry for SWRL built-in predicates.</span>
+
+<span class="sd">    All methods are class-level or static; no instance is needed.</span>
+<span class="sd">    The registry is populated once at class-definition time.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">_BUILTINS</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">SWRLBuiltin</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Registry population</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_register</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">SWRLBuiltin</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">cls</span><span class="o">.</span><span class="n">_BUILTINS</span><span class="p">[</span><span class="n">b</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()]</span> <span class="o">=</span> <span class="n">b</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_builtins</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Populate the built-in registry (called once at module load).&quot;&quot;&quot;</span>
+        <span class="n">r</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_register</span>
+
+        <span class="c1"># -- Comparison ------------------------------------------------</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;greaterThan&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;comparison&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &gt; CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &gt; CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span> <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;lessThan&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;comparison&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &lt; CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &lt; CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span> <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;greaterThanOrEqual&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;comparison&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &gt;= CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &gt;= CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span> <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;lessThanOrEqual&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;comparison&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &lt;= CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &lt;= CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span> <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;equal&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;comparison&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;</span><span class="si">{0}</span><span class="s2"> = </span><span class="si">{1}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{0}</span><span class="s2"> = </span><span class="si">{1}</span><span class="s2">&quot;</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;notEqual&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;comparison&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;</span><span class="si">{0}</span><span class="s2"> &lt;&gt; </span><span class="si">{1}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{0}</span><span class="s2"> &lt;&gt; </span><span class="si">{1}</span><span class="s2">&quot;</span><span class="p">))</span>
+
+        <span class="c1"># -- Math ------------------------------------------------------</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;math&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) + CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) + CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span> <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;subtract&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;math&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) - CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) - CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span> <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;multiply&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;math&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) * CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) * CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span> <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;divide&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;math&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) / NULLIF(CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE), 0)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CASE WHEN CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE) = 0 THEN null ELSE CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) / CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE) END&quot;</span><span class="p">,</span>
+                       <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;mod&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;math&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;MOD(CAST(</span><span class="si">{0}</span><span class="s2"> AS BIGINT), CAST(</span><span class="si">{1}</span><span class="s2"> AS BIGINT))&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS INT64) % CAST(</span><span class="si">{1}</span><span class="s2"> AS INT64)&quot;</span><span class="p">,</span> <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;abs&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;math&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;ABS(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;abs(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span> <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;round&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;math&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;ROUND(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;round(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE), 0)&quot;</span><span class="p">,</span> <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;ceiling&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;math&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CEIL(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;ceil(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span> <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;floor&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;math&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;FLOOR(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;floor(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span> <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+
+        <span class="c1"># -- String ----------------------------------------------------</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;startsWith&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;</span><span class="si">{0}</span><span class="s2"> LIKE CONCAT(</span><span class="si">{1}</span><span class="s2">, &#39;</span><span class="si">%%</span><span class="s2">&#39;)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;starts with(</span><span class="si">{0}</span><span class="s2">, </span><span class="si">{1}</span><span class="s2">)&quot;</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;endsWith&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;</span><span class="si">{0}</span><span class="s2"> LIKE CONCAT(&#39;</span><span class="si">%%</span><span class="s2">&#39;, </span><span class="si">{1}</span><span class="s2">)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;ends with(</span><span class="si">{0}</span><span class="s2">, </span><span class="si">{1}</span><span class="s2">)&quot;</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;contains&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;</span><span class="si">{0}</span><span class="s2"> LIKE CONCAT(&#39;</span><span class="si">%%</span><span class="s2">&#39;, </span><span class="si">{1}</span><span class="s2">, &#39;</span><span class="si">%%</span><span class="s2">&#39;)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;contains(</span><span class="si">{0}</span><span class="s2">, </span><span class="si">{1}</span><span class="s2">)&quot;</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;stringLength&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;LENGTH(</span><span class="si">{0}</span><span class="s2">)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;size(</span><span class="si">{0}</span><span class="s2">)&quot;</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;upperCase&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;UPPER(</span><span class="si">{0}</span><span class="s2">)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;toUpper(</span><span class="si">{0}</span><span class="s2">)&quot;</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;lowerCase&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;LOWER(</span><span class="si">{0}</span><span class="s2">)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;toLower(</span><span class="si">{0}</span><span class="s2">)&quot;</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;matches&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;</span><span class="si">{0}</span><span class="s2"> RLIKE </span><span class="si">{1}</span><span class="s2">&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;</span><span class="si">{0}</span><span class="s2"> =~ </span><span class="si">{1}</span><span class="s2">&quot;</span><span class="p">))</span>
+
+        <span class="c1"># -- Date/Time -------------------------------------------------</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;before&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;date&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS TIMESTAMP) &lt; CAST(</span><span class="si">{1}</span><span class="s2"> AS TIMESTAMP)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;datetime(</span><span class="si">{0}</span><span class="s2">) &lt; datetime(</span><span class="si">{1}</span><span class="s2">)&quot;</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;after&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;date&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS TIMESTAMP) &gt; CAST(</span><span class="si">{1}</span><span class="s2"> AS TIMESTAMP)&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;datetime(</span><span class="si">{0}</span><span class="s2">) &gt; datetime(</span><span class="si">{1}</span><span class="s2">)&quot;</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;dateDiff&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;date&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;DATEDIFF(CAST(</span><span class="si">{0}</span><span class="s2"> AS DATE), CAST(</span><span class="si">{1}</span><span class="s2"> AS DATE))&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;duration.between(datetime(</span><span class="si">{1}</span><span class="s2">), datetime(</span><span class="si">{0}</span><span class="s2">)).days&quot;</span><span class="p">))</span>
+        <span class="n">r</span><span class="p">(</span><span class="n">SWRLBuiltin</span><span class="p">(</span><span class="s2">&quot;now&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;date&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;CURRENT_TIMESTAMP()&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;datetime()&quot;</span><span class="p">))</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Public API</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="SWRLBuiltinRegistry.get">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.get">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">SWRLBuiltin</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Look up a built-in by name (case-insensitive).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_BUILTINS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span></div>
+
+
+<div class="viewcode-block" id="SWRLBuiltinRegistry.is_builtin">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.is_builtin">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_builtin</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True if *name* is a registered built-in.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_BUILTINS</span></div>
+
+
+<div class="viewcode-block" id="SWRLBuiltinRegistry.all">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.all">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">all</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">SWRLBuiltin</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a copy of the full registry.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">_BUILTINS</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SWRLBuiltinRegistry.by_category">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.by_category">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">by_category</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return built-ins grouped by category for UI consumption.&quot;&quot;&quot;</span>
+        <span class="n">groups</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_BUILTINS</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="n">groups</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">category</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">b</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="s2">&quot;arity&quot;</span><span class="p">:</span> <span class="n">b</span><span class="o">.</span><span class="n">arity</span><span class="p">,</span>
+                <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="n">b</span><span class="o">.</span><span class="n">category</span><span class="p">,</span>
+            <span class="p">})</span>
+        <span class="k">return</span> <span class="n">groups</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Literal helpers (stateless utilities)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="SWRLBuiltinRegistry.is_literal">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.is_literal">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_literal</span><span class="p">(</span><span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True if *token* is a literal value (not a variable).</span>
+
+<span class="sd">        Variables start with ``?``.  Quoted strings and bare numbers are literals.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="n">token</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;?&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SWRLBuiltinRegistry.literal_sql">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.literal_sql">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">literal_sql</span><span class="p">(</span><span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a SWRL literal token to a SQL literal expression.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">token</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">token</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+        <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">token</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">token</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="nb">float</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">token</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s2">&#39;&quot;</span></div>
+
+
+<div class="viewcode-block" id="SWRLBuiltinRegistry.literal_cypher">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.literal_cypher">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">literal_cypher</span><span class="p">(</span><span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a SWRL literal token to a Cypher literal expression.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">token</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">token</span>
+        <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">token</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s1">&#39;&quot;</span><span class="si">{</span><span class="n">token</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="nb">float</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">token</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s1">&#39;&quot;</span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s1">&quot;&#39;</span></div>
+</div>
+
+
+
+<span class="c1"># Populate the registry once at import time</span>
+<span class="n">SWRLBuiltinRegistry</span><span class="o">.</span><span class="n">_init_builtins</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

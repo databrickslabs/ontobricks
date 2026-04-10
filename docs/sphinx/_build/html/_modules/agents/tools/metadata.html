@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>agents.tools.metadata &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for agents.tools.metadata</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Metadata tools – shared across agents.</span>
+
+<span class="sd">Provides tools to retrieve project table metadata from the ToolContext.</span>
+<span class="sd">All metadata is read from imported/project metadata only — no direct</span>
+<span class="sd">Unity Catalog queries. Metadata must be loaded in Project settings first.</span>
+
+<span class="sd">Limits are applied to avoid exceeding LLM context size when there are</span>
+<span class="sd">many tables or columns. Use get_table_detail for full schema of a specific table.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">agents.tools.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolContext</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="c1"># Limits to avoid &quot;too many&quot; context overflow in auto-assign</span>
+<span class="n">_MAX_TABLES_IN_METADATA</span> <span class="o">=</span> <span class="mi">50</span>
+<span class="n">_MAX_COLUMNS_PER_TABLE</span> <span class="o">=</span> <span class="mi">80</span>
+
+
+<span class="c1"># =====================================================</span>
+<span class="c1"># Tool implementations</span>
+<span class="c1"># =====================================================</span>
+
+<div class="viewcode-block" id="tool_get_metadata">
+<a class="viewcode-back" href="../../../api/agents.html#agents.tools.metadata.tool_get_metadata">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">tool_get_metadata</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return project table metadata from imported metadata only.</span>
+<span class="sd">    Does NOT query Unity Catalog — uses pre-loaded metadata from Project settings.</span>
+<span class="sd">    When there are many tables/columns, results are limited to avoid context overflow.</span>
+<span class="sd">    Use get_table_detail for full schema of a specific table.&quot;&quot;&quot;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_get_metadata: retrieving project metadata&quot;</span><span class="p">)</span>
+    <span class="n">tables</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">tables</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_get_metadata: no tables in metadata&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;No metadata loaded&quot;</span><span class="p">,</span> <span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="p">[]})</span>
+
+    <span class="n">total_tables</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span>
+    <span class="n">tables</span> <span class="o">=</span> <span class="n">tables</span><span class="p">[:</span><span class="n">_MAX_TABLES_IN_METADATA</span><span class="p">]</span>
+    <span class="n">truncated_tables</span> <span class="o">=</span> <span class="n">total_tables</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;tool_get_metadata: processing </span><span class="si">%d</span><span class="s2"> table(s)</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">),</span>
+                 <span class="sa">f</span><span class="s2">&quot; (showing first </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span><span class="si">}</span><span class="s2"> of </span><span class="si">{</span><span class="n">total_tables</span><span class="si">}</span><span class="s2">)&quot;</span> <span class="k">if</span> <span class="n">truncated_tables</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+    <span class="n">result</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">total_cols</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tables</span><span class="p">:</span>
+        <span class="n">cols</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">),</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">),</span> <span class="s2">&quot;comment&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;comment&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)[:</span><span class="mi">200</span><span class="p">]}</span>
+            <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;columns&quot;</span><span class="p">,</span> <span class="p">[])[:</span><span class="n">_MAX_COLUMNS_PER_TABLE</span><span class="p">]</span>
+        <span class="p">]</span>
+        <span class="n">original_col_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;columns&quot;</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="n">truncated_cols</span> <span class="o">=</span> <span class="n">original_col_count</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">cols</span><span class="p">)</span>
+        <span class="n">total_cols</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">cols</span><span class="p">)</span>
+        <span class="n">entry</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">),</span>
+            <span class="s2">&quot;full_name&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;full_name&quot;</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)),</span>
+            <span class="s2">&quot;comment&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;comment&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)[:</span><span class="mi">500</span><span class="p">],</span>
+            <span class="s2">&quot;column_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">cols</span><span class="p">),</span>
+            <span class="s2">&quot;columns&quot;</span><span class="p">:</span> <span class="n">cols</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="n">truncated_cols</span><span class="p">:</span>
+            <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;_note&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Showing first </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">cols</span><span class="p">)</span><span class="si">}</span><span class="s2"> of </span><span class="si">{</span><span class="n">original_col_count</span><span class="si">}</span><span class="s2"> columns. Use get_table_detail(&#39;</span><span class="si">{</span><span class="n">entry</span><span class="p">[</span><span class="s1">&#39;full_name&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39;) for full schema.&quot;</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">&quot;tool_get_metadata: table &#39;</span><span class="si">%s</span><span class="s2">&#39; — </span><span class="si">%d</span><span class="s2"> columns&quot;</span><span class="p">,</span>
+            <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;full_name&quot;</span><span class="p">],</span> <span class="nb">len</span><span class="p">(</span><span class="n">cols</span><span class="p">),</span>
+        <span class="p">)</span>
+
+    <span class="n">out</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="n">result</span><span class="p">,</span>
+        <span class="s2">&quot;table_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">),</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="n">truncated_tables</span><span class="p">:</span>
+        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;_truncated&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;_message&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Showing first </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="si">}</span><span class="s2"> of </span><span class="si">{</span><span class="n">total_tables</span><span class="si">}</span><span class="s2"> tables to avoid context overflow. Use get_table_detail(table_name) for any table&#39;s full schema.&quot;</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_get_metadata: returning </span><span class="si">%d</span><span class="s2"> table(s), </span><span class="si">%d</span><span class="s2"> total column(s)</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">),</span> <span class="n">total_cols</span><span class="p">,</span> <span class="s2">&quot; (truncated)&quot;</span> <span class="k">if</span> <span class="n">truncated_tables</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">out</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="tool_get_table_detail">
+<a class="viewcode-back" href="../../../api/agents.html#agents.tools.metadata.tool_get_table_detail">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">tool_get_table_detail</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return detailed metadata for one specific table.&quot;&quot;&quot;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_get_table_detail: looking up &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">table_name</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;tool_get_table_detail: called without table_name parameter&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;table_name is required&quot;</span><span class="p">})</span>
+
+    <span class="n">available_tables</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+        <span class="s2">&quot;tool_get_table_detail: searching &#39;</span><span class="si">%s</span><span class="s2">&#39; in </span><span class="si">%d</span><span class="s2"> table(s): [</span><span class="si">%s</span><span class="s2">]&quot;</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">available_tables</span><span class="p">),</span>
+        <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;full_name&quot;</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;?&quot;</span><span class="p">))</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">available_tables</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">available_tables</span><span class="p">:</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;full_name&quot;</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="n">table_name</span> <span class="ow">or</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">table_name</span><span class="p">:</span>
+            <span class="n">cols</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">),</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">),</span> <span class="s2">&quot;comment&quot;</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;comment&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)}</span>
+                <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;columns&quot;</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="p">]</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_get_table_detail: found &#39;</span><span class="si">%s</span><span class="s2">&#39; — </span><span class="si">%d</span><span class="s2"> column(s)&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">cols</span><span class="p">))</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;tool_get_table_detail: &#39;</span><span class="si">%s</span><span class="s2">&#39; columns: [</span><span class="si">%s</span><span class="s2">]&quot;</span><span class="p">,</span>
+                <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">c</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">c</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">cols</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">),</span>
+                <span class="s2">&quot;full_name&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;full_name&quot;</span><span class="p">),</span>
+                <span class="s2">&quot;comment&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;comment&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                <span class="s2">&quot;columns&quot;</span><span class="p">:</span> <span class="n">cols</span><span class="p">,</span>
+                <span class="s2">&quot;column_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">cols</span><span class="p">),</span>
+            <span class="p">})</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+        <span class="s2">&quot;tool_get_table_detail: table &#39;</span><span class="si">%s</span><span class="s2">&#39; not found in </span><span class="si">%d</span><span class="s2"> available table(s)&quot;</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">available_tables</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Table &#39;</span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">&#39; not found&quot;</span><span class="p">})</span></div>
+
+
+
+<span class="c1"># =====================================================</span>
+<span class="c1"># OpenAI function-calling definitions</span>
+<span class="c1"># =====================================================</span>
+
+<span class="n">METADATA_TOOL_DEFINITIONS</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_metadata&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="p">(</span>
+                <span class="s2">&quot;Get the project&#39;s database table metadata: table names (full catalog.schema.table names), &quot;</span>
+                <span class="s2">&quot;column names, data types, and descriptions. Call this first to understand the available data.&quot;</span>
+            <span class="p">),</span>
+            <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{},</span> <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[]},</span>
+        <span class="p">},</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_table_detail&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Get detailed metadata for a single table.&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;table_name&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Full (catalog.schema.table) or short table name&quot;</span><span class="p">,</span>
+                    <span class="p">}</span>
+                <span class="p">},</span>
+                <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;table_name&quot;</span><span class="p">],</span>
+            <span class="p">},</span>
+        <span class="p">},</span>
+    <span class="p">},</span>
+<span class="p">]</span>
+
+<span class="n">METADATA_TOOL_HANDLERS</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;get_metadata&quot;</span><span class="p">:</span> <span class="n">tool_get_metadata</span><span class="p">,</span>
+    <span class="s2">&quot;get_table_detail&quot;</span><span class="p">:</span> <span class="n">tool_get_table_detail</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

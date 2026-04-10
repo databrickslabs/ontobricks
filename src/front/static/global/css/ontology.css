@@ -1,0 +1,447 @@
+/* ==========================================================================
+   Ontology Page Specific Styles
+   ========================================================================== */
+
+/* Full-width layout activation for ontology page */
+body.ontology-page {
+    /* Marker class for page-specific JS behaviors */
+}
+
+/* OWL section - full height cards */
+#owl-section .card {
+    min-height: calc(100vh - 120px);
+}
+
+/* Ontology graph container sizing */
+#ontologyGraph {
+    height: calc(100vh - 180px);
+    min-height: 400px;
+}
+
+/* ==========================================================================
+   Entities & Relationships Sections - flex column so the card fills
+   remaining space after the section-header automatically.
+   ========================================================================== */
+
+#entities-section.active,
+#relationships-section.active {
+    display: flex !important;
+    flex-direction: column;
+    height: calc(100vh - 95px);
+    overflow: hidden;
+}
+
+/* ==========================================================================
+   Design Section - Full Height Canvas
+   Self-contained sizing (no sidebar-content override needed).
+   ========================================================================== */
+
+#design-section .section-header {
+    margin-bottom: 0.5rem;
+}
+
+/* View Selector Styling */
+.view-selector {
+    background: #f8f9fa;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+}
+
+.view-selector label {
+    white-space: nowrap;
+}
+
+.view-selector .form-select {
+    border-color: #ced4da;
+    font-weight: 500;
+}
+
+.view-selector .btn-group .btn {
+    padding: 0.25rem 0.5rem;
+}
+
+.view-selector .btn-group .btn:disabled {
+    opacity: 0.5;
+}
+
+/* Designer canvas fills its wrapper */
+#ontology-designer-canvas {
+    width: 100%;
+    height: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+}
+
+/* Designer Loading Overlay */
+.designer-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(248, 249, 250, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    border-radius: 8px;
+}
+
+
+/* ==========================================================================
+   OWL Content Section
+   ========================================================================== */
+.owl-preview-textarea {
+    min-height: 400px;
+    resize: none;
+    background-color: #fff !important;
+    color: #212529 !important;
+}
+
+.owl-preview-textarea:read-only {
+    background-color: #fff !important;
+    color: #212529 !important;
+}
+
+.owl-preview-textarea::placeholder {
+    color: #6c757d;
+}
+
+/* OWL generation error state */
+.owl-preview-textarea.owl-error {
+    background-color: #fff5f5 !important;
+    border-color: #dc3545;
+    color: #842029 !important;
+}
+
+.owl-preview-textarea.owl-error::placeholder {
+    color: #842029;
+}
+
+/* ==========================================================================
+   Advanced Sections (SWRL, Constraints, Axioms)
+   ========================================================================== */
+
+/* Placeholder icons */
+.icon-lg {
+    font-size: 3rem;
+}
+
+/* SWRL Rules */
+.swrl-rule-card {
+    border-left: 3px solid #6f42c1;
+    transition: box-shadow 0.2s ease;
+}
+
+.swrl-rule-card:hover {
+    box-shadow: 0 2px 8px rgba(111, 66, 193, 0.15);
+}
+
+.swrl-rule-code {
+    font-family: 'Fira Code', 'Monaco', monospace;
+    font-size: 0.85rem;
+    background: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.swrl-rule-code code {
+    color: #6f42c1;
+}
+
+/* Constraints */
+.constraint-card {
+    border-left: 3px solid #0d6efd;
+    transition: box-shadow 0.2s ease;
+}
+
+.constraint-card:hover {
+    box-shadow: 0 2px 8px rgba(13, 110, 253, 0.15);
+}
+
+/* Axioms */
+.axiom-card {
+    border-left: 3px solid #198754;
+    transition: box-shadow 0.2s ease;
+}
+
+.axiom-card:hover {
+    box-shadow: 0 2px 8px rgba(25, 135, 84, 0.15);
+}
+
+/* Clickable chips for SWRL predicates */
+.clickable-chip {
+    cursor: pointer;
+    transition: transform 0.1s ease, opacity 0.1s ease;
+}
+
+.clickable-chip:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
+}
+
+/* Code textarea in modals */
+.code-textarea {
+    font-family: 'Fira Code', 'Monaco', monospace;
+    font-size: 0.9rem;
+}
+
+/* Property chain connector */
+.input-group-text {
+    background: #f8f9fa;
+    font-weight: bold;
+}
+
+/* ==========================================================================
+   Visualization Legend
+   ========================================================================== */
+.viz-legend-badge-class {
+    background-color: #3498db !important;
+}
+
+.viz-legend-badge-object-property {
+    background-color: #e67e22 !important;
+}
+
+.viz-legend-badge-data-property {
+    background-color: #27ae60 !important;
+}
+
+/* ==========================================================================
+   Class Hierarchy Tree View
+   ========================================================================== */
+
+.class-hierarchy-list {
+    list-style: none;
+    padding-left: 0;
+    margin-bottom: 0;
+}
+
+.class-hierarchy-list:not(.root-level) {
+    padding-left: 1.5rem;
+    border-left: 1px dashed #dee2e6;
+    margin-left: 0.5rem;
+}
+
+.tree-node {
+    margin: 0.25rem 0;
+}
+
+.tree-node-content {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: background-color 0.15s ease;
+}
+
+.tree-node-content:hover {
+    background-color: #f8f9fa;
+}
+
+.tree-toggle {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    text-decoration: none !important;
+    flex-shrink: 0;
+}
+
+.tree-toggle:hover {
+    color: #0d6efd;
+}
+
+.tree-toggle i {
+    font-size: 0.75rem;
+    transition: transform 0.15s ease;
+}
+
+.tree-spacer {
+    width: 20px;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.tree-node-label {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.tree-node-label:hover strong {
+    color: #0d6efd;
+    text-decoration: underline;
+}
+
+.tree-node-label .emoji-inline {
+    font-size: 1rem;
+}
+
+.tree-children {
+    display: block;
+}
+
+/* Entity attributes list */
+.entity-attributes {
+    border-left: 2px solid #17a2b8;
+    background-color: #f8f9fa;
+    border-radius: 0 4px 4px 0;
+    padding: 0.25rem 0;
+}
+
+.entity-attributes .attribute-item {
+    border-color: #dee2e6 !important;
+}
+
+.entity-attributes .attribute-item:hover {
+    background-color: #e9ecef;
+}
+
+/* Badge styling for tree */
+.badge-sm {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.4rem;
+    font-weight: normal;
+}
+
+/* Highlighted class card in list */
+#classesList .card.border-primary {
+    border-width: 2px !important;
+}
+
+/* Tree delete button */
+.tree-delete-btn {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.tree-node-content:hover .tree-delete-btn {
+    opacity: 1;
+}
+
+.tree-delete-btn:hover {
+    color: #dc3545 !important;
+}
+
+/* Tree node label clickable cursor */
+.tree-node-label {
+    cursor: pointer;
+}
+
+.tree-node-label:hover {
+    background-color: rgba(13, 110, 253, 0.1);
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: -2px -6px;
+}
+
+/* ==========================================================================
+   Relationship Tree View (Flat List)
+   ========================================================================== */
+
+.relationship-list {
+    list-style: none;
+    padding-left: 0;
+    margin-bottom: 0;
+}
+
+.relationship-list .tree-node {
+    margin: 0.25rem 0;
+}
+
+.relationship-list .tree-node-content {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 4px;
+    transition: background-color 0.15s ease;
+}
+
+.relationship-list .tree-node-content:hover {
+    background-color: #f8f9fa;
+}
+
+.relationship-list .tree-node-label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.relationship-list .tree-node-label i {
+    font-size: 0.9rem;
+}
+
+/* Tree action buttons (toggle, delete) */
+.tree-action-btn {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.tree-node-content:hover .tree-action-btn {
+    opacity: 1;
+}
+
+.tree-action-btn:hover {
+    opacity: 1 !important;
+}
+
+/* ==========================================================================
+   Designer Canvas Wrapper
+   ========================================================================== */
+
+#ontology-designer-canvas-wrapper {
+    position: relative;
+    height: calc(100vh - 160px);
+    min-height: 400px;
+}
+
+/* ==========================================================================
+   Designer Empty State Overlay
+   ========================================================================== */
+
+.designer-empty-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(248, 249, 250, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.designer-empty-overlay .empty-state-content {
+    max-width: 300px;
+}
+
+/* ==========================================================================
+   Designer Save Indicator
+   ========================================================================== */
+
+#design-save-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #404040;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+

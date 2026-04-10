@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>agents.tracing &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for agents.tracing</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">MLflow tracing configuration for OntoBricks agents.</span>
+
+<span class="sd">Provides helpers to initialise MLflow experiment tracking and tracing,</span>
+<span class="sd">plus a safe decorator that degrades to a no-op when MLflow is unavailable</span>
+<span class="sd">or not configured.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">functools</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="n">_TRACING_READY</span> <span class="o">=</span> <span class="kc">False</span>
+
+<span class="n">EXPERIMENT_NAME</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;ONTOBRICKS_MLFLOW_EXPERIMENT&quot;</span><span class="p">,</span> <span class="s2">&quot;ontobricks-agents&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_resolve_experiment_name</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Ensure the experiment name is an absolute workspace path on Databricks.</span>
+
+<span class="sd">    Databricks MLflow requires paths like ``/Users/&lt;user&gt;/...`` or ``/Shared/...``.</span>
+<span class="sd">    When running locally (no tracking URI or file-based), the name is returned as-is.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">name</span>
+
+    <span class="n">tracking_uri</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;MLFLOW_TRACKING_URI&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">tracking_uri</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">!=</span> <span class="s2">&quot;databricks&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">name</span>
+
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;/Shared/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span>
+
+
+<div class="viewcode-block" id="setup_tracing">
+<a class="viewcode-back" href="../../api/agents.html#agents.tracing.setup_tracing">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">setup_tracing</span><span class="p">(</span><span class="n">experiment_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Initialise MLflow tracing for agent runs.</span>
+
+<span class="sd">    Call once during application startup.  Returns *True* if tracing was</span>
+<span class="sd">    successfully configured, *False* otherwise (the application can still</span>
+<span class="sd">    run without tracing).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">_TRACING_READY</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">mlflow</span>
+
+        <span class="n">name</span> <span class="o">=</span> <span class="n">_resolve_experiment_name</span><span class="p">(</span><span class="n">experiment_name</span> <span class="ow">or</span> <span class="n">EXPERIMENT_NAME</span><span class="p">)</span>
+        <span class="n">mlflow</span><span class="o">.</span><span class="n">set_experiment</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">mlflow</span><span class="o">.</span><span class="n">tracing</span><span class="o">.</span><span class="n">enable</span><span class="p">()</span>
+        <span class="n">_TRACING_READY</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;MLflow tracing enabled — experiment=&#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;MLflow tracing setup failed (agents will run without tracing): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+        <span class="n">_TRACING_READY</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+
+
+<div class="viewcode-block" id="is_tracing_ready">
+<a class="viewcode-back" href="../../api/agents.html#agents.tracing.is_tracing_ready">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">is_tracing_ready</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">_TRACING_READY</span></div>
+
+
+
+<div class="viewcode-block" id="trace_agent">
+<a class="viewcode-back" href="../../api/agents.html#agents.tracing.trace_agent">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">trace_agent</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Decorator: wrap an agent ``run_agent`` function with an AGENT span.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decorator</span><span class="p">(</span><span class="n">fn</span><span class="p">):</span>
+        <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">wrapper</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">_TRACING_READY</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">fn</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">mlflow</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">mlflow.entities</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpanType</span>
+            <span class="k">with</span> <span class="n">mlflow</span><span class="o">.</span><span class="n">start_span</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span> <span class="ow">or</span> <span class="n">fn</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="n">span_type</span><span class="o">=</span><span class="n">SpanType</span><span class="o">.</span><span class="n">AGENT</span><span class="p">)</span> <span class="k">as</span> <span class="n">span</span><span class="p">:</span>
+                <span class="n">span</span><span class="o">.</span><span class="n">set_inputs</span><span class="p">(</span><span class="n">_safe_inputs</span><span class="p">(</span><span class="n">kwargs</span><span class="p">))</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">fn</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                <span class="n">span</span><span class="o">.</span><span class="n">set_outputs</span><span class="p">(</span><span class="n">_safe_result</span><span class="p">(</span><span class="n">result</span><span class="p">))</span>
+                <span class="k">return</span> <span class="n">result</span>
+        <span class="k">return</span> <span class="n">wrapper</span>
+    <span class="k">return</span> <span class="n">decorator</span></div>
+
+
+
+<div class="viewcode-block" id="trace_llm">
+<a class="viewcode-back" href="../../api/agents.html#agents.tracing.trace_llm">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">trace_llm</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Decorator: wrap an LLM call function with an LLM span.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decorator</span><span class="p">(</span><span class="n">fn</span><span class="p">):</span>
+        <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">wrapper</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">_TRACING_READY</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">fn</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">mlflow</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">mlflow.entities</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpanType</span>
+            <span class="k">with</span> <span class="n">mlflow</span><span class="o">.</span><span class="n">start_span</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span> <span class="ow">or</span> <span class="n">fn</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="n">span_type</span><span class="o">=</span><span class="n">SpanType</span><span class="o">.</span><span class="n">LLM</span><span class="p">)</span> <span class="k">as</span> <span class="n">span</span><span class="p">:</span>
+                <span class="n">span</span><span class="o">.</span><span class="n">set_inputs</span><span class="p">({</span>
+                    <span class="s2">&quot;endpoint&quot;</span><span class="p">:</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;endpoint_name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="k">else</span> <span class="s2">&quot;?&quot;</span><span class="p">),</span>
+                    <span class="s2">&quot;message_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;messages&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">3</span> <span class="k">else</span> <span class="p">[])),</span>
+                <span class="p">})</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">fn</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                    <span class="n">usage</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;usage&quot;</span><span class="p">,</span> <span class="p">{})</span>
+                    <span class="n">span</span><span class="o">.</span><span class="n">set_outputs</span><span class="p">({</span>
+                        <span class="s2">&quot;finish_reason&quot;</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;choices&quot;</span><span class="p">,</span> <span class="p">[{}])[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;finish_reason&quot;</span><span class="p">),</span>
+                        <span class="s2">&quot;prompt_tokens&quot;</span><span class="p">:</span> <span class="n">usage</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;prompt_tokens&quot;</span><span class="p">),</span>
+                        <span class="s2">&quot;completion_tokens&quot;</span><span class="p">:</span> <span class="n">usage</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;completion_tokens&quot;</span><span class="p">),</span>
+                    <span class="p">})</span>
+                <span class="k">return</span> <span class="n">result</span>
+        <span class="k">return</span> <span class="n">wrapper</span>
+    <span class="k">return</span> <span class="n">decorator</span></div>
+
+
+
+<div class="viewcode-block" id="trace_tool">
+<a class="viewcode-back" href="../../api/agents.html#agents.tracing.trace_tool">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">trace_tool</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Decorator: wrap a tool-dispatch function with a TOOL span.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decorator</span><span class="p">(</span><span class="n">fn</span><span class="p">):</span>
+        <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">wrapper</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">_TRACING_READY</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">fn</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">mlflow</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">mlflow.entities</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpanType</span>
+            <span class="n">tool_name</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tool_name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="s2">&quot;?&quot;</span><span class="p">)</span>
+            <span class="n">tool_args</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;arguments&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="k">else</span> <span class="p">{})</span>
+            <span class="k">with</span> <span class="n">mlflow</span><span class="o">.</span><span class="n">start_span</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;tool:</span><span class="si">{</span><span class="n">tool_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">span_type</span><span class="o">=</span><span class="n">SpanType</span><span class="o">.</span><span class="n">TOOL</span><span class="p">)</span> <span class="k">as</span> <span class="n">span</span><span class="p">:</span>
+                <span class="n">span</span><span class="o">.</span><span class="n">set_inputs</span><span class="p">({</span><span class="s2">&quot;tool_name&quot;</span><span class="p">:</span> <span class="n">tool_name</span><span class="p">,</span> <span class="s2">&quot;arguments&quot;</span><span class="p">:</span> <span class="n">_truncate</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">tool_args</span><span class="p">),</span> <span class="mi">500</span><span class="p">)})</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">fn</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                <span class="n">span</span><span class="o">.</span><span class="n">set_outputs</span><span class="p">({</span><span class="s2">&quot;result_length&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span><span class="p">})</span>
+                <span class="k">return</span> <span class="n">result</span>
+        <span class="k">return</span> <span class="n">wrapper</span>
+    <span class="k">return</span> <span class="n">decorator</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_safe_inputs</span><span class="p">(</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract trace-safe inputs from kwargs, excluding secrets.&quot;&quot;&quot;</span>
+    <span class="n">exclude</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;token&quot;</span><span class="p">,</span> <span class="s2">&quot;host&quot;</span><span class="p">,</span> <span class="s2">&quot;client&quot;</span><span class="p">}</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">exclude</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="kc">None</span><span class="p">))):</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">_truncate</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">),</span> <span class="mi">300</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;[list, len=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="si">}</span><span class="s2">]&quot;</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;[dict, keys=</span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">keys</span><span class="p">())[:</span><span class="mi">10</span><span class="p">]</span><span class="si">}</span><span class="s2">]&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_safe_result</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Serialise an AgentResult-like object for the span output.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{}</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;success&quot;</span><span class="p">,</span> <span class="s2">&quot;iterations&quot;</span><span class="p">,</span> <span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="s2">&quot;usage&quot;</span><span class="p">):</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">val</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">attr</span><span class="p">]</span> <span class="o">=</span> <span class="n">val</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_truncate</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">s</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">limit</span> <span class="k">else</span> <span class="n">s</span><span class="p">[:</span><span class="n">limit</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;…&quot;</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

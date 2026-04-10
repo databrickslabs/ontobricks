@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en" data-max-notifications="{{ max_notifications }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OntoBricks{% endblock %}</title>
+    
+    <!-- OntoBricks Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='global/img/favicon.svg') }}?v=2">
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css">
+    
+    <!-- OntoBricks CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='global/css/main.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='global/css/components.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='global/css/pages.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='global/css/sidebar-layout.css') }}?v={{ asset_version }}">
+    
+    <!-- OntoBricks JS Utilities (defer: non-blocking, executed after HTML parse) -->
+    <script defer src="{{ url_for('static', filename='global/js/utils.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='global/js/uc_file_dialog.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='global/js/uc-location-widget.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='home/js/uc-file-browser-modal.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='global/js/navbar.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='global/js/sidebar-nav.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='global/js/task-tracker.js') }}?v={{ asset_version }}"></script>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    
+    <!-- Navigation (driven by menu_config.json) -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="{{ menu_config.brand.route }}">
+                <img src="{{ url_for('static', filename='global/img/favicon.svg') }}?v=2" alt="{{ menu_config.brand.label }}" width="24" height="24" class="me-2">
+                {{ menu_config.brand.label }}
+                {% if app_version %}<span style="font-size: 0.65rem; font-weight: 300; opacity: 0.55; align-self: flex-end; margin-left: 0.35em; line-height: 1;">v{{ app_version }}</span>{% endif %}
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    {% for menu in menu_config.menus %}
+                    <li class="nav-item nav-chevron" aria-hidden="true">
+                        <svg viewBox="0 0 12 40" preserveAspectRatio="none"><polyline points="0,0 10,20 0,40" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/></svg>
+                    </li>
+                    <li class="nav-item dropdown">
+                        {% if menu.id == 'project' %}
+                        <a class="nav-link dropdown-toggle" href="#" id="projectDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi {{ menu.icon }}"></i> <span id="currentProjectName">{{ menu.label }}</span>
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="projectDropdown" id="projectDropdownMenu">
+                            {% for action in menu.navbar_actions %}
+                            <li><a class="dropdown-item" href="#" onclick="{{ action.action }}()"{% if action.element_id %} id="{{ action.element_id }}"{% endif %}><i class="bi {{ action.icon }}"></i> {{ action.label }}</a></li>
+                            {% endfor %}
+                            {% for group in menu.groups %}
+                            {% if not group.sidebar_only|default(false) %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> <span{% if loop.first %} id="projectSectionName"{% endif %}>{{ group.title }}</span></h6></li>
+                            {% for item in group['items'] %}
+                            <li><a class="dropdown-item{% if item.requires == 'project_saved' %} dropdown-requires-project{% endif %}" href="{{ menu.route }}?section={{ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
+                            {% endfor %}
+                            {% endif %}
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <a class="nav-link dropdown-toggle{% if menu.requires_project_saved %} nav-requires-project{% endif %}" href="#" id="{{ menu.id }}Dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi {{ menu.icon }}"></i> <span class="text-light small">{{ menu.label }}</span>
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="{{ menu.id }}Dropdown">
+                            {% for group in menu.groups %}
+                            {% if not group.sidebar_only|default(false) %}
+                            {% if not loop.first %}<li><hr class="dropdown-divider"></li>{% endif %}
+                            <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> {{ group.title }}</h6></li>
+                            {% for item in group['items'] %}
+                            <li><a class="dropdown-item{% if item.requires == 'project_saved' %} dropdown-requires-project{% endif %}" href="{{ menu.route }}?section={{ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
+                            {% endfor %}
+                            {% endif %}
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                
+                <ul class="navbar-nav ms-auto">
+                    <!-- SQL Warehouse status indicator (admin-only) -->
+                    <li class="nav-item admin-only-nav" style="display:none">
+                        <a class="nav-link" href="/settings" id="warehouseStatusLink" title="SQL Warehouse – click to configure">
+                            <i class="bi bi-server" id="warehouseStatusIcon" style="color: var(--bs-secondary);"></i>
+                        </a>
+                    </li>
+                    <!-- Task Tracker -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link position-relative" href="#" id="taskTrackerToggle" onclick="toggleTaskDropdown(); return false;" title="Background tasks">
+                            <i class="bi bi-hourglass-split"></i>
+                            <span id="taskTrackerBadge" class="position-absolute start-100 translate-middle badge rounded-pill bg-danger" style="display: none; top: 4px;">
+                                0
+                            </span>
+                        </a>
+                        <div id="taskTrackerDropdown" class="dropdown-menu dropdown-menu-end task-tracker-dropdown">
+                            <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+                                <span class="fw-semibold"><i class="bi bi-hourglass-split me-2"></i>Background Tasks</span>
+                                <button class="btn btn-link btn-sm p-0 text-muted" onclick="refreshTasks()" title="Refresh">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                            </div>
+                            <div id="taskTrackerList">
+                                <div class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                                    <small>No tasks</small>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                    <!-- Notification Center -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link position-relative" href="#" id="notifCenterToggle" onclick="NotificationCenter.toggle(event); return false;" title="Notifications">
+                            <i class="bi bi-bell" id="notifCenterIcon"></i>
+                            <span id="notifCenterBadge" class="position-absolute start-100 translate-middle badge rounded-pill bg-danger" style="display: none; top: 4px;">
+                                0
+                            </span>
+                        </a>
+                        <div id="notifCenterDropdown" class="dropdown-menu dropdown-menu-end notif-center-dropdown">
+                            <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+                                <span class="fw-semibold"><i class="bi bi-bell me-2"></i>Notifications</span>
+                                <button class="btn btn-link btn-sm p-0 text-muted" onclick="NotificationCenter.clearAll()" title="Clear all">
+                                    <i class="bi bi-trash3"></i>
+                                </button>
+                            </div>
+                            <div id="notifCenterList">
+                                <div class="text-center text-muted py-4">
+                                    <i class="bi bi-bell-slash fs-3 d-block mb-2"></i>
+                                    <small>No notifications</small>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                    {% for link in menu_config.utility_links %}
+                    {% if link.id == 'settings' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ link.route }}" title="{{ link.label }}">
+                            <i class="bi {{ link.icon }}"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Full-page project loading overlay (hidden by default) -->
+    <div id="projectLoadingOverlay" class="project-loading-overlay d-none">
+        <div class="ob-loading-spinner">
+            <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
+                <g class="ob-ring">
+                    <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
+                        <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
+                        <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
+                        <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
+                        <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
+                    </g>
+                    <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
+                    <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
+                    <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
+                    <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
+                </g>
+                <g transform="translate(40,40)">
+                    <g class="ob-center">
+                        <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
+                        <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
+                        <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
+                    </g>
+                </g>
+            </svg>
+            <span class="ob-spinner-label" id="projectLoadingLabel">Loading project...</span>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="content-wrapper">
+        {% block content %}{% endblock %}
+    </div>
+    
+    <!-- Shared UC File Browser Modal -->
+    {% include "partials/layout/uc_file_browser_modal.html" %}
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Global Version Status Check -->
+    <script defer src="{{ url_for('static', filename='global/js/version-check.js') }}?v={{ asset_version }}"></script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
+

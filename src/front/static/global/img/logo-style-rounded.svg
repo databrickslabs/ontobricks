@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Rounded/Soft style - organic shapes -->
+  
+  <!-- Soft stacked layers with rounded ends -->
+  <path d="M10 42 Q32 54 54 42 L54 48 Q32 60 10 48 Z" fill="#FF3621" opacity="0.9"/>
+  <path d="M10 32 Q32 44 54 32 L54 38 Q32 50 10 38 Z" fill="#6366F1" opacity="0.9"/>
+  <path d="M10 22 Q32 34 54 22 L54 28 Q32 40 10 28 Z" fill="#4ECDC4" opacity="0.9"/>
+  
+  <!-- Soft circular nodes -->
+  <circle cx="32" cy="12" r="6" fill="#1E293B"/>
+  <circle cx="18" cy="16" r="4" fill="#FF3621"/>
+  <circle cx="46" cy="16" r="4" fill="#4ECDC4"/>
+  
+  <!-- Curved connections -->
+  <path d="M26 12 Q22 13 20 15" stroke="#1E293B" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M38 12 Q42 13 44 15" stroke="#1E293B" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg>

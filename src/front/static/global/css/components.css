@@ -1,0 +1,542 @@
+/**
+ * OntoBricks - Component Styles
+ * Reusable UI components and styles
+ */
+
+/* ==========================================================================
+   Utility Classes
+   ========================================================================== */
+
+/* Hidden by default - controlled by JavaScript */
+.hidden-initial {
+    display: none;
+}
+
+/* Display utilities */
+.d-hidden {
+    display: none;
+}
+
+/* Font size utilities - for icons and text */
+.fs-icon-sm {
+    font-size: 2rem;
+}
+
+.fs-icon-md {
+    font-size: 2.5rem;
+}
+
+.fs-icon-lg {
+    font-size: 3rem;
+}
+
+.fs-icon-xl {
+    font-size: 4rem;
+}
+
+.fs-xs {
+    font-size: 0.75rem;
+}
+
+.fs-sm {
+    font-size: 0.8rem;
+}
+
+/* Width utilities */
+.w-input-sm {
+    width: 80px;
+}
+
+.w-input-md {
+    width: 120px;
+}
+
+/* Max-width utilities */
+.mw-modal {
+    max-width: 600px;
+}
+
+/* Height utilities for scrollable lists */
+.scroll-list-sm {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.scroll-list-md {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.scroll-list-lg {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+/* Canvas container for design views */
+.canvas-container {
+    height: 100%;
+    min-height: 500px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    flex: 1;
+}
+
+/* Min-height for empty lists */
+.min-h-list {
+    min-height: 40px;
+    background: #f8f9fa;
+}
+
+/* File input hidden */
+.file-input-hidden {
+    display: none;
+}
+
+/* Progress bar container */
+.progress-start {
+    width: 0%;
+}
+
+/* Reduced opacity for readonly fields */
+.readonly-field {
+    opacity: 0.6;
+}
+
+.readonly-muted {
+    opacity: 0.7;
+}
+
+/* Empty state text */
+.empty-state-text {
+    color: #6c7086;
+    font-size: 12px;
+}
+
+/* Word break for long URIs */
+.word-break-all {
+    word-break: break-all;
+}
+
+/* ==========================================================================
+   Button Overrides - All buttons use grey styling
+   ========================================================================== */
+
+/* Base button grey styling */
+.btn {
+    border-color: #6c757d;
+    color: #495057;
+}
+
+.btn:hover {
+    border-color: #495057;
+    color: #212529;
+}
+
+.btn:focus {
+    box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
+}
+
+/* Override all colored button variants to grey */
+.btn-primary,
+.btn-secondary,
+.btn-success,
+.btn-danger,
+.btn-warning,
+.btn-info,
+.btn-light,
+.btn-dark {
+    background-color: transparent;
+    border-color: #6c757d;
+    color: #495057;
+}
+
+.btn-primary:hover,
+.btn-secondary:hover,
+.btn-success:hover,
+.btn-danger:hover,
+.btn-warning:hover,
+.btn-info:hover,
+.btn-light:hover,
+.btn-dark:hover {
+    background-color: #e9ecef;
+    border-color: #495057;
+    color: #212529;
+}
+
+.btn-primary:focus,
+.btn-secondary:focus,
+.btn-success:focus,
+.btn-danger:focus,
+.btn-warning:focus,
+.btn-info:focus,
+.btn-light:focus,
+.btn-dark:focus {
+    box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
+}
+
+.btn-primary:active,
+.btn-secondary:active,
+.btn-success:active,
+.btn-danger:active,
+.btn-warning:active,
+.btn-info:active,
+.btn-light:active,
+.btn-dark:active {
+    background-color: #dee2e6 !important;
+    border-color: #495057 !important;
+    color: #212529 !important;
+}
+
+/* Override outline button variants to grey */
+.btn-outline-primary,
+.btn-outline-secondary,
+.btn-outline-success,
+.btn-outline-danger,
+.btn-outline-warning,
+.btn-outline-info,
+.btn-outline-light,
+.btn-outline-dark {
+    background-color: transparent;
+    border-color: #6c757d;
+    color: #495057;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-secondary:hover,
+.btn-outline-success:hover,
+.btn-outline-danger:hover,
+.btn-outline-warning:hover,
+.btn-outline-info:hover,
+.btn-outline-light:hover,
+.btn-outline-dark:hover {
+    background-color: #e9ecef;
+    border-color: #495057;
+    color: #212529;
+}
+
+.btn-outline-primary:focus,
+.btn-outline-secondary:focus,
+.btn-outline-success:focus,
+.btn-outline-danger:focus,
+.btn-outline-warning:focus,
+.btn-outline-info:focus,
+.btn-outline-light:focus,
+.btn-outline-dark:focus {
+    box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
+}
+
+/* Button icons - ensure grey color */
+.btn i,
+.btn .bi {
+    color: inherit;
+}
+
+/* Button close - keep default Bootstrap styling */
+.btn-close {
+    background-color: transparent;
+    border: none;
+}
+
+/* Disabled button state */
+.btn:disabled,
+.btn.disabled {
+    background-color: transparent;
+    border-color: #adb5bd;
+    color: #adb5bd;
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
+/* Button link variant - text only */
+.btn-link {
+    color: #495057;
+    border-color: transparent;
+}
+
+.btn-link:hover {
+    color: #212529;
+    border-color: transparent;
+}
+
+/* ==========================================================================
+   Home Page Workflow Steps
+   ========================================================================== */
+.workflow-container {
+    position: relative;
+    padding: 2rem 0;
+}
+
+.workflow-steps {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    position: relative;
+}
+
+/* Connecting line behind steps - uses primary red */
+.workflow-steps::before {
+    content: '';
+    position: absolute;
+    top: 45px;
+    left: 60px;
+    right: 60px;
+    height: 4px;
+    background: var(--db-primary);
+    border-radius: 2px;
+    z-index: 0;
+}
+
+.workflow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    flex: 1;
+    position: relative;
+    z-index: 1;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.workflow-step:hover {
+    transform: translateY(-5px);
+}
+
+.step-circle {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    color: white;
+    box-shadow: var(--db-shadow-md);
+    transition: var(--db-transition);
+    position: relative;
+    background: var(--db-primary);
+}
+
+.step-circle::after {
+    content: attr(data-step);
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 28px;
+    height: 28px;
+    background: white;
+    border-radius: 50%;
+    font-size: 0.9rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    color: var(--db-primary);
+}
+
+.workflow-step:hover .step-circle {
+    transform: scale(1.1);
+    box-shadow: var(--db-shadow-lg);
+}
+
+.step-content {
+    margin-top: 1rem;
+    max-width: 180px;
+}
+
+.step-title {
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+    color: var(--db-text);
+}
+
+.step-description {
+    font-size: 0.85rem;
+    color: var(--db-text-muted);
+    line-height: 1.4;
+}
+
+/* Status badges on steps */
+.step-status {
+    position: relative;
+    margin-top: 0.75rem;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 10px;
+    white-space: nowrap;
+    display: inline-block;
+}
+
+.step-status.complete {
+    background: var(--db-primary);
+    color: white;
+}
+
+.step-status.pending {
+    background: var(--db-gray-600);
+    color: white;
+}
+
+/* Responsive workflow steps */
+@media (max-width: 768px) {
+    .workflow-steps {
+        flex-direction: column;
+        gap: 2rem;
+    }
+    
+    .workflow-steps::before {
+        display: none;
+    }
+    
+    .workflow-step {
+        flex-direction: row;
+        text-align: left;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .step-content {
+        margin-top: 0;
+        max-width: none;
+        flex: 1;
+    }
+    
+    .step-status {
+        margin-top: 0.5rem;
+        margin-left: auto;
+    }
+}
+
+
+/* ==========================================================================
+   Read-Only Mode Banner (for inactive versions)
+   ========================================================================== */
+
+#readOnlyBanner {
+    position: fixed;
+    top: 56px;  /* Below the navbar */
+    left: 0;
+    right: 0;
+    z-index: 1040;
+    border-radius: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+#readOnlyBannerSpacer {
+    height: 40px;  /* Same height as the banner */
+}
+
+/* CSS class for body when in read-only mode - allows additional adjustments */
+body.read-only-mode .content-wrapper {
+    margin-top: 40px;  /* Add space for the banner */
+}
+
+/* Disabled state for buttons in read-only mode */
+body.read-only-mode .btn:disabled,
+body.read-only-mode .btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+
+/* ==========================================================================
+   Task Tracker
+   ========================================================================== */
+
+.task-tracker-dropdown {
+    width: 480px;
+    max-height: 500px;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    z-index: 9999 !important;
+    background: white !important;
+    color: #212529;
+    border-radius: 0.375rem;
+}
+
+.navbar .dropdown-menu.task-tracker-dropdown .dropdown-item,
+.task-tracker-dropdown .fw-semibold,
+.task-tracker-dropdown .text-muted {
+    color: inherit;
+}
+
+.task-tracker-dropdown .border-bottom {
+    border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+.task-tracker-dropdown.show {
+    display: block !important;
+}
+
+.task-item {
+    transition: background-color 0.2s ease;
+}
+
+.task-item:hover {
+    background-color: #f8f9fa;
+}
+
+.task-item-clickable:hover {
+    background-color: #e7f1ff;
+}
+
+.task-item:last-child {
+    border-bottom: none !important;
+}
+
+/* Badge pulse animation for running tasks */
+.pulse-animation {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Spinning animation for running icon */
+.spin-animation {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Task tracker toggle button */
+#taskTrackerToggle,
+#notifCenterToggle {
+    position: relative;
+}
+
+#taskTrackerBadge,
+#notifCenterBadge {
+    font-size: 0.6rem;
+    padding: 0.2em 0.45em;
+    min-width: 16px;
+    transform: translate(-50%, 20%) !important;
+}
+
+
+/* ==========================================================================
+   Wizard Form Overlay (for async tasks)
+   ========================================================================== */
+
+.wizard-form-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.95);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    border-radius: 0.375rem;
+}
+

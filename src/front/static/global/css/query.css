@@ -1,0 +1,592 @@
+/* ==========================================================================
+   Query Page Specific Styles
+   ========================================================================== */
+
+/* ==========================================================================
+   EDITOR SECTION - Full height layout
+   ========================================================================== */
+
+#editor-section > .editor-layout {
+    flex: 1;
+    display: flex;
+    gap: 1rem;
+    min-height: 0;
+    overflow: hidden;
+    height: 100%;
+}
+
+/* Editor Main Panel (full width) */
+.editor-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.editor-main > .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    margin-bottom: 0;
+}
+
+.editor-main > .card > .card-header {
+    flex-shrink: 0;
+}
+
+.editor-main > .card > .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.editor-main .code-textarea {
+    flex: 1;
+    min-height: 150px;
+    resize: none;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.9rem;
+}
+
+
+/* ==========================================================================
+   RESULTS SECTION - Full height layout
+   ========================================================================== */
+
+#results-section.active {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+#results-section > .card {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+    margin-bottom: 0;
+}
+
+#results-section > .card > .card-header {
+    flex: 0 0 auto;
+}
+
+#results-section > .card > .card-body {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+    padding: 0;
+}
+
+#resultsContainer {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+/* Empty state styling */
+#resultsContainer .results-empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+}
+
+/* ==========================================================================
+   GRID.JS STYLING
+   ========================================================================== */
+
+/* Make Grid.js fill the container */
+#resultsContainer > .gridjs-container {
+    flex: 1;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0;
+    height: 100% !important;
+}
+
+#resultsContainer .gridjs-wrapper {
+    flex: 1;
+    min-height: 0;
+    overflow: auto !important;
+}
+
+#resultsContainer .gridjs-table {
+    width: 100%;
+}
+
+#resultsContainer .gridjs-head {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    background: #fff;
+    border-bottom: 1px solid #e9ecef;
+}
+
+#resultsContainer .gridjs-footer {
+    flex-shrink: 0;
+    background: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+}
+
+#resultsContainer .gridjs-search {
+    width: 250px;
+}
+
+#resultsContainer .gridjs-search-input {
+    font-size: 0.85rem;
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+#resultsContainer .gridjs-th {
+    background: #f8f9fa !important;
+    color: #212529;
+    font-weight: 600;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+#resultsContainer .gridjs-td {
+    font-size: 0.85rem;
+    padding: 8px 12px;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#resultsContainer .gridjs-tr:hover td {
+    background: #f8f9fa;
+}
+
+#resultsContainer .gridjs-pagination {
+    padding: 8px 12px;
+}
+
+#resultsContainer .gridjs-pages button {
+    font-size: 0.8rem;
+    padding: 4px 10px;
+}
+
+#resultsContainer .gridjs-summary {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+/* ==========================================================================
+   SQL SECTION - Full height layout
+   ========================================================================== */
+
+#sql-section > .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    margin-bottom: 0;
+    height: 100%;
+}
+
+#sql-section > .card > .card-header {
+    flex-shrink: 0;
+}
+
+#sql-section > .card > .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+}
+
+#sqlContent {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+    min-height: 0;
+    padding: 0;
+    height: 100%;
+    background: #ffffff;
+}
+
+#sqlContent .sql-code {
+    flex: 1;
+    margin: 0;
+    padding: 1rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-height: 100%;
+}
+
+/* Empty state centering */
+#sqlContent .text-center.text-muted {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+
+/* ==========================================================================
+   SQL SYNTAX HIGHLIGHTING
+   ========================================================================== */
+
+.sql-code {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    background: #ffffff;
+    color: #212529;
+    padding: 1rem;
+}
+
+.sql-keyword {
+    color: #0d6efd;
+    font-weight: 600;
+}
+
+.sql-number {
+    color: #198754;
+}
+
+.sql-string {
+    color: #dc3545;
+}
+
+/* ==========================================================================
+   D3 GRAPH STYLES
+   ========================================================================== */
+
+.d3-link {
+    stroke: #999;
+    stroke-opacity: 0.6;
+    stroke-width: 1.5px;
+    transition: stroke 0.2s ease, stroke-width 0.2s ease;
+}
+
+.d3-link:hover {
+    stroke: #6366F1;
+    stroke-opacity: 0.9;
+    stroke-width: 3px;
+}
+
+.d3-link.selected {
+    stroke: #6366F1;
+    stroke-opacity: 1;
+    stroke-width: 4px;
+}
+
+/* Clickable hitarea circle on relationship links */
+.d3-link-hitarea {
+    fill: #e9ecef;
+    stroke: #999;
+    stroke-width: 1.5px;
+    transition: all 0.2s ease;
+}
+
+.d3-link-hitarea:hover {
+    fill: #c7d2fe;
+    stroke: #6366F1;
+    stroke-width: 2px;
+}
+
+.d3-link-hitarea.selected {
+    fill: #a5b4fc;
+    stroke: #6366F1;
+    stroke-width: 2.5px;
+}
+
+.d3-arrow {
+    fill: #999;
+}
+
+.d3-node {
+    transition: opacity 0.2s ease;
+}
+
+.d3-node-hitarea {
+    fill: transparent !important;
+    stroke: none;
+}
+
+.d3-node.selected .d3-node-hitarea {
+    stroke: #0d6efd;
+    stroke-width: 3px;
+    fill: transparent !important;
+}
+
+.d3-node-icon {
+    font-size: 24px;
+    text-anchor: middle;
+    pointer-events: none;
+}
+
+.d3-node-label {
+    text-anchor: middle;
+    font-size: 11px;
+    font-weight: 500;
+    fill: #333;
+    pointer-events: none;
+}
+
+.d3-link-label {
+    text-anchor: middle;
+    font-size: 10px;
+    fill: #666;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.d3-link-label:hover {
+    fill: #6366F1;
+    font-weight: bold;
+}
+
+.graph-placeholder-icon {
+    font-size: 4rem;
+    color: #dee2e6;
+}
+
+
+/* ==========================================================================
+   UTILITY CLASSES
+   ========================================================================== */
+
+.icon-lg {
+    font-size: 2rem;
+}
+
+.icon-xl {
+    font-size: 3rem;
+}
+
+.hidden-initial {
+    display: none !important;
+}
+
+/* ==========================================================================
+   GROUPED RESULTS
+   ========================================================================== */
+
+.grouped-results {
+    max-height: calc(100vh - 350px);
+    overflow-y: auto;
+}
+
+.result-group {
+    border-bottom: 1px solid #e9ecef;
+}
+
+.result-group:last-child {
+    border-bottom: none;
+}
+
+.group-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    background: #f8f9fa;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s;
+}
+
+.group-header:hover {
+    background: #e9ecef;
+}
+
+.group-chevron {
+    margin-right: 10px;
+    font-size: 0.85rem;
+    color: #666;
+    transition: transform 0.2s;
+}
+
+.group-key {
+    font-weight: 500;
+    color: #333;
+}
+
+.group-content {
+    border-top: 1px solid #e9ecef;
+}
+
+.group-content .table {
+    margin-bottom: 0;
+    font-size: 0.875rem;
+}
+
+.group-content .table thead th {
+    background: #fff;
+    border-top: none;
+    font-weight: 500;
+    color: #666;
+    padding: 8px 12px;
+    position: sticky;
+    top: 0;
+}
+
+.group-content .table tbody td {
+    padding: 6px 12px;
+    vertical-align: middle;
+}
+
+.group-content .table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* ==========================================================================
+   COLUMN HEADER FILTERS
+   ========================================================================== */
+
+/* Column header with filter */
+.column-header-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 120px;
+}
+
+.column-title {
+    font-weight: 600;
+    color: #333;
+}
+
+.column-header-filter {
+    font-size: 0.75rem !important;
+    padding: 3px 6px !important;
+    height: auto !important;
+    border-radius: 3px;
+    border: 1px solid #ced4da;
+    background-color: #fff;
+    width: 100%;
+    max-width: 200px;
+}
+
+.column-header-filter:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+    outline: none;
+}
+
+.column-header-filter::placeholder {
+    color: #adb5bd;
+    font-size: 0.7rem;
+}/* Style for Grid.js header to accommodate filters */
+.gridjs-th {
+    vertical-align: top !important;
+}.gridjs-th-content {
+    display: block !important;
+}/* Prevent sort icon from interfering with filter */
+.gridjs-th-sort {
+    padding-bottom: 8px;
+}
+
+/* ==========================================================================
+   CONTEXT EXPLORER
+   ========================================================================== */
+
+#context-section.active {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 120px);
+    overflow: hidden;
+}
+
+/* Entity radio button for single selection */
+.entity-type-card .entity-radio {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+}
+
+.entity-type-card .entity-radio .form-check-input {
+    width: 18px;
+    height: 18px;
+}
+
+/* Depth slider styling */
+.depth-display {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.depth-display .badge {
+    min-width: 28px;
+}
+
+.depth-explanation {
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.depth-explanation strong {
+    color: #0d6efd;
+}
+
+/* Form range styling */
+#contextDepth {
+    cursor: pointer;
+}
+
+#contextDepth::-webkit-slider-thumb {
+    cursor: pointer;
+}
+
+#contextDepth::-moz-range-thumb {
+    cursor: pointer;
+}
+
+/* Context preview styling */
+#contextQueryPreview {
+    border: 1px solid #333;
+}
+
+/* Relationship direction indicators */
+.relationship-item .bi-arrow-right,
+.relationship-item .bi-arrow-left {
+    font-size: 0.75rem;
+}
+
+/* GraphiQL embedded container */
+#graphql-section.active #graphiql-container {
+    flex: 1;
+    min-height: 0;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+}
+
+#graphiql-container .graphiql-container {
+    flex: 1;
+    min-height: 0;
+}
+
+#graphiql-container .graphiql-container .topBar {
+    background: #1b3a4b;
+}

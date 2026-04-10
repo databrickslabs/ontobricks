@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Outline/Line art style - strokes only -->
+  
+  <!-- Layer outlines -->
+  <path d="M8 42 L32 52 L56 42 L56 48 L32 58 L8 48 Z" 
+        fill="none" stroke="#FF3621" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M8 32 L32 42 L56 32 L56 38 L32 48 L8 38 Z" 
+        fill="none" stroke="#6366F1" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M8 22 L32 32 L56 22 L56 28 L32 38 L8 28 Z" 
+        fill="none" stroke="#4ECDC4" stroke-width="2.5" stroke-linejoin="round"/>
+  
+  <!-- Node outlines -->
+  <circle cx="32" cy="11" r="5" fill="none" stroke="#1E293B" stroke-width="2.5"/>
+  <circle cx="18" cy="15" r="3.5" fill="none" stroke="#1E293B" stroke-width="2"/>
+  <circle cx="46" cy="15" r="3.5" fill="none" stroke="#1E293B" stroke-width="2"/>
+  
+  <!-- Connection lines -->
+  <line x1="27" y1="12" x2="21" y2="14" stroke="#1E293B" stroke-width="2" stroke-linecap="round"/>
+  <line x1="37" y1="12" x2="43" y2="14" stroke="#1E293B" stroke-width="2" stroke-linecap="round"/>
+</svg>

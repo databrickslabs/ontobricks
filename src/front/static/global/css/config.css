@@ -1,0 +1,121 @@
+/* ==========================================================================
+   Config Page Specific Styles
+   ========================================================================== */
+
+/* (Settings page uses sidebar-layout, no extra full-height rules needed) */
+
+/* ==========================================================================
+   Document Upload Drop Zone
+   ========================================================================== */
+.doc-drop-zone {
+    border: 2px dashed #dee2e6;
+    border-radius: 0.5rem;
+    padding: 2rem;
+    text-align: center;
+    transition: border-color 0.2s, background-color 0.2s;
+    cursor: default;
+}
+
+.doc-drop-zone.drag-over {
+    border-color: var(--db-primary, #FF3621);
+    background-color: rgba(255, 54, 33, 0.04);
+}
+
+/* ==========================================================================
+   Registry Select Spinners
+   ========================================================================== */
+.registry-select-spinner {
+    z-index: 2;
+}
+
+/* ==========================================================================
+   Registry Project Table
+   ========================================================================== */
+.registry-project-table-wrapper {
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+}
+
+.registry-project-table {
+    font-size: 0.85rem;
+}
+
+.registry-project-table thead th {
+    background: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #6c757d;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.registry-project-table tbody tr .registry-delete-btn {
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.registry-project-table tbody tr:hover .registry-delete-btn {
+    opacity: 1;
+}
+
+.registry-version-panel td {
+    background: #f8f9fa;
+}
+
+.registry-version-badge {
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 0.3em 0.55em;
+}
+
+.registry-version-badge .btn-close-sm {
+    opacity: 0.35;
+    transition: opacity 0.15s;
+}
+
+.registry-version-badge:hover .btn-close-sm {
+    opacity: 1;
+}
+
+/* ==========================================================================
+   Schedule History Table
+   ========================================================================== */
+.schedule-history-table-wrapper {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.schedule-history-table {
+    font-size: 0.85rem;
+}
+
+.schedule-history-table thead th {
+    background: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #6c757d;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.schedule-history-msg {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.schedule-history-summary {
+    font-size: 0.82rem;
+}
+

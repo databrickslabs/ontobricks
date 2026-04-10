@@ -1,0 +1,136 @@
+<!-- JS: /static/home/js/uc-file-browser-modal.js -->
+<!-- Unity Catalog File Dialog Modal - Supports Load and Save -->
+<div class="modal fade" id="ucFileDialogModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-cloud"></i> <span id="ucFileDialogTitle">Unity Catalog</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- SQL Warehouse Selection -->
+                <div class="mb-3 p-3 bg-light rounded border">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="flex-grow-1">
+                            <label for="ucFileDialogWarehouse" class="form-label fw-bold mb-1">
+                                <i class="bi bi-server"></i> SQL Warehouse
+                            </label>
+                            <select class="form-select" id="ucFileDialogWarehouse">
+                                <option value="">Loading warehouses...</option>
+                            </select>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary mt-4" id="ucFileDialogRefreshWarehouses" title="Refresh warehouses">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </button>
+                    </div>
+                    <small class="text-muted">Select the SQL Warehouse to use for browsing Unity Catalog</small>
+                </div>
+                
+                <!-- Volume Selection -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="ucFileDialogCatalog" class="form-label">Catalog</label>
+                        <select class="form-select" id="ucFileDialogCatalog" disabled>
+                            <option value="">Select warehouse first...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="ucFileDialogSchema" class="form-label">Schema</label>
+                        <select class="form-select" id="ucFileDialogSchema" disabled>
+                            <option value="">Select catalog first...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="ucFileDialogVolume" class="form-label">Volume</label>
+                        <select class="form-select" id="ucFileDialogVolume" disabled>
+                            <option value="">Select schema first...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Save Mode: Filename Input -->
+                <div id="ucFileDialogSaveSection" class="mb-3 hidden-initial">
+                    <label for="ucFileDialogFilename" class="form-label">Filename</label>
+                    <input type="text" class="form-control" id="ucFileDialogFilename" placeholder="Enter filename (e.g., taxonomy.owl)">
+                    <small class="text-muted">Enter the name for the file to save</small>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="ucFileDialogLoadFiles" disabled>
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                    <div class="text-muted small" id="ucFileDialogInfo"></div>
+                </div>
+                
+                <!-- Files List -->
+                <div id="ucFileDialogFilesList" class="file-list-container">
+                    <div class="text-muted text-center py-3">
+                        <i class="bi bi-info-circle"></i> Select a volume to browse files
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success hidden-initial" id="ucFileDialogConfirmSave">
+                    <i class="bi bi-cloud-upload"></i> Save File
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Legacy UC File Browser Modal (keeping for backward compatibility) -->
+<div class="modal fade" id="ucFileBrowserModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-folder2-open"></i> <span id="ucFileBrowserTitle">Browse Unity Catalog</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle"></i> Select the volume location to browse files
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="ucBrowserCatalog" class="form-label">Catalog</label>
+                        <select class="form-select" id="ucBrowserCatalog">
+                            <option value="">Select catalog...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="ucBrowserSchema" class="form-label">Schema</label>
+                        <select class="form-select" id="ucBrowserSchema" disabled>
+                            <option value="">Select catalog first...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="ucBrowserVolume" class="form-label">Volume</label>
+                        <select class="form-select" id="ucBrowserVolume" disabled>
+                            <option value="">Select schema first...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="ucBrowserLoadFiles">
+                        <i class="bi bi-arrow-clockwise"></i> Load Files
+                    </button>
+                    <div class="text-muted small" id="ucBrowserInfo"></div>
+                </div>
+                
+                <div id="ucBrowserFilesList">
+                    <div class="text-muted text-center py-3">
+                        <i class="bi bi-info-circle"></i> Select a volume location and click "Load Files"
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+

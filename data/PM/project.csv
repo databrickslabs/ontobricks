@@ -1,0 +1,9 @@
+project_id,project_name,start_date,end_date,budget,status,description
+PR001,Customer Data Platform,2023-01-10,2023-12-31,500000,Active,Building unified customer data platform
+PR002,ML Recommendation System,2023-03-01,2024-02-28,450000,Active,Developing personalized recommendation engine
+PR003,Real-time Analytics Dashboard,2023-02-15,2023-09-30,320000,Completed,Interactive analytics dashboard for executives
+PR004,Data Governance Initiative,2023-04-01,2024-03-31,280000,Active,Implementing data quality and governance framework
+PR005,Cloud Migration,2023-01-20,2023-11-30,750000,Active,Migrating infrastructure to cloud platform
+PR006,Security Audit System,2023-05-10,2023-12-15,200000,Active,Automated security monitoring and compliance
+PR007,Mobile App Analytics,2023-06-01,2024-01-31,380000,Planning,Analytics SDK for mobile applications
+

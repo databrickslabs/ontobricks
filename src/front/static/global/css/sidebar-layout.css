@@ -1,0 +1,348 @@
+/* ==========================================================================
+   Sidebar Layout - Reusable Component
+   Use this for pages with a left sidebar navigation and main content area
+   ========================================================================== */
+
+/* Full Width Layout - Override base content-wrapper restrictions 
+   Applies automatically when .sidebar-layout is used */
+.content-wrapper:has(.sidebar-layout) {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.container-fluid:has(.sidebar-layout),
+.sidebar-layout .container-fluid {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Fallback for body class approach */
+body.full-width-layout .content-wrapper {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+body.full-width-layout .container-fluid {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+body.full-width-layout {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+/* ==========================================================================
+   Sidebar Layout Container
+   ========================================================================== */
+.sidebar-layout {
+    display: flex;
+    height: calc(100vh - 60px);
+    max-height: calc(100vh - 60px);
+    gap: 0;
+    width: 100%;
+    max-width: 100vw;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* ==========================================================================
+   Sidebar Navigation
+   ========================================================================== */
+.sidebar-nav {
+    width: 200px;
+    min-width: 200px;
+    border-right: 1px solid var(--border-color, rgba(255,255,255,0.1));
+    padding: 0.5rem 0;
+    flex-shrink: 0;
+    overflow-y: auto;
+    height: 100%;
+    transition: width 0.25s ease, min-width 0.25s ease;
+}
+
+.sidebar-nav .sidebar-title {
+    padding: 0.3rem 1rem 0.35rem;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted, #6c757d);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: opacity 0.2s ease;
+}
+
+.sidebar-nav .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 1rem;
+    color: #666;
+    border-left: 3px solid transparent;
+    transition: all 0.2s ease;
+    font-size: 0.82rem;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.sidebar-nav .nav-link:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: #333;
+}
+
+.sidebar-nav .nav-link.active {
+    background: rgba(0, 0, 0, 0.15);
+    color: #000;
+}
+
+/* Disabled sidebar items (requires project saved to UC) */
+.sidebar-nav .nav-link.sidebar-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    cursor: not-allowed;
+    color: #999;
+}
+
+.sidebar-nav .nav-link.sidebar-disabled:hover {
+    background: none;
+    color: #999;
+    border-left-color: #333;
+    font-weight: 500;
+}
+
+.sidebar-nav .nav-link i {
+    font-size: 0.95rem;
+    width: 20px;
+    min-width: 20px;
+    text-align: center;
+}
+
+/* ==========================================================================
+   Sidebar Toggle Button
+   ========================================================================== */
+.sidebar-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.6rem;
+    margin: 0 0.4rem 0.35rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s ease;
+    width: calc(100% - 0.8rem);
+    overflow: hidden;
+}
+
+.sidebar-toggle:hover {
+    background: transparent;
+}
+
+.sidebar-toggle i {
+    font-size: 1.1rem;
+    min-width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+    color: #555;
+}
+
+.sidebar-toggle .sidebar-toggle-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #555;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: opacity 0.2s ease;
+}
+
+/* ==========================================================================
+   Sidebar Collapsed State
+   ========================================================================== */
+.sidebar-nav.collapsed {
+    width: 48px;
+    min-width: 48px;
+}
+
+.sidebar-nav.collapsed .sidebar-title {
+    opacity: 0;
+    height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+.sidebar-nav.collapsed .nav-link {
+    justify-content: center;
+    padding: 0.45rem 0;
+    gap: 0;
+}
+
+.sidebar-nav.collapsed .nav-link .nav-label {
+    display: none;
+}
+
+.sidebar-nav.collapsed .nav-link .badge {
+    display: none;
+}
+
+.sidebar-nav.collapsed .sidebar-toggle {
+    justify-content: center;
+    padding: 0.45rem 0;
+    margin: 0 0 0.35rem;
+    width: 100%;
+}
+
+.sidebar-nav.collapsed .sidebar-toggle .sidebar-toggle-label {
+    display: none;
+}
+
+/* ==========================================================================
+   Sidebar Content Area
+   ========================================================================== */
+.sidebar-content {
+    flex: 1;
+    min-width: 0;
+    padding: 1rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: calc(100vh - 60px);
+    transition: width 0.25s ease;
+}
+
+/* ==========================================================================
+   Section Visibility (for tabbed content within sidebar layout)
+   ========================================================================== */
+.sidebar-section {
+    display: none;
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.sidebar-section.active {
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-section .card {
+    width: 100%;
+}
+
+/* ==========================================================================
+   Knowledge Graph Sections - No scroll, full height
+   ========================================================================== */
+.sidebar-content:has(#sigmagraph-section.active),
+.sidebar-content:has(#graphql-section.active),
+.sidebar-content:has(#dataquality-section.active) {
+    overflow: hidden;
+    padding: 0.5rem;
+}
+
+#sigmagraph-section.active,
+#graphql-section.active {
+    height: calc(100vh - 80px);
+    max-height: calc(100vh - 80px);
+    overflow: hidden;
+}
+
+/* ==========================================================================
+   Other Sections - Standard display
+   ========================================================================== */
+#owl-section.active,
+#entities-section.active,
+#relationships-section.active,
+#rules-section.active,
+#r2rml-section.active {
+    display: block;
+}
+
+/* Sections that use .content-section wrappers: stretch to fill the parent */
+.sidebar-section > .content-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Tab content and cards inside content-section fill remaining height and scroll */
+.sidebar-section > .content-section > .ob-tab-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.sidebar-section > .content-section > .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.sidebar-section > .content-section > .card > .card-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* ==========================================================================
+   Query Page Sections - Full height flex layout
+   ========================================================================== */
+.sidebar-content:has(#editor-section.active),
+.sidebar-content:has(#results-section.active),
+.sidebar-content:has(#sql-section.active) {
+    overflow: hidden;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+}
+
+#editor-section.active,
+#results-section.active,
+#sql-section.active {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+}
+
+/* ==========================================================================
+   Read-Only Mode Adjustments
+   When the read-only banner is displayed, reduce available height
+   ========================================================================== */
+body.read-only-mode .sidebar-layout {
+    height: calc(100vh - 100px);  /* 60px navbar + 40px banner */
+    max-height: calc(100vh - 100px);
+}
+
+body.read-only-mode .sidebar-content {
+    max-height: calc(100vh - 100px);
+}
+
+body.read-only-mode #sigmagraph-section.active,
+body.read-only-mode #graphql-section.active {
+    height: calc(100vh - 120px);
+    max-height: calc(100vh - 120px);
+}
+
+body.read-only-mode #design-section #ontology-designer-canvas-wrapper {
+    height: calc(100vh - 200px);
+}
+

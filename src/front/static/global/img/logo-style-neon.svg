@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <filter id="neon1" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="neon2" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Dark background suggestion -->
+  <rect x="0" y="0" width="64" height="64" fill="#0F172A" rx="8"/>
+  
+  <!-- Neon glowing layers -->
+  <path d="M10 42 L32 51 L54 42 L54 47 L32 56 L10 47 Z" 
+        fill="none" stroke="#FF6B6B" stroke-width="2" filter="url(#neon1)"/>
+  <path d="M10 33 L32 42 L54 33 L54 38 L32 47 L10 38 Z" 
+        fill="none" stroke="#A78BFA" stroke-width="2" filter="url(#neon1)"/>
+  <path d="M10 24 L32 33 L54 24 L54 29 L32 38 L10 29 Z" 
+        fill="none" stroke="#34D399" stroke-width="2" filter="url(#neon1)"/>
+  
+  <!-- Glowing nodes -->
+  <circle cx="32" cy="13" r="4" fill="none" stroke="#F472B6" stroke-width="2" filter="url(#neon2)"/>
+  <circle cx="20" cy="17" r="2.5" fill="none" stroke="#F472B6" stroke-width="1.5" filter="url(#neon2)"/>
+  <circle cx="44" cy="17" r="2.5" fill="none" stroke="#F472B6" stroke-width="1.5" filter="url(#neon2)"/>
+  
+  <!-- Neon connections -->
+  <line x1="28" y1="14" x2="22" y2="16" stroke="#F472B6" stroke-width="1.5" filter="url(#neon2)"/>
+  <line x1="36" y1="14" x2="42" y2="16" stroke="#F472B6" stroke-width="1.5" filter="url(#neon2)"/>
+</svg>

@@ -1,0 +1,1250 @@
+/**
+ * OntoBricks - Page-Specific Styles
+ * Custom styles for individual pages
+ */
+
+/* ==========================================================================
+   Query Page - Rich Data Grid
+   ========================================================================== */
+.rich-grid {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.rich-grid th {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    min-width: 100px;
+    resize: horizontal;
+    overflow: hidden;
+}
+
+.rich-grid th:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+}
+
+.rich-grid th .sort-icon {
+    margin-left: 0.5rem;
+    opacity: 0.3;
+}
+
+.rich-grid th.sorted-asc .sort-icon,
+.rich-grid th.sorted-desc .sort-icon {
+    opacity: 1;
+}
+
+.rich-grid th .resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    cursor: col-resize;
+    background: transparent;
+}
+
+.rich-grid th .resize-handle:hover {
+    background: var(--db-primary);
+}
+
+.rich-grid td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #f0f0f0;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rich-grid tr:hover td {
+    background: #f8f9fa;
+}
+
+.rich-grid .uri-cell {
+    color: var(--db-primary);
+    font-family: monospace;
+    font-size: 0.8rem;
+}
+
+.rich-grid .predicate-cell {
+    color: #6f42c1;
+    font-weight: 500;
+}
+
+/* ==========================================================================
+   Query Page - D3.js Graph Visualization
+   ========================================================================== */
+#graphContainer {
+    width: 100%;
+    height: 550px;
+    border: 2px solid var(--db-border-light);
+    border-radius: 12px;
+    background: #ffffff;
+    position: relative;
+    overflow: hidden;
+}
+
+#graphSvg {
+    width: 100%;
+    height: 100%;
+}
+
+.d3-link {
+    stroke: #6366f1;
+    stroke-opacity: 0.7;
+    stroke-width: 2px;
+    fill: none;
+}
+
+.d3-link-label {
+    font-size: 11px;
+    fill: #6366f1;
+    font-weight: 600;
+    text-anchor: middle;
+    pointer-events: none;
+}
+
+.d3-node {
+    cursor: grab;
+}
+
+.d3-node:active {
+    cursor: grabbing;
+}
+
+.d3-node-icon {
+    font-size: 32px;
+    text-anchor: middle;
+    dominant-baseline: central;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+.d3-node-label {
+    font-size: 12px;
+    fill: #1e293b;
+    font-weight: 600;
+    text-anchor: middle;
+    pointer-events: none;
+}
+
+.d3-node-hitarea {
+    cursor: inherit;
+}
+
+.d3-node.pinned .d3-node-icon {
+    filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.8));
+}
+
+.d3-node.pinned .d3-node-hitarea {
+    fill: rgba(99, 102, 241, 0.1);
+}
+
+.d3-node.selected .d3-node-icon {
+    filter: drop-shadow(0 0 12px rgba(13, 110, 253, 0.9));
+}
+
+.d3-node.selected .d3-node-hitarea {
+    fill: rgba(13, 110, 253, 0.15);
+    stroke: rgba(13, 110, 253, 0.5);
+    stroke-width: 2px;
+}
+
+.d3-focus-ring {
+    fill: none;
+    stroke: #f59e0b;
+    stroke-width: 3px;
+    stroke-dasharray: 8, 4;
+    animation: focus-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes focus-pulse {
+    0%, 100% { stroke-opacity: 1; stroke-width: 3px; }
+    50% { stroke-opacity: 0.5; stroke-width: 5px; }
+}
+
+.d3-arrow {
+    fill: #6366f1;
+}
+
+/* ==========================================================================
+   Query Page - SQL Code Styling
+   ========================================================================== */
+.sql-code {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 1rem;
+    border-radius: 8px;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.85rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    max-height: 400px;
+}
+
+.sql-keyword { color: #569cd6; }
+.sql-function { color: #dcdcaa; }
+.sql-string { color: #ce9178; }
+.sql-number { color: #b5cea8; }
+
+/* ==========================================================================
+   Home Page - Hero Section
+   ========================================================================== */
+.home-hero {
+    text-align: center;
+    padding: 2rem 1rem 3rem;
+}
+
+.home-hero h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--db-text);
+    margin-bottom: 0.75rem;
+}
+
+.home-hero h1 i {
+    color: var(--db-primary);
+}
+
+.home-hero .tagline {
+    font-size: 1.1rem;
+    color: var(--db-text-muted);
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* ==========================================================================
+   Home Page - Workflow Section & Cards
+   ========================================================================== */
+.workflow-section {
+    margin-bottom: 2rem;
+}
+
+.workflow-section h5 {
+    font-weight: 600;
+    color: var(--db-text-muted);
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.workflow-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+}
+
+@media (max-width: 992px) {
+    .workflow-cards {
+        grid-template-columns: 1fr;
+    }
+}
+
+.workflow-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.75rem;
+    border: 2px solid var(--db-border);
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.workflow-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    border-color: var(--db-primary);
+    color: inherit;
+}
+
+.workflow-card .step-badge {
+    position: absolute;
+    top: -12px;
+    left: 20px;
+    background: var(--db-primary);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 12px;
+}
+
+.workflow-card .card-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.workflow-card.taxonomy .card-icon { color: #4CAF50; }
+.workflow-card.mapping .card-icon { color: #2196F3; }
+.workflow-card.query .card-icon { color: #9C27B0; }
+
+.workflow-card h4 {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.workflow-card p {
+    color: var(--db-text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    flex-grow: 1;
+}
+
+.workflow-card .card-status {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.workflow-card .card-status.ready {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.workflow-card .card-status.pending {
+    background: #fff3e0;
+    color: #ef6c00;
+}
+
+.workflow-card .card-actions {
+    margin-top: 1rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.workflow-card .card-action {
+    padding: 0.6rem 1.2rem;
+    background: var(--db-primary);
+    color: white;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+    text-decoration: none;
+}
+
+.workflow-card .card-action:hover {
+    background: var(--db-primary-dark);
+    color: white;
+}
+
+.workflow-card .card-reset-btn {
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    color: var(--db-text-muted);
+    border: 1px solid var(--db-border);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.workflow-card .card-reset-btn:hover {
+    background: #e9ecef;
+    color: #212529;
+    border-color: #495057;
+}
+
+/* ==========================================================================
+   Home Page - Session Stats (within Project Panel)
+   ========================================================================== */
+
+.session-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 768px) {
+    .session-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.stat-item {
+    text-align: center;
+    padding: 1rem;
+    background: var(--db-light-gray);
+    border-radius: 12px;
+}
+
+.stat-item .stat-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.stat-item .stat-icon.active { color: #4CAF50; }
+.stat-item .stat-icon.inactive { color: #bdbdbd; }
+
+.stat-item .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--db-text);
+}
+
+.stat-item .stat-label {
+    font-size: 0.8rem;
+    color: var(--db-text-muted);
+    margin-top: 0.25rem;
+}
+
+/* ==========================================================================
+   Home Page - Quick Links
+   ========================================================================== */
+.quick-links {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--db-border);
+}
+
+.quick-link {
+    padding: 0.5rem 1rem;
+    background: var(--db-light-gray);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: var(--db-text);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.quick-link:hover {
+    background: var(--db-primary);
+    color: white;
+}
+
+.quick-link i {
+    font-size: 1rem;
+}
+
+/* ==========================================================================
+   Home Page - Project Management Panel
+   ========================================================================== */
+.project-panel {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border-radius: 16px;
+    padding: 1.5rem;
+    border: 2px solid var(--db-border);
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+}
+
+.project-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.project-panel h5 {
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--db-text);
+}
+
+.project-panel h5 i {
+    color: var(--db-primary);
+    font-size: 1.2rem;
+}
+
+.quick-links-inline {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.quick-link-sm {
+    padding: 0.35rem 0.75rem;
+    background: var(--db-light-gray);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: var(--db-text);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+}
+
+.quick-link-sm:hover {
+    background: var(--db-primary);
+    color: white;
+}
+
+.quick-link-sm i {
+    font-size: 0.9rem;
+}
+
+.project-panel .session-stats {
+    margin-bottom: 1.25rem;
+}
+
+.project-description {
+    color: var(--db-text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 1.25rem;
+}
+
+.project-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.project-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    border: 1px solid var(--db-border);
+    background: var(--db-light-gray);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 85px;
+    text-decoration: none;
+}
+
+.project-btn i {
+    font-size: 1.25rem;
+    margin-bottom: 0.35rem;
+    color: var(--db-text-muted);
+}
+
+.project-btn span {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--db-text);
+}
+
+.project-btn:hover {
+    background: var(--db-primary);
+    border-color: var(--db-primary);
+}
+
+.project-btn:hover i,
+.project-btn:hover span {
+    color: white;
+}
+
+/* Project Button Dropdowns */
+.project-actions .dropdown {
+    position: relative;
+}
+
+.project-actions .dropdown-toggle::after {
+    display: none; /* Hide default caret, icon is enough */
+}
+
+.project-actions .dropdown-menu {
+    min-width: 200px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border: 1px solid var(--db-border);
+    margin-top: 0.25rem;
+}
+
+.project-actions .dropdown-menu .dropdown-item {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.project-actions .dropdown-menu .dropdown-item i {
+    font-size: 1rem;
+    color: var(--db-primary);
+}
+
+.project-actions .dropdown-menu .dropdown-item:hover {
+    background: var(--db-light-gray);
+}
+
+.project-actions .dropdown-menu .dropdown-item:hover i {
+    color: var(--db-primary);
+}
+
+/* Project Status Messages */
+.project-status {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--db-light-gray);
+    border: 1px solid var(--db-border);
+    color: var(--db-text);
+}
+
+.project-status.hidden-initial {
+    display: none !important;
+}
+
+.project-status:empty {
+    display: none !important;
+}
+
+.project-status.info {
+    border-left: 3px solid var(--db-primary);
+}
+
+.project-status.success {
+    border-left: 3px solid #16a34a;
+}
+
+.project-status.error {
+    border-left: 3px solid #dc2626;
+}
+
+.project-status.warning {
+    border-left: 3px solid #d97706;
+}
+
+@media (max-width: 768px) {
+    .project-actions {
+        justify-content: center;
+    }
+    
+    .project-btn {
+        flex: 1 1 calc(50% - 0.75rem);
+        min-width: 100px;
+    }
+}
+
+/* ==========================================================================
+   Home Page - Info Cards
+   ========================================================================== */
+.info-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+@media (max-width: 992px) {
+    .info-cards {
+        grid-template-columns: 1fr;
+    }
+}
+
+.info-card {
+    background: var(--db-light-gray);
+    border-radius: 12px;
+    padding: 1.25rem;
+}
+
+.info-card h6 {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.info-card h6 i {
+    color: var(--db-primary);
+}
+
+.info-card p {
+    font-size: 0.85rem;
+    color: var(--db-text-muted);
+    margin: 0;
+}
+
+/* ==========================================================================
+   Utility Classes - Display & Visibility
+   ========================================================================== */
+.hidden {
+    display: none !important;
+}
+
+.disabled-overlay {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* ==========================================================================
+   Notification Center Dropdown
+   ========================================================================== */
+.notif-center-dropdown {
+    width: 400px;
+    max-height: 450px;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    z-index: 9999 !important;
+    background: white !important;
+    color: #212529;
+    border-radius: 0.375rem;
+}
+
+.navbar .dropdown-menu.notif-center-dropdown .dropdown-item,
+.notif-center-dropdown .fw-semibold,
+.notif-center-dropdown .text-muted {
+    color: inherit;
+}
+
+.notif-center-dropdown .border-bottom {
+    border-color: rgba(0, 0, 0, 0.1) !important;
+}
+.notif-center-dropdown.show {
+    display: block !important;
+}
+.notif-item {
+    transition: background-color 0.2s ease;
+}
+.notif-item:hover {
+    background-color: #f8f9fa;
+}
+@keyframes notifFlash {
+    0%   { transform: scale(1); }
+    30%  { transform: scale(1.3); }
+    100% { transform: scale(1); }
+}
+.notif-flash {
+    animation: notifFlash 0.6s ease;
+}
+
+/* Error toast popup (bottom-right) */
+#errorToastContainer {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+    max-width: 480px;
+    pointer-events: none;
+}
+.error-toast-popup {
+    pointer-events: auto;
+    background: #dc3545;
+    color: #fff;
+    padding: 12px 16px;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
+    font-size: 0.875rem;
+    word-break: break-word;
+    opacity: 1;
+    transition: opacity 0.15s ease;
+}
+.error-toast-popup:not(.show) {
+    opacity: 0;
+}
+.success-toast-popup {
+    pointer-events: auto;
+    background: #198754;
+    color: #fff;
+    padding: 12px 16px;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(25, 135, 84, 0.35);
+    font-size: 0.875rem;
+    word-break: break-word;
+    opacity: 1;
+    transition: opacity 0.15s ease;
+}
+.success-toast-popup:not(.show) { opacity: 0; }
+.warning-toast-popup {
+    pointer-events: auto;
+    background: #ffc107;
+    color: #212529;
+    padding: 12px 16px;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(255, 193, 7, 0.35);
+    font-size: 0.875rem;
+    word-break: break-word;
+    opacity: 1;
+    transition: opacity 0.15s ease;
+}
+.warning-toast-popup:not(.show) { opacity: 0; }
+
+/* ==========================================================================
+   Utility Classes - File Lists
+   ========================================================================== */
+.file-list-container {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* ==========================================================================
+   Mapping Page - R2RML Preview Textarea
+   ========================================================================== */
+#r2rmlPreview {
+    font-size: 0.85rem;
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+}
+
+/* ==========================================================================
+   Mapping Page - Progress Bar
+   ========================================================================== */
+.mapping-progress {
+    height: 6px;
+}
+
+/* ==========================================================================
+   Taxonomy Page - Graph Container
+   ========================================================================== */
+#ontologyGraph {
+    width: 100%;
+    height: 600px;
+    border: 1px solid var(--db-border-light);
+}
+
+/* ==========================================================================
+   Taxonomy Page - OWL Preview Textarea
+   ========================================================================== */
+#owlPreview {
+    font-size: 0.85rem;
+}
+
+/* ==========================================================================
+   Emoji Picker Styles
+   ========================================================================== */
+.emoji-preview {
+    font-size: 1.5rem;
+    min-width: 50px;
+    justify-content: center;
+}
+
+.emoji-grid-container {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.emoji-inline {
+    font-size: 1.3rem;
+    margin-right: 8px;
+}
+
+/* ==========================================================================
+   Query Page - Results Container
+   ========================================================================== */
+#resultsContainer {
+    max-height: 600px;
+    overflow: auto;
+}
+
+/* ==========================================================================
+   Large Icon Display
+   ========================================================================== */
+.icon-lg {
+    font-size: 2rem;
+}
+
+.icon-xl {
+    font-size: 3rem;
+}
+
+.icon-xxl {
+    font-size: 4rem;
+}
+
+/* Graph placeholder icon */
+.graph-placeholder-icon {
+    font-size: 4rem;
+    opacity: 0.3;
+    color: #6366f1;
+}
+
+/* ==========================================================================
+   Custom Tab Styling (Mapping, Taxonomy, R2RML pages)
+   Override default nav-tabs with black text on gray background
+   ========================================================================== */
+.custom-tabs .nav-item {
+    margin-right: 0.5rem;
+}
+
+.custom-tabs .nav-item:last-child {
+    margin-right: 0;
+}
+
+.custom-tabs .nav-link,
+.custom-tabs .nav-link:link,
+.custom-tabs .nav-link:visited {
+    color: var(--db-text) !important;
+    background-color: var(--db-border);
+    border: 1px solid var(--db-border-light);
+    border-radius: 6px 6px 0 0;
+    font-weight: 500;
+}
+
+.custom-tabs .nav-link:hover,
+.custom-tabs .nav-link:focus {
+    color: var(--db-text) !important;
+    background-color: var(--db-light-gray);
+}
+
+.custom-tabs .nav-link.active,
+.custom-tabs .nav-link.active:hover,
+.custom-tabs .nav-link.active:focus {
+    color: white !important;
+    background-color: var(--db-primary);
+    border-color: var(--db-primary);
+    font-weight: 600;
+}
+
+.custom-tabs .nav-link i {
+    margin-right: 5px;
+}
+
+/* ==========================================================================
+   Mapping Page Styles
+   ========================================================================== */
+.mapping-card {
+    border-left: 4px solid var(--db-primary);
+}
+
+/* ==========================================================================
+   Graph Visualization Container (R2RML, Taxonomy pages)
+   ========================================================================== */
+.graph-container {
+    width: 100%;
+    height: 600px;
+    border: 1px solid var(--db-border-light);
+    border-radius: 8px;
+    background-color: #fafafa;
+}
+
+/* Smaller graph container variant */
+.graph-container-sm {
+    height: 400px;
+}
+
+/* ==========================================================================
+   Emoji Picker Styles (Taxonomy, Config pages)
+   ========================================================================== */
+.emoji-picker-grid {
+    scrollbar-width: thin;
+}
+
+.emoji-picker-grid::-webkit-scrollbar {
+    width: 6px;
+}
+
+.emoji-picker-grid::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.emoji-picker-grid::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.emoji-btn {
+    cursor: pointer;
+    transition: transform 0.1s, background-color 0.15s;
+    border: none;
+    background: transparent;
+    padding: 0.25rem;
+    border-radius: 4px;
+}
+
+.emoji-btn:hover {
+    transform: scale(1.2);
+    background-color: #e9ecef !important;
+}
+
+.emoji-picker-container {
+    position: relative;
+    z-index: 100;
+}
+
+/* ==========================================================================
+   Status Banners
+   ========================================================================== */
+.status-banner {
+    border-radius: 8px;
+}
+
+.status-banner.success {
+    border-left: 4px solid var(--db-success);
+}
+
+.status-banner.warning {
+    border-left: 4px solid var(--db-warning);
+}
+
+.status-banner.error {
+    border-left: 4px solid var(--db-primary);
+}
+
+/* ==========================================================================
+   Entity/Relationship Cards
+   ========================================================================== */
+.entity-card,
+.relationship-card {
+    transition: var(--db-transition);
+    border-left: 3px solid var(--db-primary);
+}
+
+.entity-card:hover,
+.relationship-card:hover {
+    box-shadow: var(--db-shadow-sm);
+}
+
+.entity-card .card-title,
+.relationship-card .card-title {
+    font-weight: 600;
+    color: var(--db-text);
+}
+
+/* ==========================================================================
+   Unmapped/Mapped Column Headers
+   ========================================================================== */
+.column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background-color: var(--db-light-gray);
+    border-radius: 6px;
+    margin-bottom: 1rem;
+}
+
+.column-header h6 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.column-header .badge {
+    font-size: 0.75rem;
+}
+
+/* ==========================================================================
+   Code Preview Boxes
+   ========================================================================== */
+.code-preview {
+    background-color: var(--db-gray);
+    color: #F8F8F2;
+    padding: 1rem;
+    border-radius: 8px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.85rem;
+    overflow-x: auto;
+    max-height: 500px;
+}
+
+.code-preview.light {
+    background-color: var(--db-light-gray);
+    color: var(--db-text);
+    border: 1px solid var(--db-border);
+}
+
+/* ==========================================================================
+   Action Button Groups
+   ========================================================================== */
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.action-buttons .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* ==========================================================================
+   Stats Cards (R2RML execution stats)
+   ========================================================================== */
+.stats-card {
+    text-align: center;
+    padding: 1rem;
+}
+
+.stats-card .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--db-primary);
+}
+
+.stats-card .stat-label {
+    font-size: 0.85rem;
+    color: var(--db-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ==========================================================================
+   Legend (Graph visualization)
+   ========================================================================== */
+.graph-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background-color: var(--db-light-gray);
+    border-radius: 6px;
+    margin-top: 1rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    background: white;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+}
+
+.legend-emoji {
+    font-size: 1.25rem;
+}
+
+/* ==========================================================================
+   Load Page - SPARQL Query Interface
+   ========================================================================== */
+.code-textarea {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    border: 1px solid var(--db-border);
+    border-radius: 6px;
+    padding: 1rem;
+    resize: vertical;
+}
+
+.code-textarea:focus {
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    border-color: var(--db-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--db-primary-rgb), 0.15);
+}
+
+.code-textarea::placeholder {
+    color: #6a6a6a;
+}
+
+/* Stats display */
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--db-primary);
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: var(--db-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Sticky table header */
+.table-responsive .sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+/* Results table */
+.table-sm td {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.table-sm td:hover {
+    white-space: normal;
+    word-break: break-all;
+}
+
+/* ========== Document Preview Modal ========== */
+.doc-preview-iframe {
+    width: 100%;
+    height: 75vh;
+    border: none;
+    display: block;
+}
+
+.doc-preview-image {
+    max-width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+}
+
+.doc-preview-text {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    max-height: 75vh;
+    overflow: auto;
+    background: #f8f9fa;
+    white-space: pre-wrap;
+    word-break: break-word;
+    tab-size: 4;
+}
+
+.doc-preview-md {
+    max-height: 75vh;
+    overflow: auto;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+.doc-preview-md h3 { font-size: 1.3rem; margin-top: 1.2rem; }
+.doc-preview-md h4 { font-size: 1.1rem; margin-top: 1rem; }
+.doc-preview-md h5 { font-size: 1rem; margin-top: 0.8rem; }
+.doc-preview-md code {
+    background: #f0f0f0;
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+    font-size: 0.85em;
+}
+.doc-preview-md ul { padding-left: 1.5rem; }
+
+.doc-preview-link {
+    cursor: pointer;
+}
+.doc-preview-link:hover {
+    text-decoration: underline;
+    color: var(--db-primary, #0d6efd);
+}
+
+

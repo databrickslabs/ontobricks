@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Product &amp; go-to-market &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Examples" href="examples.html" />
+    <link rel="prev" title="Development" href="development.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="development.html">Development</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Product &amp; go-to-market</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#ontobricks-value-proposition-deck">OntoBricks – Value Proposition Deck</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#ontobricks-field-engineering-innovation-project">OntoBricks — Field Engineering Innovation Project</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="development.html" title="previous chapter">Development</a></li>
+      <li>Next: <a href="examples.html" title="next chapter">Examples</a></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="product-go-to-market">
+<h1>Product &amp; go-to-market<a class="headerlink" href="#product-go-to-market" title="Link to this heading">¶</a></h1>
+<section id="ontobricks-value-proposition-deck">
+<h2>OntoBricks – Value Proposition Deck<a class="headerlink" href="#ontobricks-value-proposition-deck" title="Link to this heading">¶</a></h2>
+<blockquote>
+<div><p>Slide-ready content for presenting OntoBricks to enterprise stakeholders.
+Each section maps to one slide or slide group.</p>
+</div></blockquote>
+<section id="agenda">
+<h3>Agenda<a class="headerlink" href="#agenda" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>The data semantics Gap</p></li>
+<li><p>Where OntoBricks fits</p></li>
+<li><p>The 4-Click pipeline</p></li>
+<li><p>Key features and capabilities</p></li>
+<li><p>Competitive landscape</p></li>
+<li><p>Value Proposition</p></li>
+<li><p>Conclusion &amp; next steps</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="slide-1-the-data-semantics-gap">
+<h3>Slide 1: The Data Semantics Gap<a class="headerlink" href="#slide-1-the-data-semantics-gap" title="Link to this heading">¶</a></h3>
+<section id="every-enterprise-has-the-data-almost-none-have-the-meaning">
+<h4>Every enterprise has the data. Almost none have the meaning.<a class="headerlink" href="#every-enterprise-has-the-data-almost-none-have-the-meaning" title="Link to this heading">¶</a></h4>
+<p>Organizations invest heavily in Lakehouse platforms to store and process data at scale. But structured data alone does not capture what the data <em>means</em> – the entities it represents, how they relate, and what business rules apply.</p>
+<p><strong>The five gaps:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Gap</p></th>
+<th class="head"><p>What happens today</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>No semantic layer</strong></p></td>
+<td><p>Tables have columns and types, but nothing that says “a Customer <em>has</em> Contracts, which <em>contain</em> Invoices.” The business meaning lives outside the data.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Siloed knowledge</strong></p></td>
+<td><p>Domain expertise is trapped in documentation, ER diagrams, or the heads of senior engineers – disconnected from the data itself.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Query-only exploration</strong></p></td>
+<td><p>Understanding relationships requires ad-hoc SQL joins. There is no visual, graph-based way to navigate across tables.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Inaccessible standards</strong></p></td>
+<td><p>Industry ontologies (FIBO for finance, CDISC for clinical, IOF for manufacturing) exist but require specialized desktop tools that do not integrate with the data platform.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>No schema-to-graph path</strong></p></td>
+<td><p>Building a knowledge graph from Lakehouse tables today requires stitching together multiple external tools, custom ETL, and manual RDF generation.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The result:</strong> data is stored but not understood, relationships are implicit but not navigable, and knowledge graph adoption stalls because the infrastructure barrier is too high.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="slide-2-where-ontobricks-fits">
+<h3>Slide 2: Where OntoBricks Fits<a class="headerlink" href="#slide-2-where-ontobricks-fits" title="Link to this heading">¶</a></h3>
+<section id="a-knowledge-graph-builder-that-lives-inside-databricks">
+<h4>A Knowledge Graph Builder that lives inside Databricks.<a class="headerlink" href="#a-knowledge-graph-builder-that-lives-inside-databricks" title="Link to this heading">¶</a></h4>
+<p>OntoBricks is not a separate platform. It deploys as a <strong>Databricks App</strong> and uses the services you already have.</p>
+<div class="highlight-mermaid notranslate"><div class="highlight"><pre><span></span>flowchart LR
+    subgraph databricksPlatform [&quot;Databricks Platform&quot;]
+        UC[&quot;Unity Catalog&lt;br/&gt;Tables, Volumes, Metadata&quot;]
+        WH[&quot;SQL Warehouse&lt;br/&gt;Query Execution&quot;]
+        MS[&quot;Model Serving&lt;br/&gt;LLM Endpoints&quot;]
+        TS[&quot;Delta Triple Store&lt;br/&gt;Subject-Predicate-Object&quot;]
+    end
+
+    subgraph ontoBricks [&quot;OntoBricks App&quot;]
+        OD[&quot;Ontology Designer&lt;br/&gt;OWL / RDFS&quot;]
+        MA[&quot;Mapping&lt;br/&gt;R2RML Mapping&quot;]
+        DT[&quot;Digital Twin&lt;br/&gt;Knowledge Graph&quot;]
+    end
+
+    UC --&gt;|metadata| OD
+    OD --&gt;|entities &amp; rules| MA
+    UC --&gt;|table data| MA
+    WH --&gt;|SQL execution| MA
+    MS --&gt;|LLM automation| OD
+    MS --&gt;|LLM automation| MA
+    MA --&gt;|materialized triples| TS
+    TS --&gt;|graph data| DT
+</pre></div>
+</div>
+<p><strong>Key architecture points:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Resource</p></th>
+<th class="head"><p>Role</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Unity Catalog</p></td>
+<td><p>Storage for tables, project files (Volumes), and metadata</p></td>
+</tr>
+<tr class="row-odd"><td><p>SQL Warehouse</p></td>
+<td><p>Executes all data queries – no separate compute</p></td>
+</tr>
+<tr class="row-even"><td><p>Model Serving</p></td>
+<td><p>Powers LLM-driven ontology generation and auto-mapping</p></td>
+</tr>
+<tr class="row-odd"><td><p>Delta Table</p></td>
+<td><p>Triple store – triples live in your Lakehouse, not in a separate graph DB</p></td>
+</tr>
+<tr class="row-even"><td><p>Databricks App</p></td>
+<td><p>Deployment target – <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">apps</span> <span class="pre">deploy</span></code> and you are live</p></td>
+</tr>
+<tr class="row-odd"><td><p>MCP Server</p></td>
+<td><p>Exposes knowledge-graph tools to the Databricks Playground and LLM clients</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Standards bridge:</strong> OntoBricks uses W3C semantic web standards internally (OWL, R2RML, SPARQL) but translates everything to Spark SQL for execution. Users never need to learn RDF.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="slide-3-the-4-click-pipeline">
+<h3>Slide 3: The 4-Click Pipeline<a class="headerlink" href="#slide-3-the-4-click-pipeline" title="Link to this heading">¶</a></h3>
+<section id="from-raw-tables-to-a-queryable-knowledge-graph-in-minutes-not-months">
+<h4>From raw tables to a queryable knowledge graph in minutes, not months.<a class="headerlink" href="#from-raw-tables-to-a-queryable-knowledge-graph-in-minutes-not-months" title="Link to this heading">¶</a></h4>
+<p>After a one-time setup (Databricks connection, LLM endpoint, triple store table), the entire pipeline is four actions:</p>
+<div class="highlight-mermaid notranslate"><div class="highlight"><pre><span></span>flowchart LR
+    S1[&quot;1. Import Metadata&quot;]
+    S2[&quot;2. Generate Ontology&quot;]
+    S3[&quot;3. Auto-Mapping Data&quot;]
+    S4[&quot;4. Sync Triple Store&quot;]
+
+    S1 --&gt;|&quot;UC tables &amp; columns&quot;| S2
+    S2 --&gt;|&quot;LLM designs entities&quot;| S3
+    S3 --&gt;|&quot;LLM maps SQL&quot;| S4
+    S4 --&gt;|&quot;Delta materialization&quot;| KG[&quot;Knowledge Graph Ready&quot;]
+</pre></div>
+</div>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Step</p></th>
+<th class="head"><p>Where in OntoBricks</p></th>
+<th class="head"><p>What happens</p></th>
+<th class="head"><p>Powered by</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>1</strong></p></td>
+<td><p>Project &gt; Metadata</p></td>
+<td><p>Fetches table and column metadata from Unity Catalog</p></td>
+<td><p>Unity Catalog API</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>2</strong></p></td>
+<td><p>Ontology &gt; Generate</p></td>
+<td><p>LLM designs entities, relationships, attributes, and inheritance from your metadata</p></td>
+<td><p>Model Serving</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>3</strong></p></td>
+<td><p>Mapping &gt; Auto-Map</p></td>
+<td><p>LLM generates SQL queries and column mappings for every entity and relationship</p></td>
+<td><p>Model Serving</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>4</strong></p></td>
+<td><p>Digital Twin &gt; Build</p></td>
+<td><p>Executes all mappings and populates the triple store table</p></td>
+<td><p>SQL Warehouse</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Traditional approach:</strong> weeks of manual ontology design, custom ETL pipelines, separate graph database setup.</p>
+<p><strong>OntoBricks approach:</strong> minutes of guided, LLM-automated interaction – all within the Databricks platform.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="slide-4-key-features-and-capabilities">
+<h3>Slide 4: Key Features and Capabilities<a class="headerlink" href="#slide-4-key-features-and-capabilities" title="Link to this heading">¶</a></h3>
+<section id="four-pillars-one-integrated-experience">
+<h4>Four pillars, one integrated experience.<a class="headerlink" href="#four-pillars-one-integrated-experience" title="Link to this heading">¶</a></h4>
+</section>
+<section id="ontology-design">
+<h4>Ontology Design<a class="headerlink" href="#ontology-design" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Capability</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Visual Designer (OntoViz)</p></td>
+<td><p>Drag-and-drop entities, relationships, and inheritance hierarchies on an interactive canvas</p></td>
+</tr>
+<tr class="row-odd"><td><p>LLM-Powered Wizard</p></td>
+<td><p>Point to Unity Catalog tables; the LLM generates a complete OWL ontology from metadata</p></td>
+</tr>
+<tr class="row-even"><td><p>Industry Standards</p></td>
+<td><p>One-click import of FIBO (6 domains), CDISC (5 standards), IOF (3 domains)</p></td>
+</tr>
+<tr class="row-odd"><td><p>OWL/RDFS Import</p></td>
+<td><p>Load existing ontologies from files or Unity Catalog Volumes</p></td>
+</tr>
+<tr class="row-even"><td><p>Constraints and Rules</p></td>
+<td><p>Cardinality, value constraints, property characteristics, SWRL rules, expressions and axioms</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="mapping-data-mapping">
+<h4>Mapping (Data Mapping)<a class="headerlink" href="#mapping-data-mapping" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Capability</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Visual Mapping</p></td>
+<td><p>Click entities on the interactive graph to configure SQL sources</p></td>
+</tr>
+<tr class="row-odd"><td><p>AI Auto-Mapping</p></td>
+<td><p>LLM generates SQL queries and column mappings for all entities and relationships</p></td>
+</tr>
+<tr class="row-even"><td><p>Attribute Mapping</p></td>
+<td><p>Column-level precision with live data preview</p></td>
+</tr>
+<tr class="row-odd"><td><p>Relationship Mapping</p></td>
+<td><p>Direction control – forward, reverse, or bidirectional</p></td>
+</tr>
+<tr class="row-even"><td><p>R2RML Generation</p></td>
+<td><p>W3C-compliant mapping generated automatically – users never write mapping rules</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="digital-twin-sync-and-explore">
+<h4>Digital Twin (Sync and Explore)<a class="headerlink" href="#digital-twin-sync-and-explore" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Capability</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>One-Click Sync</p></td>
+<td><p>Materialize triples into a Delta table stored in Unity Catalog</p></td>
+</tr>
+<tr class="row-odd"><td><p>Knowledge Graph</p></td>
+<td><p>Sigma.js WebGL graph with search, filtering, depth control, and entity detail panels</p></td>
+</tr>
+<tr class="row-even"><td><p>Quality Checks</p></td>
+<td><p>Async validation against ontology constraints (cardinality, orphans, value rules)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Dashboard Integration</p></td>
+<td><p>Embed Databricks dashboards with parameter mapping to ontology entities</p></td>
+</tr>
+<tr class="row-even"><td><p>Triples Grid</p></td>
+<td><p>Sortable, searchable table view of all materialized triples</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="project-management">
+<h4>Project Management<a class="headerlink" href="#project-management" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Capability</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Unity Catalog Storage</p></td>
+<td><p>Save and load projects to UC Volumes with version control</p></td>
+</tr>
+<tr class="row-odd"><td><p>Import/Export</p></td>
+<td><p>Import OWL, RDFS, R2RML; export OWL and R2RML</p></td>
+</tr>
+<tr class="row-even"><td><p>Secret-Safe Design</p></td>
+<td><p>Projects never store tokens, passwords, or query results</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="external-access">
+<h4>External Access<a class="headerlink" href="#external-access" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Capability</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>REST API (Digital Twin)</p></td>
+<td><p>Stateless endpoints for triple store status, entity search, ontology/R2RML/SQL retrieval, and build triggers</p></td>
+</tr>
+<tr class="row-odd"><td><p>GraphQL API</p></td>
+<td><p>Auto-generated typed schema per project with configurable depth, GraphiQL playground</p></td>
+</tr>
+<tr class="row-even"><td><p>MCP Server</p></td>
+<td><p>Model Context Protocol server for Databricks Playground and LLM clients (Cursor, Claude Desktop)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ontology Assistant</p></td>
+<td><p>Conversational agent for natural-language ontology editing (add entities, clean orphans, etc.)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="slide-5-competitive-landscape">
+<h3>Slide 5: Competitive Landscape<a class="headerlink" href="#slide-5-competitive-landscape" title="Link to this heading">¶</a></h3>
+<section id="no-existing-solution-provides-an-integrated-databricks-native-knowledge-graph-experience">
+<h4>No existing solution provides an integrated, Databricks-native knowledge graph experience.<a class="headerlink" href="#no-existing-solution-provides-an-integrated-databricks-native-knowledge-graph-experience" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Solution</p></th>
+<th class="head"><p>What it does</p></th>
+<th class="head"><p>Limitation for Databricks users</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Palantir Foundry</strong></p></td>
+<td><p>Powerful ontology layer (Ontology + AIP) for entity modeling and operational analytics</p></td>
+<td><p>Proprietary platform; requires Palantir infrastructure; expensive licensing; no W3C standards (OWL/RDF); lock-in</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Snowflake Cortex + Horizon</strong></p></td>
+<td><p>ML functions and governance catalog for the Snowflake ecosystem</p></td>
+<td><p>No ontology design; no RDF/OWL; no graph visualization; Snowflake-only – not available on Databricks</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Microsoft Fabric + Purview</strong></p></td>
+<td><p>Unified analytics with a governance catalog (Purview) for lineage and classification</p></td>
+<td><p>Governance-focused, not ontology-focused; no knowledge graph materialization; no visual graph exploration; Azure-centric</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Neo4j / Amazon Neptune</strong></p></td>
+<td><p>Dedicated graph databases optimized for traversal queries</p></td>
+<td><p>Separate infrastructure; data must be exported from the Lakehouse; no native Delta integration; data duplication</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Stardog</strong></p></td>
+<td><p>Knowledge graph platform with virtual graph and reasoning</p></td>
+<td><p>Separate server; JDBC connector to Databricks but no native integration; commercial license</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>TopBraid / Protege</strong></p></td>
+<td><p>Enterprise and desktop OWL ontology editors</p></td>
+<td><p>No Databricks integration; cannot map to tables; no SQL generation; no knowledge graph exploration</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>dbt Semantic Layer</strong></p></td>
+<td><p>SQL-based semantic modeling for metrics and dimensions</p></td>
+<td><p>No ontology/OWL; no graph visualization; limited to dimensional modeling concepts</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="ontobricks-differentiator">
+<h4>OntoBricks differentiator<a class="headerlink" href="#ontobricks-differentiator" title="Link to this heading">¶</a></h4>
+<p>OntoBricks is the <strong>only</strong> solution that combines all of the following in a single application:</p>
+<ul class="simple">
+<li><p>Databricks-native (deploys as an App, uses UC + SQL Warehouse)</p></li>
+<li><p>W3C standards-based (OWL, R2RML, SPARQL)</p></li>
+<li><p>LLM-automated (ontology generation + data mapping)</p></li>
+<li><p>Graph-visualizing (interactive knowledge graph)</p></li>
+<li><p>Industry-standard ready (FIBO, CDISC, IOF)</p></li>
+<li><p>Open-source (MIT license)</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="slide-6-value-proposition">
+<h3>Slide 6: Value Proposition<a class="headerlink" href="#slide-6-value-proposition" title="Link to this heading">¶</a></h3>
+<section id="quantified-benefits-for-the-enterprise">
+<h4>Quantified benefits for the enterprise.<a class="headerlink" href="#quantified-benefits-for-the-enterprise" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Benefit</p></th>
+<th class="head"><p>Without OntoBricks</p></th>
+<th class="head"><p>With OntoBricks</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Time to knowledge graph</strong></p></td>
+<td><p>Weeks to months of manual ontology design, custom ETL, and graph DB setup</p></td>
+<td><p>Minutes – 4-click LLM-automated pipeline</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Infrastructure cost</strong></p></td>
+<td><p>Separate graph database (Neo4j, Neptune, Stardog) + compute + maintenance</p></td>
+<td><p>Zero – triples live in Delta, queries run on SQL Warehouse</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Industry compliance</strong></p></td>
+<td><p>Requires Protege or TopBraid + manual import + custom integration</p></td>
+<td><p>One-click import of FIBO, CDISC, IOF directly from the Databricks platform</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Knowledge sharing</strong></p></td>
+<td><p>ER diagrams in Confluence, tribal knowledge in meetings</p></td>
+<td><p>Versioned ontology projects in Unity Catalog, shareable across teams</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Data quality</strong></p></td>
+<td><p>Manual spot-checks or custom validation scripts</p></td>
+<td><p>Automated quality checks against formal ontology constraints</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Vendor lock-in</strong></p></td>
+<td><p>Proprietary formats (Palantir, Stardog) or platform-specific (Snowflake)</p></td>
+<td><p>Open standards (OWL, R2RML, SPARQL) – export and reuse anywhere</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Skill barrier</strong></p></td>
+<td><p>Requires RDF/SPARQL expertise or graph DB skills</p></td>
+<td><p>Visual designer + LLM automation – domain experts contribute directly</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="who-benefits">
+<h4>Who benefits<a class="headerlink" href="#who-benefits" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Persona</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Data Engineers</strong></p></td>
+<td><p>Build semantic layers without leaving the Databricks platform</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Domain Experts</strong></p></td>
+<td><p>Model and explore entity relationships visually, without SQL</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Data Architects</strong></p></td>
+<td><p>Evaluate knowledge graph approaches with zero infrastructure overhead</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Compliance Teams</strong></p></td>
+<td><p>Apply industry standards (FIBO, CDISC, IOF) to real data</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="slide-7-conclusion-and-next-steps">
+<h3>Slide 7: Conclusion and Next Steps<a class="headerlink" href="#slide-7-conclusion-and-next-steps" title="Link to this heading">¶</a></h3>
+<section id="deploy-a-knowledge-graph-on-databricks-in-minutes">
+<h4>Deploy a knowledge graph on Databricks in minutes.<a class="headerlink" href="#deploy-a-knowledge-graph-on-databricks-in-minutes" title="Link to this heading">¶</a></h4>
+<p><strong>Get started:</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">databricks</span> <span class="n">apps</span> <span class="n">deploy</span> <span class="o">--</span><span class="n">app</span><span class="o">-</span><span class="n">name</span> <span class="n">ontobricks</span>
+</pre></div>
+</div>
+<p><strong>Requirements:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Resource</p></th>
+<th class="head"><p>Details</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>SQL Warehouse</p></td>
+<td><p>Serverless recommended; Classic also supported</p></td>
+</tr>
+<tr class="row-odd"><td><p>Model Serving</p></td>
+<td><p>Optional – required for LLM features (ontology generation, auto-mapping)</p></td>
+</tr>
+<tr class="row-even"><td><p>Unity Catalog</p></td>
+<td><p>For table access and project storage (Volumes)</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Resources:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Resource</p></th>
+<th class="head"><p>Link</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Source Code</p></td>
+<td><p>GitHub repository (MIT license)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Documentation</p></td>
+<td><p>Full user guide, architecture docs, API reference</p></td>
+</tr>
+<tr class="row-even"><td><p>Automated Pipeline Guide</p></td>
+<td><p>Step-by-step: tables to knowledge graph in 4 clicks</p></td>
+</tr>
+<tr class="row-odd"><td><p>Import Guide</p></td>
+<td><p>FIBO, CDISC, IOF import instructions</p></td>
+</tr>
+<tr class="row-even"><td><p>MCP Server Guide</p></td>
+<td><p>Deployment, tools, client configuration for Playground, Cursor, Claude Desktop</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Next steps for your organization:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Try it</strong> – Deploy OntoBricks on a development workspace with sample data</p></li>
+<li><p><strong>Identify a use case</strong> – Pick a domain with complex entity relationships (e.g., customer-contract-invoice, clinical trial data, manufacturing processes)</p></li>
+<li><p><strong>Run the 4-click pipeline</strong> – Import metadata, generate ontology, run auto-mapping, sync</p></li>
+<li><p><strong>Explore the graph</strong> – Navigate entities and relationships visually; run quality checks</p></li>
+<li><p><strong>Evaluate</strong> – Compare the time, cost, and insight quality against your current approach</p></li>
+</ol>
+<hr class="docutils" />
+<p><em>OntoBricks – Bridging relational data and knowledge graphs on Databricks.</em></p>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="ontobricks-field-engineering-innovation-project">
+<h2>OntoBricks — Field Engineering Innovation Project<a class="headerlink" href="#ontobricks-field-engineering-innovation-project" title="Link to this heading">¶</a></h2>
+<section id="summary">
+<h3>Summary<a class="headerlink" href="#summary" title="Link to this heading">¶</a></h3>
+<p>OntoBricks is a <strong>Knowledge Graph Builder for Databricks</strong> that brings <strong>graph database capabilities and formal reasoning</strong> to the Lakehouse — without requiring separate graph infrastructure. It transforms relational tables stored in Unity Catalog into a structured knowledge graph by leveraging semantic web standards (OWL, R2RML, RDF), embedded graph technology (LadybugDB with Cypher), OWL 2 RL reasoning, and LLM-powered automation.</p>
+<p>Users can design ontologies visually or import industry standards (FIBO for finance, CDISC for clinical data, IOF for manufacturing), map ontology entities to Databricks tables, materialize the result into a Delta or LadybugDB triple store, run <strong>formal reasoning</strong> (OWL 2 RL deductive closure, SWRL rules, transitive/symmetric inference), and explore the knowledge graph through interactive visualization. The entire pipeline — from raw tables to a reasoned, queryable knowledge graph — can be completed in as few as four clicks thanks to LLM-driven ontology generation and automatic data mapping.</p>
+<p>OntoBricks runs as a <strong>Databricks App</strong>, making it natively integrated with the Databricks platform: Unity Catalog for storage and metadata, SQL Warehouses for query execution, and Model Serving endpoints for LLM features.</p>
+</section>
+<hr class="docutils" />
+<section id="problem-statement">
+<h3>Problem Statement<a class="headerlink" href="#problem-statement" title="Link to this heading">¶</a></h3>
+<p>Organizations on Databricks accumulate large volumes of structured data across catalogs and schemas, but <strong>understanding and navigating the relationships between entities</strong> hidden in those tables remains difficult:</p>
+<ul class="simple">
+<li><p><strong>No semantic layer</strong>: Databricks provides excellent storage and compute, but no built-in tooling to define or visualize the meaning of data — what entities exist, how they relate, and what constraints apply.</p></li>
+<li><p><strong>Knowledge is siloed</strong>: Domain knowledge about entity relationships (e.g., “a Customer has Contracts, which have Invoices”) lives in documentation, tribal knowledge, or ER diagrams disconnected from the actual data.</p></li>
+<li><p><strong>Exploration is query-driven</strong>: Understanding how entities connect requires writing ad-hoc SQL joins. There is no visual, graph-based way to navigate data across tables.</p></li>
+<li><p><strong>Industry standards are inaccessible</strong>: Established ontologies like FIBO (finance), CDISC (clinical), and IOF (manufacturing) exist but require specialized tooling (Protégé, TopBraid) that doesn’t integrate with the Databricks ecosystem.</p></li>
+<li><p><strong>No path from schema to knowledge graph</strong>: Building a knowledge graph from Databricks tables today requires stitching together multiple external tools, custom ETL pipelines, and manual RDF generation — a process that is expensive, fragile, and disconnected from the data platform.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="proposed-solution">
+<h3>Proposed Solution<a class="headerlink" href="#proposed-solution" title="Link to this heading">¶</a></h3>
+<p>OntoBricks provides an end-to-end, web-based solution that runs directly on Databricks:</p>
+<section id="id1">
+<h4>Ontology Design<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Visual designer</strong> (OntoViz) with drag-and-drop entity creation, relationship wiring, and inheritance hierarchies.</p></li>
+<li><p><strong>LLM-powered Wizard</strong>: Point to Unity Catalog tables, and the LLM generates a complete OWL ontology from table/column metadata — entities, relationships, attributes, and inheritance.</p></li>
+<li><p><strong>Industry-standard import</strong>: One-click import of FIBO (6 domains), CDISC (5 standards), and IOF (3 domains) with automatic module fetching, merging, and parsing.</p></li>
+<li><p><strong>OWL/RDFS import</strong>: Load existing ontologies from files or Unity Catalog Volumes.</p></li>
+</ul>
+</section>
+<section id="data-mapping">
+<h4>Data Mapping<a class="headerlink" href="#data-mapping" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Visual mapping</strong>: Click entities on an interactive graph to configure their SQL source.</p></li>
+<li><p><strong>LLM-powered Auto-Map</strong>: The LLM generates SQL queries and column mappings for every entity and relationship automatically, using project metadata as context.</p></li>
+<li><p><strong>R2RML generation</strong>: W3C-compliant R2RML mappings are generated behind the scenes — users never need to write mapping rules manually.</p></li>
+</ul>
+</section>
+<section id="dual-triple-store-backends">
+<h4>Dual Triple Store Backends<a class="headerlink" href="#dual-triple-store-backends" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Delta (SQL Warehouse)</strong>: Materialize triples into a governed Delta table <code class="docutils literal notranslate"><span class="pre">(subject,</span> <span class="pre">predicate,</span> <span class="pre">object)</span></code> with Liquid Clustering, full Unity Catalog lineage, and SQL-based graph reasoning (recursive CTEs for transitive closure, anti-joins for symmetric expansion).</p></li>
+<li><p><strong>LadybugDB (Embedded Graph)</strong>: An embedded Cypher-native graph database (<code class="docutils literal notranslate"><span class="pre">real_ladybug</span></code>) that generates <strong>typed node and relationship tables</strong> from the OWL ontology — each class becomes a Cypher <code class="docutils literal notranslate"><span class="pre">NODE</span> <span class="pre">TABLE</span></code>, each object property a <code class="docutils literal notranslate"><span class="pre">REL</span> <span class="pre">TABLE</span></code> — enabling native graph traversal, shortest-path algorithms, and variable-length path queries without a separate graph database.</p></li>
+<li><p><strong>Quality checks</strong>: Validate the triple store against ontology constraints — cardinality, value constraints, functional/symmetric properties, orphan detection, and more.</p></li>
+<li><p><strong>SHACL Data Quality</strong>: Define W3C SHACL shapes across six quality categories (completeness, cardinality, uniqueness, consistency, conformance, structural) — shapes are compiled to SQL for execution against the triple store or validated in-memory via PySHACL.</p></li>
+</ul>
+</section>
+<section id="reasoning-inference">
+<h4>Reasoning &amp; Inference<a class="headerlink" href="#reasoning-inference" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>OWL 2 RL Reasoner</strong>: Forward-chaining deductive closure on the ontology using the <code class="docutils literal notranslate"><span class="pre">owlrl</span></code> library — infers subclass hierarchies, property entailments, domain/range typing, and class axioms.</p></li>
+<li><p><strong>SWRL Rule Engine</strong>: User-defined Horn-clause rules with a <strong>graphical D3-based editor</strong> — compiled to SQL (Delta) or Cypher (LadybugDB) for violation detection and triple materialization.</p></li>
+<li><p><strong>Graph Reasoning</strong>: Automatic transitive closure and symmetric expansion based on OWL property characteristics.</p></li>
+<li><p><strong>Constraint Validation</strong>: Formal checking of cardinality, functional/inverse-functional properties, value constraints, and global rules (no orphans, require labels).</p></li>
+</ul>
+</section>
+<section id="knowledge-graph-exploration">
+<h4>Knowledge Graph Exploration<a class="headerlink" href="#knowledge-graph-exploration" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Interactive Knowledge Graph</strong>: Sigma.js WebGL-powered graph with search, filtering, depth control, and entity detail panels.</p></li>
+<li><p><strong>Triples grid</strong>: Sortable, searchable table view of all materialized triples.</p></li>
+<li><p><strong>Dashboard integration</strong>: Embed Databricks SQL dashboards with parameter mapping to ontology entities.</p></li>
+</ul>
+</section>
+<section id="external-programmatic-access">
+<h4>External &amp; Programmatic Access<a class="headerlink" href="#external-programmatic-access" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Digital Twin REST API</strong>: Stateless endpoints for triple store status, ontology/R2RML/SQL retrieval, entity search, and build triggers (<code class="docutils literal notranslate"><span class="pre">/api/v1/digitaltwin/</span></code>).</p></li>
+<li><p><strong>GraphQL API</strong>: Auto-generated typed schema per project with configurable relationship depth and GraphiQL playground.</p></li>
+<li><p><strong>MCP Server</strong>: Model Context Protocol server deployable as a Databricks App (<code class="docutils literal notranslate"><span class="pre">mcp-ontobricks</span></code>) for Databricks Playground integration and LLM client access (Cursor, Claude Desktop).</p></li>
+<li><p><strong>Ontology Assistant</strong>: Conversational LLM agent for natural-language ontology editing.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="what-solutions-exist-today">
+<h3>What Solutions Exist Today<a class="headerlink" href="#what-solutions-exist-today" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Solution</p></th>
+<th class="head"><p>Approach</p></th>
+<th class="head"><p>Limitation on Databricks</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Protégé</strong></p></td>
+<td><p>Desktop OWL editor</p></td>
+<td><p>No Databricks integration; cannot map to tables or generate SQL</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>TopBraid Composer / EDG</strong></p></td>
+<td><p>Enterprise ontology platform</p></td>
+<td><p>Separate infrastructure; no Unity Catalog awareness; expensive licensing</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Apache Jena / RDF4J</strong></p></td>
+<td><p>Java RDF frameworks</p></td>
+<td><p>Requires custom development; no UI; no Databricks-native deployment</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Neo4j / Amazon Neptune</strong></p></td>
+<td><p>Graph databases</p></td>
+<td><p>Separate graph DB infrastructure; data must be exported from Databricks; no native Delta integration</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Stardog</strong></p></td>
+<td><p>Knowledge graph platform with virtual graph</p></td>
+<td><p>Separate server; JDBC connector to Databricks but no native integration; commercial license</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Custom Spark RDF pipelines</strong></p></td>
+<td><p>DIY with rdflib + PySpark</p></td>
+<td><p>No UI; requires significant engineering effort; no ontology design or visual exploration</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>dbt + Semantic Layer</strong></p></td>
+<td><p>SQL-based semantic modeling</p></td>
+<td><p>No ontology/OWL support; no graph visualization; limited to dimensional modeling concepts</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Gap</strong>: No existing solution provides an integrated, Databricks-native experience that combines ontology design, industry-standard import, LLM-powered automation, <strong>graph database capabilities (embedded Cypher engine)</strong>, <strong>formal OWL 2 RL reasoning</strong>, <strong>SWRL rule evaluation</strong>, <strong>W3C SHACL data quality validation</strong>, triple store materialization in Delta, and visual knowledge graph exploration — all deployable as a Databricks App without requiring separate graph infrastructure.</p>
+</section>
+<hr class="docutils" />
+<section id="final-deliverable-and-impact">
+<h3>Final Deliverable and Impact<a class="headerlink" href="#final-deliverable-and-impact" title="Link to this heading">¶</a></h3>
+<section id="deliverable">
+<h4>Deliverable<a class="headerlink" href="#deliverable" title="Link to this heading">¶</a></h4>
+<p>A <strong>production-ready Databricks App</strong> (open-source, MIT license) that:</p>
+<ul class="simple">
+<li><p>Deploys in minutes via <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">apps</span> <span class="pre">deploy</span></code></p></li>
+<li><p>Requires only a SQL Warehouse and (optionally) a Model Serving endpoint</p></li>
+<li><p>Stores all project data in Unity Catalog Volumes (no external dependencies)</p></li>
+<li><p>Supports the full lifecycle: design → map → materialize → explore → validate</p></li>
+</ul>
+</section>
+<section id="expected-impact">
+<h4>Expected Impact<a class="headerlink" href="#expected-impact" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Area</p></th>
+<th class="head"><p>Impact</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Data understanding</strong></p></td>
+<td><p>Domain experts can visually model and explore entity relationships without writing SQL</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Knowledge graph adoption</strong></p></td>
+<td><p>Removes the infrastructure barrier — no separate graph database needed; triples live in Delta or an embedded graph engine</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Formal reasoning</strong></p></td>
+<td><p>OWL 2 RL deductive closure and SWRL rules bring inference capabilities to the Lakehouse — discovering implicit relationships, enforcing constraints, and enriching data with derived facts</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Graph capabilities</strong></p></td>
+<td><p>Embedded Cypher-native graph DB (LadybugDB) provides typed schema, traversal, shortest path, and variable-length path queries without deploying Neo4j or Neptune</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Industry compliance</strong></p></td>
+<td><p>FIBO, CDISC, and IOF ontologies become accessible directly from the Databricks platform</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Time to value</strong></p></td>
+<td><p>LLM automation reduces the manual effort from weeks of custom development to minutes of guided interaction</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Reusability</strong></p></td>
+<td><p>Saved projects (ontology + mappings) can be versioned, shared, and applied to new datasets</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Data quality</strong></p></td>
+<td><p>Built-in quality checks and formal constraint validation ensure the knowledge graph adheres to ontology semantics</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="target-users">
+<h4>Target Users<a class="headerlink" href="#target-users" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Data engineers</strong> building semantic layers on Databricks</p></li>
+<li><p><strong>Domain experts</strong> (finance, healthcare, manufacturing) who need to model and explore entity relationships</p></li>
+<li><p><strong>Data architects</strong> evaluating knowledge graph approaches on Lakehouse platforms</p></li>
+<li><p><strong>Field engineers</strong> demonstrating Databricks capabilities for knowledge management and data governance use cases</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="additional-information-for-support-requested">
+<h3>Additional Information for Support Requested<a class="headerlink" href="#additional-information-for-support-requested" title="Link to this heading">¶</a></h3>
+<section id="technical-stack">
+<h4>Technical Stack<a class="headerlink" href="#technical-stack" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Layer</p></th>
+<th class="head"><p>Technology</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Backend</p></td>
+<td><p>Python 3.10+, FastAPI, RDFLib, Databricks SDK</p></td>
+</tr>
+<tr class="row-odd"><td><p>Reasoning</p></td>
+<td><p>owlrl 7.0+ (OWL 2 RL forward chaining), PySHACL 0.26+ (SHACL validation), custom SWRL engine (SQL + Cypher translators)</p></td>
+</tr>
+<tr class="row-even"><td><p>Graph DB</p></td>
+<td><p>LadybugDB / real_ladybug (embedded Cypher graph database), typed node/rel schema from OWL</p></td>
+</tr>
+<tr class="row-odd"><td><p>Frontend</p></td>
+<td><p>Bootstrap 5, Sigma.js, Graphology, D3.js, OntoViz (custom), Vanilla JS</p></td>
+</tr>
+<tr class="row-even"><td><p>Data</p></td>
+<td><p>Databricks SQL Connector, Unity Catalog, Delta Lake</p></td>
+</tr>
+<tr class="row-odd"><td><p>AI</p></td>
+<td><p>Databricks Model Serving (LLM endpoints)</p></td>
+</tr>
+<tr class="row-even"><td><p>MCP</p></td>
+<td><p>FastMCP, httpx, Databricks SDK (separate App)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Deployment</p></td>
+<td><p>Databricks Apps (<code class="docutils literal notranslate"><span class="pre">app.yaml</span></code>)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="current-state">
+<h4>Current State<a class="headerlink" href="#current-state" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Fully functional application with all features implemented</p></li>
+<li><p>Tested with CRM, IoT, energy, and healthcare ontologies</p></li>
+<li><p>Industry-standard imports operational (FIBO, CDISC, IOF)</p></li>
+<li><p>LLM-powered wizard and auto-map working with Databricks Model Serving endpoints</p></li>
+<li><p><strong>Reasoning engine operational</strong>: OWL 2 RL deductive closure, SWRL rule engine (SQL + Cypher) with graphical D3 editor, graph reasoning (transitive closure, symmetric expansion), constraint validation, and SHACL data quality shapes (PySHACL + SQL compilation)</p></li>
+<li><p><strong>Dual triple store backends</strong>: Delta (SQL Warehouse) and LadybugDB (embedded Cypher graph DB) with typed schema generation from OWL</p></li>
+<li><p>MCP server deployed and operational for Databricks Playground</p></li>
+<li><p>Digital Twin REST API with design status, ontology, R2RML, Spark SQL endpoints</p></li>
+<li><p>GraphQL API with configurable depth and auto-generated schema</p></li>
+<li><p>Documentation: README, user guide, architecture, API reference, import guide, automated pipeline guide</p></li>
+</ul>
+</section>
+<section id="resources-needed">
+<h4>Resources Needed<a class="headerlink" href="#resources-needed" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Databricks workspace</strong> with a SQL Warehouse (Serverless recommended) for demo and testing</p></li>
+<li><p><strong>Model Serving endpoint</strong> for LLM features (e.g., Meta Llama 3.3 70B or equivalent)</p></li>
+<li><p><strong>Unity Catalog</strong> with sample datasets for demonstration scenarios</p></li>
+<li><p>Visibility and feedback from field engineering teams working on knowledge graph, data governance, and semantic layer use cases</p></li>
+</ul>
+</section>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/guides/product.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

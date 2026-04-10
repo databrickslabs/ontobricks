@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Flask
+instance/
+.webassets-cache
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+
+*.pid
+fastapi_session/
+
+# OntoBricks specific
+.databricks/*
+.ontobricks.pid
+.ontobricks.log
+
+/logs/*
+
+# MLflow local artifacts
+mlflow.db
+mlruns/
+mlartifacts/
+.cursorrules
+src/.coding_rules.md
+.cursorrules
+/src/.databricks/sync-snapshots

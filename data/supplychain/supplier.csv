@@ -1,0 +1,61 @@
+supplier_id,supplier_name,contact_name,email,phone,country,city,rating,is_active
+SUP00001,Pacific Supplies,Olga Kozlov,procurement@pacificsupplies.com,+18 854 2719583,Belgium,Antwerp,4.4,true
+SUP00002,Prime Supplies,Maria Kozlov,procurement@primesupplies.com,+30 617 1445199,China,Shanghai,4.1,false
+SUP00003,Euro Goods,Ahmed Smith,procurement@eurogoods.com,+98 925 3678638,Australia,Sydney,4.4,true
+SUP00004,Asia Components,Sophie Garcia,procurement@asiacomponents.com,+12 489 2622631,Japan,Tokyo,3.7,true
+SUP00005,Asia Supplies,Marcus Garcia,procurement@asiasupplies.com,+49 180 5918715,USA,Chicago,4.7,true
+SUP00006,Euro Materials,Olga Hassan,procurement@euromaterials.com,+11 975 4905582,Netherlands,Rotterdam,4.7,false
+SUP00007,Asia Goods,Sophie Wang,procurement@asiagoods.com,+48 463 4514944,Brazil,São Paulo,4.3,true
+SUP00008,Atlantic Trading,Elena Patel,procurement@atlantictrading.com,+35 755 4684531,Germany,Hamburg,4.4,true
+SUP00009,Euro Supplies,Raj Hassan,procurement@eurosupplies.com,+9 316 6279418,USA,Houston,3.4,false
+SUP00010,Prime Goods,Ahmed Wang,procurement@primegoods.com,+32 862 5408072,USA,Los Angeles,4.5,false
+SUP00011,Prime Sourcing,Chen Johnson,procurement@primesourcing.com,+64 193 1790481,India,Mumbai,4.7,true
+SUP00012,Atlantic Parts,Maria Patel,procurement@atlanticparts.com,+49 710 8852574,Canada,Toronto,4.1,true
+SUP00013,Pacific Logistics,Sophie Garcia,procurement@pacificlogistics.com,+38 545 3653446,Brazil,São Paulo,3.9,true
+SUP00014,Atlantic Materials,Ahmed Johnson,procurement@atlanticmaterials.com,+78 303 3564217,Brazil,São Paulo,3.7,true
+SUP00015,Global Sourcing,James Garcia,procurement@globalsourcing.com,+47 999 6159230,Spain,Barcelona,3.5,true
+SUP00016,Pacific Materials,Maria Johnson,procurement@pacificmaterials.com,+99 228 3154051,Spain,Barcelona,4.3,true
+SUP00017,Asia Parts,Marcus Kozlov,procurement@asiaparts.com,+92 419 7693979,Japan,Tokyo,5.0,true
+SUP00018,Elite Goods,Olga Kozlov,procurement@elitegoods.com,+9 446 1352896,UAE,Dubai,4.2,true
+SUP00019,Euro Supplies 10,James Kozlov,procurement@eurosupplies10.com,+9 132 6543670,Brazil,São Paulo,3.1,true
+SUP00020,Asia Goods 28,Chen Tanaka,procurement@asiagoods28.com,+74 584 5076817,India,Mumbai,4.6,false
+SUP00021,Euro Materials 13,Raj Müller,procurement@euromaterials13.com,+55 520 8835373,Russia,Moscow,4.7,true
+SUP00022,Pacific Supplies 52,Maria Kozlov,procurement@pacificsupplies52.com,+25 294 9997381,USA,Houston,3.9,false
+SUP00023,Atlantic Logistics,Olga Garcia,procurement@atlanticlogistics.com,+57 927 2642635,USA,Chicago,3.1,true
+SUP00024,Pacific Trading,Raj Rossi,procurement@pacifictrading.com,+62 318 7728339,Germany,Hamburg,4.8,true
+SUP00025,Prime Supplies 50,Elena Hassan,procurement@primesupplies50.com,+55 813 9164991,Belgium,Antwerp,3.3,true
+SUP00026,Euro Supplies 75,James Müller,procurement@eurosupplies75.com,+8 151 8999183,India,Mumbai,4.0,true
+SUP00027,Global Materials,Maria Tanaka,procurement@globalmaterials.com,+9 791 4946066,Germany,Hamburg,3.8,true
+SUP00028,Global Materials 54,Yuki Tanaka,procurement@globalmaterials54.com,+67 423 5374922,Russia,Moscow,3.4,true
+SUP00029,Euro Logistics,Chen Hassan,procurement@eurologistics.com,+59 423 2217071,UK,Felixstowe,3.0,true
+SUP00030,Pacific Trading 65,Chen Müller,procurement@pacifictrading65.com,+9 350 7199635,Belgium,Antwerp,3.6,false
+SUP00031,Asia Supplies 86,Ahmed Garcia,procurement@asiasupplies86.com,+18 370 2936571,India,Mumbai,4.8,true
+SUP00032,Asia Logistics,Olga Müller,procurement@asialogistics.com,+27 803 5428914,Canada,Toronto,4.0,true
+SUP00033,Global Materials 82,Ahmed Smith,procurement@globalmaterials82.com,+1 441 3194789,Spain,Valencia,4.3,true
+SUP00034,Atlantic Goods,Raj Johnson,procurement@atlanticgoods.com,+2 214 2262382,India,Mumbai,4.9,true
+SUP00035,Global Sourcing 75,Chen Patel,procurement@globalsourcing75.com,+17 142 6171716,India,Mumbai,3.7,true
+SUP00036,Nordic Trading,Olga Garcia,procurement@nordictrading.com,+46 898 7817881,Russia,Moscow,4.9,true
+SUP00037,Euro Components,Raj Smith,procurement@eurocomponents.com,+23 854 6573147,Germany,Hamburg,4.6,false
+SUP00038,Euro Logistics 21,Raj Smith,procurement@eurologistics21.com,+61 327 4348276,UAE,Dubai,4.6,false
+SUP00039,Nordic Logistics,Olga Smith,procurement@nordiclogistics.com,+85 297 7685149,India,Mumbai,3.7,true
+SUP00040,Asia Sourcing,Marcus Patel,procurement@asiasourcing.com,+87 963 9996207,Brazil,São Paulo,3.7,true
+SUP00041,Pacific Logistics 23,Ahmed Smith,procurement@pacificlogistics23.com,+14 710 8290770,Australia,Sydney,3.7,true
+SUP00042,Prime Materials,Yuki Kozlov,procurement@primematerials.com,+33 145 8315831,UK,Felixstowe,3.0,true
+SUP00043,Nordic Parts,Sophie Tanaka,procurement@nordicparts.com,+41 779 3090865,Singapore,Singapore,4.4,true
+SUP00044,Asia Parts 42,Ahmed Johnson,procurement@asiaparts42.com,+17 296 8053918,UK,Felixstowe,4.3,false
+SUP00045,Atlantic Logistics 52,James Hassan,procurement@atlanticlogistics52.com,+37 315 8212326,India,Mumbai,4.6,true
+SUP00046,Elite Goods 57,Olga Johnson,procurement@elitegoods57.com,+61 912 3846949,Russia,Moscow,4.3,true
+SUP00047,Nordic Materials,Ahmed Kozlov,procurement@nordicmaterials.com,+26 250 1409790,India,Mumbai,3.1,false
+SUP00048,Pacific Goods,Yuki Kozlov,procurement@pacificgoods.com,+92 813 7442089,Spain,Valencia,4.0,true
+SUP00049,Atlantic Supplies,Raj Kozlov,procurement@atlanticsupplies.com,+23 923 9689889,UAE,Dubai,3.9,true
+SUP00050,Pacific Goods 18,Marcus Johnson,procurement@pacificgoods18.com,+77 424 8425149,USA,Chicago,4.2,false
+SUP00051,Elite Components,Elena Hassan,procurement@elitecomponents.com,+97 353 5652512,Spain,Barcelona,4.5,false
+SUP00052,Euro Logistics 57,Ahmed Kozlov,procurement@eurologistics57.com,+35 443 6363836,Singapore,Singapore,4.8,true
+SUP00053,Atlantic Components,Raj Wang,procurement@atlanticcomponents.com,+91 319 2077581,India,Mumbai,3.8,true
+SUP00054,Elite Parts,Olga Patel,procurement@eliteparts.com,+50 888 1327691,Netherlands,Rotterdam,4.7,false
+SUP00055,Elite Supplies,Ahmed Patel,procurement@elitesupplies.com,+54 651 4700025,China,Hong Kong,4.0,true
+SUP00056,Prime Goods 4,Sophie Patel,procurement@primegoods4.com,+93 269 8841505,UK,Felixstowe,4.8,true
+SUP00057,Prime Supplies 11,Raj Wang,procurement@primesupplies11.com,+60 286 1843636,Brazil,São Paulo,3.5,true
+SUP00058,Euro Goods 42,Raj Hassan,procurement@eurogoods42.com,+97 951 8072684,USA,Houston,3.5,true
+SUP00059,Elite Supplies 96,James Müller,procurement@elitesupplies96.com,+29 765 2151225,India,Mumbai,4.6,true
+SUP00060,Global Trading,James Tanaka,procurement@globaltrading.com,+20 344 3117636,Japan,Tokyo,3.9,true

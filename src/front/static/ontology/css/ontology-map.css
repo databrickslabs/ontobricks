@@ -1,0 +1,344 @@
+/**
+ * OntoBricks - ontology-map.css
+ * Extracted from ontology templates per code_instructions.txt
+ */
+
+/* Ontology Model Styles - Matching Query Visualization */
+#ontology-map-container {
+    overflow: hidden;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    position: relative;
+}
+
+#ontology-map-container svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Entity nodes - icon only, no circles */
+.map-node {
+    cursor: grab;
+}
+
+.map-node:active {
+    cursor: grabbing;
+}
+
+.map-node-icon {
+    font-size: 32px;
+    text-anchor: middle;
+    dominant-baseline: central;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    pointer-events: none;
+}
+
+.map-node-label {
+    font-size: 12px;
+    fill: #1e293b;
+    font-weight: 600;
+    text-anchor: middle;
+    pointer-events: none;
+}
+
+.map-node-hitarea {
+    fill: transparent;
+    stroke: none;
+    cursor: inherit;
+}
+
+.map-node.selected .map-node-hitarea {
+    fill: rgba(108, 117, 125, 0.15);
+    stroke: rgba(73, 80, 87, 0.5);
+    stroke-width: 2px;
+}
+
+.map-node:hover .map-node-icon {
+    filter: drop-shadow(0 0 8px rgba(73, 80, 87, 0.6));
+}
+
+.map-node.selected .map-node-icon {
+    filter: drop-shadow(0 0 12px rgba(73, 80, 87, 0.9));
+}
+
+/* Relationship links */
+.map-link {
+    fill: none;
+    stroke: #6c757d;
+    stroke-opacity: 0.8;
+    stroke-width: 2px;
+    marker-end: url(#map-arrow);
+}
+
+.map-link:hover {
+    stroke: #495057;
+    stroke-opacity: 1;
+    stroke-width: 3px;
+}
+
+/* Self-loop relationships */
+.map-link.self-loop {
+    stroke: #495057;
+    stroke-width: 2.5px;
+    marker-end: url(#map-arrow-self);
+}
+
+/* Link hitarea dots at midpoint */
+.map-link-hitarea {
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.map-link-hitarea:hover {
+    fill: #dee2e6 !important;
+    stroke: #495057 !important;
+    stroke-width: 2.5px !important;
+}
+
+/* Inheritance links (dashed) */
+.map-link.inheritance {
+    stroke: #adb5bd;
+    stroke-dasharray: 5, 5;
+    stroke-width: 2px;
+    marker-end: url(#map-arrow-inheritance);
+}
+
+/* Link labels */
+.map-link-label {
+    font-size: 11px;
+    fill: #495057;
+    font-weight: 500;
+    pointer-events: none;
+    dominant-baseline: middle;
+    text-anchor: middle;
+}
+
+/* Self-loop labels positioned outside the loop */
+.map-link-label.self-loop-label {
+    font-size: 10px;
+}
+
+/* Legend */
+.map-legend {
+    position: absolute;
+    bottom: 15px;
+    left: 15px;
+    background: rgba(255,255,255,0.95);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    color: #495057;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border: 1px solid #e9ecef;
+}
+
+.map-legend-title {
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #1e293b;
+}
+
+.map-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+}
+
+.map-legend-line {
+    width: 24px;
+    height: 2px;
+    background: #6c757d;
+}
+
+.map-legend-line.inheritance {
+    background: #adb5bd;
+    background: repeating-linear-gradient(
+        90deg,
+        #adb5bd 0px,
+        #adb5bd 5px,
+        transparent 5px,
+        transparent 10px
+    );
+}
+
+/* Context Menu */
+.map-context-menu {
+    position: absolute;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e9ecef;
+    min-width: 180px;
+    z-index: 1000;
+    overflow: hidden;
+    animation: mapContextFadeIn 0.15s ease;
+}
+
+@keyframes mapContextFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.map-context-header {
+    padding: 10px 14px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.map-context-icon {
+    font-size: 18px;
+}
+
+.map-context-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+}
+
+.map-context-divider {
+    height: 1px;
+    background: #e9ecef;
+}
+
+.map-context-item {
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #495057;
+    transition: background 0.15s ease;
+}
+
+.map-context-item:hover {
+    background: #f8f9fa;
+}
+
+.map-context-item i {
+    font-size: 14px;
+    width: 16px;
+    text-align: center;
+}
+
+.map-context-item.map-context-danger {
+    color: #dc3545;
+}
+
+.map-context-item.map-context-danger:hover {
+    background: #fff5f5;
+}
+
+/* Connection Mode Styles */
+.map-connecting {
+    cursor: crosshair !important;
+}
+
+.map-connecting .map-node {
+    cursor: crosshair !important;
+}
+
+.map-connection-line {
+    stroke: #0d6efd;
+    stroke-width: 3px;
+    stroke-dasharray: 8, 4;
+    stroke-linecap: round;
+    pointer-events: none;
+    animation: mapConnectionDash 0.5s linear infinite;
+}
+
+@keyframes mapConnectionDash {
+    to {
+        stroke-dashoffset: -12;
+    }
+}
+
+.map-node.connection-source .map-node-hitarea {
+    fill: rgba(13, 110, 253, 0.2);
+    stroke: #0d6efd;
+    stroke-width: 3px;
+}
+
+.map-node.connection-source .map-node-icon {
+    filter: drop-shadow(0 0 12px rgba(13, 110, 253, 0.8));
+}
+
+.map-node.connection-target .map-node-hitarea {
+    fill: rgba(25, 135, 84, 0.2);
+    stroke: #198754;
+    stroke-width: 3px;
+}
+
+.map-node.connection-target .map-node-icon {
+    filter: drop-shadow(0 0 12px rgba(25, 135, 84, 0.8));
+}
+
+.map-connection-tooltip {
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(33, 37, 41, 0.9);
+    color: white;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    z-index: 100;
+    white-space: nowrap;
+    animation: mapTooltipFadeIn 0.2s ease;
+}
+
+@keyframes mapTooltipFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* Inheritance Connection Mode Styles */
+.map-inheritance-line {
+    stroke: #6f42c1;
+    stroke-width: 3px;
+    stroke-dasharray: 5, 5;
+}
+
+.map-connecting-inheritance {
+    cursor: crosshair !important;
+}
+
+.map-node.inheritance-source .map-node-hitarea {
+    fill: rgba(111, 66, 193, 0.2);
+    stroke: #6f42c1;
+    stroke-width: 3px;
+}
+
+.map-node.inheritance-source .map-node-icon {
+    filter: drop-shadow(0 0 12px rgba(111, 66, 193, 0.8));
+}
+
+.map-node.inheritance-target .map-node-hitarea {
+    fill: rgba(253, 126, 20, 0.2);
+    stroke: #fd7e14;
+    stroke-width: 3px;
+}
+
+.map-node.inheritance-target .map-node-icon {
+    filter: drop-shadow(0 0 12px rgba(253, 126, 20, 0.8));
+}

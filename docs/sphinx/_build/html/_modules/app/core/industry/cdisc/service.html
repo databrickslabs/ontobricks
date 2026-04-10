@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>app.core.industry.cdisc.service &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/documentation.html">OntoBricks documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.html"><code class="docutils literal notranslate"><span class="pre">app</span></code> – Application Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.fastapi.html"><code class="docutils literal notranslate"><span class="pre">app.fastapi</span></code> — FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">app.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">app.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">app.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">app.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">app.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">app.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">app.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">app.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">app.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.html.html"><code class="docutils literal notranslate"><span class="pre">app.html</span></code> – Web UI Routers &amp; Services</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">app.config</span></code> – Application Constants &amp; Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for app.core.industry.cdisc.service</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;CDISC RDF import service.</span>
+
+<span class="sd">Fetches CDISC (Clinical Data Interchange Standards Consortium) foundational</span>
+<span class="sd">standards in RDF from the PhUSE GitHub repository, merges them using rdflib,</span>
+<span class="sd">and converts them to OntoBricks ontology structures.</span>
+
+<span class="sd">Because CDISC standards use an ISO 11179 meta-model (instances of</span>
+<span class="sd">mms:DataElement, mms:Domain, mms:Context, etc.) rather than standard</span>
+<span class="sd">owl:Class definitions, a custom mapper transforms the RDF instance data</span>
+<span class="sd">into OntoBricks-compatible classes and properties:</span>
+
+<span class="sd">    DomainContext  →  top-level OWL classes  (Events, Findings, …)</span>
+<span class="sd">    Domain         →  OWL classes            (AE, CM, LB, …)</span>
+<span class="sd">    DataElement    →  dataProperties          (AETERM, LBTEST, …)</span>
+
+<span class="sd">Source repository: https://github.com/phuse-org/rdf.cdisc.org</span>
+<span class="sd">CDISC Standard:   https://www.cdisc.org/standards/foundational/rdf/cdisc-standards-rdf</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">concurrent.futures</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadPoolExecutor</span><span class="p">,</span> <span class="n">as_completed</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">app.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">RDF</span><span class="p">,</span> <span class="n">RDFS</span><span class="p">,</span> <span class="n">Namespace</span><span class="p">,</span> <span class="n">URIRef</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib.namespace</span><span class="w"> </span><span class="kn">import</span> <span class="n">SKOS</span><span class="p">,</span> <span class="n">XSD</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># RDF namespaces used by the CDISC data</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="n">MMS</span> <span class="o">=</span> <span class="n">Namespace</span><span class="p">(</span><span class="s2">&quot;http://rdf.cdisc.org/mms#&quot;</span><span class="p">)</span>
+<span class="n">CDISCS</span> <span class="o">=</span> <span class="n">Namespace</span><span class="p">(</span><span class="s2">&quot;http://rdf.cdisc.org/std/schema#&quot;</span><span class="p">)</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Human-readable labels for CDISC domain codes</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="n">_DOMAIN_LABELS</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;AE&quot;</span><span class="p">:</span> <span class="s2">&quot;Adverse Events&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;CM&quot;</span><span class="p">:</span> <span class="s2">&quot;Concomitant Medications&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;CO&quot;</span><span class="p">:</span> <span class="s2">&quot;Comments&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;DA&quot;</span><span class="p">:</span> <span class="s2">&quot;Drug Accountability&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;DM&quot;</span><span class="p">:</span> <span class="s2">&quot;Demographics&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;DS&quot;</span><span class="p">:</span> <span class="s2">&quot;Disposition&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;DV&quot;</span><span class="p">:</span> <span class="s2">&quot;Protocol Deviations&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;EG&quot;</span><span class="p">:</span> <span class="s2">&quot;ECG Test Results&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;EX&quot;</span><span class="p">:</span> <span class="s2">&quot;Exposure&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;IE&quot;</span><span class="p">:</span> <span class="s2">&quot;Inclusion/Exclusion Criteria&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;LB&quot;</span><span class="p">:</span> <span class="s2">&quot;Laboratory Tests&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;MH&quot;</span><span class="p">:</span> <span class="s2">&quot;Medical History&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;PE&quot;</span><span class="p">:</span> <span class="s2">&quot;Physical Examination&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SC&quot;</span><span class="p">:</span> <span class="s2">&quot;Subject Characteristics&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SU&quot;</span><span class="p">:</span> <span class="s2">&quot;Substance Use&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;VS&quot;</span><span class="p">:</span> <span class="s2">&quot;Vital Signs&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Common&quot;</span><span class="p">:</span> <span class="s2">&quot;Common Variables&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Timing&quot;</span><span class="p">:</span> <span class="s2">&quot;Timing Variables&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;QS&quot;</span><span class="p">:</span> <span class="s2">&quot;Questionnaires&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TI&quot;</span><span class="p">:</span> <span class="s2">&quot;Trial Inclusion&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TV&quot;</span><span class="p">:</span> <span class="s2">&quot;Trial Visits&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TA&quot;</span><span class="p">:</span> <span class="s2">&quot;Trial Arms&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TE&quot;</span><span class="p">:</span> <span class="s2">&quot;Trial Elements&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SE&quot;</span><span class="p">:</span> <span class="s2">&quot;Subject Elements&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SV&quot;</span><span class="p">:</span> <span class="s2">&quot;Subject Visits&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;FA&quot;</span><span class="p">:</span> <span class="s2">&quot;Findings About&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;RS&quot;</span><span class="p">:</span> <span class="s2">&quot;Disease Response&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TU&quot;</span><span class="p">:</span> <span class="s2">&quot;Tumor Identification&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TR&quot;</span><span class="p">:</span> <span class="s2">&quot;Tumor Results&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">_DOMAIN_CONTEXT_LABELS</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;Events&quot;</span><span class="p">:</span> <span class="s2">&quot;Events Observation Class&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Findings&quot;</span><span class="p">:</span> <span class="s2">&quot;Findings Observation Class&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;FindingsAbout&quot;</span><span class="p">:</span> <span class="s2">&quot;Findings About Observation Class&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Interventions&quot;</span><span class="p">:</span> <span class="s2">&quot;Interventions Observation Class&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SpecialPurposeDomains&quot;</span><span class="p">:</span> <span class="s2">&quot;Special Purpose Domains&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TrialDesign&quot;</span><span class="p">:</span> <span class="s2">&quot;Trial Design Model&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;CommonVariables&quot;</span><span class="p">:</span> <span class="s2">&quot;Common Variables&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;CommonTimingVariables&quot;</span><span class="p">:</span> <span class="s2">&quot;Common Timing Variables&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Relationships&quot;</span><span class="p">:</span> <span class="s2">&quot;Relationship Datasets&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># CDISC Catalog – curated list of schemas and standard modules</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="n">CDISC_BASE_URL_SCHEMAS</span> <span class="o">=</span> <span class="s2">&quot;https://raw.githubusercontent.com/phuse-org/rdf.cdisc.org/master/schemas&quot;</span>
+<span class="n">CDISC_BASE_URL_STD</span> <span class="o">=</span> <span class="s2">&quot;https://raw.githubusercontent.com/phuse-org/rdf.cdisc.org/master/std&quot;</span>
+
+<span class="n">CDISC_DOMAINS</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;SCHEMAS&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Schemas (required)&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Core OWL schemas: CDISC Meta-Model (ISO 11179 based), &quot;</span>
+                       <span class="s2">&quot;Controlled Terminology schema, and CDISC domain-specific schema. &quot;</span>
+                       <span class="s2">&quot;Required as the foundation for all other standards.&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;icon&quot;</span><span class="p">:</span> <span class="s2">&quot;bi-diagram-3&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="s2">&quot;secondary&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;modules&quot;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">CDISC_BASE_URL_SCHEMAS</span><span class="si">}</span><span class="s2">/meta-model-schema.owl&quot;</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;xml&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Meta-Model Schema&quot;</span><span class="p">},</span>
+            <span class="p">{</span><span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">CDISC_BASE_URL_SCHEMAS</span><span class="si">}</span><span class="s2">/ct-schema.owl&quot;</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;xml&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;CT Schema&quot;</span><span class="p">},</span>
+            <span class="p">{</span><span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">CDISC_BASE_URL_SCHEMAS</span><span class="si">}</span><span class="s2">/cdisc-schema.owl&quot;</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;xml&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;CDISC Schema&quot;</span><span class="p">},</span>
+        <span class="p">],</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;SDTM&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;SDTM (Study Data Tabulation Model)&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;The primary standard for organizing and submitting clinical &quot;</span>
+                       <span class="s2">&quot;trial tabulation data. Includes SDTM v1.2, v1.3, and &quot;</span>
+                       <span class="s2">&quot;Implementation Guides 3.1.2 &amp; 3.1.3.&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;icon&quot;</span><span class="p">:</span> <span class="s2">&quot;bi-table&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="s2">&quot;primary&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s2">&quot;modules&quot;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">CDISC_BASE_URL_STD</span><span class="si">}</span><span class="s2">/sdtm-1-2.ttl&quot;</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;turtle&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;SDTM 1.2&quot;</span><span class="p">},</span>
+            <span class="p">{</span><span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">CDISC_BASE_URL_STD</span><span class="si">}</span><span class="s2">/sdtm-1-3.ttl&quot;</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;turtle&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;SDTM 1.3&quot;</span><span class="p">},</span>
+            <span class="p">{</span><span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">CDISC_BASE_URL_STD</span><span class="si">}</span><span class="s2">/sdtmig-3-1-2.ttl&quot;</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;turtle&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;SDTM IG 3.1.2&quot;</span><span class="p">},</span>
+            <span class="p">{</span><span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">CDISC_BASE_URL_STD</span><span class="si">}</span><span class="s2">/sdtmig-3-1-3.ttl&quot;</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;turtle&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;SDTM IG 3.1.3&quot;</span><span class="p">},</span>
+        <span class="p">],</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;CDASH&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;CDASH (Clinical Data Acquisition)&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Standards for clinical data acquisition – defines the basic &quot;</span>
+                       <span class="s2">&quot;recommended data collection fields for studies.&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;icon&quot;</span><span class="p">:</span> <span class="s2">&quot;bi-clipboard2-data&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="s2">&quot;success&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s2">&quot;modules&quot;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">CDISC_BASE_URL_STD</span><span class="si">}</span><span class="s2">/cdash-1-1.ttl&quot;</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;turtle&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;CDASH 1.1&quot;</span><span class="p">},</span>
+        <span class="p">],</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;SEND&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;SEND (Nonclinical Data Exchange)&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Standard for the Exchange of Nonclinical Data – covers &quot;</span>
+                       <span class="s2">&quot;preclinical/nonclinical study data.&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;icon&quot;</span><span class="p">:</span> <span class="s2">&quot;bi-virus&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s2">&quot;modules&quot;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">CDISC_BASE_URL_STD</span><span class="si">}</span><span class="s2">/sendig-3-0.ttl&quot;</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;turtle&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;SEND IG 3.0&quot;</span><span class="p">},</span>
+        <span class="p">],</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;ADaM&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;ADaM (Analysis Data Model)&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Defines standards for analysis datasets derived from SDTM &quot;</span>
+                       <span class="s2">&quot;for statistical analysis and regulatory submission.&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;icon&quot;</span><span class="p">:</span> <span class="s2">&quot;bi-bar-chart-line&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="s2">&quot;warning&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s2">&quot;modules&quot;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">CDISC_BASE_URL_STD</span><span class="si">}</span><span class="s2">/adam-2-1.ttl&quot;</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;turtle&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;ADaM 2.1&quot;</span><span class="p">},</span>
+            <span class="p">{</span><span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">CDISC_BASE_URL_STD</span><span class="si">}</span><span class="s2">/adamig-1-0.ttl&quot;</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;turtle&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;ADaM IG 1.0&quot;</span><span class="p">},</span>
+        <span class="p">],</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="get_cdisc_catalog">
+<a class="viewcode-back" href="../../../../../api/app.core.industry.html#app.core.industry.cdisc.service.get_cdisc_catalog">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_cdisc_catalog</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the CDISC domain catalog for the frontend.&quot;&quot;&quot;</span>
+    <span class="n">catalog</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">domain</span> <span class="ow">in</span> <span class="n">CDISC_DOMAINS</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">catalog</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+            <span class="s2">&quot;key&quot;</span><span class="p">:</span> <span class="n">key</span><span class="p">,</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">domain</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="n">domain</span><span class="p">[</span><span class="s2">&quot;description&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;icon&quot;</span><span class="p">:</span> <span class="n">domain</span><span class="p">[</span><span class="s2">&quot;icon&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="n">domain</span><span class="p">[</span><span class="s2">&quot;color&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+            <span class="s2">&quot;module_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">domain</span><span class="p">[</span><span class="s2">&quot;modules&quot;</span><span class="p">]),</span>
+        <span class="p">})</span>
+    <span class="k">return</span> <span class="n">catalog</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Fetching helpers</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="n">_REQUEST_TIMEOUT</span> <span class="o">=</span> <span class="mi">30</span>
+<span class="n">_MAX_WORKERS</span> <span class="o">=</span> <span class="mi">5</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_fetch_single_module</span><span class="p">(</span>
+    <span class="n">module</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fetch a single CDISC module from GitHub.&quot;&quot;&quot;</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="n">module</span><span class="p">[</span><span class="s2">&quot;url&quot;</span><span class="p">]</span>
+    <span class="n">label</span> <span class="o">=</span> <span class="n">module</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">resp</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="n">url</span><span class="p">,</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="n">_REQUEST_TIMEOUT</span><span class="p">,</span>
+            <span class="n">headers</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;User-Agent&quot;</span><span class="p">:</span> <span class="s2">&quot;OntoBricks/1.0&quot;</span><span class="p">,</span> <span class="s2">&quot;Accept&quot;</span><span class="p">:</span> <span class="s2">&quot;*/*&quot;</span><span class="p">},</span>
+            <span class="n">allow_redirects</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">resp</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">200</span><span class="p">:</span>
+            <span class="n">text</span> <span class="o">=</span> <span class="n">resp</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">text</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;&lt;!DOCTYPE&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">text</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;&lt;html&quot;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">label</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2"> returned HTML instead of RDF&quot;</span>
+            <span class="k">return</span> <span class="n">label</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">label</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2"> -&gt; HTTP </span><span class="si">{</span><span class="n">resp</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">Timeout</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">label</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2"> -&gt; timeout&quot;</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">label</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_collect_modules</span><span class="p">(</span><span class="n">domain_keys</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build a deduplicated list of CDISC modules for the selected domains.</span>
+
+<span class="sd">    SCHEMAS is always included when any other domain is selected.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">modules</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">seen_urls</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+    <span class="n">keys_to_fetch</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain_keys</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">k</span> <span class="o">!=</span> <span class="s2">&quot;SCHEMAS&quot;</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys_to_fetch</span><span class="p">)</span> <span class="ow">and</span> <span class="s2">&quot;SCHEMAS&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">keys_to_fetch</span><span class="p">:</span>
+        <span class="n">keys_to_fetch</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;SCHEMAS&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys_to_fetch</span><span class="p">:</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">CDISC_DOMAINS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">domain</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">for</span> <span class="n">mod</span> <span class="ow">in</span> <span class="n">domain</span><span class="p">[</span><span class="s2">&quot;modules&quot;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">mod</span><span class="p">[</span><span class="s2">&quot;url&quot;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen_urls</span><span class="p">:</span>
+                <span class="n">seen_urls</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">mod</span><span class="p">[</span><span class="s2">&quot;url&quot;</span><span class="p">])</span>
+                <span class="n">modules</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mod</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">modules</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># CDISC-to-OntoBricks mapper</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_extract_local</span><span class="p">(</span><span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract local name from a URI (after # or last /).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_xsd_to_simple</span><span class="p">(</span><span class="n">xsd_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Map xsd type URIs to simple type names.&quot;&quot;&quot;</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">xsd_type</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="k">if</span> <span class="s2">&quot;string&quot;</span> <span class="ow">in</span> <span class="n">t</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;string&quot;</span>
+    <span class="k">if</span> <span class="s2">&quot;integer&quot;</span> <span class="ow">in</span> <span class="n">t</span> <span class="ow">or</span> <span class="s2">&quot;int&quot;</span> <span class="ow">in</span> <span class="n">t</span> <span class="ow">or</span> <span class="s2">&quot;positiveinteger&quot;</span> <span class="ow">in</span> <span class="n">t</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;integer&quot;</span>
+    <span class="k">if</span> <span class="s2">&quot;decimal&quot;</span> <span class="ow">in</span> <span class="n">t</span> <span class="ow">or</span> <span class="s2">&quot;float&quot;</span> <span class="ow">in</span> <span class="n">t</span> <span class="ow">or</span> <span class="s2">&quot;double&quot;</span> <span class="ow">in</span> <span class="n">t</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;decimal&quot;</span>
+    <span class="k">if</span> <span class="s2">&quot;boolean&quot;</span> <span class="ow">in</span> <span class="n">t</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;boolean&quot;</span>
+    <span class="k">if</span> <span class="s2">&quot;date&quot;</span> <span class="ow">in</span> <span class="n">t</span> <span class="ow">and</span> <span class="s2">&quot;time&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">t</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;date&quot;</span>
+    <span class="k">if</span> <span class="s2">&quot;time&quot;</span> <span class="ow">in</span> <span class="n">t</span> <span class="ow">and</span> <span class="s2">&quot;date&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">t</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;time&quot;</span>
+    <span class="k">if</span> <span class="s2">&quot;datetime&quot;</span> <span class="ow">in</span> <span class="n">t</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;dateTime&quot;</span>
+    <span class="k">return</span> <span class="s2">&quot;string&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_transform_cdisc_to_ontobricks</span><span class="p">(</span><span class="n">graph</span><span class="p">:</span> <span class="n">Graph</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Transform CDISC RDF instance data into OntoBricks classes and properties.</span>
+
+<span class="sd">    CDISC standards use different RDF patterns:</span>
+
+<span class="sd">    CDASH:     DomainContext → Domain → DataElement (direct)</span>
+<span class="sd">    SDTM IG:   DatasetContext → Dataset ← Column (→ DataElement)</span>
+<span class="sd">    SEND IG:   DatasetContext → Dataset ← Column (with inline props)</span>
+<span class="sd">    ADaM IG:   Dataset ← VariableGrouping ← Column (with inline props)</span>
+<span class="sd">    SDTM base: VariableGrouping ← DataElement (generic templates)</span>
+
+<span class="sd">    This mapper normalises all patterns into:</span>
+<span class="sd">        Top-level class ← Domain/Dataset class ← dataProperties</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">base_uri</span> <span class="o">=</span> <span class="s2">&quot;http://rdf.cdisc.org/ontobricks#&quot;</span>
+
+    <span class="c1"># =====================================================================</span>
+    <span class="c1"># Step 1: Collect top-level context classes</span>
+    <span class="c1">#         Sources: DomainContext, DatasetContext</span>
+    <span class="c1"># =====================================================================</span>
+    <span class="n">context_classes</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">_seen_context_names</span><span class="p">:</span> <span class="nb">set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_make_class</span><span class="p">(</span><span class="n">class_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">human_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">comment</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+                    <span class="n">parent</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_uri</span><span class="si">}{</span><span class="n">class_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">class_name</span><span class="p">,</span>
+            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">human_label</span><span class="p">,</span>
+            <span class="s2">&quot;comment&quot;</span><span class="p">:</span> <span class="n">comment</span><span class="p">,</span>
+            <span class="s2">&quot;emoji&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;parent&quot;</span><span class="p">:</span> <span class="n">parent</span><span class="p">,</span>
+            <span class="s2">&quot;dashboard&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;dashboardParams&quot;</span><span class="p">:</span> <span class="p">{},</span>
+            <span class="s2">&quot;dataProperties&quot;</span><span class="p">:</span> <span class="p">[],</span>
+        <span class="p">}</span>
+
+    <span class="k">for</span> <span class="n">rdf_type</span> <span class="ow">in</span> <span class="p">(</span><span class="n">MMS</span><span class="o">.</span><span class="n">DomainContext</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">DatasetContext</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">ctx_uri</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">rdf_type</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">ctx_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">contextName</span><span class="p">):</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span><span class="p">:</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="n">_extract_local</span><span class="p">(</span><span class="n">ctx_uri</span><span class="p">)</span>
+
+            <span class="n">class_name</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">class_name</span> <span class="ow">in</span> <span class="n">_seen_context_names</span><span class="p">:</span>
+                <span class="c1"># Reuse existing context under new URI</span>
+                <span class="k">for</span> <span class="n">existing_uri</span><span class="p">,</span> <span class="n">existing_cls</span> <span class="ow">in</span> <span class="n">context_classes</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">existing_cls</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">class_name</span><span class="p">:</span>
+                        <span class="n">context_classes</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">ctx_uri</span><span class="p">)]</span> <span class="o">=</span> <span class="n">existing_cls</span>
+                        <span class="k">break</span>
+                <span class="k">continue</span>
+            <span class="n">_seen_context_names</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">class_name</span><span class="p">)</span>
+
+            <span class="n">human_label</span> <span class="o">=</span> <span class="n">_DOMAIN_CONTEXT_LABELS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+            <span class="n">context_classes</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">ctx_uri</span><span class="p">)]</span> <span class="o">=</span> <span class="n">_make_class</span><span class="p">(</span>
+                <span class="n">class_name</span><span class="p">,</span> <span class="n">human_label</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;CDISC </span><span class="si">{</span><span class="n">human_label</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+    <span class="c1"># =====================================================================</span>
+    <span class="c1"># Step 2: Collect domain / dataset classes</span>
+    <span class="c1">#         Sources: mms:Domain, mms:Dataset</span>
+    <span class="c1"># =====================================================================</span>
+    <span class="n">domain_classes</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">_seen_domain_names</span><span class="p">:</span> <span class="nb">set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">rdf_type</span> <span class="ow">in</span> <span class="p">(</span><span class="n">MMS</span><span class="o">.</span><span class="n">Domain</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">Dataset</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">d_uri</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">rdf_type</span><span class="p">):</span>
+            <span class="n">d_name</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">d_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">contextName</span><span class="p">):</span>
+                <span class="n">d_name</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">d_name</span><span class="p">:</span>
+                <span class="n">d_name</span> <span class="o">=</span> <span class="n">_extract_local</span><span class="p">(</span><span class="n">d_uri</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">d_name</span> <span class="ow">in</span> <span class="n">_seen_domain_names</span><span class="p">:</span>
+                <span class="c1"># Reuse existing domain under new URI</span>
+                <span class="k">for</span> <span class="n">existing_uri</span><span class="p">,</span> <span class="n">existing_cls</span> <span class="ow">in</span> <span class="n">domain_classes</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">existing_cls</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">d_name</span><span class="p">:</span>
+                        <span class="n">domain_classes</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">d_uri</span><span class="p">)]</span> <span class="o">=</span> <span class="n">existing_cls</span>
+                        <span class="k">break</span>
+                <span class="k">continue</span>
+            <span class="n">_seen_domain_names</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">d_name</span><span class="p">)</span>
+
+            <span class="c1"># Resolve parent context</span>
+            <span class="n">parent_name</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">for</span> <span class="n">ctx_uri</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">d_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">context</span><span class="p">):</span>
+                <span class="n">ctx_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ctx_uri</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">ctx_str</span> <span class="ow">in</span> <span class="n">context_classes</span><span class="p">:</span>
+                    <span class="n">resolved</span> <span class="o">=</span> <span class="n">context_classes</span><span class="p">[</span><span class="n">ctx_str</span><span class="p">][</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+                    <span class="c1"># Avoid self-referencing parent (ADaM pattern: Dataset</span>
+                    <span class="c1"># and its DatasetContext share the same name)</span>
+                    <span class="k">if</span> <span class="n">resolved</span> <span class="o">!=</span> <span class="n">d_name</span><span class="p">:</span>
+                        <span class="n">parent_name</span> <span class="o">=</span> <span class="n">resolved</span>
+                    <span class="k">break</span>
+
+            <span class="n">human_label</span> <span class="o">=</span> <span class="n">_DOMAIN_LABELS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">d_name</span><span class="p">,</span> <span class="n">d_name</span><span class="p">)</span>
+            <span class="n">desc</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">for</span> <span class="n">dd</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">d_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">contextDescription</span><span class="p">):</span>
+                <span class="n">desc</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">dd</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">desc</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">dd</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">d_uri</span><span class="p">,</span> <span class="n">SKOS</span><span class="o">.</span><span class="n">definition</span><span class="p">):</span>
+                    <span class="n">desc</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">dd</span><span class="p">)</span>
+
+            <span class="n">domain_classes</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">d_uri</span><span class="p">)]</span> <span class="o">=</span> <span class="n">_make_class</span><span class="p">(</span>
+                <span class="n">d_name</span><span class="p">,</span> <span class="n">human_label</span><span class="p">,</span>
+                <span class="n">desc</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;CDISC domain </span><span class="si">{</span><span class="n">d_name</span><span class="si">}</span><span class="s2"> – </span><span class="si">{</span><span class="n">human_label</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">parent</span><span class="o">=</span><span class="n">parent_name</span><span class="p">,</span>
+            <span class="p">)</span>
+
+    <span class="c1"># Build a VariableGrouping → parent Dataset lookup for ADaM-like patterns</span>
+    <span class="n">vg_to_dataset</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># VG URI → Dataset URI</span>
+    <span class="k">for</span> <span class="n">vg_uri</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">VariableGrouping</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">ctx_uri</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">vg_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">context</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">ctx_uri</span><span class="p">)</span> <span class="ow">in</span> <span class="n">domain_classes</span><span class="p">:</span>
+                <span class="n">vg_to_dataset</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">vg_uri</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ctx_uri</span><span class="p">)</span>
+                <span class="k">break</span>
+
+    <span class="c1"># =====================================================================</span>
+    <span class="c1"># Step 3: If no contexts/domains found from DomainContext/DatasetContext/</span>
+    <span class="c1">#         Domain/Dataset, fall back to VariableGroupings as top-level</span>
+    <span class="c1">#         classes (SDTM base model scenario).</span>
+    <span class="c1"># =====================================================================</span>
+    <span class="n">has_structure</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">context_classes</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">bool</span><span class="p">(</span><span class="n">domain_classes</span><span class="p">)</span>
+    <span class="n">vg_as_toplevel</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">has_structure</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">vg_uri</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">VariableGrouping</span><span class="p">):</span>
+            <span class="n">vg_name</span> <span class="o">=</span> <span class="n">_extract_local</span><span class="p">(</span><span class="n">vg_uri</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">vg_name</span> <span class="ow">in</span> <span class="n">_seen_context_names</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">_seen_context_names</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">vg_name</span><span class="p">)</span>
+            <span class="n">human_label</span> <span class="o">=</span> <span class="n">_DOMAIN_CONTEXT_LABELS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">vg_name</span><span class="p">,</span> <span class="n">vg_name</span><span class="p">)</span>
+            <span class="bp">cls</span> <span class="o">=</span> <span class="n">_make_class</span><span class="p">(</span><span class="n">vg_name</span><span class="p">,</span> <span class="n">human_label</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;CDISC </span><span class="si">{</span><span class="n">human_label</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">vg_as_toplevel</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">vg_uri</span><span class="p">)]</span> <span class="o">=</span> <span class="bp">cls</span>
+            <span class="n">context_classes</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">vg_uri</span><span class="p">)]</span> <span class="o">=</span> <span class="bp">cls</span>
+
+    <span class="c1"># =====================================================================</span>
+    <span class="c1"># Step 4: Collect DataElement info</span>
+    <span class="c1"># =====================================================================</span>
+    <span class="n">de_info</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">de_uri</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">DataElement</span><span class="p">):</span>
+        <span class="n">de_name</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">de_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">dataElementName</span><span class="p">):</span>
+            <span class="n">de_name</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">de_name</span><span class="p">:</span>
+            <span class="n">de_name</span> <span class="o">=</span> <span class="n">_extract_local</span><span class="p">(</span><span class="n">de_uri</span><span class="p">)</span>
+
+        <span class="n">de_label</span> <span class="o">=</span> <span class="n">de_name</span>
+        <span class="k">for</span> <span class="n">ll</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">de_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">dataElementLabel</span><span class="p">):</span>
+            <span class="n">de_label</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ll</span><span class="p">)</span>
+
+        <span class="n">de_desc</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">dd</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">de_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">dataElementDescription</span><span class="p">):</span>
+            <span class="n">de_desc</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">dd</span><span class="p">)</span>
+
+        <span class="n">de_type</span> <span class="o">=</span> <span class="s2">&quot;string&quot;</span>
+        <span class="k">for</span> <span class="n">tt</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">de_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">dataElementType</span><span class="p">):</span>
+            <span class="n">de_type</span> <span class="o">=</span> <span class="n">_xsd_to_simple</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">tt</span><span class="p">))</span>
+
+        <span class="n">de_info</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">de_uri</span><span class="p">)]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">de_name</span><span class="p">,</span>
+            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">de_label</span><span class="p">,</span>
+            <span class="s2">&quot;desc&quot;</span><span class="p">:</span> <span class="n">de_desc</span><span class="p">,</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">de_type</span><span class="p">,</span>
+        <span class="p">}</span>
+
+    <span class="c1"># =====================================================================</span>
+    <span class="c1"># Step 5: Assign properties</span>
+    <span class="c1"># =====================================================================</span>
+    <span class="n">properties_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">seen_props</span><span class="p">:</span> <span class="nb">set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_add_data_prop</span><span class="p">(</span><span class="n">target_cls</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">de</span><span class="p">:</span> <span class="n">Dict</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Register a data element as a property of a class.&quot;&quot;&quot;</span>
+        <span class="n">domain_name</span> <span class="o">=</span> <span class="n">target_cls</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+        <span class="n">clean_name</span> <span class="o">=</span> <span class="n">de</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">)</span>
+        <span class="n">prop_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">domain_name</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">clean_name</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="n">prop_key</span> <span class="ow">in</span> <span class="n">seen_props</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">seen_props</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">prop_key</span><span class="p">)</span>
+
+        <span class="n">target_cls</span><span class="p">[</span><span class="s2">&quot;dataProperties&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">clean_name</span><span class="p">,</span>
+            <span class="s2">&quot;localName&quot;</span><span class="p">:</span> <span class="n">clean_name</span><span class="p">,</span>
+            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">de</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_uri</span><span class="si">}{</span><span class="n">domain_name</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">clean_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="p">})</span>
+        <span class="n">properties_list</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+            <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_uri</span><span class="si">}{</span><span class="n">domain_name</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">clean_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">clean_name</span><span class="p">,</span>
+            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">de</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;comment&quot;</span><span class="p">:</span> <span class="n">de</span><span class="p">[</span><span class="s2">&quot;desc&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;DatatypeProperty&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="n">domain_name</span><span class="p">,</span>
+            <span class="s2">&quot;range&quot;</span><span class="p">:</span> <span class="n">de</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">],</span>
+        <span class="p">})</span>
+
+    <span class="c1"># 5a: Direct DataElement → Domain (CDASH pattern)</span>
+    <span class="k">for</span> <span class="n">de_uri_str</span><span class="p">,</span> <span class="n">de</span> <span class="ow">in</span> <span class="n">de_info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">ctx_uri</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">URIRef</span><span class="p">(</span><span class="n">de_uri_str</span><span class="p">),</span> <span class="n">MMS</span><span class="o">.</span><span class="n">context</span><span class="p">):</span>
+            <span class="n">ctx_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ctx_uri</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">ctx_str</span> <span class="ow">in</span> <span class="n">domain_classes</span><span class="p">:</span>
+                <span class="n">_add_data_prop</span><span class="p">(</span><span class="n">domain_classes</span><span class="p">[</span><span class="n">ctx_str</span><span class="p">],</span> <span class="n">de</span><span class="p">)</span>
+                <span class="k">break</span>
+
+    <span class="c1"># 5b: Column-based assignment (SDTM IG / SEND IG / ADaM IG)</span>
+    <span class="k">for</span> <span class="n">col_uri</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">Column</span><span class="p">):</span>
+        <span class="c1"># Read column-level info (preferred: available even without DE)</span>
+        <span class="n">col_name</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">col_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">dataElementName</span><span class="p">):</span>
+            <span class="n">col_name</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+        <span class="n">col_label</span> <span class="o">=</span> <span class="n">col_name</span>
+        <span class="k">for</span> <span class="n">ll</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">col_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">dataElementLabel</span><span class="p">):</span>
+            <span class="n">col_label</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ll</span><span class="p">)</span>
+        <span class="n">col_desc</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">dd</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">col_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">dataElementDescription</span><span class="p">):</span>
+            <span class="n">col_desc</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">dd</span><span class="p">)</span>
+        <span class="n">col_type</span> <span class="o">=</span> <span class="s2">&quot;string&quot;</span>
+        <span class="k">for</span> <span class="n">tt</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">col_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">dataElementType</span><span class="p">):</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">tt</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">val</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;xsd:&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;XMLSchema&quot;</span> <span class="ow">in</span> <span class="n">val</span><span class="p">:</span>
+                <span class="n">col_type</span> <span class="o">=</span> <span class="n">_xsd_to_simple</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+
+        <span class="c1"># Resolve which dataset/domain this column belongs to</span>
+        <span class="n">target_cls</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">ctx_uri</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">col_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">context</span><span class="p">):</span>
+            <span class="n">ctx_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ctx_uri</span><span class="p">)</span>
+            <span class="c1"># Direct: Column → Dataset/Domain</span>
+            <span class="k">if</span> <span class="n">ctx_str</span> <span class="ow">in</span> <span class="n">domain_classes</span><span class="p">:</span>
+                <span class="n">target_cls</span> <span class="o">=</span> <span class="n">domain_classes</span><span class="p">[</span><span class="n">ctx_str</span><span class="p">]</span>
+                <span class="k">break</span>
+            <span class="c1"># Indirect: Column → VariableGrouping → Dataset</span>
+            <span class="k">if</span> <span class="n">ctx_str</span> <span class="ow">in</span> <span class="n">vg_to_dataset</span><span class="p">:</span>
+                <span class="n">ds_uri</span> <span class="o">=</span> <span class="n">vg_to_dataset</span><span class="p">[</span><span class="n">ctx_str</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">ds_uri</span> <span class="ow">in</span> <span class="n">domain_classes</span><span class="p">:</span>
+                    <span class="n">target_cls</span> <span class="o">=</span> <span class="n">domain_classes</span><span class="p">[</span><span class="n">ds_uri</span><span class="p">]</span>
+                    <span class="k">break</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">target_cls</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">col_name</span><span class="p">:</span>
+            <span class="k">continue</span>
+
+        <span class="c1"># Build DE info: prefer column-level, fall back to DataElement ref</span>
+        <span class="n">de_ref_info</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">de_ref</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">col_uri</span><span class="p">,</span> <span class="n">MMS</span><span class="o">.</span><span class="n">dataElement</span><span class="p">):</span>
+            <span class="n">de_ref_info</span> <span class="o">=</span> <span class="n">de_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">de_ref</span><span class="p">))</span>
+            <span class="k">break</span>
+
+        <span class="n">col_de</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">col_name</span><span class="p">,</span>
+            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">col_label</span> <span class="ow">or</span> <span class="p">(</span><span class="n">de_ref_info</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">de_ref_info</span> <span class="k">else</span> <span class="n">col_name</span><span class="p">),</span>
+            <span class="s2">&quot;desc&quot;</span><span class="p">:</span> <span class="n">col_desc</span> <span class="ow">or</span> <span class="p">(</span><span class="n">de_ref_info</span><span class="p">[</span><span class="s2">&quot;desc&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">de_ref_info</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">col_type</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="n">_add_data_prop</span><span class="p">(</span><span class="n">target_cls</span><span class="p">,</span> <span class="n">col_de</span><span class="p">)</span>
+
+    <span class="c1"># 5c: DataElement → VariableGrouping (SDTM base model fallback)</span>
+    <span class="k">if</span> <span class="n">vg_as_toplevel</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">de_uri_str</span><span class="p">,</span> <span class="n">de</span> <span class="ow">in</span> <span class="n">de_info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">clean</span> <span class="o">=</span> <span class="n">de</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">)</span>
+            <span class="n">already</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;.</span><span class="si">{</span><span class="n">clean</span><span class="si">}</span><span class="s2">&quot;</span> <span class="ow">in</span> <span class="n">k</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">seen_props</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">already</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">for</span> <span class="n">ctx_uri</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">URIRef</span><span class="p">(</span><span class="n">de_uri_str</span><span class="p">),</span> <span class="n">MMS</span><span class="o">.</span><span class="n">context</span><span class="p">):</span>
+                <span class="n">ctx_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ctx_uri</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">ctx_str</span> <span class="ow">in</span> <span class="n">vg_as_toplevel</span><span class="p">:</span>
+                    <span class="n">_add_data_prop</span><span class="p">(</span><span class="n">vg_as_toplevel</span><span class="p">[</span><span class="n">ctx_str</span><span class="p">],</span> <span class="n">de</span><span class="p">)</span>
+                    <span class="k">break</span>
+
+    <span class="c1"># =====================================================================</span>
+    <span class="c1"># Step 6: Deduplicate and assemble</span>
+    <span class="c1"># =====================================================================</span>
+    <span class="c1"># Collect unique classes.  When a context and a domain share the</span>
+    <span class="c1"># same name (e.g. ADaM DatasetContext &quot;ADAE&quot; and Dataset &quot;ADAE&quot;),</span>
+    <span class="c1"># merge the domain&#39;s dataProperties into the context class.</span>
+    <span class="n">name_to_cls</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="n">context_classes</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">name_to_cls</span><span class="p">:</span>
+            <span class="n">name_to_cls</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">cls</span>
+
+    <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="n">domain_classes</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">name_to_cls</span><span class="p">:</span>
+            <span class="c1"># Merge dataProperties from the domain into the existing class</span>
+            <span class="n">existing</span> <span class="o">=</span> <span class="n">name_to_cls</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+            <span class="n">existing_dp_names</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">dp</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">dp</span> <span class="ow">in</span> <span class="n">existing</span><span class="p">[</span><span class="s2">&quot;dataProperties&quot;</span><span class="p">]</span>
+            <span class="p">}</span>
+            <span class="k">for</span> <span class="n">dp</span> <span class="ow">in</span> <span class="bp">cls</span><span class="p">[</span><span class="s2">&quot;dataProperties&quot;</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="n">dp</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">existing_dp_names</span><span class="p">:</span>
+                    <span class="n">existing</span><span class="p">[</span><span class="s2">&quot;dataProperties&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span>
+                    <span class="n">existing_dp_names</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">dp</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">])</span>
+            <span class="c1"># Inherit parent if the existing class has none</span>
+            <span class="c1"># Guard against self-referencing parent</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">existing</span><span class="p">[</span><span class="s2">&quot;parent&quot;</span><span class="p">]</span> <span class="ow">and</span> <span class="bp">cls</span><span class="p">[</span><span class="s2">&quot;parent&quot;</span><span class="p">]</span> <span class="ow">and</span> <span class="bp">cls</span><span class="p">[</span><span class="s2">&quot;parent&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">name</span><span class="p">:</span>
+                <span class="n">existing</span><span class="p">[</span><span class="s2">&quot;parent&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">[</span><span class="s2">&quot;parent&quot;</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">name_to_cls</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">cls</span>
+
+    <span class="n">all_classes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">name_to_cls</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+
+    <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="n">all_classes</span><span class="p">:</span>
+        <span class="bp">cls</span><span class="p">[</span><span class="s2">&quot;dataProperties&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span>
+            <span class="bp">cls</span><span class="p">[</span><span class="s2">&quot;dataProperties&quot;</span><span class="p">],</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+
+    <span class="n">all_classes</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="p">(</span><span class="mi">0</span> <span class="k">if</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;parent&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span> <span class="k">else</span> <span class="mi">1</span><span class="p">,</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]))</span>
+    <span class="n">properties_list</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">],</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]))</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;classes&quot;</span><span class="p">:</span> <span class="n">all_classes</span><span class="p">,</span>
+        <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="n">properties_list</span><span class="p">,</span>
+    <span class="p">}</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Main public function</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="fetch_and_parse_cdisc">
+<a class="viewcode-back" href="../../../../../api/app.core.industry.html#app.core.industry.cdisc.service.fetch_and_parse_cdisc">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">fetch_and_parse_cdisc</span><span class="p">(</span>
+    <span class="n">domain_keys</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fetch CDISC modules for the selected domains, merge, and parse.</span>
+
+<span class="sd">    For SCHEMAS-only imports, uses the standard OWL parser.</span>
+<span class="sd">    When standard data files are included (SDTM, CDASH, etc.), uses the</span>
+<span class="sd">    custom CDISC mapper to transform RDF instances into classes/properties.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">modules</span> <span class="o">=</span> <span class="n">_collect_modules</span><span class="p">(</span><span class="n">domain_keys</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">modules</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;No valid CDISC domains selected.&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;turtle&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;stats&quot;</span><span class="p">:</span> <span class="p">{},</span>
+            <span class="s2">&quot;fetched&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="s2">&quot;failed&quot;</span><span class="p">:</span> <span class="p">[],</span>
+        <span class="p">}</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Fetching </span><span class="si">%d</span><span class="s2"> modules for domains: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">modules</span><span class="p">),</span> <span class="n">domain_keys</span><span class="p">)</span>
+
+    <span class="c1"># Fetch modules concurrently</span>
+    <span class="n">merged_graph</span> <span class="o">=</span> <span class="n">Graph</span><span class="p">()</span>
+    <span class="n">fetched_count</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">failed_modules</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">_MAX_WORKERS</span><span class="p">)</span> <span class="k">as</span> <span class="n">pool</span><span class="p">:</span>
+        <span class="n">futures</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">pool</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">_fetch_single_module</span><span class="p">,</span> <span class="n">mod</span><span class="p">):</span> <span class="n">mod</span>
+            <span class="k">for</span> <span class="n">mod</span> <span class="ow">in</span> <span class="n">modules</span>
+        <span class="p">}</span>
+        <span class="k">for</span> <span class="n">future</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+            <span class="n">label</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">error</span> <span class="o">=</span> <span class="n">future</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">content</span><span class="p">:</span>
+                <span class="n">mod</span> <span class="o">=</span> <span class="n">futures</span><span class="p">[</span><span class="n">future</span><span class="p">]</span>
+                <span class="n">fmt</span> <span class="o">=</span> <span class="n">mod</span><span class="p">[</span><span class="s2">&quot;format&quot;</span><span class="p">]</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">merged_graph</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">content</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="n">fmt</span><span class="p">)</span>
+                    <span class="n">fetched_count</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;OK  </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">parse_err</span><span class="p">:</span>
+                    <span class="n">failed_modules</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;PARSE_ERR  </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">parse_err</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">failed_modules</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;FAIL </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">error</span><span class="p">)</span>
+
+    <span class="n">elapsed</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Fetched </span><span class="si">%d</span><span class="s2">/</span><span class="si">%d</span><span class="s2"> modules in </span><span class="si">%.1f</span><span class="s2">s&quot;</span><span class="p">,</span> <span class="n">fetched_count</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">modules</span><span class="p">),</span> <span class="n">elapsed</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">fetched_count</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">hint</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s2">&quot;Could not reach the CDISC RDF GitHub repository. &quot;</span>
+            <span class="s2">&quot;If you are running in Databricks Apps, outbound internet access &quot;</span>
+            <span class="s2">&quot;may be restricted. Try downloading CDISC TTL/OWL files manually &quot;</span>
+            <span class="s2">&quot;from https://github.com/phuse-org/rdf.cdisc.org and importing &quot;</span>
+            <span class="s2">&quot;via &#39;Import OWL&#39;.&quot;</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">hint</span><span class="p">,</span>
+            <span class="s2">&quot;turtle&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;stats&quot;</span><span class="p">:</span> <span class="p">{},</span>
+            <span class="s2">&quot;fetched&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="s2">&quot;failed&quot;</span><span class="p">:</span> <span class="n">failed_modules</span><span class="p">,</span>
+        <span class="p">}</span>
+
+    <span class="c1"># Determine which parsing strategy to use</span>
+    <span class="n">has_standard_data</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">k</span> <span class="o">!=</span> <span class="s2">&quot;SCHEMAS&quot;</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">domain_keys</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">has_standard_data</span><span class="p">:</span>
+        <span class="c1"># Use custom CDISC mapper for instance data</span>
+        <span class="n">mapped</span> <span class="o">=</span> <span class="n">_transform_cdisc_to_ontobricks</span><span class="p">(</span><span class="n">merged_graph</span><span class="p">)</span>
+        <span class="n">classes</span> <span class="o">=</span> <span class="n">mapped</span><span class="p">[</span><span class="s2">&quot;classes&quot;</span><span class="p">]</span>
+        <span class="n">properties</span> <span class="o">=</span> <span class="n">mapped</span><span class="p">[</span><span class="s2">&quot;properties&quot;</span><span class="p">]</span>
+        <span class="n">constraints</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">swrl_rules</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">axioms</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c1"># Build ontology info from the first standard ontology found</span>
+        <span class="n">ontology_info</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;http://rdf.cdisc.org/ontobricks&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;CDISC&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;comment&quot;</span><span class="p">:</span> <span class="s2">&quot;CDISC Foundational Standards&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;http://rdf.cdisc.org/ontobricks#&quot;</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="c1"># Try to get a better name from the graph</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">OWL</span> <span class="k">as</span> <span class="n">OWL_NS</span>
+        <span class="k">for</span> <span class="n">onto_uri</span> <span class="ow">in</span> <span class="n">merged_graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL_NS</span><span class="o">.</span><span class="n">Ontology</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="n">merged_graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">onto_uri</span><span class="p">,</span> <span class="n">SKOS</span><span class="o">.</span><span class="n">prefLabel</span><span class="p">):</span>
+                <span class="n">ontology_info</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">lbl</span><span class="p">)</span>
+                <span class="k">break</span>
+            <span class="k">break</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># Schemas-only: use the generic OWL parser</span>
+        <span class="n">turtle_content</span> <span class="o">=</span> <span class="n">merged_graph</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="s2">&quot;turtle&quot;</span><span class="p">)</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">app.objects.ontology</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ontology</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">Ontology</span><span class="o">.</span><span class="n">parse_owl</span><span class="p">(</span><span class="n">turtle_content</span><span class="p">,</span> <span class="n">extract_advanced</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">ontology_info</span><span class="p">,</span> <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">axioms</span> <span class="o">=</span> <span class="n">result</span>
+
+    <span class="c1"># Count relationships (ObjectProperty) vs attributes (DatatypeProperty)</span>
+    <span class="n">relationships</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">properties</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;ObjectProperty&quot;</span><span class="p">]</span>
+    <span class="n">attributes</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">properties</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="s2">&quot;ObjectProperty&quot;</span><span class="p">]</span>
+
+    <span class="n">stats</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;classes&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">classes</span><span class="p">),</span>
+        <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">properties</span><span class="p">),</span>
+        <span class="s2">&quot;relationships&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">relationships</span><span class="p">),</span>
+        <span class="s2">&quot;attributes&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">attributes</span><span class="p">),</span>
+        <span class="s2">&quot;constraints&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">constraints</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">constraints</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="s2">&quot;modules_fetched&quot;</span><span class="p">:</span> <span class="n">fetched_count</span><span class="p">,</span>
+        <span class="s2">&quot;modules_failed&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">failed_modules</span><span class="p">),</span>
+    <span class="p">}</span>
+
+    <span class="n">domain_names</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+        <span class="n">CDISC_DOMAINS</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">domain_keys</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">CDISC_DOMAINS</span>
+    <span class="p">)</span>
+    <span class="c1"># Build a readable summary, omitting zero counts</span>
+    <span class="n">parts</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">stats</span><span class="p">[</span><span class="s1">&#39;classes&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> classes&quot;</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">stats</span><span class="p">[</span><span class="s2">&quot;relationships&quot;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">stats</span><span class="p">[</span><span class="s1">&#39;relationships&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> relationships&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">stats</span><span class="p">[</span><span class="s2">&quot;attributes&quot;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">stats</span><span class="p">[</span><span class="s1">&#39;attributes&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> attributes&quot;</span><span class="p">)</span>
+    <span class="n">msg</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;CDISC imported: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;from </span><span class="si">{</span><span class="n">domain_names</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">fetched_count</span><span class="si">}</span><span class="s2"> modules loaded&quot;</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">failed_modules</span><span class="p">:</span>
+        <span class="n">msg</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">failed_modules</span><span class="p">)</span><span class="si">}</span><span class="s2"> modules unavailable&quot;</span>
+    <span class="n">msg</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;) in </span><span class="si">{</span><span class="n">elapsed</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">s&quot;</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">,</span>
+        <span class="s2">&quot;turtle&quot;</span><span class="p">:</span> <span class="n">merged_graph</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="s2">&quot;turtle&quot;</span><span class="p">),</span>
+        <span class="s2">&quot;ontology_info&quot;</span><span class="p">:</span> <span class="n">ontology_info</span><span class="p">,</span>
+        <span class="s2">&quot;classes&quot;</span><span class="p">:</span> <span class="n">classes</span><span class="p">,</span>
+        <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="n">properties</span><span class="p">,</span>
+        <span class="s2">&quot;constraints&quot;</span><span class="p">:</span> <span class="n">constraints</span><span class="p">,</span>
+        <span class="s2">&quot;swrl_rules&quot;</span><span class="p">:</span> <span class="n">swrl_rules</span><span class="p">,</span>
+        <span class="s2">&quot;axioms&quot;</span><span class="p">:</span> <span class="n">axioms</span><span class="p">,</span>
+        <span class="s2">&quot;stats&quot;</span><span class="p">:</span> <span class="n">stats</span><span class="p">,</span>
+        <span class="s2">&quot;fetched&quot;</span><span class="p">:</span> <span class="n">fetched_count</span><span class="p">,</span>
+        <span class="s2">&quot;failed&quot;</span><span class="p">:</span> <span class="n">failed_modules</span><span class="p">,</span>
+    <span class="p">}</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

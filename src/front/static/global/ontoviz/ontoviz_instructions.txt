@@ -1,0 +1,58 @@
+OntoViz manages Entities and Relationships.
+
+These are the rules for displaying Entity-relationships:
+* Globally the rendering is an entity-relationship model: Data Model
+* Entities are represented in an Entity box and have:
+    - An icon (updatable, in the entity title)
+    - A Name (Updatable, in the entity title)
+    - A + button to add entity attributes
+    - A close button to remove the entity
+    - Entity can have one to many attributes (manageable in the Entity box)
+    - Each entity have 4 anchors (rounds)
+        - Top, bottom, left and right, represented (fixed) on the Entity box by rounds 
+            - Located in the middle of the entity box side
+        - One anchor can hold one to many relationships (line)
+* Relationships (represented by a relation box):
+    - One relationship links 2 (and only 2) entities  together
+    - A relationship is represented by 2 lines and a relationship descriptive box.
+        - The relationship box has 4 anchors (similarly to the entity) where the lines can be anchored
+        - The relationship lineq comes from one side to another side of the relationship box
+            - From the right to the left or from the left to the right or from the bottom to the top or from the top to the bottom
+            - It is linked to entities by using its anchors
+        - The arrow describes the relationship direction
+        - lines can be represented as straight lines (The lines should have no corners). 
+    - Only one direction (changeable in the Relationship box, on the relationship title)
+    - The same entity can have one to many relationships with another entity
+    - A entity can have a relationship with itself (recursive)
+    - Relationships can have one to many attributes (manageable in the Relationship box)
+    - For each relationship, the line must come in from a side (Top, bottom, left of right) and come out from another side. 
+        - The Relationship box cannot be disconnected from the lines (the path must actually pass through the label position)
+        - Layout priority:
+            - Always try to place the Relationship box betwwen the 2 entities
+            - When a line comes from the left, it's better to go out from the right
+            - When a line comes from the top, it's better to go out from the bottom
+    - User can to drag and change the origin of a line (from an anchor to another)
+        - Use can select the line (when attached to an anchor) mand drag'n move it to another anchor
+    - For recursive relationships / self-loops (relationship with the same entity as Input and output): 
+        - Use dynamic anchors: entity anchors face toward the relationship box, box anchors face toward the entity
+        - The relationship box can be dragged to any position around the entity, and anchors adjust automatically
+        - Lines are displayed as quarter-circle arcs (curved) to highlight the recursive nature
+* Keep some space between entities, relationships to have something visible
+* Entities cannot overlaps between each over and Relationship box
+* Relationship box cannot everlaps between each over and entities
+* I would like to create an inheritance links. 
+    - Inheritance links 2 entities (no self loops possible)
+    - Inheritance will be straight lines (dotted) with arrow from an entity to another entity. 
+    - Clicking on the the arrow will change the arrow direction.
+    - All the attributes from the source entity are inherited in the target entity (user cannot modify them in the target entity)
+* Auto-layout:
+    - Uses force-directed placement — never align entities into rows or columns
+    - Avoids all box and line overlaps
+    - Centers the diagram after layout
+    - Places connected entities near each other
+* First load:
+    - Always center the diagram
+    - Auto-layout automatically (without animation)
+* Keep in memory the layout.
+* Entities, Relationships, attributes names
+    - Can only include letters, numbers, underscores (_), and hyphens (-); no spaces or other symbols. Avoid non authorized characters when typing.

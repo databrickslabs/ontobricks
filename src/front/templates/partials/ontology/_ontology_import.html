@@ -1,0 +1,343 @@
+<!-- JS: /static/ontology/js/ontology-import.js -->
+<!-- Import Section -->
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-box-arrow-in-down me-2"></i>Import</h4>
+            <p class="text-muted mb-0 small">Import ontologies from local files, Unity Catalog, or load industry-standard ontologies.</p>
+        </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <ul class="nav nav-tabs" id="importTabs" role="tablist" style="gap: 2px;">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-owl" data-bs-toggle="tab" data-bs-target="#pane-owl"
+                    type="button" role="tab" aria-controls="pane-owl" aria-selected="true">
+                <i class="bi bi-file-earmark-code"></i> OWL
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-rdfs" data-bs-toggle="tab" data-bs-target="#pane-rdfs"
+                    type="button" role="tab" aria-controls="pane-rdfs" aria-selected="false">
+                <i class="bi bi-diagram-2"></i> RDFS
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-fibo" data-bs-toggle="tab" data-bs-target="#pane-fibo"
+                    type="button" role="tab" aria-controls="pane-fibo" aria-selected="false">
+                <i class="bi bi-bank2"></i> FIBO
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-cdisc" data-bs-toggle="tab" data-bs-target="#pane-cdisc"
+                    type="button" role="tab" aria-controls="pane-cdisc" aria-selected="false">
+                <i class="bi bi-heart-pulse"></i> CDISC
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-iof" data-bs-toggle="tab" data-bs-target="#pane-iof"
+                    type="button" role="tab" aria-controls="pane-iof" aria-selected="false">
+                <i class="bi bi-gear-wide-connected"></i> IOF
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content ob-tab-content" id="importTabContent">
+
+        <!-- OWL Tab -->
+        <div class="tab-pane fade show active" id="pane-owl" role="tabpanel" aria-labelledby="tab-owl">
+            <h6 class="mb-2"><i class="bi bi-file-earmark-code"></i> Import OWL Ontology</h6>
+            <p class="text-muted small mb-3">Import an OWL (Web Ontology Language) file to load classes, properties, and relationships.</p>
+            <div class="d-flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="importOwlLocalBtn">
+                    <i class="bi bi-hdd"></i> From Local File
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="importOwlUCBtn">
+                    <i class="bi bi-cloud-download"></i> From Unity Catalog
+                </button>
+            </div>
+        </div>
+
+        <!-- RDFS Tab -->
+        <div class="tab-pane fade" id="pane-rdfs" role="tabpanel" aria-labelledby="tab-rdfs">
+            <h6 class="mb-2"><i class="bi bi-diagram-2"></i> Import RDFS Schema</h6>
+            <p class="text-muted small mb-3">Import an RDFS (RDF Schema) file to load class hierarchies and property definitions.</p>
+            <div class="d-flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-outline-info btn-sm" id="importRdfsLocalBtn">
+                    <i class="bi bi-hdd"></i> From Local File
+                </button>
+                <button type="button" class="btn btn-outline-info btn-sm" id="importRdfsUCBtn">
+                    <i class="bi bi-cloud-download"></i> From Unity Catalog
+                </button>
+            </div>
+        </div>
+
+        <!-- FIBO Tab -->
+        <div class="tab-pane fade" id="pane-fibo" role="tabpanel" aria-labelledby="tab-fibo">
+            <h6 class="mb-2">
+                <i class="bi bi-bank2"></i> Import FIBO Ontology
+                <span class="badge bg-warning text-dark ms-2">Financial Industry</span>
+            </h6>
+            <p class="text-muted small mb-2">
+                <a href="https://spec.edmcouncil.org/fibo/" target="_blank" rel="noopener">FIBO</a>
+                (Financial Industry Business Ontology) is the industry-standard ontology
+                for financial services, published by the
+                <a href="https://edmcouncil.org/" target="_blank" rel="noopener">EDM Council</a>.
+                It covers entities, instruments, products, and processes across the
+                financial domain.
+            </p>
+            <p class="text-muted small mb-3">
+                Select the domain modules you need below. <strong>Foundations (FND)</strong>
+                is always included as it provides core concepts used by all other domains.
+                Modules are fetched directly from the FIBO specification server and merged
+                automatically.
+            </p>
+
+            <!-- Domain checkboxes -->
+            <div class="row g-2 mb-3" id="fiboDomainCheckboxes">
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="fiboDomainFND" value="FND" checked disabled>
+                        <label class="form-check-label" for="fiboDomainFND">
+                            <i class="bi bi-bricks text-secondary"></i> <strong>Foundations (FND)</strong>
+                            <small class="text-muted d-block">Parties, agreements, relations, dates, organizations</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input fibo-domain-cb" type="checkbox" id="fiboDomainBE" value="BE">
+                        <label class="form-check-label" for="fiboDomainBE">
+                            <i class="bi bi-building text-primary"></i> <strong>Business Entities (BE)</strong>
+                            <small class="text-muted d-block">Legal entities, corporations, government bodies</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input fibo-domain-cb" type="checkbox" id="fiboDomainFBC" value="FBC">
+                        <label class="form-check-label" for="fiboDomainFBC">
+                            <i class="bi bi-bank text-success"></i> <strong>Financial Business (FBC)</strong>
+                            <small class="text-muted d-block">Financial products, services, markets</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input fibo-domain-cb" type="checkbox" id="fiboDomainLOAN" value="LOAN">
+                        <label class="form-check-label" for="fiboDomainLOAN">
+                            <i class="bi bi-cash-coin text-warning"></i> <strong>Loans (LOAN)</strong>
+                            <small class="text-muted d-block">Loan products, applications, mortgages</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input fibo-domain-cb" type="checkbox" id="fiboDomainSEC" value="SEC">
+                        <label class="form-check-label" for="fiboDomainSEC">
+                            <i class="bi bi-graph-up-arrow text-info"></i> <strong>Securities (SEC)</strong>
+                            <small class="text-muted d-block">Equities, bonds, funds, debt instruments</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input fibo-domain-cb" type="checkbox" id="fiboDomainDER" value="DER">
+                        <label class="form-check-label" for="fiboDomainDER">
+                            <i class="bi bi-arrow-left-right text-danger"></i> <strong>Derivatives (DER)</strong>
+                            <small class="text-muted d-block">Options, futures, swaps</small>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Import button -->
+            <button type="button" class="btn btn-outline-warning btn-sm" id="importFiboBtn">
+                <i class="bi bi-download"></i> Import Selected Domains
+            </button>
+
+            <!-- Progress indicator -->
+            <div id="fiboImportProgress" class="d-none mt-3">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <div class="spinner-border spinner-border-sm text-warning" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <small class="text-muted" id="fiboImportStatus">Fetching FIBO modules from spec.edmcouncil.org...</small>
+                </div>
+                <div class="progress" style="height: 4px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
+                         id="fiboImportProgressBar" role="progressbar" style="width: 100%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CDISC Tab -->
+        <div class="tab-pane fade" id="pane-cdisc" role="tabpanel" aria-labelledby="tab-cdisc">
+            <h6 class="mb-2">
+                <i class="bi bi-heart-pulse"></i> Import CDISC Standards
+                <span class="badge bg-danger ms-2">Clinical Data</span>
+            </h6>
+            <p class="text-muted small mb-2">
+                <a href="https://www.cdisc.org/standards/foundational/rdf/cdisc-standards-rdf" target="_blank" rel="noopener">CDISC</a>
+                (Clinical Data Interchange Standards Consortium) foundational standards
+                in RDF, maintained by the
+                <a href="https://github.com/phuse-org/rdf.cdisc.org" target="_blank" rel="noopener">PhUSE Semantic Technology Working Group</a>.
+                Covers clinical trial data models including SDTM, CDASH, SEND, and ADaM.
+            </p>
+            <p class="text-muted small mb-3">
+                Select the standard modules you need below. <strong>Schemas</strong>
+                are always included as they provide the core meta-model (ISO 11179 based)
+                used by all other standards.
+                Modules are fetched directly from GitHub and merged automatically.
+            </p>
+
+            <!-- Domain checkboxes -->
+            <div class="row g-2 mb-3" id="cdiscDomainCheckboxes">
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="cdiscDomainSCHEMAS" value="SCHEMAS" checked disabled>
+                        <label class="form-check-label" for="cdiscDomainSCHEMAS">
+                            <i class="bi bi-diagram-3 text-secondary"></i> <strong>Schemas (required)</strong>
+                            <small class="text-muted d-block">Meta-Model, CT Schema, CDISC Schema</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input cdisc-domain-cb" type="checkbox" id="cdiscDomainSDTM" value="SDTM">
+                        <label class="form-check-label" for="cdiscDomainSDTM">
+                            <i class="bi bi-table text-primary"></i> <strong>SDTM</strong>
+                            <small class="text-muted d-block">Study Data Tabulation Model v1.2 & v1.3</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input cdisc-domain-cb" type="checkbox" id="cdiscDomainCDASH" value="CDASH">
+                        <label class="form-check-label" for="cdiscDomainCDASH">
+                            <i class="bi bi-clipboard2-data text-success"></i> <strong>CDASH</strong>
+                            <small class="text-muted d-block">Clinical Data Acquisition Standards v1.1</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input cdisc-domain-cb" type="checkbox" id="cdiscDomainSEND" value="SEND">
+                        <label class="form-check-label" for="cdiscDomainSEND">
+                            <i class="bi bi-virus text-info"></i> <strong>SEND</strong>
+                            <small class="text-muted d-block">Nonclinical Data Exchange IG 3.0</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input cdisc-domain-cb" type="checkbox" id="cdiscDomainADaM" value="ADaM">
+                        <label class="form-check-label" for="cdiscDomainADaM">
+                            <i class="bi bi-bar-chart-line text-warning"></i> <strong>ADaM</strong>
+                            <small class="text-muted d-block">Analysis Data Model v2.1 & IG 1.0</small>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Import button -->
+            <button type="button" class="btn btn-outline-danger btn-sm" id="importCdiscBtn">
+                <i class="bi bi-download"></i> Import Selected Standards
+            </button>
+
+            <!-- Progress indicator -->
+            <div id="cdiscImportProgress" class="d-none mt-3">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <div class="spinner-border spinner-border-sm text-danger" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <small class="text-muted" id="cdiscImportStatus">Fetching CDISC modules from GitHub...</small>
+                </div>
+                <div class="progress" style="height: 4px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-danger"
+                         id="cdiscImportProgressBar" role="progressbar" style="width: 100%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- IOF Tab -->
+        <div class="tab-pane fade" id="pane-iof" role="tabpanel" aria-labelledby="tab-iof">
+            <h6 class="mb-2">
+                <i class="bi bi-gear-wide-connected"></i> Import IOF Ontology
+                <span class="badge bg-primary ms-2">Manufacturing</span>
+            </h6>
+            <p class="text-muted small mb-2">
+                <a href="https://www.industrialontologies.org/" target="_blank" rel="noopener">IOF</a>
+                (Industrial Ontologies Foundry) is a suite of OWL ontologies for digital
+                manufacturing, published by
+                <a href="https://oagi.org/" target="_blank" rel="noopener">OAGi</a>.
+                Built on BFO (Basic Formal Ontology), it covers manufacturing processes,
+                maintenance, supply chain, and more.
+            </p>
+            <p class="text-muted small mb-3">
+                Select the domain modules you need below. <strong>Core</strong>
+                is always included as it provides foundational concepts (agents, processes,
+                capabilities, organizations) used by all other domains.
+                Modules are fetched directly from
+                <a href="https://github.com/iofoundry/ontology" target="_blank" rel="noopener">GitHub</a>
+                and merged automatically.
+            </p>
+
+            <!-- Domain checkboxes -->
+            <div class="row g-2 mb-3" id="iofDomainCheckboxes">
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="iofDomainCORE" value="CORE" checked disabled>
+                        <label class="form-check-label" for="iofDomainCORE">
+                            <i class="bi bi-gear-wide-connected text-primary"></i> <strong>Core (required)</strong>
+                            <small class="text-muted d-block">Agents, processes, capabilities, organizations</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input iof-domain-cb" type="checkbox" id="iofDomainMAINTENANCE" value="MAINTENANCE">
+                        <label class="form-check-label" for="iofDomainMAINTENANCE">
+                            <i class="bi bi-wrench-adjustable text-warning"></i> <strong>Maintenance</strong>
+                            <small class="text-muted d-block">Asset maintenance, failure analysis, FMEA</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input iof-domain-cb" type="checkbox" id="iofDomainSUPPLYCHAIN" value="SUPPLYCHAIN">
+                        <label class="form-check-label" for="iofDomainSUPPLYCHAIN">
+                            <i class="bi bi-truck text-success"></i> <strong>Supply Chain</strong>
+                            <small class="text-muted d-block">Procurement, logistics, distribution</small>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Import button -->
+            <button type="button" class="btn btn-outline-primary btn-sm" id="importIofBtn">
+                <i class="bi bi-download"></i> Import Selected Domains
+            </button>
+
+            <!-- Progress indicator -->
+            <div id="iofImportProgress" class="d-none mt-3">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <small class="text-muted" id="iofImportStatus">Fetching IOF modules from GitHub...</small>
+                </div>
+                <div class="progress" style="height: 4px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                         id="iofImportProgressBar" role="progressbar" style="width: 100%"></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Hidden file inputs -->
+    <input type="file" id="importOwlFileInput" accept=".ttl,.owl,.rdf,.xml" class="d-none">
+    <input type="file" id="importRdfsFileInput" accept=".ttl,.rdf,.xml,.rdfs,.n3,.nt" class="d-none">
+</div>

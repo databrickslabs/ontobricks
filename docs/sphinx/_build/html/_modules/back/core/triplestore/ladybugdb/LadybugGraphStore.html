@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>back.core.triplestore.ladybugdb.LadybugGraphStore &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for back.core.triplestore.ladybugdb.LadybugGraphStore</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;LadybugDB graph-model triple store backend.</span>
+
+<span class="sd">Uses typed node tables and relationship tables derived from the project</span>
+<span class="sd">ontology.  Falls back to the flat-model base class for operations that</span>
+<span class="sd">do not have a graph-specific implementation.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Set</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">RDFS_LABEL</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb.LadybugFlatStore</span><span class="w"> </span><span class="kn">import</span> <span class="n">LadybugFlatStore</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb.GraphSchema</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSchema</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_table_name</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_GRAPH_NAME</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="LadybugGraphStore">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">LadybugGraphStore</span><span class="p">(</span><span class="n">LadybugFlatStore</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Graph-model LadybugDB backend.</span>
+
+<span class="sd">    OWL classes map to node tables and object properties map to</span>
+<span class="sd">    relationship tables.  When the schema cannot be built or graph tables</span>
+<span class="sd">    are missing, all inherited flat-model methods remain available as</span>
+<span class="sd">    fallbacks.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">db_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;/tmp/ontobricks&quot;</span><span class="p">,</span>
+        <span class="n">db_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">,</span>
+        <span class="n">ontology</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">auto_restore</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">db_path</span><span class="o">=</span><span class="n">db_path</span><span class="p">,</span> <span class="n">db_name</span><span class="o">=</span><span class="n">db_name</span><span class="p">,</span>
+            <span class="n">ontology</span><span class="o">=</span><span class="n">ontology</span><span class="p">,</span> <span class="n">auto_restore</span><span class="o">=</span><span class="n">auto_restore</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_graph_schema</span><span class="p">()</span>
+
+    <span class="c1"># -- Schema initialisation -------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_graph_schema</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build the graph schema from ontology if available.</span>
+
+<span class="sd">        Probes the database to verify expected node tables exist.</span>
+<span class="sd">        Falls back to flat mode if they don&#39;t.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema_checked</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ontology</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema_checked</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">return</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb.GraphSchemaBuilder</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSchemaBuilder</span>
+            <span class="n">classes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="n">properties</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="n">base_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">classes</span><span class="p">:</span>
+                <span class="n">schema</span> <span class="o">=</span> <span class="n">GraphSchemaBuilder</span><span class="o">.</span><span class="n">generate_graph_schema</span><span class="p">(</span>
+                    <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">base_uri</span><span class="o">=</span><span class="n">base_uri</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_tables_exist</span><span class="p">(</span><span class="n">schema</span><span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span> <span class="o">=</span> <span class="n">schema</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="s2">&quot;LadybugDB graph schema initialised: </span><span class="si">%d</span><span class="s2"> node tables, </span><span class="si">%d</span><span class="s2"> rel tables&quot;</span><span class="p">,</span>
+                        <span class="nb">len</span><span class="p">(</span><span class="n">schema</span><span class="o">.</span><span class="n">node_tables</span><span class="p">),</span>
+                        <span class="nb">len</span><span class="p">(</span><span class="n">schema</span><span class="o">.</span><span class="n">rel_tables</span><span class="p">),</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="s2">&quot;LadybugDB: graph tables not found in database — using flat model&quot;</span>
+                    <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not build graph schema: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema_checked</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_graph_tables_exist</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True if at least one expected graph node table exists.&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">tbl</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">node_tables</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">tbl</span> <span class="o">==</span> <span class="n">schema</span><span class="o">.</span><span class="n">fallback_node_table</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MATCH (n:</span><span class="si">{</span><span class="n">tbl</span><span class="si">}</span><span class="s2">) RETURN n.uri LIMIT 0&quot;</span><span class="p">)</span>
+                    <span class="k">return</span> <span class="kc">True</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="k">continue</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">use_graph_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_graph_schema</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+
+    <span class="c1"># -- Core CRUD overrides ---------------------------------------------</span>
+
+<div class="viewcode-block" id="LadybugGraphStore.create_table">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.create_table">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb.GraphSchemaBuilder</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSchemaBuilder</span>
+            <span class="n">stmts</span> <span class="o">=</span> <span class="n">GraphSchemaBuilder</span><span class="o">.</span><span class="n">generate_ddl</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="n">stmts</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;DDL statement failed (may already exist): </span><span class="si">%s</span><span class="s2"> — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">stmt</span><span class="p">[:</span><span class="mi">80</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">tbl</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span><span class="o">.</span><span class="n">node_tables</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_table_registry</span><span class="p">[</span><span class="n">tbl</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Created LadybugDB graph schema (</span><span class="si">%d</span><span class="s2"> DDL statements)&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">stmts</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">create_table</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LadybugGraphStore.insert_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.insert_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">insert_triples</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2000</span><span class="p">,</span>
+        <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">triples</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_insert_triples_graph</span><span class="p">(</span><span class="n">triples</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">on_progress</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">insert_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">triples</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">on_progress</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_insert_triples_graph</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Insert triples using the true graph model.&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb.GraphSchemaBuilder</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSchemaBuilder</span>
+
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+
+        <span class="n">node_inserts</span><span class="p">,</span> <span class="n">rel_inserts</span><span class="p">,</span> <span class="n">attr_updates</span> <span class="o">=</span> <span class="n">GraphSchemaBuilder</span><span class="o">.</span><span class="n">classify_triples</span><span class="p">(</span>
+            <span class="n">triples</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">total_ops</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">sum</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">nodes</span><span class="p">)</span> <span class="k">for</span> <span class="n">nodes</span> <span class="ow">in</span> <span class="n">node_inserts</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+            <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">rel_inserts</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">completed</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="n">created_uris</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">nodes</span> <span class="ow">in</span> <span class="n">node_inserts</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">nodes</span><span class="p">:</span>
+                <span class="n">uri</span> <span class="o">=</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">created_uris</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">label</span> <span class="o">=</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+                <span class="n">uri_esc</span> <span class="o">=</span> <span class="n">uri</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;CREATE (:</span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> </span><span class="se">{{</span><span class="s2">uri: &#39;</span><span class="si">{</span><span class="n">uri_esc</span><span class="si">}</span><span class="s2">&#39;, label: &#39;</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">}}</span><span class="s2">)&quot;</span>
+                    <span class="p">)</span>
+                    <span class="n">created_uris</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Node insert failed (may exist): </span><span class="si">%s</span><span class="s2"> — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">uri</span><span class="p">[:</span><span class="mi">60</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
+                <span class="n">completed</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">on_progress</span> <span class="ow">and</span> <span class="n">completed</span> <span class="o">%</span> <span class="n">batch_size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">on_progress</span><span class="p">(</span><span class="n">completed</span><span class="p">,</span> <span class="n">total_ops</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">rel</span> <span class="ow">in</span> <span class="n">rel_inserts</span><span class="p">:</span>
+            <span class="n">rel_table</span> <span class="o">=</span> <span class="n">rel</span><span class="p">[</span><span class="s2">&quot;rel_table&quot;</span><span class="p">]</span>
+            <span class="n">from_uri</span> <span class="o">=</span> <span class="n">rel</span><span class="p">[</span><span class="s2">&quot;from_uri&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+            <span class="n">to_uri</span> <span class="o">=</span> <span class="n">rel</span><span class="p">[</span><span class="s2">&quot;to_uri&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+            <span class="n">rel_def</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">rel_tables</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">rel_table</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">rel_def</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">from_tbl</span> <span class="o">=</span> <span class="n">rel_def</span><span class="o">.</span><span class="n">from_table</span>
+            <span class="n">to_tbl</span> <span class="o">=</span> <span class="n">rel_def</span><span class="o">.</span><span class="n">to_table</span>
+
+            <span class="k">if</span> <span class="n">rel</span><span class="p">[</span><span class="s2">&quot;from_uri&quot;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">created_uris</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;CREATE (:</span><span class="si">{</span><span class="n">from_tbl</span><span class="si">}</span><span class="s2"> </span><span class="se">{{</span><span class="s2">uri: &#39;</span><span class="si">{</span><span class="n">from_uri</span><span class="si">}</span><span class="s2">&#39;, label: &#39;&#39;</span><span class="se">}}</span><span class="s2">)&quot;</span>
+                    <span class="p">)</span>
+                    <span class="n">created_uris</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">rel</span><span class="p">[</span><span class="s2">&quot;from_uri&quot;</span><span class="p">])</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="k">pass</span>
+            <span class="k">if</span> <span class="n">rel</span><span class="p">[</span><span class="s2">&quot;to_uri&quot;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">created_uris</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;CREATE (:</span><span class="si">{</span><span class="n">to_tbl</span><span class="si">}</span><span class="s2"> </span><span class="se">{{</span><span class="s2">uri: &#39;</span><span class="si">{</span><span class="n">to_uri</span><span class="si">}</span><span class="s2">&#39;, label: &#39;&#39;</span><span class="se">}}</span><span class="s2">)&quot;</span>
+                    <span class="p">)</span>
+                    <span class="n">created_uris</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">rel</span><span class="p">[</span><span class="s2">&quot;to_uri&quot;</span><span class="p">])</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="k">pass</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;MATCH (a:</span><span class="si">{</span><span class="n">from_tbl</span><span class="si">}</span><span class="s2"> </span><span class="se">{{</span><span class="s2">uri: &#39;</span><span class="si">{</span><span class="n">from_uri</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">}}</span><span class="s2">), &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;(b:</span><span class="si">{</span><span class="n">to_tbl</span><span class="si">}</span><span class="s2"> </span><span class="se">{{</span><span class="s2">uri: &#39;</span><span class="si">{</span><span class="n">to_uri</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">}}</span><span class="s2">) &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;CREATE (a)-[:</span><span class="si">{</span><span class="n">rel_table</span><span class="si">}</span><span class="s2">]-&gt;(b)&quot;</span>
+                <span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Relationship insert failed: </span><span class="si">%s</span><span class="s2"> — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">rel_table</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="n">completed</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="n">on_progress</span> <span class="ow">and</span> <span class="n">completed</span> <span class="o">%</span> <span class="n">batch_size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">on_progress</span><span class="p">(</span><span class="n">completed</span><span class="p">,</span> <span class="n">total_ops</span><span class="p">)</span>
+
+        <span class="n">attr_applied</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">subj_uri</span><span class="p">,</span> <span class="n">attrs</span> <span class="ow">in</span> <span class="n">attr_updates</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">subj_table</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">for</span> <span class="n">tbl_name</span><span class="p">,</span> <span class="n">nodes</span> <span class="ow">in</span> <span class="n">node_inserts</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">n</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">subj_uri</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">nodes</span><span class="p">):</span>
+                    <span class="n">subj_table</span> <span class="o">=</span> <span class="n">tbl_name</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">subj_table</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">tbl_name</span><span class="p">,</span> <span class="n">node_def</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">node_tables</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">tbl_name</span> <span class="o">==</span> <span class="n">schema</span><span class="o">.</span><span class="n">fallback_node_table</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="n">col</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">resolve_data_property</span><span class="p">(</span><span class="n">tbl_name</span><span class="p">,</span> <span class="n">attrs</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;predicate&quot;</span><span class="p">])</span>
+                    <span class="k">if</span> <span class="n">col</span><span class="p">:</span>
+                        <span class="n">subj_table</span> <span class="o">=</span> <span class="n">tbl_name</span>
+                        <span class="k">break</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">subj_table</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">set_parts</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">:</span>
+                <span class="n">col</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">resolve_data_property</span><span class="p">(</span><span class="n">subj_table</span><span class="p">,</span> <span class="n">attr</span><span class="p">[</span><span class="s2">&quot;predicate&quot;</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">col</span><span class="p">:</span>
+                    <span class="n">val</span> <span class="o">=</span> <span class="p">(</span><span class="n">attr</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+                    <span class="n">set_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;n.</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2"> = &#39;</span><span class="si">{</span><span class="n">val</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">set_parts</span><span class="p">:</span>
+                <span class="n">uri_esc</span> <span class="o">=</span> <span class="n">subj_uri</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;MATCH (n:</span><span class="si">{</span><span class="n">subj_table</span><span class="si">}</span><span class="s2"> </span><span class="se">{{</span><span class="s2">uri: &#39;</span><span class="si">{</span><span class="n">uri_esc</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">}}</span><span class="s2">) &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;SET </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">set_parts</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="p">)</span>
+                    <span class="n">attr_applied</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">set_parts</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Attr update failed for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">subj_uri</span><span class="p">[:</span><span class="mi">60</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">on_progress</span><span class="p">:</span>
+            <span class="n">on_progress</span><span class="p">(</span><span class="n">total_ops</span><span class="p">,</span> <span class="n">total_ops</span><span class="p">)</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Graph insert: </span><span class="si">%d</span><span class="s2"> nodes, </span><span class="si">%d</span><span class="s2"> relationships, </span><span class="si">%d</span><span class="s2"> attributes&quot;</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">created_uris</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">rel_inserts</span><span class="p">),</span> <span class="n">attr_applied</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">)</span>
+
+<div class="viewcode-block" id="LadybugGraphStore.delete_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.delete_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_triples</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2000</span><span class="p">,</span>
+        <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">triples</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_delete_triples_graph</span><span class="p">(</span><span class="n">triples</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">on_progress</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">delete_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">triples</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">on_progress</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_delete_triples_graph</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete triples from the graph model.&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb.GraphSchemaBuilder</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSchemaBuilder</span>
+
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+
+        <span class="n">node_inserts</span><span class="p">,</span> <span class="n">rel_inserts</span><span class="p">,</span> <span class="n">attr_updates</span> <span class="o">=</span> <span class="n">GraphSchemaBuilder</span><span class="o">.</span><span class="n">classify_triples</span><span class="p">(</span>
+            <span class="n">triples</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">deleted</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">rel</span> <span class="ow">in</span> <span class="n">rel_inserts</span><span class="p">:</span>
+            <span class="n">rel_table</span> <span class="o">=</span> <span class="n">rel</span><span class="p">[</span><span class="s2">&quot;rel_table&quot;</span><span class="p">]</span>
+            <span class="n">from_uri</span> <span class="o">=</span> <span class="n">rel</span><span class="p">[</span><span class="s2">&quot;from_uri&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+            <span class="n">to_uri</span> <span class="o">=</span> <span class="n">rel</span><span class="p">[</span><span class="s2">&quot;to_uri&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+            <span class="n">rel_def</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">rel_tables</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">rel_table</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">rel_def</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;MATCH (a:</span><span class="si">{</span><span class="n">rel_def</span><span class="o">.</span><span class="n">from_table</span><span class="si">}</span><span class="s2"> </span><span class="se">{{</span><span class="s2">uri: &#39;</span><span class="si">{</span><span class="n">from_uri</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">}}</span><span class="s2">)&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;-[r:</span><span class="si">{</span><span class="n">rel_table</span><span class="si">}</span><span class="s2">]-&gt;&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;(b:</span><span class="si">{</span><span class="n">rel_def</span><span class="o">.</span><span class="n">to_table</span><span class="si">}</span><span class="s2"> </span><span class="se">{{</span><span class="s2">uri: &#39;</span><span class="si">{</span><span class="n">to_uri</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">}}</span><span class="s2">) &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;DELETE r&quot;</span>
+                <span class="p">)</span>
+                <span class="n">deleted</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Graph rel delete failed: </span><span class="si">%s</span><span class="s2"> — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">rel_table</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">subj_uri</span><span class="p">,</span> <span class="n">attrs</span> <span class="ow">in</span> <span class="n">attr_updates</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">subj_table</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">for</span> <span class="n">tbl_name</span><span class="p">,</span> <span class="n">nodes</span> <span class="ow">in</span> <span class="n">node_inserts</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">n</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">subj_uri</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">nodes</span><span class="p">):</span>
+                    <span class="n">subj_table</span> <span class="o">=</span> <span class="n">tbl_name</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">subj_table</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">tbl_name</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">node_tables</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">tbl_name</span> <span class="o">==</span> <span class="n">schema</span><span class="o">.</span><span class="n">fallback_node_table</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="n">col</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">resolve_data_property</span><span class="p">(</span><span class="n">tbl_name</span><span class="p">,</span> <span class="n">attrs</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;predicate&quot;</span><span class="p">])</span>
+                    <span class="k">if</span> <span class="n">col</span><span class="p">:</span>
+                        <span class="n">subj_table</span> <span class="o">=</span> <span class="n">tbl_name</span>
+                        <span class="k">break</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">subj_table</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">set_parts</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">:</span>
+                <span class="n">col</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">resolve_data_property</span><span class="p">(</span><span class="n">subj_table</span><span class="p">,</span> <span class="n">attr</span><span class="p">[</span><span class="s2">&quot;predicate&quot;</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">col</span><span class="p">:</span>
+                    <span class="n">set_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;n.</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2"> = NULL&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">set_parts</span><span class="p">:</span>
+                <span class="n">uri_esc</span> <span class="o">=</span> <span class="n">subj_uri</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;MATCH (n:</span><span class="si">{</span><span class="n">subj_table</span><span class="si">}</span><span class="s2"> </span><span class="se">{{</span><span class="s2">uri: &#39;</span><span class="si">{</span><span class="n">uri_esc</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">}}</span><span class="s2">) &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;SET </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">set_parts</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="p">)</span>
+                    <span class="n">deleted</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">set_parts</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Graph attr delete failed for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">subj_uri</span><span class="p">[:</span><span class="mi">60</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
+
+        <span class="n">nodes_to_delete</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">tbl_name</span><span class="p">,</span> <span class="n">nodes</span> <span class="ow">in</span> <span class="n">node_inserts</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">nodes</span><span class="p">:</span>
+                <span class="n">uri</span> <span class="o">=</span> <span class="n">node</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">uri</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">nodes_to_delete</span><span class="p">:</span>
+                    <span class="n">uri_esc</span> <span class="o">=</span> <span class="n">uri</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;MATCH (n:</span><span class="si">{</span><span class="n">tbl_name</span><span class="si">}</span><span class="s2"> </span><span class="se">{{</span><span class="s2">uri: &#39;</span><span class="si">{</span><span class="n">uri_esc</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">}}</span><span class="s2">) DETACH DELETE n&quot;</span>
+                        <span class="p">)</span>
+                        <span class="n">nodes_to_delete</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+                        <span class="n">deleted</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Graph node delete failed: </span><span class="si">%s</span><span class="s2"> — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">uri</span><span class="p">[:</span><span class="mi">60</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">on_progress</span><span class="p">:</span>
+            <span class="n">on_progress</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">total</span><span class="p">)</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Graph delete: </span><span class="si">%d</span><span class="s2"> operations for </span><span class="si">%d</span><span class="s2"> triples&quot;</span><span class="p">,</span> <span class="n">deleted</span><span class="p">,</span> <span class="n">total</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">deleted</span>
+
+    <span class="c1"># -- Query overrides -------------------------------------------------</span>
+
+<div class="viewcode-block" id="LadybugGraphStore.query_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.query_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">query_triples</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_materialize_all_triples</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">query_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LadybugGraphStore.count_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.count_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">count_triples</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="n">count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_count_graph_triples</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">count</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">count_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LadybugGraphStore.table_exists">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.table_exists">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">table_exists</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">table_name</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">table_name</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_table_registry</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">tbl_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span><span class="o">.</span><span class="n">node_tables</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MATCH (n:</span><span class="si">{</span><span class="n">tbl_name</span><span class="si">}</span><span class="s2">) RETURN n LIMIT 0&quot;</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_table_registry</span><span class="p">[</span><span class="n">tbl_name</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="k">return</span> <span class="kc">True</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="k">pass</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">table_exists</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LadybugGraphStore.get_aggregate_stats">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.get_aggregate_stats">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_aggregate_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_aggregate_stats_graph</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">get_aggregate_stats</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LadybugGraphStore.find_subjects_by_type">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.find_subjects_by_type">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">find_subjects_by_type</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">type_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span><span class="p">,</span>
+        <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">search</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_find_subjects_by_type_graph</span><span class="p">(</span><span class="n">type_uri</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">search</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">find_subjects_by_type</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">search</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LadybugGraphStore.get_triples_for_subjects">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.get_triples_for_subjects">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_triples_for_subjects</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">subjects</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">subjects</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_triples_for_subjects_graph</span><span class="p">(</span><span class="n">subjects</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">rows</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">rows</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">get_triples_for_subjects</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">subjects</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LadybugGraphStore.get_predicates_for_type">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.get_predicates_for_type">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_predicates_for_type</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_predicates_for_type_graph</span><span class="p">(</span><span class="n">type_uri</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">get_predicates_for_type</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LadybugGraphStore.bfs_traversal">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.bfs_traversal">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">bfs_traversal</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">seed_where</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">depth</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">search</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">entity_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bfs_traversal_graph</span><span class="p">(</span><span class="n">seed_where</span><span class="p">,</span> <span class="n">depth</span><span class="p">,</span>
+                                             <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">,</span> <span class="n">entity_type</span><span class="o">=</span><span class="n">entity_type</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">bfs_traversal</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">seed_where</span><span class="p">,</span> <span class="n">depth</span><span class="p">,</span>
+                                     <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">,</span> <span class="n">entity_type</span><span class="o">=</span><span class="n">entity_type</span><span class="p">)</span></div>
+
+
+    <span class="c1"># -- Reasoning methods ------------------------------------------------</span>
+
+<div class="viewcode-block" id="LadybugGraphStore.transitive_closure">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.transitive_closure">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">transitive_closure</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">predicate_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">start_uri</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Compute transitive closure using variable-length Cypher paths.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;transitive_closure: graph model not active, delegating to flat model&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">transitive_closure</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">,</span> <span class="n">start_uri</span><span class="p">,</span> <span class="n">max_depth</span><span class="p">)</span>
+
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span>
+        <span class="n">rel_table</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">property_uri_to_table</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">predicate_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">rel_table</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;transitive_closure: no rel table for </span><span class="si">%s</span><span class="s2">, skipping&quot;</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="n">rel_def</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">rel_tables</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">rel_table</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">rel_def</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+        <span class="n">from_tbl</span> <span class="o">=</span> <span class="n">rel_def</span><span class="o">.</span><span class="n">from_table</span>
+        <span class="n">to_tbl</span> <span class="o">=</span> <span class="n">rel_def</span><span class="o">.</span><span class="n">to_table</span>
+
+        <span class="n">not_exists</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;WHERE NOT EXISTS </span><span class="se">{{</span><span class="s2"> MATCH (a)-[:</span><span class="si">{</span><span class="n">rel_table</span><span class="si">}</span><span class="s2">]-&gt;(b) </span><span class="se">}}</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="n">start_uri</span><span class="p">:</span>
+            <span class="n">start_esc</span> <span class="o">=</span> <span class="n">start_uri</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+            <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (a:</span><span class="si">{</span><span class="n">from_tbl</span><span class="si">}</span><span class="s2">)-[:</span><span class="si">{</span><span class="n">rel_table</span><span class="si">}</span><span class="s2">*2..</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">max_depth</span><span class="p">)</span><span class="si">}</span><span class="s2"> acyclic]-&gt;(b:</span><span class="si">{</span><span class="n">to_tbl</span><span class="si">}</span><span class="s2">) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;WHERE a.uri = &#39;</span><span class="si">{</span><span class="n">start_esc</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;AND NOT EXISTS </span><span class="se">{{</span><span class="s2"> MATCH (a)-[:</span><span class="si">{</span><span class="n">rel_table</span><span class="si">}</span><span class="s2">]-&gt;(b) </span><span class="se">}}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT a.uri AS subject, b.uri AS object&quot;</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (a:</span><span class="si">{</span><span class="n">from_tbl</span><span class="si">}</span><span class="s2">)-[:</span><span class="si">{</span><span class="n">rel_table</span><span class="si">}</span><span class="s2">*2..</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">max_depth</span><span class="p">)</span><span class="si">}</span><span class="s2"> acyclic]-&gt;(b:</span><span class="si">{</span><span class="n">to_tbl</span><span class="si">}</span><span class="s2">) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">not_exists</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT a.uri AS subject, b.uri AS object&quot;</span>
+            <span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">cypher</span><span class="p">)</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                    <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">predicate_uri</span><span class="p">,</span>
+                    <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                <span class="p">})</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Transitive closure via Cypher: </span><span class="si">%d</span><span class="s2"> inferred triples for </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="n">rel_table</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">results</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Cypher transitive closure failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span></div>
+
+
+<div class="viewcode-block" id="LadybugGraphStore.symmetric_expand">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.symmetric_expand">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">symmetric_expand</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">predicate_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Find missing symmetric counterparts using Cypher.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;symmetric_expand: graph model not active, delegating to flat model&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">symmetric_expand</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">)</span>
+
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span>
+        <span class="n">rel_table</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">property_uri_to_table</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">predicate_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">rel_table</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;symmetric_expand: no rel table for </span><span class="si">%s</span><span class="s2">, skipping&quot;</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="n">rel_def</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">rel_tables</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">rel_table</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">rel_def</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+        <span class="n">from_tbl</span> <span class="o">=</span> <span class="n">rel_def</span><span class="o">.</span><span class="n">from_table</span>
+        <span class="n">to_tbl</span> <span class="o">=</span> <span class="n">rel_def</span><span class="o">.</span><span class="n">to_table</span>
+
+        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (a:</span><span class="si">{</span><span class="n">from_tbl</span><span class="si">}</span><span class="s2">)-[:</span><span class="si">{</span><span class="n">rel_table</span><span class="si">}</span><span class="s2">]-&gt;(b:</span><span class="si">{</span><span class="n">to_tbl</span><span class="si">}</span><span class="s2">) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE NOT EXISTS </span><span class="se">{{</span><span class="s2"> MATCH (b)-[:</span><span class="si">{</span><span class="n">rel_table</span><span class="si">}</span><span class="s2">]-&gt;(a) </span><span class="se">}}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT b.uri AS subject, a.uri AS object&quot;</span>
+        <span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">cypher</span><span class="p">)</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                    <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">predicate_uri</span><span class="p">,</span>
+                    <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                <span class="p">})</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Symmetric expand via Cypher: </span><span class="si">%d</span><span class="s2"> missing triples for </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="n">rel_table</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">results</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Cypher symmetric expand failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span></div>
+
+
+<div class="viewcode-block" id="LadybugGraphStore.shortest_path">
+<a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.LadybugGraphStore.LadybugGraphStore.shortest_path">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">shortest_path</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">source_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">target_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Find shortest path using Cypher SHORTEST algorithm.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph_model</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+        <span class="n">src_esc</span> <span class="o">=</span> <span class="n">source_uri</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+        <span class="n">tgt_esc</span> <span class="o">=</span> <span class="n">target_uri</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+
+        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (a </span><span class="se">{{</span><span class="s2">uri: &#39;</span><span class="si">{</span><span class="n">src_esc</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">}}</span><span class="s2">)-[e* SHORTEST 1..</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">max_depth</span><span class="p">)</span><span class="si">}</span><span class="s2">]-&gt;(b </span><span class="se">{{</span><span class="s2">uri: &#39;</span><span class="si">{</span><span class="n">tgt_esc</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">}}</span><span class="s2">) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN length(e) AS hops, properties(nodes(e), &#39;uri&#39;) AS path_uris&quot;</span>
+        <span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">cypher</span><span class="p">)</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s2">&quot;source&quot;</span><span class="p">:</span> <span class="n">source_uri</span><span class="p">,</span>
+                    <span class="s2">&quot;target&quot;</span><span class="p">:</span> <span class="n">target_uri</span><span class="p">,</span>
+                    <span class="s2">&quot;hops&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                    <span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="p">[],</span>
+                <span class="p">})</span>
+            <span class="k">return</span> <span class="n">results</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Cypher shortest path failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span></div>
+
+
+    <span class="c1"># -- Graph-model implementations -------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_count_graph_triples</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Count materialized triples from the graph model.&quot;&quot;&quot;</span>
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+        <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">tbl_name</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">node_tables</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">tbl_name</span> <span class="o">==</span> <span class="n">schema</span><span class="o">.</span><span class="n">fallback_node_table</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MATCH (n:</span><span class="si">{</span><span class="n">tbl_name</span><span class="si">}</span><span class="s2">) RETURN COUNT(n) AS cnt&quot;</span><span class="p">)</span>
+                <span class="n">row</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get_next</span><span class="p">()</span>
+                <span class="n">node_count</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="n">row</span> <span class="k">else</span> <span class="mi">0</span>
+                <span class="n">total</span> <span class="o">+=</span> <span class="n">node_count</span> <span class="o">*</span> <span class="mi">2</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">pass</span>
+        <span class="k">for</span> <span class="n">rel_name</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">rel_tables</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MATCH ()-[r:</span><span class="si">{</span><span class="n">rel_name</span><span class="si">}</span><span class="s2">]-&gt;() RETURN COUNT(r) AS cnt&quot;</span><span class="p">)</span>
+                <span class="n">row</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get_next</span><span class="p">()</span>
+                <span class="n">total</span> <span class="o">+=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="n">row</span> <span class="k">else</span> <span class="mi">0</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">pass</span>
+        <span class="k">return</span> <span class="n">total</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_materialize_all_triples</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Reconstruct (s, p, o) triples from the graph model.&quot;&quot;&quot;</span>
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">tbl_name</span><span class="p">,</span> <span class="n">node_def</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">node_tables</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">tbl_name</span> <span class="o">==</span> <span class="n">schema</span><span class="o">.</span><span class="n">fallback_node_table</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">prop_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">GraphSchema</span><span class="o">.</span><span class="n">safe_identifier</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">node_def</span><span class="o">.</span><span class="n">properties</span><span class="p">]</span>
+            <span class="n">extra_returns</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;, n.</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2"> AS </span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">prop_cols</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;MATCH (n:</span><span class="si">{</span><span class="n">tbl_name</span><span class="si">}</span><span class="s2">) RETURN n.uri AS uri, n.label AS label</span><span class="si">{</span><span class="n">extra_returns</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                    <span class="n">uri</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">node_def</span><span class="o">.</span><span class="n">class_uri</span><span class="p">})</span>
+                    <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+                        <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">RDFS_LABEL</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]})</span>
+                    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">col</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">prop_cols</span><span class="p">):</span>
+                        <span class="n">val_idx</span> <span class="o">=</span> <span class="n">idx</span> <span class="o">+</span> <span class="mi">2</span>
+                        <span class="k">if</span> <span class="n">val_idx</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="ow">and</span> <span class="n">row</span><span class="p">[</span><span class="n">val_idx</span><span class="p">]:</span>
+                            <span class="n">pred_uri</span> <span class="o">=</span> <span class="n">node_def</span><span class="o">.</span><span class="n">property_uris</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                            <span class="k">if</span> <span class="n">pred_uri</span><span class="p">:</span>
+                                <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">pred_uri</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">val_idx</span><span class="p">])})</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Materialize node table &#39;</span><span class="si">%s</span><span class="s2">&#39; failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">tbl_name</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">rel_name</span><span class="p">,</span> <span class="n">rel_def</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">rel_tables</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;MATCH (a:</span><span class="si">{</span><span class="n">rel_def</span><span class="o">.</span><span class="n">from_table</span><span class="si">}</span><span class="s2">)-[r:</span><span class="si">{</span><span class="n">rel_name</span><span class="si">}</span><span class="s2">]-&gt;(b:</span><span class="si">{</span><span class="n">rel_def</span><span class="o">.</span><span class="n">to_table</span><span class="si">}</span><span class="s2">) &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;RETURN a.uri, b.uri&quot;</span>
+                <span class="p">)</span>
+                <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                    <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">rel_def</span><span class="o">.</span><span class="n">property_uri</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]})</span>
+                    <span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                    <span class="s2">&quot;Materialized </span><span class="si">%d</span><span class="s2"> triples for relationship &#39;</span><span class="si">%s</span><span class="s2">&#39; (predicate=&#39;</span><span class="si">%s</span><span class="s2">&#39;)&quot;</span><span class="p">,</span>
+                    <span class="n">count</span><span class="p">,</span> <span class="n">rel_name</span><span class="p">,</span> <span class="n">rel_def</span><span class="o">.</span><span class="n">property_uri</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;Materialize relationship &#39;</span><span class="si">%s</span><span class="s2">&#39; (</span><span class="si">%s</span><span class="s2">→</span><span class="si">%s</span><span class="s2">) failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">rel_name</span><span class="p">,</span> <span class="n">rel_def</span><span class="o">.</span><span class="n">from_table</span><span class="p">,</span> <span class="n">rel_def</span><span class="o">.</span><span class="n">to_table</span><span class="p">,</span> <span class="n">exc</span><span class="p">,</span>
+                <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">triples</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_aggregate_stats_graph</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Aggregate stats from the graph model.&quot;&quot;&quot;</span>
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+        <span class="n">total_nodes</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">total_rels</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">distinct_subjects</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">tbl_name</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">node_tables</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">tbl_name</span> <span class="o">==</span> <span class="n">schema</span><span class="o">.</span><span class="n">fallback_node_table</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MATCH (n:</span><span class="si">{</span><span class="n">tbl_name</span><span class="si">}</span><span class="s2">) RETURN n.uri&quot;</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                    <span class="n">distinct_subjects</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                    <span class="n">total_nodes</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">pass</span>
+
+        <span class="k">for</span> <span class="n">rel_name</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">rel_tables</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MATCH ()-[r:</span><span class="si">{</span><span class="n">rel_name</span><span class="si">}</span><span class="s2">]-&gt;() RETURN COUNT(r) AS cnt&quot;</span><span class="p">)</span>
+                <span class="n">row</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get_next</span><span class="p">()</span>
+                <span class="n">total_rels</span> <span class="o">+=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="n">row</span> <span class="k">else</span> <span class="mi">0</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">pass</span>
+
+        <span class="n">type_cnt</span> <span class="o">=</span> <span class="n">total_nodes</span>
+        <span class="n">label_cnt</span> <span class="o">=</span> <span class="n">total_nodes</span>
+        <span class="n">total</span> <span class="o">=</span> <span class="n">type_cnt</span> <span class="o">+</span> <span class="n">label_cnt</span> <span class="o">+</span> <span class="n">total_rels</span>
+        <span class="n">pred_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">schema</span><span class="o">.</span><span class="n">rel_tables</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span>
+
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="n">total</span><span class="p">,</span>
+            <span class="s2">&quot;distinct_subjects&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">distinct_subjects</span><span class="p">),</span>
+            <span class="s2">&quot;distinct_predicates&quot;</span><span class="p">:</span> <span class="n">pred_count</span><span class="p">,</span>
+            <span class="s2">&quot;type_assertion_count&quot;</span><span class="p">:</span> <span class="n">type_cnt</span><span class="p">,</span>
+            <span class="s2">&quot;label_count&quot;</span><span class="p">:</span> <span class="n">label_cnt</span><span class="p">,</span>
+        <span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_find_subjects_by_type_graph</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">search</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Find subjects by type using node table lookup.&quot;&quot;&quot;</span>
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span>
+        <span class="n">tbl</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">get_node_table</span><span class="p">(</span><span class="n">type_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">tbl</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;LadybugDB graph: no node table for type_uri=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+        <span class="n">node_def</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">node_tables</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">tbl</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;LadybugDB graph search: table=</span><span class="si">%s</span><span class="s2">, type_uri=</span><span class="si">%s</span><span class="s2">, search=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">tbl</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">,</span> <span class="n">search</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">search</span><span class="p">:</span>
+            <span class="n">search_lower</span> <span class="o">=</span> <span class="n">search</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="n">where_clauses</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;LOWER(n.label) CONTAINS $search&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">node_def</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">prop_name</span> <span class="ow">in</span> <span class="n">node_def</span><span class="o">.</span><span class="n">properties</span><span class="p">:</span>
+                    <span class="n">col</span> <span class="o">=</span> <span class="n">GraphSchema</span><span class="o">.</span><span class="n">safe_identifier</span><span class="p">(</span><span class="n">prop_name</span><span class="p">)</span>
+                    <span class="n">where_clauses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;LOWER(n.</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">) CONTAINS $search&quot;</span><span class="p">)</span>
+            <span class="n">where_expr</span> <span class="o">=</span> <span class="s2">&quot; OR &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">where_clauses</span><span class="p">)</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (n:</span><span class="si">{</span><span class="n">tbl</span><span class="si">}</span><span class="s2">) WHERE </span><span class="si">{</span><span class="n">where_expr</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN n.uri ORDER BY n.uri SKIP </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span><span class="si">}</span><span class="s2"> LIMIT </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;search&quot;</span><span class="p">:</span> <span class="n">search_lower</span><span class="p">},</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (n:</span><span class="si">{</span><span class="n">tbl</span><span class="si">}</span><span class="s2">) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN n.uri ORDER BY n.uri SKIP </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span><span class="si">}</span><span class="s2"> LIMIT </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">r</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_triples_for_subjects_graph</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">subjects</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Reconstruct triples for specific subjects from the graph model.&quot;&quot;&quot;</span>
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">tbl_name</span><span class="p">,</span> <span class="n">node_def</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">node_tables</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">tbl_name</span> <span class="o">==</span> <span class="n">schema</span><span class="o">.</span><span class="n">fallback_node_table</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">prop_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">GraphSchema</span><span class="o">.</span><span class="n">safe_identifier</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">node_def</span><span class="o">.</span><span class="n">properties</span><span class="p">]</span>
+            <span class="n">extra_returns</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;, n.</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2"> AS </span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">prop_cols</span><span class="p">)</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;MATCH (n:</span><span class="si">{</span><span class="n">tbl_name</span><span class="si">}</span><span class="s2">) WHERE n.uri IN $subjects &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;RETURN n.uri AS uri, n.label AS label</span><span class="si">{</span><span class="n">extra_returns</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;subjects&quot;</span><span class="p">:</span> <span class="n">subjects</span><span class="p">},</span>
+                <span class="p">)</span>
+                <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                    <span class="n">uri</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">node_def</span><span class="o">.</span><span class="n">class_uri</span><span class="p">})</span>
+                    <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+                        <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">RDFS_LABEL</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]})</span>
+                    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">col</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">prop_cols</span><span class="p">):</span>
+                        <span class="n">val_idx</span> <span class="o">=</span> <span class="n">idx</span> <span class="o">+</span> <span class="mi">2</span>
+                        <span class="k">if</span> <span class="n">val_idx</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="ow">and</span> <span class="n">row</span><span class="p">[</span><span class="n">val_idx</span><span class="p">]:</span>
+                            <span class="n">pred_uri</span> <span class="o">=</span> <span class="n">node_def</span><span class="o">.</span><span class="n">property_uris</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                            <span class="k">if</span> <span class="n">pred_uri</span><span class="p">:</span>
+                                <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">pred_uri</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">val_idx</span><span class="p">])})</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Graph triples query failed for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">tbl_name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">rel_name</span><span class="p">,</span> <span class="n">rel_def</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">rel_tables</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;MATCH (a:</span><span class="si">{</span><span class="n">rel_def</span><span class="o">.</span><span class="n">from_table</span><span class="si">}</span><span class="s2">)-[r:</span><span class="si">{</span><span class="n">rel_name</span><span class="si">}</span><span class="s2">]-&gt;(b:</span><span class="si">{</span><span class="n">rel_def</span><span class="o">.</span><span class="n">to_table</span><span class="si">}</span><span class="s2">) &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;WHERE a.uri IN $subjects &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;RETURN a.uri, b.uri&quot;</span><span class="p">,</span>
+                    <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;subjects&quot;</span><span class="p">:</span> <span class="n">subjects</span><span class="p">},</span>
+                <span class="p">)</span>
+                <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                    <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">rel_def</span><span class="o">.</span><span class="n">property_uri</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]})</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">pass</span>
+
+        <span class="k">return</span> <span class="n">triples</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_predicates_for_type_graph</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return all predicates available for a type in the graph model.&quot;&quot;&quot;</span>
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span>
+        <span class="n">tbl</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">get_node_table</span><span class="p">(</span><span class="n">type_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">tbl</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">node_def</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">node_tables</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">tbl</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">node_def</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">predicates</span> <span class="o">=</span> <span class="p">[</span><span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">RDFS_LABEL</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">_col</span><span class="p">,</span> <span class="n">pred_uri</span> <span class="ow">in</span> <span class="n">node_def</span><span class="o">.</span><span class="n">property_uris</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">predicates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pred_uri</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">_rel_name</span><span class="p">,</span> <span class="n">rel_def</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">rel_tables</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">rel_def</span><span class="o">.</span><span class="n">from_table</span> <span class="o">==</span> <span class="n">tbl</span><span class="p">:</span>
+                <span class="n">predicates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rel_def</span><span class="o">.</span><span class="n">property_uri</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">predicates</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_bfs_traversal_graph</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">seed_where</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">depth</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">search</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">entity_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;BFS traversal using native graph relationships.&quot;&quot;&quot;</span>
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_schema</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+
+        <span class="n">seeds</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="n">search_lower</span> <span class="o">=</span> <span class="n">search</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">if</span> <span class="n">search</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">et_lower</span> <span class="o">=</span> <span class="n">entity_type</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">if</span> <span class="n">entity_type</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="k">for</span> <span class="n">tbl_name</span><span class="p">,</span> <span class="n">node_def</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">node_tables</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">tbl_name</span> <span class="o">==</span> <span class="n">schema</span><span class="o">.</span><span class="n">fallback_node_table</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">et_lower</span> <span class="ow">and</span> <span class="n">tbl_name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">!=</span> <span class="n">et_lower</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">search_lower</span><span class="p">:</span>
+                    <span class="n">where_parts</span> <span class="o">=</span> <span class="p">[</span>
+                        <span class="s2">&quot;toLower(n.label) CONTAINS $search&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;toLower(n.uri) CONTAINS $search&quot;</span><span class="p">,</span>
+                    <span class="p">]</span>
+                    <span class="k">for</span> <span class="n">prop_name</span> <span class="ow">in</span> <span class="n">node_def</span><span class="o">.</span><span class="n">properties</span><span class="p">:</span>
+                        <span class="n">col</span> <span class="o">=</span> <span class="n">GraphSchema</span><span class="o">.</span><span class="n">safe_identifier</span><span class="p">(</span><span class="n">prop_name</span><span class="p">)</span>
+                        <span class="n">where_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;toLower(n.</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">) CONTAINS $search&quot;</span><span class="p">)</span>
+                    <span class="n">where_clause</span> <span class="o">=</span> <span class="s2">&quot; OR &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">where_parts</span><span class="p">)</span>
+                    <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;MATCH (n:</span><span class="si">{</span><span class="n">tbl_name</span><span class="si">}</span><span class="s2">) WHERE </span><span class="si">{</span><span class="n">where_clause</span><span class="si">}</span><span class="s2"> RETURN n.uri&quot;</span><span class="p">,</span>
+                        <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;search&quot;</span><span class="p">:</span> <span class="n">search_lower</span><span class="p">},</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MATCH (n:</span><span class="si">{</span><span class="n">tbl_name</span><span class="si">}</span><span class="s2">) RETURN n.uri&quot;</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                    <span class="n">seeds</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">pass</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">seeds</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="n">entity_levels</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="n">s</span><span class="p">:</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">seeds</span><span class="p">}</span>
+        <span class="n">current_level</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">seeds</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">lvl</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">depth</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">current_level</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="n">new_level</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">rel_name</span><span class="p">,</span> <span class="n">rel_def</span> <span class="ow">in</span> <span class="n">schema</span><span class="o">.</span><span class="n">rel_tables</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;MATCH (a:</span><span class="si">{</span><span class="n">rel_def</span><span class="o">.</span><span class="n">from_table</span><span class="si">}</span><span class="s2">)-[:</span><span class="si">{</span><span class="n">rel_name</span><span class="si">}</span><span class="s2">]-&gt;(b:</span><span class="si">{</span><span class="n">rel_def</span><span class="o">.</span><span class="n">to_table</span><span class="si">}</span><span class="s2">) &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;WHERE a.uri IN $uris &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT b.uri&quot;</span><span class="p">,</span>
+                        <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;uris&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">current_level</span><span class="p">)},</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">entity_levels</span><span class="p">:</span>
+                            <span class="n">entity_levels</span><span class="p">[</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">lvl</span>
+                            <span class="n">new_level</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="k">pass</span>
+
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">r</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;MATCH (a:</span><span class="si">{</span><span class="n">rel_def</span><span class="o">.</span><span class="n">from_table</span><span class="si">}</span><span class="s2">)-[:</span><span class="si">{</span><span class="n">rel_name</span><span class="si">}</span><span class="s2">]-&gt;(b:</span><span class="si">{</span><span class="n">rel_def</span><span class="o">.</span><span class="n">to_table</span><span class="si">}</span><span class="s2">) &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;WHERE b.uri IN $uris &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT a.uri&quot;</span><span class="p">,</span>
+                        <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;uris&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">current_level</span><span class="p">)},</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">entity_levels</span><span class="p">:</span>
+                            <span class="n">entity_levels</span><span class="p">[</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">lvl</span>
+                            <span class="n">new_level</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="k">pass</span>
+
+            <span class="n">current_level</span> <span class="o">=</span> <span class="n">new_level</span>
+
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s2">&quot;entity&quot;</span><span class="p">:</span> <span class="n">e</span><span class="p">,</span> <span class="s2">&quot;min_lvl&quot;</span><span class="p">:</span> <span class="n">l</span><span class="p">}</span>
+            <span class="k">for</span> <span class="n">e</span><span class="p">,</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">entity_levels</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="p">]</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

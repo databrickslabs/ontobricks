@@ -1,0 +1,344 @@
+<!-- Inference Section - OWL + SWRL + Graph + Business Rules inference -->
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-lightning me-2"></i>Inference</h4>
+            <p class="text-muted mb-0 small">OWL 2 RL inference, SWRL rules, graph reasoning, and business rules</p>
+        </div>
+        <button class="btn btn-sm btn-outline-primary" onclick="ReasoningModule.runReasoning()" id="runReasoningBtn">
+            <i class="bi bi-play-fill me-1"></i> Run Inference
+        </button>
+    </div>
+    <div class="card">
+        <div class="card-body d-flex flex-column p-0">
+
+            <!-- Tabs -->
+            <ul class="nav nav-tabs nav-fill small flex-shrink-0 px-3 pt-3" id="reasoningTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="tab-options" data-bs-toggle="tab"
+                            data-bs-target="#pane-options" type="button" role="tab"
+                            aria-controls="pane-options" aria-selected="true">
+                        <i class="bi bi-gear me-1"></i>Options
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tab-report" data-bs-toggle="tab"
+                            data-bs-target="#pane-report" type="button" role="tab"
+                            aria-controls="pane-report" aria-selected="false">
+                        <i class="bi bi-clipboard-data me-1"></i>Report
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tab-inferred" data-bs-toggle="tab"
+                            data-bs-target="#pane-inferred" type="button" role="tab"
+                            aria-controls="pane-inferred" aria-selected="false">
+                        <i class="bi bi-plus-circle me-1"></i>Inferred
+                        <span class="badge bg-success bg-opacity-75 ms-1" id="tabBadgeInferred" style="font-size:.65rem"></span>
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Progress area (visible across all tabs) -->
+            <div id="reasoningProgressArea" class="flex-shrink-0" style="display: none;">
+                <div class="card bg-light border border-top-0 rounded-0 mx-3 mb-0">
+                    <div class="card-body py-3">
+                        <div class="d-flex align-items-center justify-content-center mb-3">
+                            <div class="ob-loading-spinner">
+                                <svg class="ob-spinner-svg" style="width:56px;height:56px;" viewBox="0 0 80 80" fill="none">
+                                    <g class="ob-ring">
+                                        <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
+                                            <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
+                                            <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
+                                            <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
+                                            <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
+                                        </g>
+                                        <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
+                                        <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
+                                        <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
+                                        <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
+                                    </g>
+                                    <g transform="translate(40,40)">
+                                        <g class="ob-center">
+                                            <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
+                                            <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
+                                            <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
+                                        </g>
+                                    </g>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="text-center mb-2">
+                            <strong id="reasoningProgressStep" class="text-muted">Starting inference...</strong>
+                        </div>
+                        <div class="progress" style="height: 20px;">
+                            <div id="reasoningProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                 role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab panes (scrollable area) -->
+            <div class="tab-content flex-grow-1 overflow-auto" id="reasoningPanes" style="min-height:0;">
+
+                <!-- Options pane -->
+                <div class="tab-pane fade show active p-3" id="pane-options" role="tabpanel" aria-labelledby="tab-options">
+                    <div class="d-flex justify-content-end gap-2 mb-2">
+                        <a href="#" class="small text-decoration-none" onclick="ReasoningModule.toggleAllOptions(true);return false;">
+                            <i class="bi bi-check-all me-1"></i>Select all
+                        </a>
+                        <span class="text-muted small">|</span>
+                        <a href="#" class="small text-decoration-none" onclick="ReasoningModule.toggleAllOptions(false);return false;">
+                            <i class="bi bi-x-circle me-1"></i>Unselect all
+                        </a>
+                    </div>
+
+                    <style>
+                        .reasoning-tile {
+                            border: 1px solid var(--bs-border-color);
+                            border-radius: .5rem;
+                            padding: .75rem;
+                            cursor: pointer;
+                            transition: border-color .15s, box-shadow .15s, background-color .15s;
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            text-align: center;
+                            gap: .35rem;
+                            min-height: 120px;
+                            justify-content: center;
+                            user-select: none;
+                            position: relative;
+                        }
+                        .reasoning-tile:hover {
+                            border-color: var(--bs-primary);
+                            box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), .12);
+                        }
+                        .reasoning-tile.active {
+                            border-color: var(--bs-primary);
+                            background-color: rgba(var(--bs-primary-rgb), .06);
+                            box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), .18);
+                        }
+                        .reasoning-tile .rt-icon {
+                            font-size: 1.5rem;
+                            line-height: 1;
+                        }
+                        .reasoning-tile .rt-check {
+                            position: absolute;
+                            top: .5rem;
+                            right: .5rem;
+                        }
+                        .reasoning-tile .rt-title {
+                            font-size: .78rem;
+                            font-weight: 600;
+                            line-height: 1.2;
+                        }
+                        .reasoning-tile .rt-badge {
+                            font-size: .6rem;
+                        }
+                        .reasoning-tile .rt-desc {
+                            font-size: .65rem;
+                            color: var(--bs-secondary-color);
+                            line-height: 1.3;
+                        }
+                    </style>
+
+                    <div class="row g-2">
+                        <!-- T-Box -->
+                        <div class="col-4">
+                            <label class="reasoning-tile active w-100" for="reasoningTbox" id="tileTbox">
+                                <input class="form-check-input rt-check" type="checkbox" id="reasoningTbox" checked
+                                       onchange="ReasoningModule._syncTile(this)">
+                                <i class="bi bi-diagram-3 rt-icon text-primary"></i>
+                                <span class="rt-title">T-Box (OWL 2 RL)</span>
+                                {% if reasoning_ctx.owlrl_available %}
+                                <span class="badge bg-success bg-opacity-75 rt-badge">owlrl ready</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark rt-badge">owlrl missing</span>
+                                {% endif %}
+                                <span class="rt-desc">Deductive closure &rarr; Inferred triples</span>
+                            </label>
+                        </div>
+
+                        <!-- SWRL Rules -->
+                        <div class="col-4">
+                            <label class="reasoning-tile active w-100" for="reasoningSwrl" id="tileSwrl">
+                                <input class="form-check-input rt-check" type="checkbox" id="reasoningSwrl" checked
+                                       onchange="ReasoningModule._syncTile(this)">
+                                <i class="bi bi-code-square rt-icon text-indigo"></i>
+                                <span class="rt-title">SWRL Rules</span>
+                                {% if reasoning_ctx.swrl_rules_count > 0 %}
+                                <span class="badge bg-primary bg-opacity-75 rt-badge">{{ reasoning_ctx.swrl_rules_count }} rule{{ 's' if reasoning_ctx.swrl_rules_count != 1 else '' }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary rt-badge">no rules</span>
+                                {% endif %}
+                                <span class="rt-desc">IF-THEN business rules &rarr; Inferred triples</span>
+                            </label>
+                        </div>
+
+                        <!-- Graph Inference -->
+                        <div class="col-4">
+                            <label class="reasoning-tile active w-100" for="reasoningGraph" id="tileGraph">
+                                <input class="form-check-input rt-check" type="checkbox" id="reasoningGraph" checked
+                                       onchange="ReasoningModule._syncTile(this)">
+                                <i class="bi bi-share rt-icon text-info"></i>
+                                <span class="rt-title">Graph Inference</span>
+                                <span class="badge bg-info bg-opacity-75 text-dark rt-badge">{{ reasoning_ctx.object_properties_count }} obj prop{{ 's' if reasoning_ctx.object_properties_count != 1 else '' }}</span>
+                                <span class="rt-desc">Transitive / symmetric closure &rarr; Inferred</span>
+                            </label>
+                        </div>
+
+                        <!-- Decision Tables -->
+                        <div class="col-4">
+                            <label class="reasoning-tile w-100" for="reasoningDecisionTables" id="tileDecisionTables">
+                                <input class="form-check-input rt-check" type="checkbox" id="reasoningDecisionTables"
+                                       onchange="ReasoningModule._syncTile(this)">
+                                <i class="bi bi-table rt-icon text-warning"></i>
+                                <span class="rt-title">Decision Tables</span>
+                                {% if reasoning_ctx.decision_tables_count > 0 %}
+                                <span class="badge bg-primary bg-opacity-75 rt-badge">{{ reasoning_ctx.decision_tables_count }} table{{ 's' if reasoning_ctx.decision_tables_count != 1 else '' }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary rt-badge">no tables</span>
+                                {% endif %}
+                                <span class="rt-desc">DMN-style tabular rules &rarr; Inferred triples</span>
+                            </label>
+                        </div>
+
+                        <!-- SPARQL CONSTRUCT Rules -->
+                        <div class="col-4">
+                            <label class="reasoning-tile w-100" for="reasoningSparqlRules" id="tileSparqlRules">
+                                <input class="form-check-input rt-check" type="checkbox" id="reasoningSparqlRules"
+                                       onchange="ReasoningModule._syncTile(this)">
+                                <i class="bi bi-braces rt-icon text-danger"></i>
+                                <span class="rt-title">SPARQL CONSTRUCT</span>
+                                {% if reasoning_ctx.sparql_rules_count > 0 %}
+                                <span class="badge bg-primary bg-opacity-75 rt-badge">{{ reasoning_ctx.sparql_rules_count }} rule{{ 's' if reasoning_ctx.sparql_rules_count != 1 else '' }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary rt-badge">no rules</span>
+                                {% endif %}
+                                <span class="rt-desc">CONSTRUCT queries &rarr; Inferred triples</span>
+                            </label>
+                        </div>
+
+                        <!-- Aggregate Rules -->
+                        <div class="col-4">
+                            <label class="reasoning-tile w-100" for="reasoningAggregateRules" id="tileAggregateRules">
+                                <input class="form-check-input rt-check" type="checkbox" id="reasoningAggregateRules"
+                                       onchange="ReasoningModule._syncTile(this)">
+                                <i class="bi bi-calculator rt-icon text-purple"></i>
+                                <span class="rt-title">Aggregate Rules</span>
+                                {% if reasoning_ctx.aggregate_rules_count > 0 %}
+                                <span class="badge bg-primary bg-opacity-75 rt-badge">{{ reasoning_ctx.aggregate_rules_count }} rule{{ 's' if reasoning_ctx.aggregate_rules_count != 1 else '' }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary rt-badge">no rules</span>
+                                {% endif %}
+                                <span class="rt-desc">GROUP BY / HAVING stats &rarr; Inferred triples</span>
+                            </label>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Execution Report pane -->
+                <div class="tab-pane fade p-3" id="pane-report" role="tabpanel" aria-labelledby="tab-report">
+                    <div id="reasoningInitMessage" class="text-center text-muted py-3">
+                        <i class="bi bi-lightning fs-3 d-block mb-2"></i>
+                        <small>Run inference to see the execution report here.</small>
+                    </div>
+                    <div id="reasoningReportContent" style="display:none;">
+                        <div id="reasoningStats" class="small text-muted mb-2"></div>
+                        <table class="table table-sm table-borderless mb-0 small">
+                            <thead>
+                                <tr class="text-muted">
+                                    <th style="width:30%">Phase</th>
+                                    <th style="width:15%">Status</th>
+                                    <th style="width:15%">Duration</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reasoningReportBody"></tbody>
+                            <tfoot>
+                                <tr class="border-top">
+                                    <td class="fw-bold">Total</td>
+                                    <td id="reportTotalStatus"></td>
+                                    <td id="reportTotalDuration" class="fw-bold"></td>
+                                    <td id="reportTotalDetails" class="text-muted"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                        <div id="reportTimestamp" class="text-end text-muted mt-1" style="font-size: 0.75rem;"></div>
+
+                        <!-- Materialise panel (shown after inference completes with results) -->
+                        <div id="materializePanel" class="card border-dashed mt-3" style="display:none;">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="bi bi-database-add me-2 text-warning"></i>
+                                    <span class="fw-semibold small">Materialise inferred triples</span>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="materializeDelta"
+                                           onchange="ReasoningModule._syncDeltaInput()">
+                                    <label class="form-check-label small" for="materializeDelta">
+                                        <i class="bi bi-table me-1 text-primary"></i>Write to Delta table
+                                    </label>
+                                </div>
+                                <div id="materializeDeltaGroup" class="ms-4 mb-2" style="display:none;">
+                                    <input type="text" class="form-control form-control-sm" id="materializeTableName"
+                                           value="{{ reasoning_ctx.materialize_table }}"
+                                           placeholder="catalog.schema.table">
+                                    <div class="form-text" style="font-size:.7rem;">
+                                        Fully-qualified name (catalog.schema.table). Created automatically if it does not exist.
+                                    </div>
+                                </div>
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="materializeGraph" checked>
+                                    <label class="form-check-label small" for="materializeGraph">
+                                        <i class="bi bi-diagram-3 me-1 text-info"></i>Append to graph database (LadybugDB)
+                                    </label>
+                                </div>
+                                <button class="btn btn-sm btn-warning" id="runMaterializeBtn"
+                                        onclick="ReasoningModule.runMaterialize()">
+                                    <i class="bi bi-database-add me-1"></i>Materialise
+                                </button>
+                                <div id="materializeResultArea" class="mt-2" style="display:none;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Inferred Triples pane -->
+                <div class="tab-pane fade p-3" id="pane-inferred" role="tabpanel" aria-labelledby="tab-inferred">
+                    <div id="inferredTriplesEmpty" class="text-center text-muted py-3">
+                        <i class="bi bi-check-circle fs-4 d-block mb-1"></i>
+                        <small>No inferred triples.</small>
+                    </div>
+                    <div id="inferredTriplesTable" style="display:none;">
+                        <table class="table table-sm table-striped table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Subject</th>
+                                    <th>Predicate</th>
+                                    <th>Object</th>
+                                    <th>Provenance</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inferredTriplesBody"></tbody>
+                        </table>
+                        <nav id="inferredPaginationNav" class="d-flex align-items-center justify-content-between mt-2" style="display:none!important;">
+                            <small class="text-muted" id="inferredPageInfo"></small>
+                            <ul class="pagination pagination-sm mb-0">
+                                <li class="page-item" id="inferredPrevLi">
+                                    <a class="page-link" href="#" onclick="ReasoningModule.pageInferred(-1);return false;">&laquo;</a>
+                                </li>
+                                <li class="page-item" id="inferredNextLi">
+                                    <a class="page-link" href="#" onclick="ReasoningModule.pageInferred(1);return false;">&raquo;</a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>

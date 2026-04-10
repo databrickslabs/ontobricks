@@ -1,0 +1,248 @@
+station_id,station_name,commune,zone,latitude,longitude,is_accessible,has_elevator,has_bike_parking,opening_year,annual_traffic
+ST0001,Châtelet,Argenteuil,1,48.706815,2.526671,True,False,True,1908,31052197
+ST0002,Gare du Nord,Paris 9e,3,48.687259,2.396562,True,True,False,1930,11080005
+ST0003,Gare de Lyon,Créteil,1,48.738638,2.548625,True,False,True,1942,42309894
+ST0004,Saint-Lazare,Paris 16e,1,48.860262,2.373502,True,False,True,1972,17990573
+ST0005,Montparnasse,Paris 17e,1,48.701298,2.499466,True,False,False,1969,12877247
+ST0006,République,Paris 15e,2,48.687672,2.16527,True,True,True,1967,28262274
+ST0007,Bastille,Montreuil,3,48.660099,2.177901,True,False,True,2013,45497662
+ST0008,Nation,Paris 3e,2,48.824465,2.553469,True,False,False,2014,33308093
+ST0009,Opéra,Montreuil,1,48.841344,2.351582,True,False,True,1923,29552606
+ST0010,Concorde,Paris 10e,1,48.789978,2.410625,False,True,True,1996,44188918
+ST0011,La Défense,Paris 6e,3,48.874239,2.454351,False,True,False,1964,45330164
+ST0012,Charles de Gaulle-Étoile,La Défense,4,48.874823,2.216262,True,False,True,1974,3799437
+ST0013,Trocadéro,Orly,3,48.853049,2.436503,True,False,False,1940,16870189
+ST0014,Belleville,Orly,4,48.748732,2.170027,True,False,True,1919,3620654
+ST0015,Ménilmontant,La Défense,1,48.754875,2.410466,True,False,True,1967,3411642
+ST0016,Père Lachaise,Antony,2,48.945273,2.14984,False,True,True,1925,45713576
+ST0017,Gambetta,Cergy,2,48.689944,2.281649,False,True,True,1943,41016892
+ST0018,Place d'Italie,Ivry-sur-Seine,3,48.785062,2.103474,False,True,True,2006,7839736
+ST0019,Bercy,Versailles,3,48.80256,2.439783,False,False,True,1993,14881973
+ST0020,Bibliothèque,Cergy,4,48.927348,2.524091,True,False,True,1947,42207685
+ST0021,Invalides,Paris 5e,2,48.909884,2.52489,False,False,False,1999,18449766
+ST0022,Champs-Élysées-Clemenceau,Créteil,4,48.84293,2.462011,True,True,True,1931,35250802
+ST0023,Franklin D. Roosevelt,Argenteuil,1,48.920192,2.457733,True,True,True,2002,1095816
+ST0024,Madeleine,Paris 11e,1,48.730957,2.153538,True,False,True,1919,2833716
+ST0025,Pyramides,Saint-Denis,1,48.725108,2.55011,True,True,True,1946,17013176
+ST0026,Palais Royal-Musée du Louvre,Bobigny,4,48.885247,2.504092,False,False,False,1996,16343003
+ST0027,Arts et Métiers,Paris 10e,2,48.88471,2.43814,True,True,True,2016,16309007
+ST0028,Réaumur-Sébastopol,Paris 14e,2,48.760032,2.128986,True,True,True,1910,48613469
+ST0029,Strasbourg-Saint-Denis,Paris 6e,1,48.675754,2.101435,False,True,False,1925,15564201
+ST0030,Oberkampf,Paris 6e,3,48.791301,2.304298,False,False,False,1991,47462697
+ST0031,Voltaire,Paris 13e,1,48.693056,2.280523,False,True,False,2023,48729322
+ST0032,Charonne,Paris 16e,3,48.688632,2.306273,False,True,True,1948,29900953
+ST0033,Porte de Vincennes,Paris 18e,4,48.92832,2.418479,True,True,True,1915,42392972
+ST0034,Château de Vincennes,Vincennes,1,48.849985,2.140673,True,True,False,1917,30947116
+ST0035,Mairie de Montreuil,Massy,5,48.681583,2.402549,False,False,True,1941,38525716
+ST0036,Vincennes,Paris 16e,1,48.745958,2.407684,True,False,True,1965,30925632
+ST0037,Fontenay-sous-Bois,Paris 20e,1,48.873038,2.2832,True,True,True,1972,43391191
+ST0038,Nogent-sur-Marne,Massy,2,48.85471,2.318433,True,False,False,1966,20215037
+ST0039,Le Perreux-Nogent,Paris 13e,3,48.751087,2.10821,True,False,True,1954,34539553
+ST0040,Bry-sur-Marne,Versailles,2,48.939089,2.172858,True,False,True,1919,12706932
+ST0041,Noisy-le-Grand,Paris 3e,5,48.674918,2.584791,False,True,False,1995,11040917
+ST0042,Torcy,Paris 10e,4,48.697019,2.228885,True,False,False,1941,44251363
+ST0043,Marne-la-Vallée,Paris 12e,3,48.862536,2.34599,True,False,True,1910,34580950
+ST0044,Val de Fontenay,Versailles,2,48.867979,2.121678,True,True,True,2006,7315279
+ST0045,Neuilly-Plaisance,Paris 6e,1,48.827829,2.417131,True,True,True,1902,48701511
+ST0046,Rosny-Bois-Perrier,Paris 15e,5,48.680776,2.598886,False,True,True,1925,831124
+ST0047,Villemomble,Saint-Denis,3,48.741495,2.540754,True,True,True,2009,49961028
+ST0048,Le Raincy,Cergy,2,48.804842,2.447988,True,False,False,1925,30539100
+ST0049,Gagny,Paris 8e,1,48.694692,2.243648,True,False,False,2009,16605671
+ST0050,Chelles,Paris 14e,1,48.769248,2.534288,False,True,True,1931,1771517
+ST0051,Auber,Paris 16e,3,48.739978,2.155166,True,False,True,1906,43392459
+ST0052,Haussmann-Saint-Lazare,La Défense,3,48.667906,2.20858,True,True,False,1929,5695351
+ST0053,Magenta,Antony,4,48.810321,2.346527,True,False,True,1971,2568452
+ST0054,Gare de l'Est,Argenteuil,3,48.785304,2.305309,True,True,True,1940,44973505
+ST0055,Châtelet-Les Halles,Paris 9e,5,48.862819,2.232004,True,False,True,2020,15411640
+ST0056,Luxembourg,Créteil,2,48.655179,2.417565,True,True,True,2012,12301707
+ST0057,Port-Royal,Montreuil,5,48.918064,2.522124,True,True,True,1984,48830166
+ST0058,Denfert-Rochereau,Paris 1er,3,48.73307,2.252696,True,False,True,1945,41132512
+ST0059,Cité Universitaire,Vincennes,1,48.665318,2.23945,True,True,False,1930,33963484
+ST0060,Gentilly,Bobigny,1,48.79197,2.389561,True,True,True,1914,32869776
+ST0061,Laplace,Paris 20e,2,48.861124,2.501871,False,True,False,1904,36182851
+ST0062,Arcueil-Cachan,Versailles,1,48.685356,2.38558,True,True,True,1910,6591324
+ST0063,Bagneux,Paris 6e,1,48.659917,2.22759,False,True,True,1960,31187004
+ST0064,Bourg-la-Reine,Paris 10e,1,48.682904,2.291889,False,True,True,1981,38030132
+ST0065,Sceaux,Paris 4e,2,48.69491,2.560857,True,False,False,1902,29891238
+ST0066,Robinson,Vincennes,1,48.757818,2.113901,True,False,True,2010,8725863
+ST0067,Antony,Paris 9e,2,48.759788,2.319128,True,False,True,1927,29993221
+ST0068,Les Baconnets,Vincennes,1,48.712628,2.559242,True,True,True,1976,47563513
+ST0069,Massy-Verrières,Argenteuil,1,48.667353,2.103711,True,False,True,1976,32654548
+ST0070,Massy-Palaiseau,Cergy,1,48.888018,2.228597,True,False,True,1975,7212078
+ST0071,Orsay-Ville,Paris 12e,1,48.799883,2.31859,False,False,True,1941,47350924
+ST0072,Le Guichet,Paris 19e,3,48.816798,2.586388,True,False,True,1908,23583485
+ST0073,Saint-Rémy-lès-Chevreuse,Paris 19e,3,48.872072,2.343397,True,False,True,1911,2546911
+ST0074,Aéroport CDG 1,Montreuil,3,48.943402,2.482635,True,True,True,1910,6218363
+ST0075,Aéroport CDG 2,Boulogne-Billancourt,4,48.660309,2.456306,True,True,True,2004,230294
+ST0076,Villepinte,Paris 7e,2,48.926309,2.466242,True,True,True,1975,18690242
+ST0077,Parc des Expositions,Argenteuil,3,48.935002,2.237752,True,False,True,1940,48361403
+ST0078,Sevran,Versailles,1,48.885113,2.219613,False,True,False,1906,31692951
+ST0079,Aulnay-sous-Bois,Paris 11e,1,48.88682,2.318839,True,True,True,1910,24133740
+ST0080,Le Blanc-Mesnil,Créteil,1,48.662558,2.546204,True,False,True,1950,3916555
+ST0081,Drancy,Montreuil,1,48.755358,2.309447,False,False,False,2018,10087985
+ST0082,Le Bourget,Paris 9e,5,48.653732,2.468579,True,False,True,1959,47570769
+ST0083,La Courneuve,Ivry-sur-Seine,2,48.863641,2.558701,True,True,True,1967,26093181
+ST0084,Stade de France,Ivry-sur-Seine,3,48.6582,2.246878,True,True,True,1958,2951409
+ST0085,Saint-Denis,Créteil,2,48.839706,2.389065,True,True,True,2016,6373288
+ST0086,Épinay,Boulogne-Billancourt,4,48.722252,2.503112,True,False,True,1918,24230363
+ST0087,Enghien-les-Bains,Créteil,3,48.945886,2.317773,False,False,True,1992,28772753
+ST0088,Ermont-Eaubonne,Saint-Denis,1,48.714209,2.446693,True,False,True,2001,14417455
+ST0089,Saint-Gratien,Antony,1,48.696282,2.394506,True,False,True,1980,49966059
+ST0090,Argenteuil,Paris 1er,2,48.862555,2.331622,True,True,True,1940,22276719
+ST0091,Sartrouville,Massy,3,48.661395,2.345752,True,True,True,1991,758306
+ST0092,Maisons-Laffitte,Paris 20e,1,48.799479,2.385653,True,False,True,1921,12162828
+ST0093,Poissy,Paris 11e,3,48.746001,2.419056,True,True,False,1913,5849155
+ST0094,Cergy-Préfecture,Massy,3,48.678737,2.419484,True,False,True,1919,29302214
+ST0095,Cergy-le-Haut,Paris 3e,1,48.937533,2.398545,True,False,False,1971,21376029
+ST0096,Pontoise,Paris 7e,1,48.849187,2.207672,True,False,True,1967,28345941
+ST0097,Saint-Germain-en-Laye,Paris 4e,1,48.880218,2.49154,True,True,True,2013,43666136
+ST0098,Le Vésinet,Paris 19e,1,48.924639,2.269508,True,True,False,1914,46918571
+ST0099,Chatou,Paris 6e,1,48.851422,2.24687,True,False,False,1961,12679932
+ST0100,Nanterre-Préfecture,Paris 1er,1,48.802315,2.532386,True,False,True,1913,20230250
+ST0101,Nanterre-Université,Créteil,5,48.732269,2.533609,True,True,False,1902,22838395
+ST0102,Rueil-Malmaison,Paris 5e,2,48.910614,2.201719,True,False,True,1964,31556100
+ST0103,Suresnes,Paris 10e,4,48.875104,2.494993,True,False,True,1959,17776010
+ST0104,Puteaux,Saint-Denis,3,48.835881,2.595848,True,True,True,1980,41768813
+ST0105,Courbevoie,Orly,3,48.889145,2.109497,True,False,False,1961,30816015
+ST0106,Boulogne-Jean Jaurès,Paris 10e,4,48.81787,2.339738,True,False,True,2004,2765684
+ST0107,Boulogne-Pont de Saint-Cloud,Versailles,2,48.711577,2.157544,False,True,True,1990,8378004
+ST0108,Issy-Val de Seine,Paris 18e,2,48.898768,2.512649,False,True,True,1971,20233177
+ST0109,Clamart,Créteil,1,48.882278,2.196582,False,True,False,1913,45977403
+ST0110,Meudon,Bobigny,1,48.718918,2.480656,True,False,True,1988,42719927
+ST0111,Chaville,La Défense,2,48.742214,2.427272,True,False,True,2011,15834425
+ST0112,Versailles-Château,Paris 14e,1,48.791475,2.30942,True,False,False,1973,4030158
+ST0113,Versailles-Chantiers,Massy,1,48.67253,2.387878,False,False,False,1921,6959994
+ST0114,Saint-Cloud,Paris 7e,5,48.930595,2.300054,True,True,True,2005,19415508
+ST0115,Garches,La Défense,4,48.721202,2.256815,True,False,True,1918,8900251
+ST0116,Vaucresson,Paris 2e,2,48.905887,2.580962,True,False,True,1904,42239416
+ST0117,Marnes-la-Coquette,Paris 15e,2,48.914854,2.348065,True,True,False,1957,13929265
+ST0118,Javel-André Citroën,Paris 11e,1,48.84555,2.149389,True,True,True,2007,6747864
+ST0119,Boucicaut,Paris 19e,1,48.829763,2.470644,True,False,True,1965,43025589
+ST0120,Lourmel,Paris 6e,2,48.673051,2.429158,True,False,False,2015,33450284
+ST0121,Convention,Orly,2,48.683116,2.406098,True,False,True,1982,37231188
+ST0122,Vaugirard,Massy,3,48.812872,2.586112,True,True,True,1918,16549223
+ST0123,Pasteur,Paris 4e,3,48.877558,2.36628,True,True,True,1903,46003706
+ST0124,Sèvres-Lecourbe,Paris 1er,5,48.699765,2.285238,False,True,True,1976,11084211
+ST0125,Cambronne,Paris 10e,1,48.814137,2.162209,True,False,True,1934,25838663
+ST0126,La Motte-Picquet,Créteil,5,48.873715,2.139431,False,True,True,1964,23610488
+ST0127,Dupleix,Paris 7e,5,48.874074,2.28901,True,True,False,1987,13994035
+ST0128,Bir-Hakeim,Paris 8e,1,48.817037,2.585113,True,True,True,1966,16466146
+ST0129,Passy,Argenteuil,1,48.698285,2.235567,True,False,True,2001,39776525
+ST0130,Ranelagh,Paris 7e,3,48.652612,2.136743,True,True,False,1950,42830942
+ST0131,Jasmin,Paris 4e,3,48.775527,2.18381,True,True,True,1938,41981891
+ST0132,Mirabeau,Paris 19e,1,48.707858,2.500244,True,False,True,2014,42194920
+ST0133,Église d'Auteuil,Paris 8e,3,48.780435,2.33865,True,True,False,2013,40080971
+ST0134,Michel-Ange-Auteuil,Massy,1,48.713552,2.361456,True,False,True,1988,43649708
+ST0135,Michel-Ange-Molitor,Paris 7e,1,48.787686,2.288538,True,False,False,1953,39568197
+ST0136,Exelmans,Paris 11e,2,48.680046,2.495045,False,False,True,1927,5878948
+ST0137,Porte de Saint-Cloud,Paris 20e,1,48.851812,2.112767,True,True,True,1906,37586311
+ST0138,Marcel Sembat,Paris 3e,2,48.947124,2.304333,False,True,False,1940,16291841
+ST0139,Billancourt,Paris 5e,1,48.707159,2.554568,False,True,False,1935,10800408
+ST0140,Pont de Sèvres,Paris 1er,2,48.781725,2.19391,False,True,True,2022,28939959
+ST0141,Bobigny,Paris 10e,4,48.830637,2.522443,True,False,False,1939,8028401
+ST0142,Pantin,Paris 7e,1,48.77789,2.562156,False,False,True,1968,13165679
+ST0143,Aubervilliers,Paris 7e,1,48.866513,2.244732,True,True,False,1999,15727697
+ST0144,Romainville,Paris 12e,2,48.847781,2.429016,False,False,True,1962,48638442
+ST0145,Les Lilas,Paris 3e,1,48.918346,2.588651,True,True,True,1966,44219326
+ST0146,Pré-Saint-Gervais,Montreuil,1,48.709142,2.425947,True,True,False,1903,42218373
+ST0147,Mairie des Lilas,Paris 1er,2,48.793689,2.100314,True,False,False,1950,22502981
+ST0148,Porte des Lilas,Antony,1,48.686787,2.541696,True,False,True,1980,25803037
+ST0149,Télégraphe,Orly,1,48.680975,2.373721,False,True,True,1963,32477237
+ST0150,Place des Fêtes,Paris 2e,1,48.840344,2.31852,True,False,True,2012,34496885
+ST0151,Botzaris,Paris 4e,2,48.747097,2.304011,True,False,True,1951,35708779
+ST0152,Buttes-Chaumont,Paris 3e,5,48.862313,2.32681,True,False,False,1980,48519190
+ST0153,Laumière,Versailles,1,48.818085,2.496268,True,False,True,2007,17459527
+ST0154,Jaurès,Paris 19e,3,48.668004,2.366225,True,False,True,1971,38596215
+ST0155,Stalingrad,Paris 5e,4,48.842245,2.276776,True,True,False,1907,20595724
+ST0156,Riquet,Paris 5e,5,48.828003,2.272811,True,True,False,1954,26349024
+ST0157,Crimée,Paris 10e,1,48.679889,2.330466,True,False,False,1982,21711164
+ST0158,Corentin Cariou,Argenteuil,3,48.876106,2.368659,False,True,True,1932,5683912
+ST0159,Porte de la Villette,Massy,4,48.910278,2.543409,True,True,True,1938,26546144
+ST0160,Porte de Pantin,Paris 18e,1,48.828634,2.588575,True,False,True,1905,44901549
+ST0161,Porte de la Chapelle,Orly,4,48.787915,2.149508,False,False,False,1933,46713180
+ST0162,Marx Dormoy,Paris 5e,3,48.83854,2.155832,True,False,True,1933,29757241
+ST0163,Marcadet-Poissonniers,Boulogne-Billancourt,3,48.903127,2.495964,False,False,True,1971,740768
+ST0164,Barbès-Rochechouart,Nanterre,5,48.934089,2.176134,True,False,True,1974,14792833
+ST0165,Pigalle,Antony,1,48.656708,2.359819,False,False,True,1978,38458088
+ST0166,Blanche,Cergy,4,48.866782,2.517387,True,False,True,1956,6367886
+ST0167,Place de Clichy,Nanterre,5,48.810028,2.134028,True,False,True,2013,32157474
+ST0168,La Fourche,Paris 8e,3,48.671102,2.463473,False,False,True,1961,1334720
+ST0169,Guy Môquet,Paris 8e,3,48.946446,2.269894,True,False,False,2005,11899478
+ST0170,Porte de Saint-Ouen,Créteil,1,48.821888,2.350612,True,True,False,1976,13596835
+ST0171,Garibaldi,Paris 11e,2,48.782906,2.35524,True,True,True,1917,3704650
+ST0172,Mairie de Saint-Ouen,Paris 4e,3,48.78632,2.237728,False,False,False,2018,25408120
+ST0173,Carrefour Pleyel,Paris 15e,2,48.924042,2.382913,True,True,False,1967,31413023
+ST0174,Saint-Denis-Pleyel,Paris 11e,3,48.828722,2.436184,True,True,True,1986,27920221
+ST0175,Villejuif,Paris 8e,1,48.845417,2.436305,True,True,True,1939,24874670
+ST0176,Ivry-sur-Seine,Saint-Denis,3,48.791776,2.595681,True,True,False,1921,17187127
+ST0177,Vitry-sur-Seine,Paris 10e,3,48.806234,2.209064,False,True,True,1976,6186448
+ST0178,Choisy-le-Roi,Paris 19e,4,48.723838,2.410733,True,False,True,1963,49184356
+ST0179,Orly,Vincennes,5,48.830169,2.41076,True,True,True,2013,43236462
+ST0180,Aéroport d'Orly,Paris 18e,2,48.722515,2.15376,False,True,True,1981,38555548
+ST0181,Créteil,Massy,1,48.864756,2.381364,True,False,True,2021,47550510
+ST0182,Maisons-Alfort,Massy,1,48.916642,2.494974,True,True,True,1926,26325006
+ST0183,Charenton,Nanterre,2,48.720456,2.38106,True,False,True,1909,10187855
+ST0184,Saint-Mandé,Paris 14e,2,48.936611,2.425623,True,True,True,2004,29827295
+ST0185,Bérault,Paris 16e,3,48.735586,2.489014,False,False,True,1930,24077706
+ST0186,Porte Dorée,Paris 10e,2,48.660824,2.55401,False,False,True,1996,22121390
+ST0187,Porte de Charenton,Paris 6e,1,48.70384,2.363841,True,False,True,1931,23347396
+ST0188,Liberté,Paris 14e,3,48.864628,2.543352,True,False,True,1909,44659437
+ST0189,Mairie de Créteil,Paris 6e,3,48.786219,2.463507,False,True,False,1974,23420403
+ST0190,Olympiades,Nanterre,2,48.850262,2.425914,False,False,True,1923,27614488
+ST0191,Tolbiac,Nanterre,1,48.89441,2.258515,True,False,False,1986,32661571
+ST0192,Nationale,Paris 12e,1,48.80717,2.511702,True,True,False,1926,5462476
+ST0193,Chevaleret,Montreuil,4,48.652083,2.109784,True,True,False,1997,7316074
+ST0194,Quai de la Gare,La Défense,1,48.929783,2.208566,True,False,True,2004,14786229
+ST0195,Cour Saint-Émilion,Antony,1,48.775043,2.519099,False,True,False,1923,17280660
+ST0196,Dugommier,Paris 12e,3,48.721532,2.16595,True,False,True,1934,7028861
+ST0197,Reuilly-Diderot,Paris 16e,1,48.900903,2.481804,True,True,False,1926,3211085
+ST0198,Faidherbe-Chaligny,Paris 2e,1,48.654464,2.21775,True,True,True,1930,22918293
+ST0199,Ledru-Rollin,Paris 14e,4,48.911646,2.383963,True,False,True,1954,37455640
+ST0200,Gare d'Austerlitz,Argenteuil,3,48.922253,2.556264,True,False,True,1947,34048332
+ST0201,Saint-Marcel,Antony,4,48.914358,2.147096,True,True,True,1924,45849382
+ST0202,Les Gobelins,Saint-Denis,5,48.812031,2.121672,True,False,True,1914,31146088
+ST0203,Censier-Daubenton,Paris 13e,5,48.874574,2.533898,True,False,False,1906,33965418
+ST0204,Monge,Saint-Denis,1,48.762067,2.597015,True,True,False,1982,1519278
+ST0205,Cardinal Lemoine,Argenteuil,1,48.811042,2.295719,True,False,True,1988,47289968
+ST0206,Jussieu,Saint-Denis,1,48.879363,2.529853,True,True,True,1980,11143045
+ST0207,Cluny-La Sorbonne,Paris 19e,2,48.812911,2.318723,True,True,True,1987,35782563
+ST0208,Odéon,Paris 10e,3,48.85243,2.251244,False,True,True,2022,28762421
+ST0209,Saint-Michel,Paris 6e,1,48.904684,2.584359,False,True,True,1957,29432046
+ST0210,Pont Neuf,Saint-Denis,1,48.925516,2.585818,True,True,True,1930,6297862
+ST0211,Louvre-Rivoli,Versailles,1,48.671451,2.454831,True,True,True,2010,15842901
+ST0212,Étienne Marcel,Paris 20e,3,48.660808,2.574259,True,True,False,1912,2543749
+ST0213,Sentier,Paris 5e,1,48.775919,2.214788,True,False,True,2015,27515571
+ST0214,Bonne Nouvelle,Paris 7e,2,48.890756,2.363311,True,True,True,2017,42610158
+ST0215,Poissonnière,Paris 7e,2,48.653763,2.360895,True,False,True,1932,23684299
+ST0216,Cadet,Paris 18e,1,48.890374,2.157941,False,False,True,1908,41681999
+ST0217,Le Peletier,Paris 15e,4,48.713465,2.35185,True,False,True,1958,14896792
+ST0218,Richelieu-Drouot,Paris 15e,1,48.691769,2.150995,True,True,True,2020,8412786
+ST0219,Grands Boulevards,Montreuil,1,48.693718,2.169985,True,True,False,1974,29055503
+ST0220,Bourse,Paris 20e,3,48.895451,2.342587,True,False,True,1945,1577866
+ST0221,Quatre-Septembre,Paris 14e,3,48.765199,2.188331,True,True,False,1968,33739352
+ST0222,Havre-Caumartin,Paris 3e,5,48.832442,2.204657,True,False,True,2015,48322277
+ST0223,Liège,Paris 10e,1,48.815184,2.472964,False,True,True,1982,47304403
+ST0224,Rome,Paris 15e,2,48.663915,2.381031,True,False,True,2007,4110304
+ST0225,Villiers,Paris 13e,3,48.905975,2.253089,False,True,True,1982,10233764
+ST0226,Monceau,Paris 16e,4,48.756981,2.263321,True,True,True,1958,29685848
+ST0227,Wagram,Paris 5e,1,48.887866,2.342258,False,False,True,2000,5192296
+ST0228,Pereire,Paris 14e,3,48.688135,2.223393,True,True,True,1906,22903408
+ST0229,Porte Maillot,Paris 7e,1,48.932581,2.569264,True,False,True,1952,42574648
+ST0230,Les Sablons,Paris 3e,5,48.750553,2.365093,True,True,False,1924,22547615
+ST0231,Pont de Neuilly,Paris 8e,2,48.732112,2.239378,True,True,False,1969,1300371
+ST0232,Esplanade de La Défense,Orly,1,48.794335,2.555899,True,False,False,1938,40037940
+ST0233,Mairie de Levallois,Massy,3,48.84633,2.405385,True,True,False,1918,6423311
+ST0234,Anatole France,Versailles,3,48.773527,2.277033,True,False,True,1994,7711988
+ST0235,Louise Michel,Paris 6e,1,48.887882,2.13449,False,True,True,1945,21124903
+ST0236,Porte de Champerret,Nanterre,1,48.676169,2.156687,True,False,True,1916,20038360
+ST0237,Ternes,Paris 13e,1,48.730755,2.216297,True,True,True,1970,18885219
+ST0238,Courcelles,Paris 9e,3,48.793616,2.181724,True,True,True,1942,43906427
+ST0239,George V,Versailles,1,48.904702,2.375214,True,True,True,1969,45961772
+ST0240,Alma-Marceau,Paris 1er,1,48.683704,2.336432,False,True,True,1993,47497358
+ST0241,Iéna,Paris 4e,2,48.673886,2.345381,True,False,True,1906,8453848
+ST0242,Boissière,Ivry-sur-Seine,3,48.752722,2.151812,True,True,True,2006,40014237
+ST0243,Victor Hugo,Paris 4e,1,48.744339,2.417607,True,True,True,1999,15160606
+ST0244,Argentine,Paris 17e,1,48.843009,2.563094,True,True,True,1995,4731861
+ST0245,Porte Dauphine,Paris 6e,1,48.917262,2.274225,False,False,True,1953,49827299
+ST0246,Avenue Foch,Paris 16e,1,48.770276,2.354185,True,True,True,1933,10565291
+ST0247,Rue de la Pompe,Paris 1er,1,48.659477,2.504798,True,True,True,1967,43849024

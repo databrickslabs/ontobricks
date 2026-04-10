@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}About - OntoBricks{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-info-circle"></i> About OntoBricks</h1>
+    <p>Visual R2RML mapping tool for Databricks taxonomy integration</p>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-diagram-3"></i> What is OntoBricks?
+            </div>
+            <div class="card-body">
+                <p>
+                    OntoBricks is a visual tool designed to simplify the creation of R2RML mappings for 
+                    integrating Databricks datasets with ontologies. It provides an intuitive interface for 
+                    mapping relational tables to RDF triples, making semantic data integration accessible.
+                </p>
+                <h6>Key Features:</h6>
+                <ul>
+                    <li>Visual mapping interface for Databricks tables</li>
+                    <li>Automatic R2RML generation</li>
+                    <li>Support for complex relationships and foreign keys</li>
+                    <li>Real-time validation and preview</li>
+                    <li>Built for Databricks Apps deployment</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-book"></i> Technologies
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Backend</h6>
+                        <ul>
+                            <li>Python 3.9+</li>
+                            <li>FastAPI 0.109+</li>
+                            <li>RDFLib 7.0</li>
+                            <li>Databricks SQL Connector</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Frontend</h6>
+                        <ul>
+                            <li>Bootstrap 5.3</li>
+                            <li>Bootstrap Icons</li>
+                            <li>Vanilla JavaScript</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Version
+            </div>
+            <div class="card-body">
+                <p><strong>Version:</strong> {{ app_version }}</p>
+                <p><strong>Status:</strong> <span class="badge bg-success">Development</span></p>
+                <p class="mb-0"><strong>License:</strong> MIT</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-link-45deg"></i> Resources
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <a href="https://www.w3.org/TR/r2rml/" target="_blank" class="text-decoration-none">
+                            <i class="bi bi-box-arrow-up-right"></i> R2RML Specification
+                        </a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="https://docs.databricks.com/" target="_blank" class="text-decoration-none">
+                            <i class="bi bi-box-arrow-up-right"></i> Databricks Documentation
+                        </a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="https://rdflib.readthedocs.io/" target="_blank" class="text-decoration-none">
+                            <i class="bi bi-box-arrow-up-right"></i> RDFLib Documentation
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

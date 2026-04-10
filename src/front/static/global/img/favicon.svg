@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- OntoBricks Favicon - Simplified network with Databricks center -->
+  
+  <!-- Connection lines -->
+  <g stroke="#1E293B" stroke-width="1.5">
+    <line x1="16" y1="5" x2="24" y2="9"/>
+    <line x1="24" y1="9" x2="26" y2="16"/>
+    <line x1="26" y1="16" x2="24" y2="23"/>
+    <line x1="24" y1="23" x2="16" y2="27"/>
+    <line x1="16" y1="27" x2="8" y2="23"/>
+    <line x1="8" y1="23" x2="6" y2="16"/>
+    <line x1="6" y1="16" x2="8" y2="9"/>
+    <line x1="8" y1="9" x2="16" y2="5"/>
+  </g>
+  
+  <!-- Nodes -->
+  <circle cx="16" cy="5" r="2.5" fill="#FF3621"/>
+  <circle cx="24" cy="9" r="2.5" fill="#6366F1"/>
+  <circle cx="26" cy="16" r="2.5" fill="#4ECDC4"/>
+  <circle cx="24" cy="23" r="2.5" fill="#F59E0B"/>
+  <circle cx="16" cy="27" r="2.5" fill="#FF3621"/>
+  <circle cx="8" cy="23" r="2.5" fill="#6366F1"/>
+  <circle cx="6" cy="16" r="2.5" fill="#4ECDC4"/>
+  <circle cx="8" cy="9" r="2.5" fill="#F59E0B"/>
+  
+  <!-- Databricks logo center -->
+  <g transform="translate(16, 16)">
+    <path d="M0 -5 L4 -2.5 L0 0 L-4 -2.5 Z" fill="#FF3621"/>
+    <path d="M0 -2 L4 0.5 L0 3 L-4 0.5 Z" fill="#FF3621" opacity="0.85"/>
+    <path d="M0 1 L4 3.5 L0 6 L-4 3.5 Z" fill="#FF3621" opacity="0.7"/>
+  </g>
+</svg>

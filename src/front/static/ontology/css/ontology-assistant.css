@@ -1,0 +1,336 @@
+/* =====================================================
+   Ontology Assistant – Right Panel Tab
+   ===================================================== */
+
+/* Wrapper: simple flex row for map */
+.ontology-map-wrapper {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+/* ---- Assistant tab pane layout ---- */
+.panel-tab-pane[data-panel-tab-content="assistant"] {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.panel-tab-pane.active[data-panel-tab-content="assistant"] {
+    display: flex;
+}
+
+/* ---- Messages area ---- */
+.assistant-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+/* Welcome screen */
+.assistant-welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1.5rem 0.5rem;
+    color: var(--bs-secondary-color, #6c757d);
+    flex: 1;
+}
+
+.assistant-welcome-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    opacity: 0.5;
+}
+
+.assistant-welcome p {
+    font-size: 0.85rem;
+    max-width: 280px;
+    margin-bottom: 0.5rem;
+}
+
+.assistant-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    justify-content: center;
+}
+
+.assistant-suggestion {
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+/* ---- Message bubbles ---- */
+.assistant-msg {
+    display: flex;
+    gap: 0.4rem;
+    max-width: 92%;
+    animation: assistantFadeIn 0.2s ease-out;
+}
+
+@keyframes assistantFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.assistant-msg.user-msg {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.assistant-msg.bot-msg {
+    align-self: flex-start;
+}
+
+.assistant-msg-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+    overflow: hidden;
+}
+
+.assistant-msg-avatar svg,
+.assistant-msg-avatar img {
+    width: 16px;
+    height: 16px;
+}
+
+.user-msg .assistant-msg-avatar {
+    background: var(--bs-primary, #0d6efd);
+    color: #fff;
+}
+
+.bot-msg .assistant-msg-avatar {
+    background: #1e293b;
+    padding: 3px;
+}
+
+.assistant-msg-body {
+    padding: 0.4rem 0.65rem;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.user-msg .assistant-msg-body {
+    background: var(--bs-primary, #0d6efd);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+}
+
+.bot-msg .assistant-msg-body {
+    background: var(--bs-light, #f8f9fa);
+    color: var(--bs-body-color, #212529);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-bottom-left-radius: 4px;
+}
+
+/* Ontology-changed badge */
+.assistant-changed-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    margin-top: 0.4rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    background: rgba(25, 135, 84, 0.1);
+    color: var(--bs-success, #198754);
+    border: 1px solid rgba(25, 135, 84, 0.2);
+}
+
+/* Thinking indicator */
+.assistant-thinking {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.65rem;
+    color: var(--bs-secondary-color, #6c757d);
+    font-size: 0.8rem;
+}
+
+.assistant-thinking-dots span {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--bs-secondary-color, #6c757d);
+    animation: assistantBounce 1.4s ease-in-out infinite;
+}
+
+.assistant-thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.assistant-thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes assistantBounce {
+    0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+    40%           { opacity: 1;   transform: scale(1); }
+}
+
+/* Error message */
+.assistant-msg.error-msg .assistant-msg-body {
+    background: rgba(220, 53, 69, 0.1);
+    color: var(--bs-danger, #dc3545);
+    border: 1px solid rgba(220, 53, 69, 0.2);
+}
+
+/* ---- Input area ---- */
+.assistant-input-area {
+    padding: 0.5rem 0.75rem;
+    border-top: 1px solid var(--bs-border-color, #dee2e6);
+    background: var(--bs-body-bg, #fff);
+    flex-shrink: 0;
+}
+
+.assistant-input-wrapper {
+    display: flex;
+    gap: 0.4rem;
+    align-items: flex-end;
+}
+
+.assistant-input-wrapper textarea {
+    resize: none;
+    border-radius: 18px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.82rem;
+    max-height: 100px;
+    min-height: 34px;
+    overflow-y: auto;
+    line-height: 1.35;
+}
+
+.assistant-input-wrapper .btn {
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.8rem;
+}
+
+.assistant-input-hint {
+    text-align: right;
+    font-size: 0.7rem;
+    opacity: 0.6;
+}
+
+.assistant-input-hint kbd {
+    font-size: 0.65rem;
+    padding: 0.05rem 0.2rem;
+}
+
+/* ---- Toggle button active state ---- */
+#mapToggleAssistant.active {
+    background: var(--bs-primary, #0d6efd);
+    color: #fff;
+    border-color: var(--bs-primary, #0d6efd);
+}
+
+/* ---- Markdown content inside bot messages ---- */
+.bot-msg .assistant-msg-body p {
+    margin: 0 0 0.4em;
+}
+
+.bot-msg .assistant-msg-body p:last-child {
+    margin-bottom: 0;
+}
+
+.bot-msg .assistant-msg-body ul,
+.bot-msg .assistant-msg-body ol {
+    margin: 0.3em 0;
+    padding-left: 1.4em;
+}
+
+.bot-msg .assistant-msg-body li {
+    margin-bottom: 0.15em;
+}
+
+.bot-msg .assistant-msg-body strong {
+    font-weight: 600;
+}
+
+.bot-msg .assistant-msg-body code {
+    font-size: 0.78rem;
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.06);
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.bot-msg .assistant-msg-body pre {
+    margin: 0.4em 0;
+    padding: 0.5em 0.6em;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.05);
+    overflow-x: auto;
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+.bot-msg .assistant-msg-body pre code {
+    background: none;
+    padding: 0;
+}
+
+.bot-msg .assistant-msg-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.4em 0;
+    font-size: 0.78rem;
+}
+
+.bot-msg .assistant-msg-body th,
+.bot-msg .assistant-msg-body td {
+    padding: 0.3em 0.5em;
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    text-align: left;
+}
+
+.bot-msg .assistant-msg-body th {
+    background: rgba(0, 0, 0, 0.04);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.bot-msg .assistant-msg-body blockquote {
+    margin: 0.4em 0;
+    padding: 0.3em 0.6em;
+    border-left: 3px solid var(--bs-border-color, #dee2e6);
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+.bot-msg .assistant-msg-body h1,
+.bot-msg .assistant-msg-body h2,
+.bot-msg .assistant-msg-body h3,
+.bot-msg .assistant-msg-body h4 {
+    margin: 0.5em 0 0.2em;
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+.bot-msg .assistant-msg-body hr {
+    margin: 0.5em 0;
+    border: none;
+    border-top: 1px solid var(--bs-border-color, #dee2e6);
+}

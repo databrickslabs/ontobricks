@@ -1,0 +1,66 @@
+<!-- Manual Mapping Section - Tree View with Bottom Panel -->
+<!-- JS: /static/mapping/js/mapping-manual.js -->
+<!-- CSS: /static/mapping/css/mapping-manual.css (loaded in main template) -->
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-list-nested me-2"></i>Manual Mapping</h4>
+        <p class="text-muted mb-0 small">Manually configure SQL queries and column mappings for each entity and relationship</p>
+    </div>
+    <div class="d-flex gap-2">
+        <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" onclick="ManualModule.expandAll()" title="Expand All">
+                <i class="bi bi-arrows-expand"></i>
+            </button>
+            <button type="button" class="btn btn-outline-secondary" onclick="ManualModule.collapseAll()" title="Collapse All">
+                <i class="bi bi-arrows-collapse"></i>
+            </button>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="ManualModule.refresh()" title="Refresh">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+</div>
+<div class="card h-100 border-0 shadow-sm d-flex flex-column">
+    <div class="card-body p-0 flex-grow-1 d-flex flex-column" style="min-height: 0;">
+        <div id="manual-container" class="manual-vertical-container">
+            <!-- Tree View (top) -->
+            <div class="manual-tree-pane">
+                <p class="text-muted small mb-3 px-3 pt-3">View mapping status by category. Click on an item to configure its mapping.</p>
+                <div id="manualAssignmentTree" class="px-3 pb-3">
+                    <div class="text-muted small">Loading...</div>
+                </div>
+            </div>
+            
+            <!-- Bottom Detail Panel - Same layout as Designer panel -->
+            <div class="manual-bottom-panel" id="manualBottomPanel">
+                <div class="panel-header">
+                    <h6 id="manualPanelTitle"><i class="bi bi-box"></i> <span id="manualPanelItemName">Select an item above</span></h6>
+                </div>
+                <div class="panel-body" id="manualPanelBody">
+                    <div class="text-muted small text-center py-4">
+                        <i class="bi bi-hand-index"></i> Click on an entity or relationship above to configure its mapping
+                    </div>
+                </div>
+                <div class="panel-footer" id="manualPanelFooter">
+                    <div class="d-flex flex-column justify-content-between h-100">
+                        <div class="d-flex flex-column gap-2">
+                            <button type="button" class="btn btn-outline-secondary btn-sm panel-action-btn" id="manualResetBtn" onclick="ManualModule.resetPanel()" title="Remove mapping">
+                                <i class="bi bi-arrow-counterclockwise"></i> Unmap
+                            </button>
+                            <button type="button" class="btn btn-outline-primary btn-sm panel-action-btn" id="manualAutoMapBtn" onclick="ManualModule.autoMap()" title="Generate SQL, execute, and auto-map columns">
+                                <span class="spinner-border spinner-border-sm d-none me-1" role="status"></span>
+                                <i class="bi bi-lightning-charge"></i> Auto-Map
+                            </button>
+                        </div>
+                        <div class="d-flex flex-column gap-2">
+                            <button type="button" class="btn btn-secondary btn-sm panel-action-btn" onclick="ManualModule.closePanel()">Cancel</button>
+                            <button type="button" class="btn btn-dark btn-sm panel-action-btn" id="manualSavePanelBtn" onclick="ManualModule.saveMapping()" disabled>
+                                <i class="bi bi-check-circle"></i> Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

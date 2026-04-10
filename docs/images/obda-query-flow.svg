@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 640" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <linearGradient id="stepGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3498DB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2980B9;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="resultGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#27AE60;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1E8449;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="tsGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#8E44AD;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6C3483;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="2" dy="2" stdDeviation="2" flood-opacity="0.15"/>
+    </filter>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3498DB"/>
+    </marker>
+    <marker id="arrowPurple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#8E44AD"/>
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="750" height="640" fill="#f8f9fa"/>
+  
+  <!-- Title -->
+  <text x="375" y="35" text-anchor="middle" font-size="20" font-weight="bold" fill="#2c3e50">OBDA Query Processing Flow</text>
+  <text x="375" y="55" text-anchor="middle" font-size="11" fill="#7f8c8d">Ontology-Based Data Access (inspired by SANSA Stack)</text>
+  
+  <!-- Step 1: SPARQL Query -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="75" width="200" height="70" rx="6" fill="#9B59B6"/>
+    <text x="150" y="100" text-anchor="middle" font-size="12" font-weight="bold" fill="white">1. SPARQL Query</text>
+    <rect x="60" y="110" width="180" height="28" rx="3" fill="white" fill-opacity="0.2"/>
+    <text x="150" y="128" text-anchor="middle" font-size="9" fill="white" font-family="Consolas, monospace">SELECT ?person WHERE...</text>
+  </g>
+  
+  <!-- Arrow 1->2 -->
+  <path d="M250 110 L295 110" stroke="#3498DB" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  
+  <!-- Step 2: SPARQL Parser -->
+  <g filter="url(#shadow)">
+    <rect x="300" y="75" width="200" height="70" rx="6" fill="url(#stepGrad)"/>
+    <text x="400" y="97" text-anchor="middle" font-size="12" font-weight="bold" fill="white">2. SPARQL Parser</text>
+    <text x="400" y="115" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Extract SELECT variables</text>
+    <text x="400" y="128" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Parse WHERE patterns</text>
+  </g>
+  
+  <!-- Arrow 2->3 -->
+  <path d="M500 110 L545 110" stroke="#3498DB" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  
+  <!-- Step 3: Pattern Extraction -->
+  <g filter="url(#shadow)">
+    <rect x="550" y="75" width="170" height="70" rx="6" fill="url(#stepGrad)"/>
+    <text x="635" y="97" text-anchor="middle" font-size="12" font-weight="bold" fill="white">3. Triple Patterns</text>
+    <text x="635" y="115" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">(?s, ?p, ?o) patterns</text>
+    <text x="635" y="128" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Type, property matches</text>
+  </g>
+  
+  <!-- Arrow down -->
+  <path d="M635 145 L635 175" stroke="#3498DB" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  
+  <!-- Step 4: R2RML Analyzer -->
+  <g filter="url(#shadow)">
+    <rect x="450" y="180" width="270" height="85" rx="6" fill="#E67E22"/>
+    <text x="585" y="205" text-anchor="middle" font-size="12" font-weight="bold" fill="white">4. R2RML Mapping Analyzer</text>
+    <rect x="460" y="215" width="250" height="42" rx="3" fill="white" fill-opacity="0.15"/>
+    <text x="585" y="232" text-anchor="middle" font-size="9" fill="white">Load TriplesMap definitions</text>
+    <text x="585" y="245" text-anchor="middle" font-size="9" fill="white">Build class->table, predicate->column maps</text>
+  </g>
+  
+  <!-- Arrow left -->
+  <path d="M450 222 L255 222" stroke="#3498DB" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  
+  <!-- Step 5: SQL Translator -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="180" width="200" height="85" rx="6" fill="url(#stepGrad)"/>
+    <text x="150" y="200" text-anchor="middle" font-size="12" font-weight="bold" fill="white">5. SPARQL -> SQL</text>
+    <text x="150" y="214" text-anchor="middle" font-size="10" fill="rgba(255,255,255,0.9)">Translator</text>
+    <rect x="60" y="222" width="180" height="36" rx="3" fill="white" fill-opacity="0.15"/>
+    <text x="150" y="238" text-anchor="middle" font-size="9" fill="white">Match patterns to mappings</text>
+    <text x="150" y="251" text-anchor="middle" font-size="9" fill="white">Generate SQL with JOINs</text>
+  </g>
+  
+  <!-- Arrow down -->
+  <path d="M150 265 L150 295" stroke="#3498DB" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  
+  <!-- Step 6: Generated SQL -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="300" width="400" height="90" rx="6" fill="#34495E"/>
+    <text x="250" y="325" text-anchor="middle" font-size="12" font-weight="bold" fill="white">6. Generated Spark SQL</text>
+    <rect x="60" y="335" width="380" height="48" rx="3" fill="#1a1a2e"/>
+    <text x="250" y="353" text-anchor="middle" font-size="9" fill="#2ECC71" font-family="Consolas, monospace">SELECT CONCAT('https://.../', person_id)</text>
+    <text x="250" y="368" text-anchor="middle" font-size="9" fill="#2ECC71" font-family="Consolas, monospace">FROM catalog.schema.person WHERE...</text>
+  </g>
+  
+  <!-- Arrow right to backend selector -->
+  <path d="M450 345 L495 345" stroke="#3498DB" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  
+  <!-- Step 7: Backend Dispatch -->
+  <g filter="url(#shadow)">
+    <rect x="500" y="300" width="220" height="90" rx="6" fill="url(#tsGrad)"/>
+    <text x="610" y="320" text-anchor="middle" font-size="12" font-weight="bold" fill="white">7. Triple Store</text>
+    <text x="610" y="335" text-anchor="middle" font-size="11" fill="rgba(255,255,255,0.9)">Backend Dispatch</text>
+    <rect x="510" y="348" width="200" height="36" rx="3" fill="white" fill-opacity="0.15"/>
+    <text x="610" y="367" text-anchor="middle" font-size="9" fill="white">Delta: SQL Warehouse execution</text>
+  </g>
+  
+  <!-- LadybugDB alternate path -->
+  <g filter="url(#shadow)">
+    <rect x="500" y="410" width="220" height="65" rx="6" fill="#16A085"/>
+    <text x="610" y="432" text-anchor="middle" font-size="11" font-weight="bold" fill="white">7b. LadybugDB Path</text>
+    <rect x="510" y="440" width="200" height="28" rx="3" fill="white" fill-opacity="0.15"/>
+    <text x="610" y="455" text-anchor="middle" font-size="9" fill="white">Native Cypher (no SQL translation)</text>
+    <text x="610" y="468" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.8)">Graph model from ontology schema</text>
+  </g>
+  
+  <!-- Arrow from R2RML to LadybugDB -->
+  <path d="M720 265 L720 435 L725 435" stroke="#16A085" stroke-width="1.5" fill="none" stroke-dasharray="5,3"/>
+  <text x="728" y="355" font-size="8" fill="#16A085" transform="rotate(90, 728, 355)">direct schema</text>
+  
+  <!-- Arrow down from backends -->
+  <path d="M610 475 L610 500" stroke="#3498DB" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  
+  <!-- Step 8: Results -->
+  <g filter="url(#shadow)">
+    <rect x="350" y="505" width="370" height="100" rx="6" fill="url(#resultGrad)"/>
+    <text x="535" y="530" text-anchor="middle" font-size="12" font-weight="bold" fill="white">8. RDF-style Results</text>
+    <rect x="360" y="540" width="350" height="55" rx="3" fill="white" fill-opacity="0.15"/>
+    <text x="535" y="560" text-anchor="middle" font-size="10" fill="white">subject | predicate | object</text>
+    <text x="535" y="578" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)" font-family="Consolas, monospace">:Person/P001 | :worksIn | :Dept/D001</text>
+    <text x="535" y="592" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">Uniform output from all backends</text>
+  </g>
+  
+  <!-- Arrow to Knowledge Graph -->
+  <path d="M350 555 L255 555" stroke="#27AE60" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  
+  <!-- Step 9: Knowledge Graph -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="505" width="200" height="100" rx="6" fill="#9B59B6"/>
+    <text x="150" y="530" text-anchor="middle" font-size="12" font-weight="bold" fill="white">9. Knowledge Graph</text>
+    <rect x="60" y="540" width="180" height="55" rx="3" fill="white" fill-opacity="0.15"/>
+    <text x="150" y="558" text-anchor="middle" font-size="9" fill="white">Sigma.js WebGL Graph</text>
+    <text x="150" y="573" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Nodes: Entities</text>
+    <text x="150" y="586" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Edges: Relationships</text>
+  </g>
+</svg>

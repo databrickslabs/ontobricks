@@ -1,0 +1,47 @@
+# mcp-ontobricks — Custom MCP Server for OntoBricks
+# Exposes Digital Twin knowledge graph tools to the Databricks Playground.
+# Calls back to the main OntoBricks app REST API.
+command:
+  - "uv"
+  - "run"
+  - "mcp-ontobricks"
+
+env:
+  # ── Main app URL ──────────────────────────────────────────────
+  - name: ONTOBRICKS_URL
+    value: "https://ontobricks-2508734981122804.aws.databricksapps.com"
+
+  # ── SQL Warehouse ─────────────────────────────────────────────
+  # Injected from the sql-warehouse resource binding.
+  # Passed to the main app as a query parameter so the MCP server
+  # can operate independently of the main app's warehouse config.
+  - name: DATABRICKS_SQL_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+
+  # ── Registry ──────────────────────────────────────────────────
+  # Injected from the volume resource binding.
+  # The path looks like /Volumes/<catalog>/<schema>/<volume>.
+  # When set, overrides the three static REGISTRY_* variables below.
+  - name: REGISTRY_VOLUME_PATH
+    valueFrom: volume
+
+  # Static fallbacks — used for local dev when no volume resource
+  # is bound. Leave empty or remove to auto-discover from the main app.
+  #- name: REGISTRY_CATALOG
+  #  value: ""
+  #- name: REGISTRY_SCHEMA
+  #  value: ""
+  #- name: REGISTRY_VOLUME
+  #  value: "OntoBricksRegistry"
+
+# Resources that this app uses
+# Configure these resources in the Databricks Apps UI after deployment
+resources:
+  - name: sql-warehouse
+    description: "SQL Warehouse for executing queries and metadata operations"
+    sql_warehouse:
+      permission: CAN_USE
+  - name: volume
+    description: "Unity Catalog Volume for the OntoBricks project registry"
+    volume:
+      permission: CAN_READ_WRITE

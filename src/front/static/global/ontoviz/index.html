@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OntoViz - Entity-Relationship Visual Editor</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- OntoViz Styles -->
+    <link rel="stylesheet" href="./css/ontoviz.css">
+    
+    <style>
+        /* Page Layout */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Outfit', system-ui, sans-serif;
+            background: #ffffff;
+            color: #1f2937;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Header */
+        .page-header {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-bottom: 1px solid #e2e8f0;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #404040 0%, #606060 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 20px;
+            letter-spacing: -0.02em;
+            color: #1a1a1a;
+        }
+        
+        .logo-text span {
+            color: #404040;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #404040 0%, #505050 100%);
+            color: #ffffff;
+        }
+        
+        .btn-primary:hover {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+            transform: translateY(-1px);
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background: #f8fafc;
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .sidebar-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #64748b;
+            margin-bottom: 12px;
+        }
+        
+        .entity-templates {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .template-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            color: #1f2937;
+            font-family: inherit;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .template-btn:hover {
+            border-color: #404040;
+            background: #f5f5f5;
+        }
+        
+        .template-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #404040 0%, #606060 100%);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        
+        .template-info {
+            flex: 1;
+            text-align: left;
+        }
+        
+        .template-name {
+            font-weight: 500;
+        }
+        
+        .template-desc {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+        
+        /* Properties Panel */
+        .properties-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        
+        .panel-section {
+            margin-bottom: 20px;
+        }
+        
+        .panel-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #64748b;
+            margin-bottom: 10px;
+        }
+        
+        .property-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .property-label {
+            font-size: 12px;
+            color: #475569;
+            width: 80px;
+            flex-shrink: 0;
+        }
+        
+        .property-input {
+            flex: 1;
+            padding: 6px 10px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            color: #1f2937;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+        }
+        
+        .property-input:focus {
+            outline: none;
+            border-color: #404040;
+            box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+        }
+        
+        .property-select {
+            flex: 1;
+            padding: 6px 10px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            color: #1f2937;
+            font-family: inherit;
+            font-size: 12px;
+        }
+        
+        /* Delete icon button */
+        .btn-icon-delete {
+            width: 22px;
+            height: 22px;
+            border: none;
+            background: transparent;
+            color: #909090;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-icon-delete:hover {
+            background: rgba(100, 100, 100, 0.1);
+            color: #404040;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+        
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+        
+        .empty-state-text {
+            font-size: 13px;
+        }
+        
+        /* Canvas Container */
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #diagram-canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Console/Log Panel */
+        .console-panel {
+            position: absolute;
+            bottom: 60px;
+            left: 16px;
+            width: 350px;
+            max-height: 200px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            backdrop-filter: blur(8px);
+            z-index: 500;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+        
+        .console-header {
+            padding: 8px 12px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .console-title {
+            font-weight: 600;
+            color: #475569;
+        }
+        
+        .console-clear {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        
+        .console-clear:hover {
+            color: #475569;
+        }
+        
+        .console-body {
+            padding: 8px 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .console-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #f1f5f9;
+            color: #475569;
+        }
+        
+        .console-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .console-entry.success {
+            color: #303030;
+        }
+        
+        .console-entry.info {
+            color: #505050;
+        }
+        
+        .console-entry.warning {
+            color: #606060;
+        }
+        
+        /* Keyboard Shortcuts Help */
+        .shortcuts-hint {
+            position: absolute;
+            bottom: 16px;
+            right: 210px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            color: #64748b;
+            backdrop-filter: blur(8px);
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        
+        .shortcuts-hint kbd {
+            display: inline-block;
+            padding: 2px 6px;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 3px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: #475569;
+            margin: 0 2px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="page-header">
+        <div class="logo">
+            <div class="logo-icon">◇</div>
+            <div class="logo-text">Onto<span>Viz</span></div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" id="btn-import">
+                <span>📂</span> Import
+            </button>
+            <button class="btn btn-secondary" id="btn-export">
+                <span>💾</span> Export
+            </button>
+            <button class="btn btn-primary" id="btn-load-demo">
+                <span>✨</span> Load Demo
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Left Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Entity Templates</div>
+                <div class="entity-templates">
+                    <button class="template-btn" data-template="basic">
+                        <div class="template-icon">□</div>
+                        <div class="template-info">
+                            <div class="template-name">Basic Entity</div>
+                            <div class="template-desc">Simple entity with ID</div>
+                        </div>
+                    </button>
+                    <button class="template-btn" data-template="user">
+                        <div class="template-icon">👤</div>
+                        <div class="template-info">
+                            <div class="template-name">User/Person</div>
+                            <div class="template-desc">Name, email, dates</div>
+                        </div>
+                    </button>
+                    <button class="template-btn" data-template="product">
+                        <div class="template-icon">📦</div>
+                        <div class="template-info">
+                            <div class="template-name">Product</div>
+                            <div class="template-desc">Name, price, stock</div>
+                        </div>
+                    </button>
+                    <button class="template-btn" data-template="order">
+                        <div class="template-icon">🧾</div>
+                        <div class="template-info">
+                            <div class="template-name">Order/Transaction</div>
+                            <div class="template-desc">Date, amount, status</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="properties-panel" id="properties-panel">
+                <div class="empty-state">
+                    <div class="empty-state-icon">◇</div>
+                    <div class="empty-state-text">
+                        Select an entity or relationship<br>to view its properties
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Canvas Area -->
+        <div class="canvas-container">
+            <div id="diagram-canvas"></div>
+            
+            <!-- Console Panel -->
+            <div class="console-panel" id="console-panel">
+                <div class="console-header">
+                    <span class="console-title">Event Log</span>
+                    <button class="console-clear" id="console-clear">Clear</button>
+                </div>
+                <div class="console-body" id="console-body">
+                    <div class="console-entry info">OntoViz initialized. Ready to create diagrams!</div>
+                </div>
+            </div>
+            
+            <!-- Shortcuts Hint -->
+            <div class="shortcuts-hint">
+                <kbd>Delete</kbd> Remove · <kbd>Esc</kbd> Deselect · <kbd>Right-click</kbd> Menu
+            </div>
+        </div>
+    </main>
+
+    <!-- OntoViz Library -->
+    <script src="./ontoviz.js"></script>
+    
+    <script>
+        // ==========================================
+        // Initialize OntoViz
+        // ==========================================
+        const canvas = new OntoViz('#diagram-canvas', {
+            showToolbar: true,
+            showMinimap: true,
+            showStatusBar: true,
+            snapToGrid: true,
+            gridSize: 24,
+            
+            // Event Callbacks
+            onEntityCreate: (entity) => {
+                logEvent('success', `Entity created: ${entity.name}`);
+                updatePropertiesPanel();
+            },
+            onEntityUpdate: (entity) => {
+                logEvent('info', `Entity updated: ${entity.name}`);
+            },
+            onEntityDelete: (entity) => {
+                logEvent('warning', `Entity deleted: ${entity.name}`);
+                updatePropertiesPanel();
+            },
+            onRelationshipCreate: (rel) => {
+                logEvent('success', `Relationship created: ${rel.name}`);
+            },
+            onRelationshipDelete: (rel) => {
+                logEvent('warning', `Relationship deleted: ${rel.name}`);
+            },
+            onSelectionChange: (selection) => {
+                updatePropertiesPanel(selection);
+            }
+        });
+
+        // ==========================================
+        // Console Logging
+        // ==========================================
+        function logEvent(type, message) {
+            const consoleBody = document.getElementById('console-body');
+            const entry = document.createElement('div');
+            entry.className = `console-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            consoleBody.appendChild(entry);
+            consoleBody.scrollTop = consoleBody.scrollHeight;
+            
+            // Keep only last 20 entries
+            while (consoleBody.children.length > 20) {
+                consoleBody.removeChild(consoleBody.firstChild);
+            }
+        }
+
+        document.getElementById('console-clear').addEventListener('click', () => {
+            document.getElementById('console-body').innerHTML = 
+                '<div class="console-entry info">Console cleared.</div>';
+        });
+
+        // ==========================================
+        // Properties Panel
+        // ==========================================
+        function updatePropertiesPanel(selection = null) {
+            const panel = document.getElementById('properties-panel');
+            
+            if (!selection) {
+                panel.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">◇</div>
+                        <div class="empty-state-text">
+                            Select an entity or relationship<br>to view its properties
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            if (selection.type === 'entity') {
+                const entity = selection.item;
+                let propsHtml = entity.properties.map((p, i) => `
+                    <div class="property-row">
+                        <span class="property-label">${p.isPrimaryKey ? '🔑 ' : ''}${p.name}</span>
+                        <select class="property-select" data-prop-id="${p.id}" data-field="type">
+                            <option value="string" ${p.type === 'string' ? 'selected' : ''}>string</option>
+                            <option value="integer" ${p.type === 'integer' ? 'selected' : ''}>integer</option>
+                            <option value="float" ${p.type === 'float' ? 'selected' : ''}>float</option>
+                            <option value="boolean" ${p.type === 'boolean' ? 'selected' : ''}>boolean</option>
+                            <option value="date" ${p.type === 'date' ? 'selected' : ''}>date</option>
+                            <option value="datetime" ${p.type === 'datetime' ? 'selected' : ''}>datetime</option>
+                        </select>
+                    </div>
+                `).join('');
+
+                panel.innerHTML = `
+                    <div class="panel-section">
+                        <div class="panel-section-title">Entity Details</div>
+                        <div class="property-row">
+                            <span class="property-label">Name</span>
+                            <input type="text" class="property-input" id="entity-name" value="${entity.name}">
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">ID</span>
+                            <input type="text" class="property-input" value="${entity.id}" readonly style="opacity: 0.6">
+                        </div>
+                    </div>
+                    <div class="panel-section">
+                        <div class="panel-section-title">Properties (${entity.properties.length})</div>
+                        ${propsHtml || '<div style="color: #6c7086; font-size: 12px;">No properties defined</div>'}
+                    </div>
+                `;
+
+                // Bind name change
+                document.getElementById('entity-name').addEventListener('change', (e) => {
+                    canvas.updateEntity(entity.id, { name: e.target.value });
+                });
+
+                // Bind property type changes
+                panel.querySelectorAll('[data-prop-id]').forEach(select => {
+                    select.addEventListener('change', (e) => {
+                        entity.updateProperty(select.dataset.propId, { type: e.target.value });
+                    });
+                });
+
+            } else if (selection.type === 'relationship') {
+                const rel = selection.item;
+                const sourceEntity = canvas.getEntity(rel.sourceEntityId);
+                const targetEntity = canvas.getEntity(rel.targetEntityId);
+                
+                // Note: Relationship attributes are not supported
+                
+                panel.innerHTML = `
+                    <div class="panel-section">
+                        <div class="panel-section-title">Relationship Details</div>
+                        <div class="property-row">
+                            <span class="property-label">Name</span>
+                            <input type="text" class="property-input" id="rel-name" value="${rel.name}">
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">From</span>
+                            <input type="text" class="property-input" value="${sourceEntity?.name || 'Unknown'}" readonly style="opacity: 0.7">
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">To</span>
+                            <input type="text" class="property-input" value="${targetEntity?.name || 'Unknown'}" readonly style="opacity: 0.7">
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Source Card.</span>
+                            <select class="property-select" id="rel-source-card">
+                                <option value="1" ${rel.sourceCardinality === '1' ? 'selected' : ''}>1</option>
+                                <option value="0..1" ${rel.sourceCardinality === '0..1' ? 'selected' : ''}>0..1</option>
+                                <option value="*" ${rel.sourceCardinality === '*' ? 'selected' : ''}>*</option>
+                                <option value="1..*" ${rel.sourceCardinality === '1..*' ? 'selected' : ''}>1..*</option>
+                            </select>
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Target Card.</span>
+                            <select class="property-select" id="rel-target-card">
+                                <option value="1" ${rel.targetCardinality === '1' ? 'selected' : ''}>1</option>
+                                <option value="0..1" ${rel.targetCardinality === '0..1' ? 'selected' : ''}>0..1</option>
+                                <option value="*" ${rel.targetCardinality === '*' ? 'selected' : ''}>*</option>
+                                <option value="1..*" ${rel.targetCardinality === '1..*' ? 'selected' : ''}>1..*</option>
+                            </select>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('rel-name').addEventListener('change', (e) => {
+                    canvas.updateRelationship(rel.id, { name: e.target.value });
+                });
+                document.getElementById('rel-source-card').addEventListener('change', (e) => {
+                    canvas.updateRelationship(rel.id, { sourceCardinality: e.target.value });
+                });
+                document.getElementById('rel-target-card').addEventListener('change', (e) => {
+                    canvas.updateRelationship(rel.id, { targetCardinality: e.target.value });
+                });
+            }
+        }
+
+        // ==========================================
+        // Entity Templates
+        // ==========================================
+        const templates = {
+            basic: {
+                name: 'Entity',
+                properties: [
+                    { name: 'id', type: 'integer', isPrimaryKey: true }
+                ]
+            },
+            user: {
+                name: 'User',
+                properties: [
+                    { name: 'id', type: 'integer', isPrimaryKey: true },
+                    { name: 'name', type: 'string' },
+                    { name: 'email', type: 'string' },
+                    { name: 'created_at', type: 'datetime' }
+                ]
+            },
+            product: {
+                name: 'Product',
+                properties: [
+                    { name: 'id', type: 'integer', isPrimaryKey: true },
+                    { name: 'name', type: 'string' },
+                    { name: 'price', type: 'float' },
+                    { name: 'stock', type: 'integer' }
+                ]
+            },
+            order: {
+                name: 'Order',
+                properties: [
+                    { name: 'id', type: 'integer', isPrimaryKey: true },
+                    { name: 'order_date', type: 'datetime' },
+                    { name: 'total_amount', type: 'float' },
+                    { name: 'status', type: 'string' }
+                ]
+            }
+        };
+
+        let templateCounter = { basic: 0, user: 0, product: 0, order: 0 };
+        let nextX = 150;
+        let nextY = 100;
+
+        document.querySelectorAll('.template-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const templateKey = btn.dataset.template;
+                const template = templates[templateKey];
+                templateCounter[templateKey]++;
+                
+                const entity = canvas.addEntity({
+                    name: template.name + (templateCounter[templateKey] > 1 ? templateCounter[templateKey] : ''),
+                    x: nextX,
+                    y: nextY,
+                    properties: JSON.parse(JSON.stringify(template.properties))
+                });
+
+                // Stagger next entity position
+                nextX += 30;
+                nextY += 30;
+                if (nextX > 500) { nextX = 150; nextY = 100; }
+            });
+        });
+
+        // ==========================================
+        // Import/Export
+        // ==========================================
+        document.getElementById('btn-export').addEventListener('click', () => {
+            const json = JSON.stringify(canvas.toJSON(), null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'diagram.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            logEvent('success', 'Diagram exported to JSON');
+        });
+
+        document.getElementById('btn-import').addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const data = JSON.parse(event.target.result);
+                            canvas.fromJSON(data);
+                            logEvent('success', 'Diagram imported successfully');
+                        } catch (err) {
+                            logEvent('warning', 'Failed to import: Invalid JSON');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
+        });
+
+        // ==========================================
+        // Load Demo Data
+        // ==========================================
+        document.getElementById('btn-load-demo').addEventListener('click', () => {
+            canvas.clear();
+            
+            // Create demo entities
+            const customer = canvas.addEntity({
+                name: 'Customer',
+                x: 100,
+                y: 100,
+                properties: [
+                    { name: 'customer_id', type: 'integer', isPrimaryKey: true },
+                    { name: 'name', type: 'string' },
+                    { name: 'email', type: 'string' },
+                    { name: 'phone', type: 'string' },
+                    { name: 'created_at', type: 'datetime' }
+                ]
+            });
+
+            const order = canvas.addEntity({
+                name: 'Order',
+                x: 450,
+                y: 100,
+                properties: [
+                    { name: 'order_id', type: 'integer', isPrimaryKey: true },
+                    { name: 'order_date', type: 'datetime' },
+                    { name: 'status', type: 'string' },
+                    { name: 'total', type: 'float' }
+                ]
+            });
+
+            const product = canvas.addEntity({
+                name: 'Product',
+                x: 450,
+                y: 350,
+                properties: [
+                    { name: 'product_id', type: 'integer', isPrimaryKey: true },
+                    { name: 'name', type: 'string' },
+                    { name: 'description', type: 'string' },
+                    { name: 'price', type: 'float' },
+                    { name: 'stock', type: 'integer' }
+                ]
+            });
+
+            const orderItem = canvas.addEntity({
+                name: 'OrderItem',
+                x: 750,
+                y: 220,
+                properties: [
+                    { name: 'item_id', type: 'integer', isPrimaryKey: true },
+                    { name: 'quantity', type: 'integer' },
+                    { name: 'unit_price', type: 'float' }
+                ]
+            });
+
+            const category = canvas.addEntity({
+                name: 'Category',
+                x: 100,
+                y: 350,
+                properties: [
+                    { name: 'category_id', type: 'integer', isPrimaryKey: true },
+                    { name: 'name', type: 'string' },
+                    { name: 'description', type: 'string' }
+                ]
+            });
+
+            // Create relationships (some with attributes)
+            canvas.addRelationship({
+                sourceEntityId: customer.id,
+                targetEntityId: order.id,
+                name: 'places',
+                sourceCardinality: '1',
+                targetCardinality: '*',
+                properties: [
+                    { id: 'rel_p1', name: 'placed_at', type: 'datetime' }
+                ]
+            });
+
+            canvas.addRelationship({
+                sourceEntityId: order.id,
+                targetEntityId: orderItem.id,
+                name: 'contains',
+                sourceCardinality: '1',
+                targetCardinality: '*',
+                properties: [
+                    { id: 'rel_p2', name: 'line_number', type: 'integer' }
+                ]
+            });
+
+            canvas.addRelationship({
+                sourceEntityId: product.id,
+                targetEntityId: orderItem.id,
+                name: 'included_in',
+                sourceCardinality: '1',
+                targetCardinality: '*',
+                properties: [
+                    { id: 'rel_p3', name: 'discount', type: 'float' },
+                    { id: 'rel_p4', name: 'is_gift', type: 'boolean' }
+                ]
+            });
+
+            canvas.addRelationship({
+                sourceEntityId: category.id,
+                targetEntityId: product.id,
+                name: 'belongs_to',
+                sourceCardinality: '1',
+                targetCardinality: '*'
+            });
+
+            // Rules: First load - Always center the diagram and auto-layout automatically (without animation)
+            setTimeout(() => {
+                canvas.autoLayoutGrid({ animate: false });
+                canvas.resolveOverlaps({ animate: false, padding: 40, iterations: 50 });
+                canvas.centerDiagram({ animate: false });
+            }, 100);
+
+            logEvent('success', 'Demo E-commerce diagram loaded with auto-layout!');
+        });
+
+        // Initial log
+        logEvent('info', 'Click "Load Demo" to see a sample diagram, or create entities using the templates.');
+    </script>
+</body>
+</html>
+
+
+
+

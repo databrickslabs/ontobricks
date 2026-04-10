@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="tripleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366F1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B5CF6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Outer hexagonal brick frame -->
+  <path d="M32 4 L56 18 L56 46 L32 60 L8 46 L8 18 Z" 
+        fill="none" stroke="#FF3621" stroke-width="3" stroke-linejoin="round"/>
+  
+  <!-- Inner triple pattern (S-P-O triangle) - Layer 1 -->
+  <g transform="translate(0, -4)">
+    <!-- Subject node -->
+    <circle cx="32" cy="20" r="6" fill="#FF3621"/>
+    <text x="32" y="22" font-size="6" fill="white" text-anchor="middle" font-weight="bold">S</text>
+    
+    <!-- Predicate (arrow/diamond) -->
+    <path d="M22 36 L32 30 L42 36 L32 42 Z" fill="url(#tripleGrad)"/>
+    <text x="32" y="38" font-size="5" fill="white" text-anchor="middle" font-weight="bold">P</text>
+    
+    <!-- Object node -->
+    <circle cx="32" cy="52" r="6" fill="#4ECDC4"/>
+    <text x="32" y="54" font-size="6" fill="white" text-anchor="middle" font-weight="bold">O</text>
+  </g>
+  
+  <!-- Connecting lines -->
+  <g stroke="#1E293B" stroke-width="2.5" stroke-linecap="round">
+    <line x1="32" y1="22" x2="32" y2="26" opacity="0.6"/>
+    <line x1="32" y1="38" x2="32" y2="42" opacity="0.6"/>
+  </g>
+  
+  <!-- Side decorative nodes (representing data sources) -->
+  <circle cx="14" cy="32" r="3" fill="#F59E0B" opacity="0.8"/>
+  <circle cx="50" cy="32" r="3" fill="#F59E0B" opacity="0.8"/>
+  
+  <!-- Connecting to center -->
+  <line x1="17" y1="32" x2="22" y2="32" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="2,2"/>
+  <line x1="47" y1="32" x2="42" y2="32" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="2,2"/>
+</svg>

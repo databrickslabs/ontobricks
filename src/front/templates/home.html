@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}OntoBricks - Home{% endblock %}
+
+{% block content %}
+<!-- JS: /static/home/js/home.js -->
+<!-- Hero Section -->
+<div class="home-hero">
+    <h1>
+        <img src="{{ url_for('static', filename='global/img/ontobricks-icon.svg') }}?v=2" alt="OntoBricks" width="56" height="56" class="me-2" style="vertical-align: middle;">
+        OntoBricks <span style="font-size: 0.4em; font-weight: 300; opacity: 0.6; vertical-align: middle;">v{{ app_version }}</span>
+    </h1>
+    <p class="tagline">Transform your Databricks data into a semantic knowledge graph using RDF, OWL, and R2RML standards</p>
+</div>
+
+<!-- Project Management -->
+<div class="project-panel" id="sessionPanel">
+    <div class="project-header">
+        <h5><i class="bi bi-folder2-open"></i> Current Project: <span id="homeProjectName">Loading...</span></h5>
+        <div class="quick-links-inline">
+            <a href="/settings" class="quick-link-sm admin-only-nav" style="display:none"><i class="bi bi-gear"></i> Settings</a>
+            <a href="/about" class="quick-link-sm"><i class="bi bi-info-circle"></i> About</a>
+        </div>
+    </div>
+    
+    <!-- Session Stats -->
+    <div class="session-stats">
+        <div class="stat-item">
+            <div class="stat-icon" id="taxonomyIcon"><i class="bi bi-diagram-3"></i></div>
+            <div class="stat-value" id="classCount">-</div>
+            <div class="stat-label">Entities</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-icon" id="propsIcon"><i class="bi bi-arrow-left-right"></i></div>
+            <div class="stat-value" id="propCount">-</div>
+            <div class="stat-label">Relationships</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-icon" id="mappingIcon"><i class="bi bi-link-45deg"></i></div>
+            <div class="stat-value" id="mappingCount">-</div>
+            <div class="stat-label">Mappings</div>
+        </div>
+    </div>
+    
+    <!-- Project Actions -->
+    <div class="project-actions">
+        <button class="project-btn new" onclick="newProject()">
+            <i class="bi bi-file-earmark-plus"></i>
+            <span>New</span>
+        </button>
+        <a href="/project/" class="project-btn manage">
+            <i class="bi bi-folder-symlink"></i>
+            <span>Manage</span>
+        </a>
+        <a href="/project/?section=metadata" class="project-btn">
+            <i class="bi bi-database"></i>
+            <span>Metadata</span>
+        </a>
+        <!-- Save Button -->
+        <button class="project-btn" onclick="projectSave()">
+            <i class="bi bi-cloud-upload"></i>
+            <span>Save</span>
+        </button>
+        <!-- Load Button -->
+        <button class="project-btn" onclick="projectLoad()">
+            <i class="bi bi-cloud-download"></i>
+            <span>Load</span>
+        </button>
+    </div>
+    <div id="projectStatus" class="project-status hidden-initial"></div>
+</div>
+
+<!-- Workflow Steps -->
+<div class="workflow-section">
+    <h5><i class="bi bi-signpost-split"></i> Workflow</h5>
+    <div class="workflow-cards">
+        <!-- Step 1: Ontology -->
+        <div class="workflow-card taxonomy">
+            <span class="step-badge">Step 1</span>
+            <div class="card-icon"><i class="bi bi-diagram-3-fill"></i></div>
+            <h4>Design Ontology</h4>
+            <p>Define your ontology classes and properties. Create the semantic structure for your data.</p>
+            <div>
+                <span class="card-status" id="taxonomyCardStatus">
+                    <i class="bi bi-circle"></i> Not started
+                </span>
+            </div>
+            <div class="card-actions">
+                <a href="/ontology/" class="card-action">Open Designer <i class="bi bi-arrow-right"></i></a>
+                <button type="button" class="card-reset-btn" onclick="resetTaxonomy(event)" title="Reset Ontology">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reset
+                </button>
+            </div>
+        </div>
+        
+        <!-- Step 2: Mapping -->
+        <div class="workflow-card mapping">
+            <span class="step-badge">Step 2</span>
+            <div class="card-icon"><i class="bi bi-link-45deg"></i></div>
+            <h4>Map Data Sources</h4>
+            <p>Connect your Databricks tables to ontology classes. Define relationships and generate R2RML.</p>
+            <div>
+                <span class="card-status" id="mappingCardStatus">
+                    <i class="bi bi-circle"></i> Not started
+                </span>
+            </div>
+            <div class="card-actions">
+                <a href="/mapping/" class="card-action">Open Mapping <i class="bi bi-arrow-right"></i></a>
+                <button type="button" class="card-reset-btn" onclick="resetMapping(event)" title="Reset Mapping">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reset
+                </button>
+            </div>
+        </div>
+        
+        <!-- Step 3: Digital Twin -->
+        <div class="workflow-card query">
+            <span class="step-badge">Step 3</span>
+            <div class="card-icon"><i class="bi bi-box-fill"></i></div>
+            <h4>Digital Twin</h4>
+            <p>Synchronize your knowledge graph to a triple store, run quality checks, and explore data visually.</p>
+            <div>
+                <span class="card-status" id="queryCardStatus">
+                    <i class="bi bi-circle"></i> Ready when mapped
+                </span>
+            </div>
+            <div class="card-actions">
+                <a href="/dtwin/" class="card-action">Open Digital Twin <i class="bi bi-arrow-right"></i></a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Info Cards -->
+<div class="info-cards">
+    <div class="info-card">
+        <h6><i class="bi bi-file-earmark-code"></i> OWL Ontology</h6>
+        <p>Define classes and properties using the W3C Web Ontology Language standard for rich semantic expressiveness.</p>
+    </div>
+    <div class="info-card">
+        <h6><i class="bi bi-database"></i> R2RML Mapping</h6>
+        <p>Map relational tables to RDF using the W3C R2RML standard. Execute directly on Databricks via Spark SQL.</p>
+    </div>
+    <div class="info-card">
+        <h6><i class="bi bi-box"></i> Digital Twin</h6>
+        <p>Sync your knowledge graph to a triple store, validate data quality, and explore entities visually.</p>
+    </div>
+</div>
+
+<!-- Home page JavaScript (extracted from template) -->
+<script src="{{ url_for('static', filename='home/js/home.js') }}?v={{ asset_version }}"></script>
+{% endblock %}

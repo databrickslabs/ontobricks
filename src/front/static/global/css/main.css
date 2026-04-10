@@ -1,0 +1,571 @@
+/**
+ * OntoBricks - Main Stylesheet
+ * Centralized CSS with harmonized Databricks color scheme
+ */
+
+/* ==========================================================================
+   CSS Custom Properties (Variables)
+   ========================================================================== */
+:root {
+    /* Primary Colors - Databricks Red */
+    --db-primary: #FF3621;
+    --db-primary-dark: #E62E1C;
+    --db-primary-darker: #CC2819;
+    --db-primary-light: rgba(255, 54, 33, 0.1);
+    --db-primary-rgb: 255, 54, 33;
+    
+    /* Neutral Colors */
+    --db-dark: #1B1C1D;
+    --db-gray: #2C2D2E;
+    --db-gray-600: #6c757d;
+    --db-light-gray: #F7F7F7;
+    --db-border: #E0E0E0;
+    --db-border-light: #dee2e6;
+    
+    /* Text Colors */
+    --db-text: #1E1E1E;
+    --db-text-secondary: #6B6C6D;
+    --db-text-muted: #666666;
+    
+    /* Status Colors */
+    --db-success: #28a745;
+    --db-success-bg: #D4EDDA;
+    --db-success-text: #155724;
+    --db-danger-bg: #F8D7DA;
+    --db-danger-text: #721C24;
+    --db-warning: #ffc107;
+    --db-info: #17a2b8;
+    
+    /* Shadows */
+    --db-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --db-shadow-md: 0 4px 15px rgba(0, 0, 0, 0.2);
+    --db-shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.3);
+    --db-shadow-primary: 0 3px 10px rgba(255, 54, 33, 0.2);
+    
+    /* Transitions */
+    --db-transition: all 0.2s ease;
+    --db-transition-fast: all 0.15s ease;
+}
+
+/* ==========================================================================
+   Base Styles
+   ========================================================================== */
+html {
+    scrollbar-gutter: stable;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--db-light-gray);
+    color: var(--db-text);
+}
+
+/* ==========================================================================
+   Navbar
+   ========================================================================== */
+.navbar {
+    background-color: var(--db-dark);
+    padding: 0.5rem 1rem;
+    position: relative;
+    z-index: 1050; /* Above OntoViz elements */
+}
+
+.navbar .dropdown-menu {
+    z-index: 1051;
+    background-color: var(--db-dark);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    padding: 0.4rem 0;
+    min-width: 14rem;
+    margin-top: 0.35rem;
+}
+
+.navbar .dropdown-menu .dropdown-item {
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 1rem;
+    padding: 0.5rem 1.1rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    border-radius: 0.25rem;
+    margin: 0 0.3rem;
+}
+
+.navbar .dropdown-menu .dropdown-item .bi {
+    opacity: 0.7;
+    margin-right: 0.15rem;
+}
+
+.navbar .dropdown-menu .dropdown-item:hover,
+.navbar .dropdown-menu .dropdown-item:focus {
+    background-color: var(--db-primary);
+    color: #fff;
+}
+
+.navbar .dropdown-menu .dropdown-item:hover .bi,
+.navbar .dropdown-menu .dropdown-item:focus .bi {
+    opacity: 1;
+}
+
+.navbar .dropdown-menu .dropdown-item.active {
+    background-color: var(--db-primary);
+    color: #fff;
+}
+
+.navbar .dropdown-menu .dropdown-header {
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.55rem 1.1rem 0.25rem;
+}
+
+.navbar .dropdown-menu .dropdown-divider {
+    border-color: rgba(255, 255, 255, 0.1);
+    margin: 0.35rem 0.8rem;
+}
+
+.navbar-brand {
+    color: white !important;
+    font-weight: 600;
+    font-size: 1.25rem;
+}
+
+.navbar-brand:hover {
+    color: white !important;
+}
+
+.navbar .nav-link {
+    color: rgba(255, 255, 255, 0.85) !important;
+    margin: 0 0.5rem;
+    transition: var(--db-transition-fast);
+    white-space: nowrap;
+}
+
+.navbar .nav-link .bi {
+    display: inline-block;
+    width: 1.15em;
+    text-align: center;
+}
+
+.navbar .nav-link:hover {
+    color: white !important;
+}
+
+.navbar .nav-link.active {
+    color: var(--db-primary) !important;
+}
+
+/* Disabled navigation items (requires project saved to UC) */
+.navbar .nav-link.nav-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.navbar .nav-link.nav-disabled:hover {
+    color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* ==========================================================================
+   OntoBricks Branded Loading Spinner
+   ========================================================================== */
+.ob-loading-spinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.ob-loading-spinner .ob-spinner-svg {
+    width: 48px;
+    height: 48px;
+}
+
+.ob-loading-spinner .ob-spinner-svg .ob-ring {
+    transform-origin: 50% 50%;
+    animation: ob-ring-rotate 3s linear infinite;
+}
+
+.ob-loading-spinner .ob-spinner-svg .ob-center {
+    animation: ob-center-pulse 1.5s ease-in-out infinite;
+    transform-origin: center;
+    transform-box: fill-box;
+}
+
+.ob-loading-spinner .ob-spinner-label {
+    margin-top: 0.5rem;
+    color: #6c757d;
+    font-weight: 500;
+    font-size: 0.8rem;
+}
+
+@keyframes ob-ring-rotate {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes ob-center-pulse {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50%      { opacity: 1;   transform: scale(1.08); }
+}
+
+/* ==========================================================================
+   Full-page Project Loading Overlay
+   ========================================================================== */
+.project-loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(27, 28, 29, 0.88);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition: opacity 0.25s ease;
+}
+
+.project-loading-overlay .ob-spinner-svg {
+    width: 72px;
+    height: 72px;
+}
+
+.project-loading-overlay .ob-spinner-label {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 1rem;
+    margin-top: 1rem;
+}
+
+/* Process chevron separators between Project > Ontology > Mapping > Digital Twin */
+.navbar .nav-chevron {
+    display: flex;
+    align-items: stretch;
+    padding: 0;
+    margin: 0 0.1rem;
+    pointer-events: none;
+    user-select: none;
+}
+
+.navbar .nav-chevron svg {
+    width: 12px;
+    height: 100%;
+    display: block;
+}
+
+/* ==========================================================================
+   Buttons - Styled in components.css (grey theme)
+   ========================================================================== */
+
+/* ==========================================================================
+   Cards
+   ========================================================================== */
+.card {
+    border: 1px solid var(--db-border);
+    border-radius: 8px;
+    box-shadow: var(--db-shadow-sm);
+}
+
+.card-header {
+    background-color: white;
+    border-bottom: 2px solid var(--db-border);
+    font-weight: 600;
+    padding: 1rem 1.25rem;
+}
+
+/* ==========================================================================
+   Forms
+   ========================================================================== */
+.form-label {
+    font-weight: 500;
+    color: var(--db-text);
+    margin-bottom: 0.5rem;
+}
+
+.form-control,
+.form-select {
+    border: 1px solid var(--db-border);
+    border-radius: 4px;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--db-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--db-primary-rgb), 0.25);
+}
+
+/* ==========================================================================
+   Alerts
+   ========================================================================== */
+.alert {
+    border-radius: 4px;
+    border: none;
+}
+
+.alert-success {
+    background-color: var(--db-success-bg);
+    color: var(--db-success-text);
+}
+
+.alert-danger {
+    background-color: var(--db-danger-bg);
+    color: var(--db-danger-text);
+}
+
+/* ==========================================================================
+   Tabs (Nav Tabs) – neutral standard styling
+   ========================================================================== */
+.nav-tabs {
+    border-bottom: 1px solid var(--db-border);
+    margin-right: 12px;
+}
+
+.nav-tabs .nav-link {
+    color: var(--db-gray-600);
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: var(--db-transition);
+}
+
+.nav-tabs .nav-link:hover {
+    color: var(--db-text);
+    background: var(--db-border-light);
+    border-color: var(--db-border-light);
+}
+
+.nav-tabs .nav-link.active {
+    background-color: #fff !important;
+    color: var(--db-text) !important;
+    border: 1px solid var(--db-border) !important;
+    border-bottom-color: #fff !important;
+    margin-bottom: -1px;
+    font-weight: 600;
+}
+
+/* Bordered tab-content pane (use .ob-tab-content on the tab-content div) */
+.ob-tab-content {
+    background: #fff;
+    border: 1px solid var(--db-border);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    padding: 1.25rem;
+    margin-right: 12px;
+}
+
+/* ==========================================================================
+   Page Layout
+   ========================================================================== */
+.content-wrapper {
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.section-header {
+    padding-top: 1rem;
+    padding-right: 12px;
+}
+
+.page-header {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--db-border);
+}
+
+.page-header h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--db-text);
+    margin: 0;
+}
+
+.page-header p {
+    color: var(--db-text-secondary);
+    margin: 0.5rem 0 0 0;
+}
+
+/* ==========================================================================
+   Badges
+   ========================================================================== */
+.badge {
+    font-weight: 500;
+    padding: 0.35em 0.65em;
+}
+
+.badge-primary,
+.bg-primary {
+    background-color: var(--db-primary) !important;
+}
+
+/* ==========================================================================
+   Code & Pre
+   ========================================================================== */
+pre {
+    background-color: var(--db-gray);
+    color: #F8F8F2;
+    padding: 1rem;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+code {
+    background-color: #f1f3f5;
+    color: #495057;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.875em;
+}
+
+/* ==========================================================================
+   Tables
+   ========================================================================== */
+.table {
+    background-color: white;
+}
+
+.table thead th {
+    background-color: var(--db-light-gray);
+    border-bottom: 2px solid var(--db-border);
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   Utility Classes
+   ========================================================================== */
+.text-primary {
+    color: var(--db-primary) !important;
+}
+
+.bg-primary {
+    background-color: var(--db-primary) !important;
+}
+
+.border-primary {
+    border-color: var(--db-primary) !important;
+}
+
+/* ==========================================================================
+   Read-Only Mode Styles
+   ========================================================================== */
+#readOnlyBanner {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#readOnlyBannerSpacer {
+    height: 40px;
+    flex-shrink: 0;
+}
+
+/* Adjust content-wrapper when banner is present */
+body.read-only-mode .content-wrapper {
+    min-height: calc(100vh - 100px);  /* 60px navbar + 40px banner */
+}
+
+/* ==========================================================================
+   OntoViz Read-Only Mode - Hide edit controls
+   ========================================================================== */
+body.read-only-mode .ovz-toolbar {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-entity-actions {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-property-actions {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-rel-delete,
+body.read-only-mode .ovz-rel-add-prop,
+body.read-only-mode .ovz-rel-direction {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-rel-prop-delete {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-entity-name input,
+body.read-only-mode .ovz-entity-title input,
+body.read-only-mode .ovz-property-name input,
+body.read-only-mode .ovz-rel-name-input,
+body.read-only-mode .ovz-rel-prop-name {
+    pointer-events: none !important;
+    background: transparent !important;
+    border-color: transparent !important;
+    cursor: default !important;
+    user-select: none !important;
+}
+
+/* Also disable all inputs in OntoViz entities */
+body.read-only-mode .ovz-entity input,
+body.read-only-mode .ovz-relationship-label input {
+    pointer-events: none !important;
+    background: transparent !important;
+    border-color: transparent !important;
+    cursor: default !important;
+    user-select: none !important;
+}
+
+body.read-only-mode .ovz-context-menu {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-entity {
+    cursor: default !important;
+}
+
+body.read-only-mode .ovz-connector {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-rel-direction-label {
+    pointer-events: none !important;
+    cursor: default !important;
+}
+
+/* Hide entity buttons container */
+body.read-only-mode .ovz-entity-btn {
+    display: none !important;
+}
+
+/* Hide property buttons */
+body.read-only-mode .ovz-property-btn {
+    display: none !important;
+}
+
+/* Hide Add Property button at bottom of entity boxes */
+body.read-only-mode .ovz-add-property {
+    display: none !important;
+}
+
+/* ==========================================================================
+   Read-Only Mode - Disable form inputs on ontology/mapping pages
+   ========================================================================== */
+body.read-only-mode #ontologyName,
+body.read-only-mode #baseUri,
+body.read-only-mode #information-section input,
+body.read-only-mode #information-section textarea,
+body.read-only-mode #information-section select:not(#projectVersionSelect) {
+    pointer-events: none !important;
+    background-color: #e9ecef !important;
+    opacity: 0.7 !important;
+    cursor: not-allowed !important;
+}
+
+/* Version selector should always be enabled to allow switching versions */
+body.read-only-mode #projectVersionSelect {
+    pointer-events: auto !important;
+    background-color: #fff !important;
+    opacity: 1 !important;
+    cursor: pointer !important;
+}
+

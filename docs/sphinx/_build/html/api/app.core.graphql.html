@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>back.core.graphql – GraphQL Schema Generation &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="back.core.industry – Industry Standard Ontology Importers" href="app.core.industry.html" />
+    <link rel="prev" title="back.core.databricks – Databricks Integration" href="app.core.databricks.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.graphql.GraphQLSchemaBuilder">Schema Builder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.graphql.SchemaMetadata">Metadata and resolvers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="app.html">OntoBricks Application Packages</a><ul>
+  <li><a href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a><ul>
+      <li>Previous: <a href="app.core.databricks.html" title="previous chapter"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+      <li>Next: <a href="app.core.industry.html" title="next chapter"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="back-core-graphql-graphql-schema-generation">
+<h1><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation<a class="headerlink" href="#back-core-graphql-graphql-schema-generation" title="Link to this heading">¶</a></h1>
+<section id="module-back.core.graphql.GraphQLSchemaBuilder">
+<span id="schema-builder"></span><h2>Schema Builder<a class="headerlink" href="#module-back.core.graphql.GraphQLSchemaBuilder" title="Link to this heading">¶</a></h2>
+<p>Generate a Strawberry GraphQL schema from OntoBricks ontology definitions.</p>
+<p>Each ontology class becomes a GraphQL object type with:
+- <code class="docutils literal notranslate"><span class="pre">id:</span> <span class="pre">ID!</span></code> — local name extracted from the subject URI
+- <code class="docutils literal notranslate"><span class="pre">uri:</span> <span class="pre">String!</span></code> — full subject URI
+- <code class="docutils literal notranslate"><span class="pre">label:</span> <span class="pre">String</span></code> — rdfs:label value
+- One <code class="docutils literal notranslate"><span class="pre">Optional[String]</span></code> field per data property
+- One <code class="docutils literal notranslate"><span class="pre">Optional[List[TargetType]]</span></code> field per object property</p>
+<p>Types are created in topological order so that relationship targets
+are always defined before the types that reference them.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphql.GraphQLSchemaBuilder.</span></span><span class="sig-name descname"><span class="pre">GraphQLSchemaBuilder</span></span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Build and cache Strawberry GraphQL schemas from ontology metadata.</p>
+<p>A single instance manages a per-project cache so that repeated
+calls with the same ontology fingerprint return the same schema.</p>
+<p>Usage:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">builder</span> <span class="o">=</span> <span class="n">GraphQLSchemaBuilder</span><span class="p">()</span>
+<span class="n">result</span>  <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">build_for_project</span><span class="p">(</span><span class="n">classes</span><span class="p">,</span> <span class="n">props</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="s2">&quot;my_project&quot;</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">result</span><span class="p">:</span>
+    <span class="n">schema</span><span class="p">,</span> <span class="n">metadata</span> <span class="o">=</span> <span class="n">result</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.build_for_project">
+<span class="sig-name descname"><span class="pre">build_for_project</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ontology_classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">project_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder.build_for_project"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.build_for_project" title="Link to this definition">¶</a></dt>
+<dd><p>Build (or return cached) a Strawberry Schema from ontology metadata.</p>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">(schema,</span> <span class="pre">metadata)</span></code> or <code class="docutils literal notranslate"><span class="pre">None</span></code> if the ontology is empty.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ontology_classes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>ontology_properties</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>project_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[strawberry.Schema, <a class="reference internal" href="#back.core.graphql.SchemaMetadata.SchemaMetadata" title="back.core.graphql.SchemaMetadata.SchemaMetadata"><em>SchemaMetadata</em></a>] | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.invalidate_cache">
+<span class="sig-name descname"><span class="pre">invalidate_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder.invalidate_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.invalidate_cache" title="Link to this definition">¶</a></dt>
+<dd><p>Remove a project’s cached schema.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>project_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.safe_name">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">safe_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">raw</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder.safe_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.safe_name" title="Link to this definition">¶</a></dt>
+<dd><p>Sanitise <em>raw</em> into a valid Python / GraphQL identifier.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>raw</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.extract_local">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">extract_local</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder.extract_local"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.extract_local" title="Link to this definition">¶</a></dt>
+<dd><p>Return the fragment / last path segment of <em>uri</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.pluralize">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">pluralize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder.pluralize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.pluralize" title="Link to this definition">¶</a></dt>
+<dd><p>Naive English pluralisation for query-field names.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.normalize_base">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">normalize_base</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder.normalize_base"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.normalize_base" title="Link to this definition">¶</a></dt>
+<dd><p>Normalise <em>base_uri</em> to always end with <code class="docutils literal notranslate"><span class="pre">/</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.ontology_hash">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">ontology_hash</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder.ontology_hash"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.ontology_hash" title="Link to this definition">¶</a></dt>
+<dd><p>MD5 fingerprint of the ontology definition lists.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>classes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>properties</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.topo_sort">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">topo_sort</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">names</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">deps</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder.topo_sort"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.topo_sort" title="Link to this definition">¶</a></dt>
+<dd><p>Topological sort (leaves first). Breaks cycles by skipping back-edges.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>names</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Set" title="(in Python v3.14)"><em>Set</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+<li><p><strong>deps</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Set" title="(in Python v3.14)"><em>Set</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.build_schema_for_project">
+<span class="sig-prename descclassname"><span class="pre">back.core.graphql.GraphQLSchemaBuilder.</span></span><span class="sig-name descname"><span class="pre">build_schema_for_project</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ontology_classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">project_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#build_schema_for_project"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.build_schema_for_project" title="Link to this definition">¶</a></dt>
+<dd><p>Module-level delegate — uses the default <code class="docutils literal notranslate"><span class="pre">GraphQLSchemaBuilder</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ontology_classes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>ontology_properties</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>project_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[strawberry.Schema, <a class="reference internal" href="#back.core.graphql.SchemaMetadata.SchemaMetadata" title="back.core.graphql.SchemaMetadata.SchemaMetadata"><em>SchemaMetadata</em></a>] | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.invalidate_cache">
+<span class="sig-prename descclassname"><span class="pre">back.core.graphql.GraphQLSchemaBuilder.</span></span><span class="sig-name descname"><span class="pre">invalidate_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#invalidate_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.invalidate_cache" title="Link to this definition">¶</a></dt>
+<dd><p>Module-level delegate — invalidates on the default builder.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>project_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-back.core.graphql.SchemaMetadata">
+<span id="metadata-and-resolvers"></span><h2>Metadata and resolvers<a class="headerlink" href="#module-back.core.graphql.SchemaMetadata" title="Link to this heading">¶</a></h2>
+<p>GraphQL schema metadata registry and entity resolution.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graphql.SchemaMetadata.SchemaMetadata">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphql.SchemaMetadata.</span></span><span class="sig-name descname"><span class="pre">SchemaMetadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/SchemaMetadata.html#SchemaMetadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.SchemaMetadata.SchemaMetadata" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Registry of all generated GraphQL types and their resolution logic.</p>
+<p>Created once during schema generation, then shared with every resolver
+via closure so they can build typed entity instances from triple-store
+rows.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphql.SchemaMetadata.SchemaMetadata.register">
+<span class="sig-name descname"><span class="pre">register</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">info</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/SchemaMetadata.html#SchemaMetadata.register"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.SchemaMetadata.SchemaMetadata.register" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>info</strong> (<a class="reference internal" href="#back.core.graphql.models.TypeInfo" title="back.core.graphql.models.TypeInfo"><em>TypeInfo</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphql.SchemaMetadata.SchemaMetadata.resolve_list">
+<span class="sig-name descname"><span class="pre">resolve_list</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">store</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">depth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/SchemaMetadata.html#SchemaMetadata.resolve_list"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.SchemaMetadata.SchemaMetadata.resolve_list" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>store</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>table</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>type_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>offset</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>search</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>depth</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphql.SchemaMetadata.SchemaMetadata.resolve_single">
+<span class="sig-name descname"><span class="pre">resolve_single</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">store</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">entity_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">depth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/SchemaMetadata.html#SchemaMetadata.resolve_single"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.SchemaMetadata.SchemaMetadata.resolve_single" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>store</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>table</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>type_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>entity_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>depth</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<p id="module-back.core.graphql.ResolverFactory">GraphQL resolver factory functions.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graphql.ResolverFactory.ResolverFactory">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphql.ResolverFactory.</span></span><span class="sig-name descname"><span class="pre">ResolverFactory</span></span><a class="reference internal" href="../_modules/back/core/graphql/ResolverFactory.html#ResolverFactory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.ResolverFactory.ResolverFactory" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Factory for creating GraphQL resolvers from schema metadata.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphql.ResolverFactory.ResolverFactory.make_list_resolver">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">make_list_resolver</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metadata</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gql_type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/ResolverFactory.html#ResolverFactory.make_list_resolver"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.ResolverFactory.ResolverFactory.make_list_resolver" title="Link to this definition">¶</a></dt>
+<dd><p>Create a root list resolver for a given entity type.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>metadata</strong> (<a class="reference internal" href="#back.core.graphql.SchemaMetadata.SchemaMetadata" title="back.core.graphql.SchemaMetadata.SchemaMetadata"><em>SchemaMetadata</em></a>)</p></li>
+<li><p><strong>type_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>gql_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)"><em>type</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphql.ResolverFactory.ResolverFactory.make_single_resolver">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">make_single_resolver</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metadata</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gql_type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/ResolverFactory.html#ResolverFactory.make_single_resolver"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.ResolverFactory.ResolverFactory.make_single_resolver" title="Link to this definition">¶</a></dt>
+<dd><p>Create a root single-entity resolver for a given type.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>metadata</strong> (<a class="reference internal" href="#back.core.graphql.SchemaMetadata.SchemaMetadata" title="back.core.graphql.SchemaMetadata.SchemaMetadata"><em>SchemaMetadata</em></a>)</p></li>
+<li><p><strong>type_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>gql_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)"><em>type</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<p id="module-back.core.graphql.models">GraphQL data transfer objects.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graphql.models.TypeInfo">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphql.models.</span></span><span class="sig-name descname"><span class="pre">TypeInfo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cls_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gql_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predicate_to_field</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">field_to_predicate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relationships</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/models.html#TypeInfo"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.models.TypeInfo" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Metadata for a single GraphQL entity type.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>cls_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>gql_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)"><em>type</em></a>)</p></li>
+<li><p><strong>predicate_to_field</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+<li><p><strong>field_to_predicate</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+<li><p><strong>relationships</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>]</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graphql.models.TypeInfo.name">
+<span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graphql.models.TypeInfo.name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graphql.models.TypeInfo.cls_uri">
+<span class="sig-name descname"><span class="pre">cls_uri</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graphql.models.TypeInfo.cls_uri" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graphql.models.TypeInfo.gql_type">
+<span class="sig-name descname"><span class="pre">gql_type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)"><span class="pre">type</span></a></span><a class="headerlink" href="#back.core.graphql.models.TypeInfo.gql_type" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graphql.models.TypeInfo.predicate_to_field">
+<span class="sig-name descname"><span class="pre">predicate_to_field</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.graphql.models.TypeInfo.predicate_to_field" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graphql.models.TypeInfo.field_to_predicate">
+<span class="sig-name descname"><span class="pre">field_to_predicate</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.graphql.models.TypeInfo.field_to_predicate" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graphql.models.TypeInfo.relationships">
+<span class="sig-name descname"><span class="pre">relationships</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><span class="pre">Tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.graphql.models.TypeInfo.relationships" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<p id="module-back.core.graphql.constants">GraphQL package constants.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/api/app.core.graphql.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

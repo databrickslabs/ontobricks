@@ -1,0 +1,20 @@
+/**
+ * OntoBricks - mapping-shared.css
+ * Extracted from mapping templates per code_instructions.txt
+ */
+
+/* SQL Wizard Table Selection Styles */
+.wizard-table-item {
+    padding: 2px 0;
+    transition: opacity 0.2s;
+}
+.wizard-table-item.text-muted {
+    opacity: 0.6;
+}
+.wizard-table-item .form-check-label {
+    cursor: pointer;
+    width: 100%;
+}
+.wizard-table-item:hover {
+    background-color: rgba(0,0,0,0.02);
+}

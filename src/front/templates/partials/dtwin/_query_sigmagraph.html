@@ -1,0 +1,251 @@
+<!-- CSS: /static/query/css/query-sigmagraph.css -->
+<!-- JS: /static/query/js/query-sigmagraph.js -->
+<!-- Knowledge Graph Section -->
+
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-layers-half me-2"></i>Knowledge Graph</h4>
+        <p class="text-muted mb-0 small">Interactive graph visualization
+            &mdash; <i class="bi bi-diagram-3"></i> LadybugDB: <code id="sgGraphDbName" class="text-primary">{{ graph_name or 'Not configured' }}</code>
+        </p>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" id="sgShowLabels" checked onchange="SigmaGraph.toggleLabels()">
+            <label class="form-check-label small" for="sgShowLabels">Labels</label>
+        </div>
+        <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" id="sgShowEdgeLabels" checked onchange="SigmaGraph.toggleEdgeLabels()">
+            <label class="form-check-label small" for="sgShowEdgeLabels">Edges</label>
+        </div>
+        <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" id="sgHideOrphans" onchange="SigmaGraph.refresh()">
+            <label class="form-check-label small" for="sgHideOrphans">Hide orphans</label>
+        </div>
+        <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" id="sgShowInferred" checked onchange="SigmaGraph.toggleInferred()">
+            <label class="form-check-label small" for="sgShowInferred">Inferred</label>
+        </div>
+        <button class="btn btn-sm btn-outline-info ms-1" onclick="SigmaGraph.loadInferredTriples()" title="Load inferred triples from inference">
+            <i class="bi bi-lightning"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-primary" onclick="OntologyViewer.open()" title="View ontology model">
+            <i class="bi bi-diagram-3"></i> View Ontology
+        </button>
+        <button class="btn btn-sm btn-outline-info" id="sgToggleTypesBtn" onclick="SigmaGraph.toggleTypesPanel()" title="Show/Hide entity type filters">
+            <i class="bi bi-eye"></i> Types
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" id="sgToggleFilterBtn" onclick="SigmaGraph.toggleFilterPane()" title="Show/Hide search filters">
+            <i class="bi bi-search"></i> Find
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" id="sgToggleGraphFilterBtn" onclick="SigmaGraph.toggleGraphFilterPane()" title="Show/Hide graph filters">
+            <i class="bi bi-funnel"></i> Search
+        </button>
+        <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-primary" onclick="SigmaGraph.reload()" title="Reload from Results">
+                <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+            <button class="btn btn-outline-secondary" onclick="SigmaGraph.zoomIn()" title="Zoom In">
+                <i class="bi bi-zoom-in"></i>
+            </button>
+            <button class="btn btn-outline-secondary" onclick="SigmaGraph.zoomOut()" title="Zoom Out">
+                <i class="bi bi-zoom-out"></i>
+            </button>
+            <button class="btn btn-outline-secondary" onclick="SigmaGraph.fitToView()" title="Fit to View">
+                <i class="bi bi-arrows-fullscreen"></i>
+            </button>
+        </div>
+    </div>
+</div>
+<div class="visualization-layout" id="sgLayout">
+    <!-- Graph Wrapper (graph + filter pane) -->
+    <div class="graph-wrapper" id="sgGraphWrapper">
+        <!-- Graph Panel -->
+        <div class="graph-panel" id="sgGraphPanel">
+            <div class="card">
+                <div class="card-body p-0">
+                    <!-- Visual Filters Panel -->
+                    <div id="sgTypesPanel" class="mx-2 mt-2" style="display: none;">
+                        <div class="card border-info">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small fw-semibold text-info"><i class="bi bi-eye"></i> Entity Types</span>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="SigmaGraph.selectAllTypes()" title="Show all">
+                                            <i class="bi bi-check-all"></i> All
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="SigmaGraph.clearAllTypes()" title="Hide all">
+                                            <i class="bi bi-x-lg"></i> None
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="filter-chips" id="sgEntityTypeFilters">
+                                    <span class="text-muted small">No entities loaded</span>
+                                </div>
+                                <div class="mt-2">
+                                    <span class="small fw-semibold text-info"><i class="bi bi-arrow-left-right"></i> Relationships</span>
+                                </div>
+                                <div class="filter-chips mt-1" id="sgRelTypeFilters">
+                                    <span class="text-muted small">No relationships loaded</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Sigma Container -->
+                    <div id="sgContainer" style="position:relative;">
+                        <div id="sgLoading" class="position-absolute top-50 start-50 translate-middle text-center">
+                            <div class="ob-loading-spinner">
+                                <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
+                                    <g class="ob-ring">
+                                        <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
+                                            <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
+                                            <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
+                                            <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
+                                            <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
+                                        </g>
+                                        <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
+                                        <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
+                                        <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
+                                        <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
+                                    </g>
+                                    <g transform="translate(40,40)">
+                                        <g class="ob-center">
+                                            <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
+                                            <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
+                                            <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
+                                        </g>
+                                    </g>
+                                </svg>
+                                <span class="ob-spinner-label">Loading graph data...</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Graph Stats -->
+                    <div id="sgStats" class="px-2 py-1 d-flex justify-content-between align-items-center" style="display:none;">
+                        <span class="text-muted small">
+                            <span id="sgNodeCount">0 entities</span> &bull; <span id="sgEdgeCount">0 relationships</span>
+                        </span>
+                        <span class="text-muted small">
+                            <i class="bi bi-info-circle"></i> Scroll to zoom &bull; Drag to pan &bull; Click to see details
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Graph Filters Pane (bottom) -->
+        <div class="sg-filter-pane" id="sgGraphFilterPane" style="display: none;">
+            <div class="card">
+                <div class="card-header py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-funnel"></i> Search</span>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-warning py-0 px-2" onclick="SigmaGraph.clearGraphFilter()" title="Clear Filters" id="sgClearGraphFilterBtn" style="display: none;">
+                                <i class="bi bi-x-circle"></i> Clear
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="SigmaGraph.toggleGraphFilterPane()" title="Close">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body py-2">
+                    <div class="d-flex gap-3 align-items-end flex-wrap">
+                        <div class="search-field">
+                            <label class="form-label small mb-1" for="sgFilterEntityType">Entity Type</label>
+                            <select class="form-select form-select-sm" id="sgFilterEntityType" onchange="SigmaGraph.populateFilterEntityTypes()">
+                                <option value="">All types</option>
+                            </select>
+                        </div>
+                        <div class="search-field">
+                            <label class="form-label small mb-1" for="sgFilterMatchType">Match</label>
+                            <select class="form-select form-select-sm" id="sgFilterMatchType">
+                                <option value="contains">Contains</option>
+                                <option value="exact">Exact</option>
+                                <option value="starts">Starts with</option>
+                                <option value="ends">Ends with</option>
+                            </select>
+                        </div>
+                        <div class="search-field flex-grow-1">
+                            <label class="form-label small mb-1" for="sgFilterValue">Search Value</label>
+                            <input type="text" class="form-control form-control-sm" id="sgFilterValue" placeholder="Enter search term..." onkeypress="if(event.key==='Enter') SigmaGraph.executeGraphFilter()">
+                        </div>
+                        <div class="search-field" id="sgFilterDepthField" style="min-width:120px;">
+                            <label class="form-label small mb-1" for="sgFilterDepth">Depth: <span id="sgFilterDepthValue">3</span></label>
+                            <input type="range" class="form-range form-range-sm" id="sgFilterDepth" min="1" max="10" value="3" title="Number of relationship levels to traverse" oninput="document.getElementById('sgFilterDepthValue').textContent=this.value">
+                        </div>
+                        <div class="search-field">
+                            <button class="btn btn-sm btn-primary" onclick="SigmaGraph.executeGraphFilter()">
+                                <i class="bi bi-funnel-fill"></i> Search
+                            </button>
+                        </div>
+                    </div>
+                    <div id="sgGraphFilterInfo" class="mt-2 small d-none">
+                        <span class="text-info"><i class="bi bi-info-circle"></i> <span id="sgGraphFilterInfoText"></span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Pane (bottom) - Search -->
+        <div class="sg-filter-pane" id="sgFilterPane" style="display: none;">
+            <div class="card">
+                <div class="card-header py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-search"></i> Find</span>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-warning py-0 px-2" onclick="SigmaGraph.clearSearch()" title="Clear Filters" id="sgClearSearchBtn" style="display: none;">
+                                <i class="bi bi-x-circle"></i> Clear
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="SigmaGraph.toggleFilterPane()" title="Close">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body py-2">
+                    <div class="d-flex gap-3 align-items-end flex-wrap">
+                        <div class="search-field">
+                            <label class="form-label small mb-1" for="sgSearchEntityType">Entity Type</label>
+                            <select class="form-select form-select-sm" id="sgSearchEntityType">
+                                <option value="">All types</option>
+                            </select>
+                        </div>
+                        <div class="search-field flex-grow-1">
+                            <label class="form-label small mb-1" for="sgSearchValue">Search</label>
+                            <input type="text" class="form-control form-control-sm" id="sgSearchValue" placeholder="Search entities..." onkeypress="if(event.key==='Enter') SigmaGraph.applySearch()">
+                        </div>
+                        <div class="search-field">
+                            <button class="btn btn-sm btn-primary" onclick="SigmaGraph.applySearch()">
+                                <i class="bi bi-funnel-fill"></i> Find
+                            </button>
+                        </div>
+                    </div>
+                    <div id="sgSearchInfo" class="mt-2 small d-none">
+                        <span class="text-info"><i class="bi bi-info-circle"></i> <span id="sgSearchInfoText"></span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Vertical Resize Handle -->
+    <div class="resize-handle" id="sgResizeHandle" title="Drag to resize panels">
+        <div class="resize-handle-bar"></div>
+    </div>
+    
+    <!-- Entity Details Panel -->
+    <div class="details-panel" id="sgDetailsPanel">
+        <div class="card">
+            <div class="card-header py-2">
+                <span><i class="bi bi-info-square"></i> Entity Details</span>
+            </div>
+            <div class="card-body" id="sgDetailsContent">
+                <div class="entity-details-placeholder">
+                    <i class="bi bi-cursor"></i>
+                    <p class="small mb-0">Click on an entity or<br>relationship to view details</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

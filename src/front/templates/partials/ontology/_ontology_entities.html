@@ -1,0 +1,34 @@
+<!-- Classes Hierarchy Section -->
+<!-- JS: /static/ontology/js/ontology-entities.js -->
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>Classes (Hierarchy)</h4>
+        <p class="text-muted mb-0 small">View the class inheritance hierarchy and manage entities</p>
+    </div>
+    <div class="d-flex gap-2">
+        <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" onclick="expandAllClasses()" title="Expand All">
+                <i class="bi bi-arrows-expand"></i>
+            </button>
+            <button type="button" class="btn btn-outline-secondary" onclick="collapseAllClasses()" title="Collapse All">
+                <i class="bi bi-arrows-collapse"></i>
+            </button>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-primary ontology-edit-btn" onclick="openEntityPanel()">
+            <i class="bi bi-plus-circle me-1"></i> Add Entity
+        </button>
+    </div>
+</div>
+<div class="card border-0 shadow-sm" style="flex: 1; min-height: 0;">
+    <div class="card-body p-0" style="height: 100%; position: relative;">
+        <div id="ontology-entities-container" style="width: 100%; height: 100%; display: flex; flex-direction: row; overflow: hidden;">
+            <div class="entities-content" style="flex: 1; min-width: 0; min-height: 0; height: 100%; overflow-y: auto; padding: 1rem; order: 1;">
+                <p class="text-muted small mb-3">View the class inheritance hierarchy. Click on an entity to view its details and attributes in the right panel.</p>
+                <div id="classHierarchyTree">
+                    <div class="text-muted small">No classes defined yet</div>
+                </div>
+            </div>
+            <!-- Detail panel will be injected here by JS -->
+        </div>
+    </div>
+</div>

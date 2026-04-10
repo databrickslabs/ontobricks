@@ -1,0 +1,554 @@
+"""Tests for back.objects.registry.service — RegistryCfg and RegistryService."""
+import json
+import pytest
+from unittest.mock import MagicMock, patch, call
+
+from back.objects.registry.service import RegistryCfg, RegistryService, _DEFAULT_VOLUME
+
+
+# ------------------------------------------------------------------ helpers
+
+def _make_project(registry=None, host="", token=""):
+    proj = MagicMock()
+    proj.settings = {"registry": registry or {}}
+    proj.databricks = {"host": host, "token": token}
+    return proj
+
+
+def _make_settings(**overrides):
+    defaults = {
+        "registry_catalog": "env_cat",
+        "registry_schema": "env_sch",
+        "registry_volume": "",
+        "registry_volume_path": "",
+        "databricks_host": "https://host.databricks.com",
+        "databricks_token": "tok-123",
+    }
+    defaults.update(overrides)
+    s = MagicMock()
+    for k, v in defaults.items():
+        setattr(s, k, v)
+    return s
+
+
+def _make_uc():
+    return MagicMock()
+
+
+CFG = RegistryCfg(catalog="cat", schema="sch", volume="vol")
+
+
+# ==================================================================
+# RegistryCfg
+# ==================================================================
+
+class TestRegistryCfgConstruction:
+    def test_direct(self):
+        c = RegistryCfg(catalog="a", schema="b", volume="c")
+        assert c.catalog == "a"
+        assert c.schema == "b"
+        assert c.volume == "c"
+
+    def test_is_frozen(self):
+        c = RegistryCfg(catalog="a", schema="b", volume="c")
+        with pytest.raises(AttributeError):
+            c.catalog = "x"
+
+    def test_from_dict_full(self):
+        c = RegistryCfg.from_dict({"catalog": "x", "schema": "y", "volume": "z"})
+        assert c == RegistryCfg("x", "y", "z")
+
+    def test_from_dict_defaults_volume(self):
+        c = RegistryCfg.from_dict({"catalog": "x", "schema": "y"})
+        assert c.volume == _DEFAULT_VOLUME
+
+    def test_from_dict_empty_volume_gets_default(self):
+        c = RegistryCfg.from_dict({"catalog": "x", "schema": "y", "volume": ""})
+        assert c.volume == _DEFAULT_VOLUME
+
+    def test_from_dict_empty(self):
+        c = RegistryCfg.from_dict({})
+        assert c.catalog == ""
+        assert c.schema == ""
+        assert c.volume == _DEFAULT_VOLUME
+
+    def test_from_project_uses_session_registry(self):
+        proj = _make_project(registry={"catalog": "s_cat", "schema": "s_sch", "volume": "s_vol"})
+        settings = _make_settings()
+        c = RegistryCfg.from_project(proj, settings)
+        assert c.catalog == "s_cat"
+        assert c.schema == "s_sch"
+        assert c.volume == "s_vol"
+
+    def test_from_project_falls_back_to_settings(self):
+        proj = _make_project(registry={})
+        settings = _make_settings(registry_catalog="env_c", registry_schema="env_s", registry_volume="env_v")
+        c = RegistryCfg.from_project(proj, settings)
+        assert c.catalog == "env_c"
+        assert c.schema == "env_s"
+        assert c.volume == "env_v"
+
+    def test_from_project_partial_fallback(self):
+        proj = _make_project(registry={"catalog": "session_cat"})
+        settings = _make_settings(registry_catalog="env_cat", registry_schema="env_sch")
+        c = RegistryCfg.from_project(proj, settings)
+        assert c.catalog == "session_cat"
+        assert c.schema == "env_sch"
+
+    def test_from_project_empty_volume_defaults(self):
+        proj = _make_project(registry={})
+        settings = _make_settings(registry_volume="")
+        c = RegistryCfg.from_project(proj, settings)
+        assert c.volume == _DEFAULT_VOLUME
+
+    def test_from_project_registry_volume_path_overrides_session(self):
+        proj = _make_project(
+            registry={"catalog": "wrong", "schema": "wrong", "volume": "wrong_vol"},
+        )
+        settings = _make_settings(
+            registry_volume_path="/Volumes/benoit_cayla/ontobricks_deployed/registry",
+        )
+        c = RegistryCfg.from_project(proj, settings)
+        assert c.catalog == "benoit_cayla"
+        assert c.schema == "ontobricks_deployed"
+        assert c.volume == "registry"
+
+
+class TestRegistryCfgHelpers:
+    def test_is_configured_true(self):
+        assert RegistryCfg("a", "b", "c").is_configured is True
+
+    def test_is_configured_missing_catalog(self):
+        assert RegistryCfg("", "b", "c").is_configured is False
+
+    def test_is_configured_missing_schema(self):
+        assert RegistryCfg("a", "", "c").is_configured is False
+
+    def test_is_configured_missing_volume(self):
+        assert RegistryCfg("a", "b", "").is_configured is False
+
+    def test_as_dict(self):
+        c = RegistryCfg("x", "y", "z")
+        assert c.as_dict() == {"catalog": "x", "schema": "y", "volume": "z"}
+
+    def test_as_dict_roundtrip(self):
+        c = RegistryCfg("a", "b", "c")
+        assert RegistryCfg.from_dict(c.as_dict()) == c
+
+
+# ==================================================================
+# RegistryService — path builders
+# ==================================================================
+
+class TestPathBuilders:
+    def _svc(self, cfg=CFG):
+        return RegistryService(cfg, _make_uc())
+
+    def test_volume_root(self):
+        assert self._svc().volume_root() == "/Volumes/cat/sch/vol"
+
+    def test_projects_path(self):
+        assert self._svc().projects_path() == "/Volumes/cat/sch/vol/projects"
+
+    def test_project_path(self):
+        assert self._svc().project_path("my_proj") == "/Volumes/cat/sch/vol/projects/my_proj"
+
+    def test_version_file_path(self):
+        assert self._svc().version_file_path("p", "3") == "/Volumes/cat/sch/vol/projects/p/v3.json"
+
+    def test_marker_path(self):
+        assert self._svc().marker_path() == "/Volumes/cat/sch/vol/.registry"
+
+    def test_config_file_path(self):
+        assert self._svc().config_file_path() == "/Volumes/cat/sch/vol/.global_config.json"
+
+    def test_permissions_file_path(self):
+        assert self._svc().permissions_file_path() == "/Volumes/cat/sch/vol/.permissions.json"
+
+    def test_history_file_path(self):
+        assert self._svc().history_file_path("p") == "/Volumes/cat/sch/vol/projects/p/.schedule_history.json"
+
+    def test_paths_with_different_cfg(self):
+        c = RegistryCfg("a", "b", "c")
+        svc = RegistryService(c, _make_uc())
+        assert svc.volume_root() == "/Volumes/a/b/c"
+
+
+# ==================================================================
+# RegistryService — lifecycle
+# ==================================================================
+
+class TestIsInitialized:
+    def test_true_when_marker_exists(self):
+        uc = _make_uc()
+        uc.read_file.return_value = (True, "content", "")
+        svc = RegistryService(CFG, uc)
+        assert svc.is_initialized() is True
+        uc.read_file.assert_called_once_with("/Volumes/cat/sch/vol/.registry")
+
+    def test_false_when_marker_missing(self):
+        uc = _make_uc()
+        uc.read_file.return_value = (False, "", "Not found")
+        svc = RegistryService(CFG, uc)
+        assert svc.is_initialized() is False
+
+
+class TestInitialize:
+    def test_creates_volume_and_marker(self):
+        uc = _make_uc()
+        client = MagicMock()
+        client.list_volumes.return_value = []
+        client.create_volume.return_value = True
+
+        svc = RegistryService(CFG, uc)
+        ok, msg = svc.initialize(client)
+
+        assert ok is True
+        assert "initialized" in msg.lower()
+        client.create_volume.assert_called_once_with("cat", "sch", "vol")
+        uc.write_file.assert_called_once()
+
+    def test_skips_volume_creation_if_exists(self):
+        uc = _make_uc()
+        client = MagicMock()
+        client.list_volumes.return_value = ["vol"]
+
+        svc = RegistryService(CFG, uc)
+        ok, _ = svc.initialize(client)
+
+        assert ok is True
+        client.create_volume.assert_not_called()
+
+    def test_returns_false_if_volume_creation_fails(self):
+        uc = _make_uc()
+        client = MagicMock()
+        client.list_volumes.return_value = []
+        client.create_volume.return_value = False
+
+        svc = RegistryService(CFG, uc)
+        ok, msg = svc.initialize(client)
+
+        assert ok is False
+        assert "failed" in msg.lower()
+
+
+# ==================================================================
+# RegistryService — project CRUD
+# ==================================================================
+
+class TestListProjects:
+    def test_success(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (True, [
+            {"name": "proj_b"},
+            {"name": ".hidden"},
+            {"name": "proj_a"},
+        ], "")
+        svc = RegistryService(CFG, uc)
+
+        ok, names, msg = svc.list_projects()
+        assert ok is True
+        assert names == ["proj_a", "proj_b"]
+
+    def test_excludes_hidden_dirs(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (True, [
+            {"name": ".registry"},
+            {"name": ".hidden"},
+            {"name": "visible"},
+        ], "")
+        svc = RegistryService(CFG, uc)
+
+        ok, names, _ = svc.list_projects()
+        assert names == ["visible"]
+
+    def test_failure(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (False, [], "Not found")
+        svc = RegistryService(CFG, uc)
+
+        ok, names, msg = svc.list_projects()
+        assert ok is False
+        assert names == []
+        assert msg == "Not found"
+
+
+class TestListProjectDetails:
+    def test_returns_names_descriptions_versions(self):
+        uc = _make_uc()
+        uc.list_directory.side_effect = [
+            (True, [{"name": "proj_a"}, {"name": ".hidden"}], ""),
+            (True, [{"name": "v2.json"}, {"name": "v1.json"}], ""),
+        ]
+        uc.read_file.return_value = (
+            True,
+            json.dumps({"info": {"description": "My desc"}}),
+            "",
+        )
+        svc = RegistryService(CFG, uc)
+
+        ok, result, _ = svc.list_project_details()
+        assert ok is True
+        assert len(result) == 1
+        assert result[0]["name"] == "proj_a"
+        assert result[0]["description"] == "My desc"
+        assert result[0]["versions"] == ["2", "1"]
+
+
+class TestDeleteProject:
+    def test_delegates_to_recursive_delete(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (True, [], "")
+        uc.delete_directory.return_value = (True, "ok")
+        svc = RegistryService(CFG, uc)
+
+        errors = svc.delete_project("my_proj")
+
+        assert errors == []
+        uc.list_directory.assert_called_once_with("/Volumes/cat/sch/vol/projects/my_proj")
+
+
+# ==================================================================
+# RegistryService — version management
+# ==================================================================
+
+class TestListVersions:
+    def test_extracts_version_strings(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (True, [
+            {"name": "v1.json"},
+            {"name": "v2.json"},
+            {"name": "v10.json"},
+            {"name": "readme.txt"},
+        ], "")
+        svc = RegistryService(CFG, uc)
+
+        ok, versions, _ = svc.list_versions("proj")
+        assert ok is True
+        assert set(versions) == {"1", "2", "10"}
+
+    def test_failure(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (False, [], "err")
+        svc = RegistryService(CFG, uc)
+
+        ok, versions, msg = svc.list_versions("proj")
+        assert ok is False
+        assert versions == []
+
+
+class TestListVersionsSorted:
+    def test_sorted_descending(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (True, [
+            {"name": "v1.json"},
+            {"name": "v10.json"},
+            {"name": "v2.json"},
+        ], "")
+        svc = RegistryService(CFG, uc)
+
+        vs = svc.list_versions_sorted("proj")
+        assert vs == ["10", "2", "1"]
+
+    def test_sorted_ascending(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (True, [
+            {"name": "v3.json"},
+            {"name": "v1.json"},
+        ], "")
+        svc = RegistryService(CFG, uc)
+
+        vs = svc.list_versions_sorted("proj", reverse=False)
+        assert vs == ["1", "3"]
+
+    def test_empty_on_failure(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (False, [], "err")
+        svc = RegistryService(CFG, uc)
+
+        assert svc.list_versions_sorted("proj") == []
+
+
+class TestGetLatestVersion:
+    def test_returns_highest(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (True, [
+            {"name": "v1.json"},
+            {"name": "v3.json"},
+            {"name": "v2.json"},
+        ], "")
+        svc = RegistryService(CFG, uc)
+
+        assert svc.get_latest_version("proj") == "3"
+
+    def test_returns_none_when_empty(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (True, [], "")
+        svc = RegistryService(CFG, uc)
+
+        assert svc.get_latest_version("proj") is None
+
+
+class TestReadVersion:
+    def test_success(self):
+        uc = _make_uc()
+        data = {"info": {"name": "test"}}
+        uc.read_file.return_value = (True, json.dumps(data), "")
+        svc = RegistryService(CFG, uc)
+
+        ok, result, msg = svc.read_version("proj", "2")
+        assert ok is True
+        assert result == data
+        uc.read_file.assert_called_once_with("/Volumes/cat/sch/vol/projects/proj/v2.json")
+
+    def test_file_not_found(self):
+        uc = _make_uc()
+        uc.read_file.return_value = (False, "", "Not found")
+        svc = RegistryService(CFG, uc)
+
+        ok, result, msg = svc.read_version("proj", "99")
+        assert ok is False
+        assert result == {}
+
+    def test_invalid_json(self):
+        uc = _make_uc()
+        uc.read_file.return_value = (True, "not-json{", "")
+        svc = RegistryService(CFG, uc)
+
+        ok, result, msg = svc.read_version("proj", "1")
+        assert ok is False
+        assert "Invalid JSON" in msg
+
+
+class TestWriteVersion:
+    def test_delegates_to_uc(self):
+        uc = _make_uc()
+        uc.write_file.return_value = (True, "ok")
+        svc = RegistryService(CFG, uc)
+
+        ok, msg = svc.write_version("proj", "5", '{"data": true}')
+        assert ok is True
+        uc.write_file.assert_called_once_with(
+            "/Volumes/cat/sch/vol/projects/proj/v5.json",
+            '{"data": true}',
+        )
+
+
+class TestDeleteVersion:
+    def test_delegates_to_uc(self):
+        uc = _make_uc()
+        uc.delete_file.return_value = (True, "ok")
+        svc = RegistryService(CFG, uc)
+
+        ok, msg = svc.delete_version("proj", "3")
+        assert ok is True
+        uc.delete_file.assert_called_once_with("/Volumes/cat/sch/vol/projects/proj/v3.json")
+
+
+# ==================================================================
+# RegistryService — load_latest_project_data
+# ==================================================================
+
+class TestLoadLatestProjectData:
+    def test_success(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (True, [
+            {"name": "v1.json"},
+            {"name": "v3.json"},
+            {"name": "v2.json"},
+        ], "")
+        data = {"info": {"name": "test"}}
+        uc.read_file.return_value = (True, json.dumps(data), "")
+
+        svc = RegistryService(CFG, uc)
+        ok, result, version, err = svc.load_latest_project_data("proj")
+
+        assert ok is True
+        assert result == data
+        assert version == "3"
+        assert err == ""
+        uc.read_file.assert_called_once_with("/Volumes/cat/sch/vol/projects/proj/v3.json")
+
+    def test_no_versions(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (True, [], "")
+
+        svc = RegistryService(CFG, uc)
+        ok, result, version, err = svc.load_latest_project_data("empty_proj")
+
+        assert ok is False
+        assert "no versions" in err.lower()
+
+    def test_read_failure(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (True, [{"name": "v1.json"}], "")
+        uc.read_file.return_value = (False, "", "Read error")
+
+        svc = RegistryService(CFG, uc)
+        ok, result, version, err = svc.load_latest_project_data("proj")
+
+        assert ok is False
+        assert version == "1"
+        assert err == "Read error"
+
+
+# ==================================================================
+# RegistryService — recursive_delete
+# ==================================================================
+
+class TestRecursiveDelete:
+    def test_deletes_files_then_directory(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (True, [
+            {"name": "v1.json", "path": "/Volumes/cat/sch/vol/projects/p/v1.json", "is_directory": False},
+        ], "")
+        uc.delete_file.return_value = (True, "ok")
+        uc.delete_directory.return_value = (True, "ok")
+
+        svc = RegistryService(CFG, uc)
+        errors = svc.recursive_delete("/Volumes/cat/sch/vol/projects/p")
+
+        assert errors == []
+        uc.delete_file.assert_called_once()
+        uc.delete_directory.assert_called_once()
+
+    def test_reports_errors(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (True, [
+            {"name": "f.json", "path": "/p/f.json", "is_directory": False},
+        ], "")
+        uc.delete_file.return_value = (False, "Permission denied")
+        uc.delete_directory.return_value = (True, "ok")
+
+        svc = RegistryService(CFG, uc)
+        errors = svc.recursive_delete("/p")
+
+        assert len(errors) == 1
+        assert "Permission denied" in errors[0]
+
+    def test_listing_failure(self):
+        uc = _make_uc()
+        uc.list_directory.return_value = (False, [], "Cannot list")
+
+        svc = RegistryService(CFG, uc)
+        errors = svc.recursive_delete("/gone")
+
+        assert len(errors) == 1
+        assert "Cannot list" in errors[0]
+
+
+# ==================================================================
+# RegistryService.from_context
+# ==================================================================
+
+class TestFromContext:
+    @patch("back.core.helpers.get_databricks_host_and_token")
+    def test_factory(self, mock_creds):
+        mock_creds.return_value = ("https://host", "tok")
+        proj = _make_project(registry={"catalog": "c", "schema": "s", "volume": "v"})
+        settings = _make_settings()
+
+        svc = RegistryService.from_context(proj, settings)
+
+        assert svc.cfg == RegistryCfg("c", "s", "v")
+        assert svc.uc is not None

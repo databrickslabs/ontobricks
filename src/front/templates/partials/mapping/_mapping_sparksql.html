@@ -1,0 +1,59 @@
+<!-- Spark SQL Viewer Section -->
+
+<!-- Loading overlay (shown until data loads) -->
+<div id="sparksqlLoadingOverlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(248, 249, 250, 0.95); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 10;">
+    <div class="ob-loading-spinner">
+        <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
+            <g class="ob-ring">
+                <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
+                    <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
+                    <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
+                    <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
+                    <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
+                </g>
+                <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
+                <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
+                <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
+                <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
+            </g>
+            <g transform="translate(40,40)">
+                <g class="ob-center">
+                    <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
+                    <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
+                    <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
+                </g>
+            </g>
+        </svg>
+        <span class="ob-spinner-label">Generating Spark SQL...</span>
+    </div>
+</div>
+
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-file-earmark-code me-2"></i>Generated Spark SQL</h4>
+        <p class="text-muted mb-0 small">View the Spark SQL generated from your SPARQL queries</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-secondary" onclick="copyMappingSql()">
+            <i class="bi bi-clipboard me-1"></i> Copy SQL
+        </button>
+        <button class="btn btn-sm btn-outline-primary" onclick="refreshMappingSql()">
+            <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+        </button>
+    </div>
+</div>
+<div class="search-builder">
+
+    <!-- Content -->
+    <div class="search-content">
+        <p class="text-muted mb-3">
+            This shows the Spark SQL that would be generated for an "All Data" query based on your current R2RML mappings.
+            Execute queries from the Query page to see specific SQL translations.
+        </p>
+        
+        <div id="mappingSqlContent" class="border rounded" style="min-height: 400px; background: #1e1e1e;">
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='mapping/js/mapping-sparksql.js') }}?v={{ asset_version }}"></script>

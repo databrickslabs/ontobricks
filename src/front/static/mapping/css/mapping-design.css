@@ -1,0 +1,412 @@
+/**
+ * OntoBricks - Mapping Design CSS
+ * Styles for the Visual Mapping Designer (D3.js Force-Directed Graph)
+ * Extracted from _mapping_design.html per code_instructions.txt
+ */
+
+/* Mapping Designer Styles */
+#mapping-map-container {
+    overflow: hidden;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+#mapping-map-container svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Entity nodes */
+.mapping-map-node {
+    cursor: pointer;
+}
+
+.mapping-map-node:active {
+    cursor: grabbing;
+}
+
+.mapping-map-node-icon {
+    font-size: 32px;
+    text-anchor: middle;
+    dominant-baseline: central;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    pointer-events: none;
+}
+
+.mapping-map-node-label {
+    font-size: 12px;
+    fill: #1e293b;
+    font-weight: 600;
+    text-anchor: middle;
+    pointer-events: none;
+}
+
+.mapping-map-node-hitarea {
+    stroke: none;
+    cursor: inherit;
+}
+
+/* Mapped entity node - green */
+.mapping-map-node.mapped .mapping-map-node-hitarea {
+    fill: rgba(25, 135, 84, 0.15);
+    stroke: #198754;
+    stroke-width: 3px;
+}
+
+.mapping-map-node.mapped .mapping-map-node-icon {
+    filter: drop-shadow(0 0 8px rgba(25, 135, 84, 0.6));
+}
+
+/* Partial entity node - orange (attributes missing) */
+.mapping-map-node.partial .mapping-map-node-hitarea {
+    fill: rgba(255, 165, 0, 0.15);
+    stroke: #fd7e14;
+    stroke-width: 3px;
+    stroke-dasharray: 5, 3;
+}
+
+.mapping-map-node.partial .mapping-map-node-icon {
+    filter: drop-shadow(0 0 8px rgba(253, 126, 20, 0.6));
+}
+
+/* Unmapped entity node - red dashed */
+.mapping-map-node.unmapped .mapping-map-node-hitarea {
+    fill: rgba(220, 53, 69, 0.1);
+    stroke: #dc3545;
+    stroke-width: 2px;
+    stroke-dasharray: 5, 3;
+}
+
+.mapping-map-node.unmapped .mapping-map-node-icon {
+    filter: drop-shadow(0 0 6px rgba(220, 53, 69, 0.5));
+}
+
+/* Excluded entity node - grey */
+.mapping-map-node.excluded .mapping-map-node-hitarea {
+    fill: rgba(173, 181, 189, 0.15);
+    stroke: #adb5bd;
+    stroke-width: 2px;
+    stroke-dasharray: 3, 3;
+}
+
+.mapping-map-node.excluded .mapping-map-node-icon {
+    filter: grayscale(1) opacity(0.45);
+}
+
+.mapping-map-node.excluded .mapping-map-node-label {
+    fill: #adb5bd;
+}
+
+/* Excluded relationship links - grey */
+.mapping-map-link.excluded {
+    stroke: #ced4da !important;
+    stroke-width: 1.5px !important;
+    stroke-dasharray: 3, 3 !important;
+    stroke-opacity: 0.5 !important;
+    marker-end: url(#mapping-arrow-excluded) !important;
+}
+
+.mapping-map-link-hitarea.excluded {
+    fill: #e9ecef;
+    stroke: #adb5bd;
+    opacity: 0.5;
+}
+
+.mapping-map-link-label.excluded {
+    fill: #adb5bd !important;
+    opacity: 0.5;
+}
+
+/* Selected node */
+.mapping-map-node.selected .mapping-map-node-hitarea {
+    stroke-width: 4px !important;
+    filter: drop-shadow(0 0 12px rgba(0, 0, 0, 0.3));
+}
+
+.mapping-map-node:hover .mapping-map-node-icon {
+    transform: scale(1.1);
+}
+
+/* Relationship links */
+.mapping-map-link {
+    fill: none;
+    stroke-opacity: 0.8;
+    stroke-width: 2px;
+}
+
+/* Mapped relationship - green */
+.mapping-map-link.mapped {
+    stroke: #198754;
+    stroke-width: 2.5px;
+    marker-end: url(#mapping-arrow-mapped);
+}
+
+/* Unmapped relationship - red dashed */
+.mapping-map-link.unmapped {
+    stroke: #dc3545;
+    stroke-width: 2px;
+    stroke-dasharray: 6, 4;
+    marker-end: url(#mapping-arrow-unmapped);
+}
+
+.mapping-map-link:hover {
+    stroke-opacity: 1;
+    stroke-width: 3px;
+}
+
+/* Self-loop relationships - override marker-end with self-loop specific markers */
+.mapping-map-link.self-loop {
+    stroke-width: 2.5px;
+}
+
+.mapping-map-link.self-loop.mapped {
+    marker-end: url(#mapping-arrow-self-mapped);
+}
+
+.mapping-map-link.self-loop.unmapped {
+    marker-end: url(#mapping-arrow-self-unmapped);
+    stroke-dasharray: none; /* solid line for self-loops, easier to see */
+}
+
+/* Link hitarea dots at midpoint */
+.mapping-map-link-hitarea {
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mapping-map-link-hitarea:hover {
+    stroke-width: 2.5px !important;
+}
+
+.mapping-map-link-hitarea.mapped {
+    fill: #d1e7dd;
+    stroke: #198754;
+}
+
+.mapping-map-link-hitarea.unmapped {
+    fill: #f8d7da;
+    stroke: #dc3545;
+}
+
+/* Inheritance links (dashed) */
+.mapping-map-link.inheritance {
+    stroke: #adb5bd;
+    stroke-dasharray: 5, 5;
+    stroke-width: 2px;
+    marker-end: url(#mapping-arrow-inheritance);
+}
+
+/* Link labels */
+.mapping-map-link-label {
+    font-size: 11px;
+    font-weight: 500;
+    pointer-events: none;
+    dominant-baseline: middle;
+    text-anchor: middle;
+}
+
+.mapping-map-link-label.mapped {
+    fill: #198754;
+}
+
+.mapping-map-link-label.unmapped {
+    fill: #dc3545;
+}
+
+/* Self-loop labels */
+.mapping-map-link-label.self-loop-label {
+    font-size: 10px;
+}
+
+/* Legend */
+.mapping-design-legend {
+    display: flex;
+    gap: 20px;
+    padding: 8px 12px;
+    background: white;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    border: 1px solid #dee2e6;
+}
+
+.mapping-design-legend .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.mapping-design-legend .legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+}
+
+.mapping-design-legend .legend-mapped {
+    background: #d1e7dd;
+    border: 2px solid #198754;
+}
+
+.mapping-design-legend .legend-unmapped {
+    background: #f8d7da;
+    border: 2px dashed #dc3545;
+}
+
+/* Designer Legend (bottom left) */
+.mapping-map-legend {
+    position: absolute;
+    bottom: 15px;
+    left: 15px;
+    background: rgba(255,255,255,0.95);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    color: #495057;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border: 1px solid #e9ecef;
+}
+
+.mapping-map-legend-title {
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #1e293b;
+}
+
+.mapping-map-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+}
+
+.mapping-map-legend-line {
+    width: 24px;
+    height: 2px;
+}
+
+.mapping-map-legend-line.mapped {
+    background: #198754;
+}
+
+.mapping-map-legend-line.partial {
+    background: repeating-linear-gradient(
+        90deg,
+        #fd7e14 0px,
+        #fd7e14 6px,
+        transparent 6px,
+        transparent 10px
+    );
+}
+
+.mapping-map-legend-line.unmapped {
+    background: #dc3545;
+    background: repeating-linear-gradient(
+        90deg,
+        #dc3545 0px,
+        #dc3545 6px,
+        transparent 6px,
+        transparent 10px
+    );
+}
+
+.mapping-map-legend-line.inheritance {
+    background: repeating-linear-gradient(
+        90deg,
+        #adb5bd 0px,
+        #adb5bd 5px,
+        transparent 5px,
+        transparent 10px
+    );
+}
+
+.mapping-map-legend-line.excluded {
+    background: #ced4da;
+    opacity: 0.5;
+}
+
+/* Context Menu Styles */
+.mapping-map-context-menu {
+    position: absolute;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e9ecef;
+    min-width: 180px;
+    z-index: 1000;
+    overflow: hidden;
+    animation: mappingMapContextFadeIn 0.15s ease;
+}
+
+@keyframes mappingMapContextFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.mapping-map-context-header {
+    padding: 10px 14px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mapping-map-context-icon {
+    font-size: 18px;
+}
+
+.mapping-map-context-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+}
+
+.mapping-map-context-divider {
+    height: 1px;
+    background: #e9ecef;
+}
+
+.mapping-map-context-item {
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #495057;
+    transition: background 0.15s ease;
+}
+
+.mapping-map-context-item:hover {
+    background: #f8f9fa;
+}
+
+.mapping-map-context-item i {
+    font-size: 14px;
+    width: 16px;
+    text-align: center;
+}
+
+.mapping-map-context-item.mapping-map-context-danger {
+    color: #dc3545;
+}
+
+.mapping-map-context-item.mapping-map-context-danger:hover {
+    background: #fff5f5;
+}
+
+.mapping-map-context-item.mapping-map-context-warning {
+    color: #6c757d;
+}
+
+.mapping-map-context-item.mapping-map-context-warning:hover {
+    background: #f8f9fa;
+}

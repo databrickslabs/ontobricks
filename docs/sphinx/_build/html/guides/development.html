@@ -1,0 +1,1991 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Development &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Product &amp; go-to-market" href="product.html" />
+    <link rel="prev" title="OntoBricks MCP Server" href="mcp.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#ontobricks-dependencies">OntoBricks Dependencies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#ontobricks-test-campaign">OntoBricks Test Campaign</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#ontobricks-permission-rights-management">OntoBricks — Permission &amp; Rights Management</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="mcp.html" title="previous chapter">OntoBricks MCP Server</a></li>
+      <li>Next: <a href="product.html" title="next chapter">Product &amp; go-to-market</a></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="development">
+<h1>Development<a class="headerlink" href="#development" title="Link to this heading">¶</a></h1>
+<p>Notes for contributors: dependencies, testing, and permission / SDK notes.</p>
+<section id="ontobricks-dependencies">
+<h2>OntoBricks Dependencies<a class="headerlink" href="#ontobricks-dependencies" title="Link to this heading">¶</a></h2>
+<p>This document describes all external dependencies used by OntoBricks, including Python packages, UI frameworks, and JavaScript libraries.</p>
+<hr class="docutils" />
+<section id="python-dependencies">
+<h3>Python Dependencies<a class="headerlink" href="#python-dependencies" title="Link to this heading">¶</a></h3>
+<section id="runtime-dependencies">
+<h4>Runtime Dependencies<a class="headerlink" href="#runtime-dependencies" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Package</p></th>
+<th class="head"><p>Version</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>License</p></th>
+<th class="head"><p>Link</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>FastAPI</strong></p></td>
+<td><p>≥0.109.0</p></td>
+<td><p>Modern, fast web framework for building APIs with Python</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://fastapi.tiangolo.com/">fastapi.tiangolo.com</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Uvicorn</strong></p></td>
+<td><p>≥0.27.0</p></td>
+<td><p>Lightning-fast ASGI server implementation (with <code class="docutils literal notranslate"><span class="pre">standard</span></code> extras)</p></td>
+<td><p>BSD-3-Clause</p></td>
+<td><p><a class="reference external" href="https://uvicorn.org/">uvicorn.org</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Starlette</strong></p></td>
+<td><p>≥0.35.0</p></td>
+<td><p>Lightweight ASGI toolkit (FastAPI dependency, pinned for middleware features)</p></td>
+<td><p>BSD-3-Clause</p></td>
+<td><p><a class="reference external" href="https://www.starlette.io/">starlette.io</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Jinja2</strong></p></td>
+<td><p>≥3.1.0</p></td>
+<td><p>Template engine for Python</p></td>
+<td><p>BSD-3-Clause</p></td>
+<td><p><a class="reference external" href="https://jinja.palletsprojects.com/">jinja.palletsprojects.com</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>pydantic</strong></p></td>
+<td><p>≥2.5.0</p></td>
+<td><p>Data validation using Python type hints</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://docs.pydantic.dev/">docs.pydantic.dev</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>pydantic-settings</strong></p></td>
+<td><p>≥2.1.0</p></td>
+<td><p>Settings management with environment variable loading (BaseSettings)</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://docs.pydantic.dev/latest/concepts/pydantic_settings/">docs.pydantic.dev/latest/concepts/pydantic_settings</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>python-multipart</strong></p></td>
+<td><p>≥0.0.6</p></td>
+<td><p>Multipart form data parsing for file uploads in FastAPI</p></td>
+<td><p>Apache-2.0</p></td>
+<td><p><a class="reference external" href="https://pypi.org/project/python-multipart/">pypi.org/project/python-multipart</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>itsdangerous</strong></p></td>
+<td><p>≥2.1.0</p></td>
+<td><p>Cryptographic signing utilities (available for session security)</p></td>
+<td><p>BSD-3-Clause</p></td>
+<td><p><a class="reference external" href="https://palletsprojects.com/p/itsdangerous/">palletsprojects.com/p/itsdangerous</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>aiofiles</strong></p></td>
+<td><p>≥23.0.0</p></td>
+<td><p>Async file I/O for Starlette static file serving</p></td>
+<td><p>Apache-2.0</p></td>
+<td><p><a class="reference external" href="https://pypi.org/project/aiofiles/">pypi.org/project/aiofiles</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>databricks-sql-connector</strong></p></td>
+<td><p>≥3.0.0</p></td>
+<td><p>Python SQL connector for Databricks SQL Warehouses</p></td>
+<td><p>Apache-2.0</p></td>
+<td><p><a class="reference external" href="https://pypi.org/project/databricks-sql-connector/">pypi.org/project/databricks-sql-connector</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>databricks-sdk</strong></p></td>
+<td><p>≥0.20.0</p></td>
+<td><p>Databricks SDK for workspace API, OAuth authentication, and auto-auth in App mode</p></td>
+<td><p>Apache-2.0</p></td>
+<td><p><a class="reference external" href="https://pypi.org/project/databricks-sdk/">pypi.org/project/databricks-sdk</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>pyarrow</strong></p></td>
+<td><p>≥14.0.0</p></td>
+<td><p>Columnar in-memory data format (required by databricks-sql-connector)</p></td>
+<td><p>Apache-2.0</p></td>
+<td><p><a class="reference external" href="https://arrow.apache.org/docs/python/">arrow.apache.org/docs/python</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>RDFLib</strong></p></td>
+<td><p>≥7.6.0</p></td>
+<td><p>Python library for working with RDF (Resource Description Framework)</p></td>
+<td><p>BSD-3-Clause</p></td>
+<td><p><a class="reference external" href="https://rdflib.readthedocs.io/">rdflib.readthedocs.io</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>python-dotenv</strong></p></td>
+<td><p>≥1.0.0</p></td>
+<td><p>Load environment variables from <code class="docutils literal notranslate"><span class="pre">.env</span></code> files</p></td>
+<td><p>BSD-3-Clause</p></td>
+<td><p><a class="reference external" href="https://pypi.org/project/python-dotenv/">pypi.org/project/python-dotenv</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>requests</strong></p></td>
+<td><p>≥2.31.0</p></td>
+<td><p>HTTP library for Python</p></td>
+<td><p>Apache-2.0</p></td>
+<td><p><a class="reference external" href="https://requests.readthedocs.io/">requests.readthedocs.io</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>real_ladybug</strong></p></td>
+<td><p>≥0.1.0</p></td>
+<td><p>LadybugDB embedded graph database engine (Cypher-based, used by LadybugDB triplestore backend)</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://pypi.org/project/real-ladybug/">pypi.org/project/real-ladybug</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>APScheduler</strong></p></td>
+<td><p>≥3.10.0</p></td>
+<td><p>Advanced Python Scheduler for background jobs (used by BuildScheduler for scheduled triple store builds)</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://pypi.org/project/APScheduler/">pypi.org/project/APScheduler</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>owlrl</strong></p></td>
+<td><p>≥7.0.0</p></td>
+<td><p>OWL 2 RL forward-chaining reasoner — performs deductive closure on RDFLib graphs for ontology-level inference</p></td>
+<td><p>W3C</p></td>
+<td><p><a class="reference external" href="https://owl-rl.readthedocs.io/">owl-rl.readthedocs.io</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>pyshacl</strong></p></td>
+<td><p>≥0.26.0</p></td>
+<td><p>W3C SHACL validator for RDFLib graphs — validates RDF data against SHACL shapes for data quality checks</p></td>
+<td><p>Apache-2.0</p></td>
+<td><p><a class="reference external" href="https://github.com/RDFLib/pySHACL">github.com/RDFLib/pySHACL</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>strawberry-graphql[fastapi]</strong></p></td>
+<td><p>≥0.220.0</p></td>
+<td><p>GraphQL library for Python — auto-generates typed schema from ontology and integrates with FastAPI</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://strawberry.rocks/">strawberry.rocks</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>MLflow</strong></p></td>
+<td><p>≥2.19.0</p></td>
+<td><p>ML lifecycle platform — used for agent tracing, evaluation, and the Databricks Agent Framework (ResponsesAgent)</p></td>
+<td><p>Apache-2.0</p></td>
+<td><p><a class="reference external" href="https://mlflow.org/">mlflow.org</a></p></td>
+</tr>
+</tbody>
+</table>
+<section id="mcp-server-additional-dependencies">
+<h5>MCP Server Additional Dependencies<a class="headerlink" href="#mcp-server-additional-dependencies" title="Link to this heading">¶</a></h5>
+<p>These packages are used by the MCP server (<code class="docutils literal notranslate"><span class="pre">src/mcp-server/</span></code>) which runs as a separate Databricks App:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Package</p></th>
+<th class="head"><p>Version</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>License</p></th>
+<th class="head"><p>Link</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>fastmcp</strong></p></td>
+<td><p>≥2.3.1</p></td>
+<td><p>Model Context Protocol (MCP) server SDK for exposing tools to LLMs</p></td>
+<td><p>Apache-2.0</p></td>
+<td><p><a class="reference external" href="https://gofastmcp.com/">gofastmcp.com</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>httpx</strong></p></td>
+<td><p>≥0.25.0</p></td>
+<td><p>Async HTTP client (used by MCP server to call the main app REST API)</p></td>
+<td><p>BSD-3-Clause</p></td>
+<td><p><a class="reference external" href="https://www.python-httpx.org/">www.python-httpx.org</a></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="development-dependencies">
+<h4>Development Dependencies<a class="headerlink" href="#development-dependencies" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Package</p></th>
+<th class="head"><p>Version</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>License</p></th>
+<th class="head"><p>Link</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>pytest</strong></p></td>
+<td><p>≥7.4.0</p></td>
+<td><p>Testing framework for Python</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://docs.pytest.org/">docs.pytest.org</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>pytest-asyncio</strong></p></td>
+<td><p>≥0.21.0</p></td>
+<td><p>Async test support for pytest</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://pypi.org/project/pytest-asyncio/">pypi.org/project/pytest-asyncio</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>pytest-cov</strong></p></td>
+<td><p>≥4.1.0</p></td>
+<td><p>Code coverage plugin for pytest</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://pypi.org/project/pytest-cov/">pypi.org/project/pytest-cov</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>httpx</strong></p></td>
+<td><p>≥0.25.0</p></td>
+<td><p>HTTP client for testing FastAPI applications</p></td>
+<td><p>BSD-3-Clause</p></td>
+<td><p><a class="reference external" href="https://www.python-httpx.org/">www.python-httpx.org</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>responses</strong></p></td>
+<td><p>≥0.24.0</p></td>
+<td><p>Mock HTTP request/response library for unit tests</p></td>
+<td><p>Apache-2.0</p></td>
+<td><p><a class="reference external" href="https://pypi.org/project/responses/">pypi.org/project/responses</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>playwright</strong></p></td>
+<td><p>≥1.40.0</p></td>
+<td><p>Browser automation for end-to-end tests</p></td>
+<td><p>Apache-2.0</p></td>
+<td><p><a class="reference external" href="https://playwright.dev/python/">playwright.dev/python</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>black</strong></p></td>
+<td><p>≥23.0.0</p></td>
+<td><p>Python code formatter</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://black.readthedocs.io/">black.readthedocs.io</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>flake8</strong></p></td>
+<td><p>≥6.0.0</p></td>
+<td><p>Python style guide enforcer</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://flake8.pycqa.org/">flake8.pycqa.org</a></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="frontend-dependencies-cdn">
+<h3>Frontend Dependencies (CDN)<a class="headerlink" href="#frontend-dependencies-cdn" title="Link to this heading">¶</a></h3>
+<section id="css-frameworks">
+<h4>CSS Frameworks<a class="headerlink" href="#css-frameworks" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Library</p></th>
+<th class="head"><p>Version</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>License</p></th>
+<th class="head"><p>CDN</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Bootstrap</strong></p></td>
+<td><p>5.3.2</p></td>
+<td><p>Front-end CSS framework for responsive UI components</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://cdn.jsdelivr.net/npm/bootstrap&#64;5.3.2/dist/css/bootstrap.min.css">cdn.jsdelivr.net/npm/bootstrap&#64;5.3.2</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Bootstrap Icons</strong></p></td>
+<td><p>1.11.2</p></td>
+<td><p>Official open-source SVG icon library for Bootstrap</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://cdn.jsdelivr.net/npm/bootstrap-icons&#64;1.11.2/font/bootstrap-icons.css">cdn.jsdelivr.net/npm/bootstrap-icons&#64;1.11.2</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Grid.js Theme</strong></p></td>
+<td><p>latest</p></td>
+<td><p>Mermaid theme for Grid.js data table</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://unpkg.com/gridjs/dist/theme/mermaid.min.css">unpkg.com/gridjs</a></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="javascript-libraries">
+<h4>JavaScript Libraries<a class="headerlink" href="#javascript-libraries" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Library</p></th>
+<th class="head"><p>Version</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>License</p></th>
+<th class="head"><p>CDN</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Bootstrap Bundle</strong></p></td>
+<td><p>5.3.2</p></td>
+<td><p>JavaScript plugins for Bootstrap (includes Popper.js)</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://cdn.jsdelivr.net/npm/bootstrap&#64;5.3.2/dist/js/bootstrap.bundle.min.js">cdn.jsdelivr.net/npm/bootstrap&#64;5.3.2</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>D3.js</strong></p></td>
+<td><p>7.x</p></td>
+<td><p>Data-driven document manipulation and graph data processing</p></td>
+<td><p>ISC</p></td>
+<td><p><a class="reference external" href="https://d3js.org/d3.v7.min.js">d3js.org/d3.v7.min.js</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Sigma.js</strong></p></td>
+<td><p>3.0.2</p></td>
+<td><p>WebGL-powered graph visualization library for large-scale networks</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://cdnjs.com/libraries/sigma.js/">cdnjs.com/libraries/sigma.js</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Graphology</strong></p></td>
+<td><p>0.26.0</p></td>
+<td><p>Robust graph data model and algorithm library (used with Sigma.js)</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://graphology.github.io/">graphology.github.io</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Graphology Library</strong></p></td>
+<td><p>0.8.0</p></td>
+<td><p>Standard library bundle for Graphology (includes ForceAtlas2 layout)</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://cdn.jsdelivr.net/npm/graphology-library&#64;0.8.0/">cdn.jsdelivr.net/npm/graphology-library</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Grid.js</strong></p></td>
+<td><p>latest</p></td>
+<td><p>Advanced table plugin with sorting, searching, and pagination</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://unpkg.com/gridjs/dist/gridjs.umd.js">unpkg.com/gridjs</a></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="local-bundled-libraries">
+<h3>Local/Bundled Libraries<a class="headerlink" href="#local-bundled-libraries" title="Link to this heading">¶</a></h3>
+<section id="ontoviz">
+<h4>OntoViz<a class="headerlink" href="#ontoviz" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Property</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Name</strong></p></td>
+<td><p>OntoViz</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Version</strong></p></td>
+<td><p>1.0.0</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Location</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">src/front/static/global/ontoviz/ontoviz.js</span></code>, <code class="docutils literal notranslate"><span class="pre">src/front/static/global/ontoviz/css/</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Description</strong></p></td>
+<td><p>Custom entity-relationship visual editor for ontology design</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>License</strong></p></td>
+<td><p>MIT</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Author</strong></p></td>
+<td><p>OntoBricks Team</p></td>
+</tr>
+</tbody>
+</table>
+<p>OntoViz is a lightweight, self-contained library for creating and managing ER diagrams. It provides:</p>
+<ul class="simple">
+<li><p>Drag-and-drop entity creation</p></li>
+<li><p>Visual relationship connections with direction control (forward, reverse, bidirectional)</p></li>
+<li><p><strong>Inheritance links</strong> for class hierarchies (rdfs:subClassOf)</p></li>
+<li><p>Entity attributes management with inherited properties display</p></li>
+<li><p>Auto-layout algorithms (grid and force-directed)</p></li>
+<li><p>Zoom and pan controls</p></li>
+<li><p>Minimap navigation</p></li>
+<li><p>JSON serialization for persistence</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="dependency-details">
+<h3>Dependency Details<a class="headerlink" href="#dependency-details" title="Link to this heading">¶</a></h3>
+<section id="fastapi">
+<h4>FastAPI<a class="headerlink" href="#fastapi" title="Link to this heading">¶</a></h4>
+<p>FastAPI is the core web framework powering OntoBricks. It provides:</p>
+<ul class="simple">
+<li><p>Modern async route handling with automatic OpenAPI documentation</p></li>
+<li><p>Custom file-based session management</p></li>
+<li><p>Jinja2 templating for HTML rendering</p></li>
+<li><p>Static file serving via Starlette</p></li>
+</ul>
+<p><strong>Example usage:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">FastAPI</span><span class="p">,</span> <span class="n">Request</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.templating</span><span class="w"> </span><span class="kn">import</span> <span class="n">Jinja2Templates</span>
+
+<span class="n">app</span> <span class="o">=</span> <span class="n">FastAPI</span><span class="p">()</span>
+<span class="n">templates</span> <span class="o">=</span> <span class="n">Jinja2Templates</span><span class="p">(</span><span class="n">directory</span><span class="o">=</span><span class="s2">&quot;src/front/templates&quot;</span><span class="p">)</span>
+
+<span class="nd">@app</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;/ontology/&#39;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">ontology_page</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">templates</span><span class="o">.</span><span class="n">TemplateResponse</span><span class="p">(</span><span class="s2">&quot;ontology.html&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;request&quot;</span><span class="p">:</span> <span class="n">request</span><span class="p">})</span>
+</pre></div>
+</div>
+</section>
+<section id="databricks-sql-connector">
+<h4>databricks-sql-connector<a class="headerlink" href="#databricks-sql-connector" title="Link to this heading">¶</a></h4>
+<p>Enables direct connectivity to Databricks SQL Warehouses for executing queries.</p>
+<p><strong>Example usage:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">sql</span>
+
+<span class="k">with</span> <span class="n">sql</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span>
+    <span class="n">server_hostname</span><span class="o">=</span><span class="n">host</span><span class="p">,</span>
+    <span class="n">http_path</span><span class="o">=</span><span class="n">warehouse_path</span><span class="p">,</span>
+    <span class="n">access_token</span><span class="o">=</span><span class="n">token</span>
+<span class="p">)</span> <span class="k">as</span> <span class="n">connection</span><span class="p">:</span>
+    <span class="k">with</span> <span class="n">connection</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cursor</span><span class="p">:</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT * FROM catalog.schema.table LIMIT 10&quot;</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="rdflib">
+<h4>RDFLib<a class="headerlink" href="#rdflib" title="Link to this heading">¶</a></h4>
+<p>Powers all RDF/OWL operations including:</p>
+<ul class="simple">
+<li><p>Parsing OWL ontologies (Turtle, RDF/XML formats)</p></li>
+<li><p>Generating OWL content from ontology configuration</p></li>
+<li><p>SPARQL query execution (local mode)</p></li>
+<li><p>R2RML mapping generation</p></li>
+</ul>
+<p><strong>Example usage:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">Namespace</span><span class="p">,</span> <span class="n">URIRef</span><span class="p">,</span> <span class="n">Literal</span>
+
+<span class="n">g</span> <span class="o">=</span> <span class="n">Graph</span><span class="p">()</span>
+<span class="n">g</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="s2">&quot;ontology.ttl&quot;</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;turtle&quot;</span><span class="p">)</span>
+
+<span class="c1">## Query the graph</span>
+<span class="k">for</span> <span class="n">s</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">g</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">s</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">o</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="bootstrap">
+<h4>Bootstrap<a class="headerlink" href="#bootstrap" title="Link to this heading">¶</a></h4>
+<p>Provides the visual foundation for OntoBricks UI including:</p>
+<ul class="simple">
+<li><p>Responsive grid layout</p></li>
+<li><p>Navigation components (navbar, dropdowns)</p></li>
+<li><p>Form controls and validation</p></li>
+<li><p>Modal dialogs</p></li>
+<li><p>Cards and panels</p></li>
+<li><p>Buttons and badges</p></li>
+</ul>
+<p><strong>Example usage:</strong></p>
+<div class="highlight-html notranslate"><div class="highlight"><pre><span></span><span class="p">&lt;</span><span class="nt">div</span> <span class="na">class</span><span class="o">=</span><span class="s">&quot;card&quot;</span><span class="p">&gt;</span>
+    <span class="p">&lt;</span><span class="nt">div</span> <span class="na">class</span><span class="o">=</span><span class="s">&quot;card-header&quot;</span><span class="p">&gt;</span>
+        <span class="p">&lt;</span><span class="nt">i</span> <span class="na">class</span><span class="o">=</span><span class="s">&quot;bi bi-diagram-3&quot;</span><span class="p">&gt;&lt;/</span><span class="nt">i</span><span class="p">&gt;</span> Entity Details
+    <span class="p">&lt;/</span><span class="nt">div</span><span class="p">&gt;</span>
+    <span class="p">&lt;</span><span class="nt">div</span> <span class="na">class</span><span class="o">=</span><span class="s">&quot;card-body&quot;</span><span class="p">&gt;</span>
+        <span class="p">&lt;</span><span class="nt">button</span> <span class="na">class</span><span class="o">=</span><span class="s">&quot;btn btn-primary&quot;</span><span class="p">&gt;</span>Save<span class="p">&lt;/</span><span class="nt">button</span><span class="p">&gt;</span>
+    <span class="p">&lt;/</span><span class="nt">div</span><span class="p">&gt;</span>
+<span class="p">&lt;/</span><span class="nt">div</span><span class="p">&gt;</span>
+</pre></div>
+</div>
+</section>
+<section id="d3-js">
+<h4>D3.js<a class="headerlink" href="#d3-js" title="Link to this heading">¶</a></h4>
+<p>Used for data-driven DOM manipulation and graph data processing in the Digital Twin page:</p>
+<ul class="simple">
+<li><p>Data array processing for graph node and link construction</p></li>
+<li><p>SVG element management</p></li>
+<li><p>Force simulation utilities</p></li>
+</ul>
+<p><strong>Example usage:</strong></p>
+<div class="highlight-javascript notranslate"><div class="highlight"><pre><span></span><span class="kd">const</span><span class="w"> </span><span class="nx">svg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">d3</span><span class="p">.</span><span class="nx">select</span><span class="p">(</span><span class="s2">&quot;#graphContainer&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="p">.</span><span class="nx">append</span><span class="p">(</span><span class="s2">&quot;svg&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="p">.</span><span class="nx">attr</span><span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">width</span><span class="p">)</span>
+<span class="w">    </span><span class="p">.</span><span class="nx">attr</span><span class="p">(</span><span class="s2">&quot;height&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">height</span><span class="p">);</span>
+
+<span class="kd">const</span><span class="w"> </span><span class="nx">simulation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">d3</span><span class="p">.</span><span class="nx">forceSimulation</span><span class="p">(</span><span class="nx">nodes</span><span class="p">)</span>
+<span class="w">    </span><span class="p">.</span><span class="nx">force</span><span class="p">(</span><span class="s2">&quot;link&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">d3</span><span class="p">.</span><span class="nx">forceLink</span><span class="p">(</span><span class="nx">links</span><span class="p">).</span><span class="nx">id</span><span class="p">(</span><span class="nx">d</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">d</span><span class="p">.</span><span class="nx">id</span><span class="p">))</span>
+<span class="w">    </span><span class="p">.</span><span class="nx">force</span><span class="p">(</span><span class="s2">&quot;charge&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">d3</span><span class="p">.</span><span class="nx">forceManyBody</span><span class="p">().</span><span class="nx">strength</span><span class="p">(</span><span class="o">-</span><span class="mf">300</span><span class="p">))</span>
+<span class="w">    </span><span class="p">.</span><span class="nx">force</span><span class="p">(</span><span class="s2">&quot;center&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">d3</span><span class="p">.</span><span class="nx">forceCenter</span><span class="p">(</span><span class="nx">width</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">2</span><span class="p">,</span><span class="w"> </span><span class="nx">height</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">2</span><span class="p">));</span>
+</pre></div>
+</div>
+</section>
+<section id="sigma-js-graphology">
+<h4>Sigma.js + Graphology<a class="headerlink" href="#sigma-js-graphology" title="Link to this heading">¶</a></h4>
+<p>Powers the WebGL-accelerated graph visualization in the Digital Twin “Knowledge Graph” view:</p>
+<ul class="simple">
+<li><p>High-performance rendering of large graphs via WebGL</p></li>
+<li><p>Interactive pan, zoom, hover highlighting, and click selection</p></li>
+<li><p>ForceAtlas2 layout algorithm (via graphology-library)</p></li>
+<li><p>Node/edge reducers for real-time filtering and search highlighting</p></li>
+</ul>
+<p><strong>Example usage:</strong></p>
+<div class="highlight-javascript notranslate"><div class="highlight"><pre><span></span><span class="kd">const</span><span class="w"> </span><span class="nx">graph</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">graphology</span><span class="p">.</span><span class="nx">Graph</span><span class="p">();</span>
+<span class="nx">graph</span><span class="p">.</span><span class="nx">addNode</span><span class="p">(</span><span class="s2">&quot;1&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">label</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;Alice&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">x</span><span class="o">:</span><span class="w"> </span><span class="mf">0</span><span class="p">,</span><span class="w"> </span><span class="nx">y</span><span class="o">:</span><span class="w"> </span><span class="mf">0</span><span class="p">,</span><span class="w"> </span><span class="nx">size</span><span class="o">:</span><span class="w"> </span><span class="mf">10</span><span class="p">,</span><span class="w"> </span><span class="nx">color</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;#FF3621&quot;</span><span class="w"> </span><span class="p">});</span>
+<span class="nx">graph</span><span class="p">.</span><span class="nx">addNode</span><span class="p">(</span><span class="s2">&quot;2&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">label</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;Bob&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">x</span><span class="o">:</span><span class="w"> </span><span class="mf">1</span><span class="p">,</span><span class="w"> </span><span class="nx">y</span><span class="o">:</span><span class="w"> </span><span class="mf">1</span><span class="p">,</span><span class="w"> </span><span class="nx">size</span><span class="o">:</span><span class="w"> </span><span class="mf">10</span><span class="p">,</span><span class="w"> </span><span class="nx">color</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;#6366F1&quot;</span><span class="w"> </span><span class="p">});</span>
+<span class="nx">graph</span><span class="p">.</span><span class="nx">addEdge</span><span class="p">(</span><span class="s2">&quot;1&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;2&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">label</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;knows&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">size</span><span class="o">:</span><span class="w"> </span><span class="mf">2</span><span class="p">,</span><span class="w"> </span><span class="nx">color</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;#bbb&quot;</span><span class="w"> </span><span class="p">});</span>
+
+<span class="kd">const</span><span class="w"> </span><span class="nx">renderer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Sigma</span><span class="p">(</span><span class="nx">graph</span><span class="p">,</span><span class="w"> </span><span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s2">&quot;container&quot;</span><span class="p">));</span>
+</pre></div>
+</div>
+</section>
+<section id="grid-js">
+<h4>Grid.js<a class="headerlink" href="#grid-js" title="Link to this heading">¶</a></h4>
+<p>Provides advanced data table functionality for query results:</p>
+<ul class="simple">
+<li><p>Sortable columns</p></li>
+<li><p>Search/filter capabilities</p></li>
+<li><p>Pagination</p></li>
+<li><p>Resizable columns</p></li>
+<li><p>Custom cell rendering</p></li>
+</ul>
+<p><strong>Example usage:</strong></p>
+<div class="highlight-javascript notranslate"><div class="highlight"><pre><span></span><span class="ow">new</span><span class="w"> </span><span class="nx">gridjs</span><span class="p">.</span><span class="nx">Grid</span><span class="p">({</span>
+<span class="w">    </span><span class="nx">columns</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Name&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Email&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Department&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="nx">data</span><span class="o">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="p">[</span><span class="s2">&quot;John&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;john@example.com&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Engineering&quot;</span><span class="p">],</span>
+<span class="w">        </span><span class="p">[</span><span class="s2">&quot;Jane&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;jane@example.com&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Marketing&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="p">],</span>
+<span class="w">    </span><span class="nx">search</span><span class="o">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">sort</span><span class="o">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">pagination</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">limit</span><span class="o">:</span><span class="w"> </span><span class="mf">100</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}).</span><span class="nx">render</span><span class="p">(</span><span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s2">&quot;resultsContainer&quot;</span><span class="p">));</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="license-summary">
+<h3>License Summary<a class="headerlink" href="#license-summary" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>License</p></th>
+<th class="head"><p>Packages</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>MIT</strong></p></td>
+<td><p>FastAPI, pydantic, pydantic-settings, Bootstrap, Bootstrap Icons, Sigma.js, Graphology, Grid.js, OntoViz, strawberry-graphql, real_ladybug, pytest, pytest-asyncio, pytest-cov, black, flake8</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>BSD-3-Clause</strong></p></td>
+<td><p>Uvicorn, Starlette, Jinja2, itsdangerous, RDFLib, python-dotenv, httpx</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Apache-2.0</strong></p></td>
+<td><p>databricks-sql-connector, databricks-sdk, pyarrow, python-multipart, aiofiles, requests, fastmcp, MLflow, pyshacl, responses, playwright</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>LGPL-3.0</strong></p></td>
+<td><p>psycopg</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>ISC</strong></p></td>
+<td><p>D3.js</p></td>
+</tr>
+</tbody>
+</table>
+<p>All dependencies use permissive open-source licenses compatible with commercial use.</p>
+</section>
+<hr class="docutils" />
+<section id="version-compatibility">
+<h3>Version Compatibility<a class="headerlink" href="#version-compatibility" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Python</strong>: ≥3.10</p></li>
+<li><p><strong>Node.js</strong>: Not required (all frontend assets via CDN)</p></li>
+<li><p><strong>Browser</strong>: Modern browsers (Chrome, Firefox, Safari, Edge)</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="updating-dependencies">
+<h3>Updating Dependencies<a class="headerlink" href="#updating-dependencies" title="Link to this heading">¶</a></h3>
+<section id="id1">
+<h4>Python Dependencies<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1">## Update all dependencies</span>
+uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span>-r<span class="w"> </span>pyproject.toml
+
+<span class="c1">## Update specific package</span>
+uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span>fastapi
+</pre></div>
+</div>
+</section>
+<section id="frontend-dependencies">
+<h4>Frontend Dependencies<a class="headerlink" href="#frontend-dependencies" title="Link to this heading">¶</a></h4>
+<p>Frontend libraries are loaded via CDN with pinned versions. To update:</p>
+<ol class="arabic simple">
+<li><p>Edit <code class="docutils literal notranslate"><span class="pre">src/front/templates/base.html</span></code> for Bootstrap</p></li>
+<li><p>Edit <code class="docutils literal notranslate"><span class="pre">src/front/templates/dtwin.html</span></code> for D3.js and Grid.js</p></li>
+<li><p>Test thoroughly after updates</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="security-considerations">
+<h3>Security Considerations<a class="headerlink" href="#security-considerations" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>All CDN resources use HTTPS</p></li>
+<li><p>Python packages are installed from PyPI</p></li>
+<li><p>Regular security audits recommended via <code class="docutils literal notranslate"><span class="pre">pip-audit</span></code></p></li>
+<li><p>Keep dependencies updated for security patches</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="ontobricks-test-campaign">
+<h2>OntoBricks Test Campaign<a class="headerlink" href="#ontobricks-test-campaign" title="Link to this heading">¶</a></h2>
+<p>This document describes the OntoBricks automated test suite: what is tested, how to run it, the test infrastructure, and conventions for adding new tests.</p>
+<hr class="docutils" />
+<section id="quick-start">
+<h3>Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1">## Install dev dependencies (if not already done)</span>
+uv<span class="w"> </span>sync<span class="w"> </span>--dev
+
+<span class="c1">## Run the full test suite</span>
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/
+
+<span class="c1">## Run with coverage report</span>
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/<span class="w"> </span>--cov<span class="o">=</span>back<span class="w"> </span>--cov<span class="o">=</span>front<span class="w"> </span>--cov<span class="o">=</span>shared<span class="w"> </span>--cov<span class="o">=</span>api<span class="w"> </span>--cov<span class="o">=</span>agents<span class="w"> </span>--cov-report<span class="o">=</span>term-missing
+
+<span class="c1">## Run a single test file</span>
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_owl_parser.py
+
+<span class="c1">## Run a single test class or method</span>
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_owl_parser.py::TestGetClasses::test_returns_defined_classes
+
+<span class="c1">## Run only unit tests (by marker)</span>
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>-m<span class="w"> </span>unit
+
+<span class="c1">## Run only integration tests (by marker)</span>
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>-m<span class="w"> </span>integration
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="test-architecture">
+<h3>Test Architecture<a class="headerlink" href="#test-architecture" title="Link to this heading">¶</a></h3>
+<section id="directory-structure">
+<h4>Directory Structure<a class="headerlink" href="#directory-structure" title="Link to this heading">¶</a></h4>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">tests</span><span class="o">/</span>
+  <span class="n">conftest</span><span class="o">.</span><span class="n">py</span>                       <span class="c1"># Shared fixtures and test configuration</span>
+  <span class="n">fixtures</span><span class="o">/</span>
+    <span class="n">sample_ontology</span><span class="o">.</span><span class="n">owl</span>             <span class="c1"># Sample OWL/Turtle content for parsing tests</span>
+    <span class="n">sample_project</span><span class="o">.</span><span class="n">json</span>             <span class="c1"># Sample project export for import/export tests</span>
+  <span class="n">test_owl_parser</span><span class="o">.</span><span class="n">py</span>                <span class="c1"># OWL parser unit tests</span>
+  <span class="n">test_owl_generator</span><span class="o">.</span><span class="n">py</span>             <span class="c1"># OWL generator unit tests</span>
+  <span class="n">test_r2rml_parser</span><span class="o">.</span><span class="n">py</span>              <span class="c1"># R2RML parser unit tests</span>
+  <span class="n">test_r2rml_generator</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># R2RML generator unit tests</span>
+  <span class="n">test_sparql_service</span><span class="o">.</span><span class="n">py</span>            <span class="c1"># SPARQL translation and local execution</span>
+  <span class="n">test_ontology_service</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># Ontology domain helpers (Ontology class)</span>
+  <span class="n">test_home_service</span><span class="o">.</span><span class="n">py</span>              <span class="c1"># Home/dashboard service layer</span>
+  <span class="n">test_dtwin_service</span><span class="o">.</span><span class="n">py</span>             <span class="c1"># Digital Twin domain class (back.objects.digitaltwin)</span>
+  <span class="n">test_mapping_service</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># Mapping domain class (back.objects.mapping.Mapping)</span>
+  <span class="n">test_project_service</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># Project domain class (back.objects.project.Project)</span>
+  <span class="n">test_project_session</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># ProjectSession state management</span>
+  <span class="n">test_databricks_client</span><span class="o">.</span><span class="n">py</span>         <span class="c1"># Databricks client (mocked)</span>
+  <span class="n">test_llm_utils</span><span class="o">.</span><span class="n">py</span>                 <span class="c1"># LLM retry logic</span>
+  <span class="n">test_triplestore_factory</span><span class="o">.</span><span class="n">py</span>       <span class="c1"># Triplestore factory</span>
+  <span class="n">test_ladybug</span><span class="o">.</span><span class="n">py</span>                   <span class="c1"># LadybugDB triple store backend (flat model)</span>
+  <span class="n">test_ladybug_schema</span><span class="o">.</span><span class="n">py</span>            <span class="c1"># LadybugDB graph schema generation</span>
+  <span class="n">test_ladybug_sync</span><span class="o">.</span><span class="n">py</span>              <span class="c1"># LadybugDB UC Volume sync</span>
+  <span class="n">test_routes</span><span class="o">.</span><span class="n">py</span>                    <span class="c1"># HTTP route tests (all endpoints)</span>
+  <span class="n">test_sql_wizard</span><span class="o">.</span><span class="n">py</span>                <span class="c1"># SQL Wizard service (pre-existing)</span>
+  <span class="n">test_ui_rendering</span><span class="o">.</span><span class="n">py</span>              <span class="c1"># UI Layer 1: HTML DOM structure tests (stdlib html.parser)</span>
+  <span class="n">test_workflow_owl_roundtrip</span><span class="o">.</span><span class="n">py</span>    <span class="c1"># Integration: OWL generate -&gt; parse cycle</span>
+  <span class="n">test_workflow_mapping</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># Integration: ontology -&gt; R2RML pipeline</span>
+  <span class="n">test_workflow_sparql</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># Integration: SPARQL-to-SQL translation pipeline</span>
+  <span class="n">test_workflow_project</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># Integration: project export/import cycle</span>
+  <span class="n">e2e</span><span class="o">/</span>
+    <span class="n">conftest</span><span class="o">.</span><span class="n">py</span>                     <span class="c1"># Uvicorn server + Playwright browser fixtures</span>
+    <span class="n">test_e2e_flows</span><span class="o">.</span><span class="n">py</span>               <span class="c1"># UI Layer 2: end-to-end browser tests (Playwright)</span>
+</pre></div>
+</div>
+</section>
+<section id="configuration">
+<h4>Configuration<a class="headerlink" href="#configuration" title="Link to this heading">¶</a></h4>
+<p>Test configuration lives in two files:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">pytest.ini</span></code></strong> – Test discovery, markers, and default options (<code class="docutils literal notranslate"><span class="pre">-v</span></code>, <code class="docutils literal notranslate"><span class="pre">--tb=short</span></code>, <code class="docutils literal notranslate"><span class="pre">--strict-markers</span></code>).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code></strong> (<code class="docutils literal notranslate"><span class="pre">[tool.uv].dev-dependencies</span></code>) – Dev dependencies: <code class="docutils literal notranslate"><span class="pre">pytest</span></code>, <code class="docutils literal notranslate"><span class="pre">pytest-asyncio</span></code>, <code class="docutils literal notranslate"><span class="pre">httpx</span></code>, <code class="docutils literal notranslate"><span class="pre">pytest-cov</span></code>, <code class="docutils literal notranslate"><span class="pre">responses</span></code>, <code class="docutils literal notranslate"><span class="pre">black</span></code>, <code class="docutils literal notranslate"><span class="pre">flake8</span></code>, <code class="docutils literal notranslate"><span class="pre">playwright</span></code>.</p></li>
+</ul>
+</section>
+<section id="shared-fixtures-conftest-py">
+<h4>Shared Fixtures (<code class="docutils literal notranslate"><span class="pre">conftest.py</span></code>)<a class="headerlink" href="#shared-fixtures-conftest-py" title="Link to this heading">¶</a></h4>
+<p>The <code class="docutils literal notranslate"><span class="pre">conftest.py</span></code> file provides reusable fixtures available to all test files:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Fixture</p></th>
+<th class="head"><p>Scope</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">setup_test_env</span></code></p></td>
+<td><p>session</p></td>
+<td><p>Sets <code class="docutils literal notranslate"><span class="pre">TESTING=1</span></code>, removes Databricks env vars to isolate tests from production</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">client</span></code></p></td>
+<td><p>function</p></td>
+<td><p>Starlette <code class="docutils literal notranslate"><span class="pre">TestClient</span></code> wrapping the FastAPI app</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">mock_session_mgr</span></code></p></td>
+<td><p>function</p></td>
+<td><p>Mocked <code class="docutils literal notranslate"><span class="pre">SessionManager</span></code> returning a fresh <code class="docutils literal notranslate"><span class="pre">ProjectSession</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">project_session</span></code></p></td>
+<td><p>function</p></td>
+<td><p>A clean <code class="docutils literal notranslate"><span class="pre">ProjectSession</span></code> with a temp directory</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sample_ontology_config</span></code></p></td>
+<td><p>function</p></td>
+<td><p>Dict with base URI, classes (Person, Organization), properties, constraints</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sample_mapping_config</span></code></p></td>
+<td><p>function</p></td>
+<td><p>Dict with entity and relationship mapping definitions</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sample_owl_content</span></code></p></td>
+<td><p>function</p></td>
+<td><p>Raw OWL/Turtle string loaded from <code class="docutils literal notranslate"><span class="pre">tests/fixtures/sample_ontology.owl</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">mock_databricks_client</span></code></p></td>
+<td><p>function</p></td>
+<td><p>Mocked <code class="docutils literal notranslate"><span class="pre">DatabricksClient</span></code> with stubbed catalog/schema/table methods</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="what-is-tested">
+<h3>What Is Tested<a class="headerlink" href="#what-is-tested" title="Link to this heading">¶</a></h3>
+<section id="p0-core-module-unit-tests-62-tests">
+<h4>P0 – Core Module Unit Tests (62 tests)<a class="headerlink" href="#p0-core-module-unit-tests-62-tests" title="Link to this heading">¶</a></h4>
+<p>These test the pure-logic modules that implement OntoBricks’ semantic web capabilities. No HTTP, no mocking of external services.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Test File</p></th>
+<th class="head"><p>Tests</p></th>
+<th class="head"><p>Module Under Test</p></th>
+<th class="head"><p>What Is Verified</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_owl_parser.py</span></code></p></td>
+<td><p>24</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.core.w3c.owl.OntologyParser</span></code></p></td>
+<td><p>Initialization, <code class="docutils literal notranslate"><span class="pre">_to_camel_case</span></code>, <code class="docutils literal notranslate"><span class="pre">get_classes</span></code>, <code class="docutils literal notranslate"><span class="pre">get_properties</span></code>, <code class="docutils literal notranslate"><span class="pre">get_ontology_info</span></code>, <code class="docutils literal notranslate"><span class="pre">get_constraints</span></code>, <code class="docutils literal notranslate"><span class="pre">get_swrl_rules</span></code>, <code class="docutils literal notranslate"><span class="pre">get_axioms</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_owl_generator.py</span></code></p></td>
+<td><p>18</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.core.w3c.owl.OntologyGenerator</span></code></p></td>
+<td><p>Basic generation, classes with hierarchy, datatype/object properties, property constraints, SWRL rules, axioms, generate-then-parse roundtrip</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_r2rml_generator.py</span></code></p></td>
+<td><p>11</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.core.w3c.r2rml.R2RMLGenerator</span></code></p></td>
+<td><p>Initialization, entity mapping (SQL query, label, attributes, exclusion flag), relationship mapping, <code class="docutils literal notranslate"><span class="pre">generate_r2rml_from_config</span></code> convenience function</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_r2rml_parser.py</span></code></p></td>
+<td><p>9</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.core.w3c.r2rml.R2RMLParser</span></code></p></td>
+<td><p>Valid/invalid R2RML parsing, entity extraction, <code class="docutils literal notranslate"><span class="pre">_parse_table_name</span></code> helper, <code class="docutils literal notranslate"><span class="pre">parse_r2rml_content</span></code> convenience, generate-then-parse roundtrip</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="p0-service-layer-unit-tests-48-tests">
+<h4>P0 – Service Layer Unit Tests (48 tests)<a class="headerlink" href="#p0-service-layer-unit-tests-48-tests" title="Link to this heading">¶</a></h4>
+<p>Test the business-logic service functions that sit between routes and core modules.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Test File</p></th>
+<th class="head"><p>Tests</p></th>
+<th class="head"><p>Module Under Test</p></th>
+<th class="head"><p>What Is Verified</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_sparql_service.py</span></code></p></td>
+<td><p>9</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.core.w3c.sparql</span></code></p></td>
+<td><p>SQL dialect helpers, <code class="docutils literal notranslate"><span class="pre">extract_r2rml_mappings</span></code>, <code class="docutils literal notranslate"><span class="pre">execute_local_query</span></code> (SELECT, LIMIT), <code class="docutils literal notranslate"><span class="pre">translate_sparql_to_spark</span></code> (non-SELECT rejection, basic SELECT)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_ontology_service.py</span></code></p></td>
+<td><p>50</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.objects.ontology.Ontology</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ensure_uris</span></code>, <code class="docutils literal notranslate"><span class="pre">get_ontology_stats</span></code>, <code class="docutils literal notranslate"><span class="pre">normalize_property_domain_range</span></code>, <code class="docutils literal notranslate"><span class="pre">prune_mappings_to_ontology_uris</span></code>, <code class="docutils literal notranslate"><span class="pre">save_ontology_config_from_editor</span></code>, <code class="docutils literal notranslate"><span class="pre">delete_class_by_uri</span></code>, <code class="docutils literal notranslate"><span class="pre">delete_property_by_uri</span></code>, <code class="docutils literal notranslate"><span class="pre">add_class</span></code>, <code class="docutils literal notranslate"><span class="pre">update_class</span></code>, <code class="docutils literal notranslate"><span class="pre">add_property</span></code>, <code class="docutils literal notranslate"><span class="pre">update_property</span></code>, <code class="docutils literal notranslate"><span class="pre">ingest_owl</span></code>, <code class="docutils literal notranslate"><span class="pre">apply_parsed_rdfs_to_project</span></code>, <code class="docutils literal notranslate"><span class="pre">rename_relationship_references</span></code>, <code class="docutils literal notranslate"><span class="pre">apply_agent_ontology_changes</span></code>, <code class="docutils literal notranslate"><span class="pre">validate_swrl_rule</span></code>, <code class="docutils literal notranslate"><span class="pre">merge_icon_suggestions</span></code>, <code class="docutils literal notranslate"><span class="pre">postprocess_generated_owl</span></code>, <code class="docutils literal notranslate"><span class="pre">build_class_from_data</span></code>, <code class="docutils literal notranslate"><span class="pre">build_property_from_data</span></code>, <code class="docutils literal notranslate"><span class="pre">validate_constraint</span></code>, <code class="docutils literal notranslate"><span class="pre">generate_owl</span></code>, <code class="docutils literal notranslate"><span class="pre">parse_owl</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_home_service.py</span></code></p></td>
+<td><p>13</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.services.home</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">get_session_status</span></code>, <code class="docutils literal notranslate"><span class="pre">get_ontology_status</span></code>, <code class="docutils literal notranslate"><span class="pre">validate_ontology</span></code>, <code class="docutils literal notranslate"><span class="pre">validate_mapping</span></code>, <code class="docutils literal notranslate"><span class="pre">validate_status</span></code>, <code class="docutils literal notranslate"><span class="pre">get_detailed_validation</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_dtwin_service.py</span></code></p></td>
+<td><p>13</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.objects.digitaltwin</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_normalize_base_uri</span></code>, <code class="docutils literal notranslate"><span class="pre">_safe_class_label</span></code>, <code class="docutils literal notranslate"><span class="pre">augment_mappings_from_config</span></code>, <code class="docutils literal notranslate"><span class="pre">augment_relationships_from_config</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="p1-mocked-external-dependencies-72-tests">
+<h4>P1 – Mocked External Dependencies (72 tests)<a class="headerlink" href="#p1-mocked-external-dependencies-72-tests" title="Link to this heading">¶</a></h4>
+<p>These use <code class="docutils literal notranslate"><span class="pre">unittest.mock</span></code> to isolate modules that depend on external systems (Databricks, LLMs, file system).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Test File</p></th>
+<th class="head"><p>Tests</p></th>
+<th class="head"><p>Module Under Test</p></th>
+<th class="head"><p>What Is Verified</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_databricks_client.py</span></code></p></td>
+<td><p>20</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.core.databricks.DatabricksClient</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">is_databricks_app</span></code>, <code class="docutils literal notranslate"><span class="pre">normalize_host</span></code>, <code class="docutils literal notranslate"><span class="pre">get_workspace_host</span></code>, <code class="docutils literal notranslate"><span class="pre">DatabricksClient</span></code> init, <code class="docutils literal notranslate"><span class="pre">has_valid_auth</span></code>, <code class="docutils literal notranslate"><span class="pre">test_connection</span></code>, <code class="docutils literal notranslate"><span class="pre">get_catalogs</span></code>, <code class="docutils literal notranslate"><span class="pre">get_schemas</span></code>, <code class="docutils literal notranslate"><span class="pre">get_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">get_table_columns</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_project_session.py</span></code></p></td>
+<td><p>21</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.objects.session.project_session</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">get_empty_project</span></code>, <code class="docutils literal notranslate"><span class="pre">ProjectSession</span></code> properties (info, version, ontology, assignment, generated, R2RML), save/reset, export/import, legacy migration</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_mapping_service.py</span></code></p></td>
+<td><p>14</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.objects.mapping.Mapping</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">build_entity_mapping</span></code>, <code class="docutils literal notranslate"><span class="pre">build_relationship_mapping</span></code>, add/update/delete entities and relationships, <code class="docutils literal notranslate"><span class="pre">get_mapping_stats</span></code>, <code class="docutils literal notranslate"><span class="pre">save_mapping_config</span></code>, <code class="docutils literal notranslate"><span class="pre">reset_mapping</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_project_service.py</span></code></p></td>
+<td><p>8</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.objects.project.Project</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">get_project_info</span></code>, <code class="docutils literal notranslate"><span class="pre">get_project_stats</span></code>, <code class="docutils literal notranslate"><span class="pre">save_project_info</span></code>, <code class="docutils literal notranslate"><span class="pre">get_session_debug_data</span></code> (secret masking, value truncation), <code class="docutils literal notranslate"><span class="pre">get_project_template_data</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_llm_utils.py</span></code></p></td>
+<td><p>5</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">agents.llm_utils</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">call_llm_with_retry</span></code> – success, retry on 429/503 HTTP errors, retry on timeout, retry exhaustion</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_triplestore_factory.py</span></code></p></td>
+<td><p>4</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.core.triplestore.TripleStoreFactory</span></code></p></td>
+<td><p>Unknown backend handling, missing Delta config, successful Delta instantiation (mocked)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="p1b-ladybugdb-tests-82-tests">
+<h4>P1b – LadybugDB Tests (82 tests)<a class="headerlink" href="#p1b-ladybugdb-tests-82-tests" title="Link to this heading">¶</a></h4>
+<p>These test the LadybugDB embedded graph database backend end-to-end using a real <code class="docutils literal notranslate"><span class="pre">real_ladybug</span></code> database (on-disk in <code class="docutils literal notranslate"><span class="pre">/tmp</span></code>, cleaned up after each test). Skipped automatically if <code class="docutils literal notranslate"><span class="pre">real_ladybug</span></code> is not installed.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Test File</p></th>
+<th class="head"><p>Tests</p></th>
+<th class="head"><p>Module Under Test</p></th>
+<th class="head"><p>What Is Verified</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_ladybug.py</span></code></p></td>
+<td><p>45</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.core.triplestore.ladybugdb</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">LadybugFlatStore</span></code> flat model: lifecycle (create/drop/close), insert/query, count, status, aggregate stats, type/predicate distributions, find subjects (by type, search, pagination), resolve by ID, triples for subjects, seed subjects (all match modes), paginated queries, BFS traversal, pattern matching, neighbor expansion, SQL-to-Cypher condition translation</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_ladybug_schema.py</span></code></p></td>
+<td><p>22</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.core.triplestore.ladybugdb</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GraphSchema</span></code>, <code class="docutils literal notranslate"><span class="pre">NodeTableDef</span></code>, <code class="docutils literal notranslate"><span class="pre">RelTableDef</span></code>, identifier sanitization, local name extraction, schema generation from ontology classes + properties, URI-to-table mappings, fallback handling, DDL generation, triple classification (node inserts, relationships, attributes)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_ladybug_sync.py</span></code></p></td>
+<td><p>15</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.core.triplestore.ladybugdb</span></code></p></td>
+<td><p>Path helpers, <code class="docutils literal notranslate"><span class="pre">sync_to_volume</span></code> (success, missing local, upload failure), <code class="docutils literal notranslate"><span class="pre">sync_from_volume</span></code> (success, archive not found, download error, replace existing local) — UC service calls are mocked</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="p2-http-route-tests-59-tests">
+<h4>P2 – HTTP Route Tests (59 tests)<a class="headerlink" href="#p2-http-route-tests-59-tests" title="Link to this heading">¶</a></h4>
+<p>End-to-end HTTP tests using Starlette’s <code class="docutils literal notranslate"><span class="pre">TestClient</span></code>. These verify that routes are reachable, return correct status codes, and produce expected response shapes.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Test Class</p></th>
+<th class="head"><p>Endpoints Covered</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TestHealthRoutes</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health/detailed</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TestMainPages</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/about</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/session-status</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/ontology-status</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/validate/*</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TestSettingsRoutes</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/settings</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/settings/current</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/settings/save</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/settings/get-default-emoji</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/settings/get-base-uri</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TestOntologyRoutes</span></code></p></td>
+<td><p>Page loads, load/save config, class/property CRUD, generate/import OWL, constraints list/save, SWRL list/save, axioms list</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TestMappingRoutes</span></code></p></td>
+<td><p>Page loads, load/save config, entity/relationship CRUD, generate R2RML</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TestProjectRoutes</span></code></p></td>
+<td><p>Page loads, info/save, export/import, config, session debug, design/map layout, design views</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TestQueryRoutes</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/dtwin/</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TestDigitalTwinAPI</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/digitaltwin/status</span></code>, <code class="docutils literal notranslate"><span class="pre">/ontology</span></code>, <code class="docutils literal notranslate"><span class="pre">/r2rml</span></code>, <code class="docutils literal notranslate"><span class="pre">/sparksql</span></code>, <code class="docutils literal notranslate"><span class="pre">/design-status</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TestTasksRoutes</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/tasks/</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/tasks/active</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TestAPIv1Routes</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/health</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/query/validate</span></code>, project endpoints (validation and auth-required behavior)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="p3-workflow-integration-tests-12-tests">
+<h4>P3 – Workflow / Integration Tests (12 tests)<a class="headerlink" href="#p3-workflow-integration-tests-12-tests" title="Link to this heading">¶</a></h4>
+<p>These exercise multi-module pipelines to verify that components work together correctly.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Test File</p></th>
+<th class="head"><p>Tests</p></th>
+<th class="head"><p>Pipeline</p></th>
+<th class="head"><p>What Is Verified</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_workflow_owl_roundtrip.py</span></code></p></td>
+<td><p>4</p></td>
+<td><p>Parse OWL -&gt; Regenerate -&gt; Re-parse</p></td>
+<td><p>Classes, properties, constraints, SWRL rules, axioms survive a full roundtrip</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_workflow_mapping.py</span></code></p></td>
+<td><p>3</p></td>
+<td><p>Ontology config -&gt; Build mappings -&gt; Generate R2RML -&gt; Parse R2RML</p></td>
+<td><p>Entity exclusion, relationship direction, and overall pipeline integrity</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_workflow_sparql.py</span></code></p></td>
+<td><p>2</p></td>
+<td><p>Ontology + Mapping -&gt; R2RML -&gt; Extraction -&gt; SPARQL-to-SQL</p></td>
+<td><p>End-to-end translation of SPARQL queries to Spark SQL via R2RML mappings</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_workflow_project.py</span></code></p></td>
+<td><p>3</p></td>
+<td><p>Create project -&gt; Set data -&gt; Export -&gt; Import -&gt; Verify</p></td>
+<td><p>Full project roundtrip data integrity, secret exclusion from exports</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="pre-existing-tests">
+<h4>Pre-Existing Tests<a class="headerlink" href="#pre-existing-tests" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Test File</p></th>
+<th class="head"><p>Tests</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_sql_wizard.py</span></code></p></td>
+<td><p>42</p></td>
+<td><p>Tests for the SQL Wizard service. Some failures are pre-existing and not related to the current test campaign. Run separately: <code class="docutils literal notranslate"><span class="pre">.venv/bin/python</span> <span class="pre">-m</span> <span class="pre">pytest</span> <span class="pre">tests/test_sql_wizard.py</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_dataquality.py</span></code></p></td>
+<td><p>12+</p></td>
+<td><p>Tests for the SHACL data quality service — SQL generation (cardinality, datatype, sparql), URI normalization, in-memory evaluation</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_reasoning_service.py</span></code></p></td>
+<td><p>—</p></td>
+<td><p>Tests for the reasoning service (if present)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="coverage">
+<h3>Coverage<a class="headerlink" href="#coverage" title="Link to this heading">¶</a></h3>
+<p>Generate a coverage report with:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/<span class="w"> </span>--cov<span class="o">=</span>back<span class="w"> </span>--cov<span class="o">=</span>front<span class="w"> </span>--cov<span class="o">=</span>shared<span class="w"> </span>--cov<span class="o">=</span>api<span class="w"> </span>--cov<span class="o">=</span>agents<span class="w"> </span>--cov-report<span class="o">=</span>term-missing
+</pre></div>
+</div>
+<p>Generate an HTML coverage report:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/<span class="w"> </span>--cov<span class="o">=</span>back<span class="w"> </span>--cov<span class="o">=</span>front<span class="w"> </span>--cov<span class="o">=</span>shared<span class="w"> </span>--cov<span class="o">=</span>api<span class="w"> </span>--cov<span class="o">=</span>agents<span class="w"> </span>--cov-report<span class="o">=</span>html
+open<span class="w"> </span>htmlcov/index.html
+</pre></div>
+</div>
+<section id="coverage-by-module-as-of-feb-2026">
+<h4>Coverage by Module (as of Feb 2026)<a class="headerlink" href="#coverage-by-module-as-of-feb-2026" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Module</p></th>
+<th class="head"><p>Coverage</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">back/core/w3c/r2rml/R2RMLParser.py</span></code></p></td>
+<td><p>99%</p></td>
+<td><p>Near-complete</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">back/core/w3c/r2rml/R2RMLGenerator.py</span></code></p></td>
+<td><p>80%</p></td>
+<td><p>Good coverage</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">back/objects/mapping/mapping.py</span></code></p></td>
+<td><p>78%</p></td>
+<td><p>Good coverage</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">back/services/home.py</span></code></p></td>
+<td><p>76%</p></td>
+<td><p>Good coverage</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api/routers/v1.py</span></code></p></td>
+<td><p>70%</p></td>
+<td><p>Auth-required paths lower coverage</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">back/objects/digitaltwin/DigitalTwin.py</span></code></p></td>
+<td><p>67%</p></td>
+<td><p>Good coverage</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">back/objects/session/project_session.py</span></code></p></td>
+<td><p>66%</p></td>
+<td><p>Legacy migration paths less covered</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">back/core/w3c/owl/OntologyParser.py</span></code></p></td>
+<td><p>63%</p></td>
+<td><p>Complex helper methods partially covered</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">back/core/w3c/owl/OntologyGenerator.py</span></code></p></td>
+<td><p>50%</p></td>
+<td><p>Advanced OWL features (annotations, complex axioms) less covered</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">back/core/w3c/sparql/SparqlTranslator.py</span></code></p></td>
+<td><p>41%</p></td>
+<td><p>Large module; advanced translation paths need Databricks</p></td>
+</tr>
+<tr class="row-even"><td><p>Routes (<code class="docutils literal notranslate"><span class="pre">front/routes/</span></code>, <code class="docutils literal notranslate"><span class="pre">api/routers/internal/</span></code>)</p></td>
+<td><p>11-40%</p></td>
+<td><p>Route handlers require full app context for deeper testing</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">back/core/triplestore/ladybugdb/</span></code></p></td>
+<td><p>~80%</p></td>
+<td><p>Good coverage via real LadybugDB tests (flat model); graph model paths partially covered</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">back/core/triplestore/ladybugdb/GraphSchema.py</span></code></p></td>
+<td><p>~90%</p></td>
+<td><p>Schema generation, DDL, triple classification well covered</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">back/core/triplestore/ladybugdb/GraphSyncService.py</span></code></p></td>
+<td><p>~95%</p></td>
+<td><p>Sync to/from UC Volume fully tested with mocked UC service</p></td>
+</tr>
+</tbody>
+</table>
+<p>Modules with 0% coverage (<code class="docutils literal notranslate"><span class="pre">back/core/w3c/rdfs</span></code>, <code class="docutils literal notranslate"><span class="pre">back/core/sqlwizard</span></code>, <code class="docutils literal notranslate"><span class="pre">back/core/databricks/MetadataService.py</span></code>) are either not yet tested or depend entirely on external services.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="test-conventions">
+<h3>Test Conventions<a class="headerlink" href="#test-conventions" title="Link to this heading">¶</a></h3>
+<section id="naming">
+<h4>Naming<a class="headerlink" href="#naming" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>Test files: <code class="docutils literal notranslate"><span class="pre">test_&lt;module_name&gt;.py</span></code></p></li>
+<li><p>Test classes: <code class="docutils literal notranslate"><span class="pre">Test&lt;FunctionalArea&gt;</span></code> (e.g., <code class="docutils literal notranslate"><span class="pre">TestGetClasses</span></code>, <code class="docutils literal notranslate"><span class="pre">TestEntityMapping</span></code>)</p></li>
+<li><p>Test functions: <code class="docutils literal notranslate"><span class="pre">test_&lt;what_is_being_tested&gt;</span></code> (e.g., <code class="docutils literal notranslate"><span class="pre">test_returns_defined_classes</span></code>, <code class="docutils literal notranslate"><span class="pre">test_missing_name_uses_default</span></code>)</p></li>
+</ul>
+</section>
+<section id="markers">
+<h4>Markers<a class="headerlink" href="#markers" title="Link to this heading">¶</a></h4>
+<p>Defined in <code class="docutils literal notranslate"><span class="pre">pytest.ini</span></code>:</p>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="na">markers</span><span class="w"> </span><span class="o">=</span>
+<span class="w">    </span><span class="na">unit</span><span class="o">:</span><span class="w"> </span><span class="s">Unit tests</span>
+<span class="w">    </span><span class="na">integration</span><span class="o">:</span><span class="w"> </span><span class="s">Integration tests</span>
+<span class="w">    </span><span class="na">slow</span><span class="o">:</span><span class="w"> </span><span class="s">Slow running tests</span>
+</pre></div>
+</div>
+<p>Use them to selectively run subsets:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>-m<span class="w"> </span>unit
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>-m<span class="w"> </span>integration
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;not slow&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="writing-new-tests">
+<h4>Writing New Tests<a class="headerlink" href="#writing-new-tests" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p><strong>Place the file</strong> in <code class="docutils literal notranslate"><span class="pre">tests/</span></code> with the <code class="docutils literal notranslate"><span class="pre">test_</span></code> prefix.</p></li>
+<li><p><strong>Use fixtures</strong> from <code class="docutils literal notranslate"><span class="pre">conftest.py</span></code> when possible (<code class="docutils literal notranslate"><span class="pre">client</span></code>, <code class="docutils literal notranslate"><span class="pre">project_session</span></code>, <code class="docutils literal notranslate"><span class="pre">sample_ontology_config</span></code>, etc.).</p></li>
+<li><p><strong>Mock external calls</strong> – never call real Databricks APIs, LLMs, or network services in tests. Use <code class="docutils literal notranslate"><span class="pre">unittest.mock.patch</span></code> or the <code class="docutils literal notranslate"><span class="pre">responses</span></code> library for HTTP mocking.</p></li>
+<li><p><strong>Keep tests fast</strong> – the full suite runs in under 3 seconds. Avoid <code class="docutils literal notranslate"><span class="pre">time.sleep</span></code> or expensive setup.</p></li>
+<li><p><strong>Test one thing per test function</strong> – each test should verify a single behavior or edge case.</p></li>
+<li><p><strong>Add fixtures to <code class="docutils literal notranslate"><span class="pre">conftest.py</span></code></strong> when they are reused across multiple test files.</p></li>
+</ol>
+</section>
+<section id="example-adding-a-unit-test">
+<h4>Example: Adding a Unit Test<a class="headerlink" href="#example-adding-a-unit-test" title="Link to this heading">¶</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.owl</span><span class="w"> </span><span class="kn">import</span> <span class="n">OntologyParser</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TestNewFeature</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_parses_annotation_properties</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sample_owl_content</span><span class="p">):</span>
+        <span class="n">parser</span> <span class="o">=</span> <span class="n">OntologyParser</span><span class="p">(</span><span class="n">sample_owl_content</span><span class="p">)</span>
+        <span class="n">props</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_properties</span><span class="p">()</span>
+        <span class="n">annotations</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">props</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;annotation&#39;</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">annotations</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">0</span>  <span class="c1"># adjust to your expectation</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_handles_empty_input</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">parser</span> <span class="o">=</span> <span class="n">OntologyParser</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_classes</span><span class="p">()</span> <span class="o">==</span> <span class="p">[]</span>
+</pre></div>
+</div>
+</section>
+<section id="example-adding-a-route-test">
+<h4>Example: Adding a Route Test<a class="headerlink" href="#example-adding-a-route-test" title="Link to this heading">¶</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">TestNewRoute</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_my_endpoint_returns_200</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">):</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;/my-new-endpoint&#39;</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">200</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_my_endpoint_post_saves_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">):</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s1">&#39;/my-new-endpoint/save&#39;</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;key&#39;</span><span class="p">:</span> <span class="s1">&#39;value&#39;</span><span class="p">})</span>
+        <span class="k">assert</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">200</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;success&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">True</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="continuous-integration">
+<h3>Continuous Integration<a class="headerlink" href="#continuous-integration" title="Link to this heading">¶</a></h3>
+<p>To integrate the test suite in a CI pipeline, use:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1">## Install dependencies</span>
+uv<span class="w"> </span>sync<span class="w"> </span>--dev
+
+<span class="c1">## Run tests with JUnit XML output (for CI reporting)</span>
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/<span class="w"> </span>--junitxml<span class="o">=</span>test-results.xml<span class="w"> </span>--cov<span class="o">=</span>back<span class="w"> </span>--cov<span class="o">=</span>front<span class="w"> </span>--cov<span class="o">=</span>shared<span class="w"> </span>--cov<span class="o">=</span>api<span class="w"> </span>--cov<span class="o">=</span>agents<span class="w"> </span>--cov-report<span class="o">=</span>xml
+
+<span class="c1">## Fail if coverage drops below a threshold</span>
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/<span class="w"> </span>--cov<span class="o">=</span>back<span class="w"> </span>--cov<span class="o">=</span>front<span class="w"> </span>--cov<span class="o">=</span>shared<span class="w"> </span>--cov<span class="o">=</span>api<span class="w"> </span>--cov<span class="o">=</span>agents<span class="w"> </span>--cov-fail-under<span class="o">=</span><span class="m">25</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="ui-tests">
+<h3>UI Tests<a class="headerlink" href="#ui-tests" title="Link to this heading">¶</a></h3>
+<p>UI testing uses two complementary layers:</p>
+<section id="layer-1-html-rendering-tests-pytest-stdlib-html-parser">
+<h4>Layer 1: HTML Rendering Tests (pytest + stdlib <code class="docutils literal notranslate"><span class="pre">html.parser</span></code>)<a class="headerlink" href="#layer-1-html-rendering-tests-pytest-stdlib-html-parser" title="Link to this heading">¶</a></h4>
+<p>Fast tests that fetch pages via the Starlette <code class="docutils literal notranslate"><span class="pre">TestClient</span></code> and verify DOM structure with a small <code class="docutils literal notranslate"><span class="pre">HTMLParser</span></code> collector (stdlib only). No browser required.</p>
+<p><strong>File:</strong> <code class="docutils literal notranslate"><span class="pre">tests/test_ui_rendering.py</span></code> (~99 tests)</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Page</p></th>
+<th class="head"><p>What Is Verified</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>All pages</p></td>
+<td><p>Navbar present, brand link, notification container, Bootstrap/utils.js scripts, nav dropdowns (Project, Ontology, Mapping, Digital Twin), Settings link, warehouse dropdown, task tracker</p></td>
+</tr>
+<tr class="row-odd"><td><p>Home <code class="docutils literal notranslate"><span class="pre">/</span></code></p></td>
+<td><p>Hero section, project panel, stat items (Entities, Relationships, Mappings), quick links (Settings, About)</p></td>
+</tr>
+<tr class="row-even"><td><p>Settings <code class="docutils literal notranslate"><span class="pre">/settings</span></code></p></td>
+<td><p>Connection form, host/token/warehouse displays, Test Connection button, base URI field, Save button</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ontology <code class="docutils literal notranslate"><span class="pre">/ontology</span></code></p></td>
+<td><p>Sidebar section groups: Ontology Editor (Information, Import, Generate, Model, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Expr. &amp; Axioms), W3C Standards (OWL); section divs, OntoViz script</p></td>
+</tr>
+<tr class="row-even"><td><p>Mapping <code class="docutils literal notranslate"><span class="pre">/mapping</span></code></p></td>
+<td><p>Sidebar with 6 section links (Information, Designer, Manual, Auto-Map, R2RML, Spark SQL), mapping-core.js</p></td>
+</tr>
+<tr class="row-odd"><td><p>Project <code class="docutils literal notranslate"><span class="pre">/project</span></code></p></td>
+<td><p>Sidebar with 6 section links (Information, Metadata, Documents, Validation, OWL, R2RML), section divs</p></td>
+</tr>
+<tr class="row-even"><td><p>Digital Twin <code class="docutils literal notranslate"><span class="pre">/dtwin/</span></code></p></td>
+<td><p>Sidebar section groups: Management (Build information, API), Graph (Knowledge Graph, GraphQL), Advanced (Data Quality, Reasoning); sync section, Sigma.js script</p></td>
+</tr>
+<tr class="row-odd"><td><p>About <code class="docutils literal notranslate"><span class="pre">/about</span></code></p></td>
+<td><p>Page renders, contains “OntoBricks”</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Run:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_ui_rendering.py<span class="w"> </span>-v
+</pre></div>
+</div>
+</section>
+<section id="layer-2-end-to-end-browser-tests-playwright">
+<h4>Layer 2: End-to-End Browser Tests (Playwright)<a class="headerlink" href="#layer-2-end-to-end-browser-tests-playwright" title="Link to this heading">¶</a></h4>
+<p>Browser-based tests using Playwright against a live Uvicorn server. Verifies navigation, sidebar switching, interactive elements.</p>
+<p><strong>Files:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/e2e/conftest.py</span></code> – Uvicorn server fixture (port 18765) and Playwright browser/page fixtures</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/e2e/test_e2e_flows.py</span></code> (~45 tests)</p></li>
+</ul>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Test Class</p></th>
+<th class="head"><p>What Is Verified</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TestNavigation</span></code></p></td>
+<td><p>All pages load with correct titles, navbar brand navigates home, Settings link works</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TestHomePage</span></code></p></td>
+<td><p>Hero visible, project panel visible, 3 workflow cards, stat items present</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TestSettingsPage</span></code></p></td>
+<td><p>Connection form visible, host display, base URI field populated, Save button enabled</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TestOntologySidebar</span></code></p></td>
+<td><p>All 11 sidebar items switch to correct section, wizard select-all checkbox exists</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TestMappingSidebar</span></code></p></td>
+<td><p>All 6 sidebar items switch to correct section</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TestProjectSidebar</span></code></p></td>
+<td><p>All 6 sidebar items switch to correct section</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TestDigitalTwinSidebar</span></code></p></td>
+<td><p>Sync section visible by default, Build link present</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TestAboutPage</span></code></p></td>
+<td><p>Page content and R2RML reference present</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Prerequisites:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1">## Install Chromium for Playwright (one-time)</span>
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>playwright<span class="w"> </span>install<span class="w"> </span>chromium
+</pre></div>
+</div>
+<p><strong>Run:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1">## Layer 2 only</span>
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/e2e/<span class="w"> </span>-v
+
+<span class="c1">## Both UI layers</span>
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_ui_rendering.py<span class="w"> </span>tests/e2e/<span class="w"> </span>-v
+</pre></div>
+</div>
+</section>
+<section id="dependencies">
+<h4>Dependencies<a class="headerlink" href="#dependencies" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Package</p></th>
+<th class="head"><p>Layer</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><em>(stdlib <code class="docutils literal notranslate"><span class="pre">html.parser</span></code>)</em></p></td>
+<td><p>Layer 1</p></td>
+<td><p>HTML parsing for DOM assertions</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">playwright&gt;=1.40.0</span></code></p></td>
+<td><p>Layer 2</p></td>
+<td><p>Browser automation for E2E tests</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="known-limitations">
+<h3>Known Limitations<a class="headerlink" href="#known-limitations" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>MCP server tests</strong> are not included in the automated test suite — the MCP server is a separate project with its own dependencies.</p></li>
+<li><p><strong>Databricks-connected features</strong> (Unity Catalog operations, SQL Warehouse queries, triplestore sync) cannot be tested without a live workspace. These are tested at the mock/stub level only.</p></li>
+<li><p><strong>LLM agent features</strong> (AI Assistant, auto-map icons) rely on external API calls that are mocked with <code class="docutils literal notranslate"><span class="pre">responses</span></code> or <code class="docutils literal notranslate"><span class="pre">unittest.mock.patch</span></code>.</p></li>
+<li><p><strong>E2E tests</strong> validate navigation and DOM visibility but cannot fully test features that require a real Databricks connection (e.g., loading metadata, running queries).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">test_sql_wizard.py</span></code></strong> has pre-existing failures unrelated to this test campaign and should be investigated separately.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="ontobricks-permission-rights-management">
+<h2>OntoBricks — Permission &amp; Rights Management<a class="headerlink" href="#ontobricks-permission-rights-management" title="Link to this heading">¶</a></h2>
+<p>This document describes how access control works in OntoBricks, covering
+both the <strong>Databricks App–level permissions</strong> and the <strong>in-app permission
+list</strong>. It is intended for administrators who deploy and manage OntoBricks.</p>
+<hr class="docutils" />
+<section id="table-of-contents">
+<h3>Table of Contents<a class="headerlink" href="#table-of-contents" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p><a class="reference internal" href="#overview"><span class="xref myst">Overview</span></a></p></li>
+<li><p><a class="reference internal" href="#roles"><span class="xref myst">Roles</span></a></p></li>
+<li><p><a class="reference internal" href="#how-permission-resolution-works"><span class="xref myst">How Permission Resolution Works</span></a></p></li>
+<li><p><a class="reference internal" href="#databricks-app-permissions-external"><span class="xref myst">Databricks App Permissions (External)</span></a></p></li>
+<li><p><a class="reference internal" href="#in-app-permission-list-internal"><span class="xref myst">In-App Permission List (Internal)</span></a></p></li>
+<li><p><a class="reference internal" href="#managing-permissions--step-by-step"><span class="xref myst">Managing Permissions — Step by Step</span></a></p></li>
+<li><p><a class="reference internal" href="#service-principal-setup"><span class="xref myst">Service Principal Setup</span></a></p></li>
+<li><p><a class="reference internal" href="#local-development-mode"><span class="xref myst">Local Development Mode</span></a></p></li>
+<li><p><a class="reference internal" href="#settings-page-access"><span class="xref myst">Settings Page Access</span></a></p></li>
+<li><p><a class="reference internal" href="#access-denied-page"><span class="xref myst">Access Denied Page</span></a></p></li>
+<li><p><a class="reference internal" href="#configuration-reference"><span class="xref myst">Configuration Reference</span></a></p></li>
+<li><p><a class="reference internal" href="#caching-behaviour"><span class="xref myst">Caching Behaviour</span></a></p></li>
+<li><p><a class="reference internal" href="#diagnostic-endpoint"><span class="xref myst">Diagnostic Endpoint</span></a></p></li>
+<li><p><a class="reference internal" href="#troubleshooting"><span class="xref myst">Troubleshooting</span></a></p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="overview">
+<h3>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h3>
+<p>OntoBricks uses a <strong>two-layer</strong> access-control model:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Layer</p></th>
+<th class="head"><p>Where it lives</p></th>
+<th class="head"><p>What it controls</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Databricks App permissions</strong></p></td>
+<td><p>Databricks workspace UI → Apps → <em>ontobricks</em> → Permissions</p></td>
+<td><p>Who can reach the app at all, and who is an <strong>Admin</strong> (<code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>In-app permission list</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">.permissions.json</span></code> stored in the Unity Catalog Registry Volume</p></td>
+<td><p>Fine-grained roles (<strong>Viewer</strong> / <strong>Editor</strong>) for individual users and groups.</p></td>
+</tr>
+</tbody>
+</table>
+<p>A user’s effective role is determined by combining both layers.</p>
+</section>
+<hr class="docutils" />
+<section id="roles">
+<h3>Roles<a class="headerlink" href="#roles" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Role</p></th>
+<th class="head"><p>Source</p></th>
+<th class="head"><p>Capabilities</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Admin</strong></p></td>
+<td><p>Databricks App <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> permission</p></td>
+<td><p>Full access. Can view, edit, and manage the Settings page including the permission list.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Editor</strong></p></td>
+<td><p>In-app permission list</p></td>
+<td><p>Can view all pages, create and modify projects, ontologies, mappings, and run syncs. Cannot access Settings.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Viewer</strong></p></td>
+<td><p>In-app permission list</p></td>
+<td><p>Read-only access. Can browse projects, ontologies, and query results. All write operations (POST, PUT, PATCH, DELETE) are blocked. Cannot access Settings.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>None</strong></p></td>
+<td><p>Default when not matched</p></td>
+<td><p>Completely blocked. Redirected to the Access Denied page.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="how-permission-resolution-works">
+<h3>How Permission Resolution Works<a class="headerlink" href="#how-permission-resolution-works" title="Link to this heading">¶</a></h3>
+<p>Every incoming HTTP request passes through the <code class="docutils literal notranslate"><span class="pre">PermissionMiddleware</span></code>. The
+resolution follows this priority order:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Request arrives
+  │
+  ├─ Running locally (no DATABRICKS_APP_PORT)?
+  │    └─ Yes → role = admin, full access
+  │
+  ├─ Path is a bypass path (/static, /health, /docs, /api, etc.)?
+  │    └─ Yes → pass through, no role enforcement
+  │
+  └─ Resolve role via get_user_role():
+       │
+       ├─ 1. is_admin(email)?
+       │    Check if the user has CAN_MANAGE on the Databricks App.
+       │    └─ Yes → role = admin
+       │
+       ├─ 2. User explicitly listed in .permissions.json?
+       │    Match email (case-insensitive).
+       │    └─ Yes → role from entry (viewer or editor)
+       │
+       ├─ 3. User belongs to a group listed in .permissions.json?
+       │    Check group membership via Databricks SCIM API.
+       │    └─ Yes → role from group entry (viewer or editor)
+       │
+       └─ 4. No match
+            └─ role = none → Access Denied
+</pre></div>
+</div>
+<section id="enforcement-rules">
+<h4>Enforcement Rules<a class="headerlink" href="#enforcement-rules" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Condition</p></th>
+<th class="head"><p>Action</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">role</span> <span class="pre">=</span> <span class="pre">none</span></code></p></td>
+<td><p>JSON 403 (for fetch/XHR) or redirect to <code class="docutils literal notranslate"><span class="pre">/access-denied</span></code> (for page navigation).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">role</span> <span class="pre">=</span> <span class="pre">viewer</span></code> + write method (POST/PUT/PATCH/DELETE)</p></td>
+<td><p>JSON 403: “Viewer role does not allow write operations”.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">role</span> <span class="pre">!=</span> <span class="pre">admin</span></code> + path starts with <code class="docutils literal notranslate"><span class="pre">/settings</span></code></p></td>
+<td><p>JSON 403 or redirect to <code class="docutils literal notranslate"><span class="pre">/</span></code>. Only admins can access the Settings page.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Otherwise</p></td>
+<td><p>Request proceeds normally.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="databricks-app-permissions-external">
+<h3>Databricks App Permissions (External)<a class="headerlink" href="#databricks-app-permissions-external" title="Link to this heading">¶</a></h3>
+<p>These are managed in the Databricks workspace UI:</p>
+<ol class="arabic simple">
+<li><p>Navigate to <strong>Compute → Apps → ontobricks → Permissions</strong>.</p></li>
+<li><p>Add users or groups with one of two permission levels:</p></li>
+</ol>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Permission Level</p></th>
+<th class="head"><p>Effect in OntoBricks</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>CAN_MANAGE</strong></p></td>
+<td><p>The user is an OntoBricks <strong>Admin</strong>. Full access including the Settings page and permission management.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>CAN_USE</strong></p></td>
+<td><p>The user can reach the app, but their actual role depends on the in-app permission list. If they are not in the list, they are blocked.</p></td>
+</tr>
+</tbody>
+</table>
+<section id="who-needs-can-manage">
+<h4>Who Needs CAN_MANAGE?<a class="headerlink" href="#who-needs-can-manage" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>At minimum, the person responsible for setting up OntoBricks.</p></li>
+<li><p>The app’s own <strong>Service Principal</strong> (required for the admin check to
+work — see <a class="reference internal" href="#service-principal-setup"><span class="xref myst">Service Principal Setup</span></a>).</p></li>
+</ul>
+</section>
+<section id="who-needs-can-use">
+<h4>Who Needs CAN_USE?<a class="headerlink" href="#who-needs-can-use" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>All users who should be able to access OntoBricks.</p></li>
+<li><p>Groups like <code class="docutils literal notranslate"><span class="pre">users</span></code> or <code class="docutils literal notranslate"><span class="pre">account</span> <span class="pre">users</span></code> can be added for broad access,
+with roles then controlled by the in-app permission list.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="in-app-permission-list-internal">
+<h3>In-App Permission List (Internal)<a class="headerlink" href="#in-app-permission-list-internal" title="Link to this heading">¶</a></h3>
+<p>The in-app permission list is stored as a JSON file in the configured
+Unity Catalog Registry Volume:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">/</span><span class="n">Volumes</span><span class="o">/</span><span class="p">{</span><span class="n">catalog</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">schema</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">volume</span><span class="p">}</span><span class="o">/</span><span class="n">projects</span><span class="o">/.</span><span class="n">permissions</span><span class="o">.</span><span class="n">json</span>
+</pre></div>
+</div>
+<section id="file-format">
+<h4>File Format<a class="headerlink" href="#file-format" title="Link to this heading">¶</a></h4>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;permissions&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;principal&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;alice@example.com&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;principal_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;display_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Alice Smith&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;editor&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;principal&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;data-team&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;principal_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;group&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;display_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;data-team&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;viewer&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="entry-fields">
+<h4>Entry Fields<a class="headerlink" href="#entry-fields" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">principal</span></code></p></td>
+<td><p>Email address (for users) or group name (for groups).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">principal_type</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;user&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;group&quot;</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">display_name</span></code></p></td>
+<td><p>Human-readable name shown in the UI.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">role</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;viewer&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;editor&quot;</span></code>. Admins are never listed here — they are determined by <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="empty-permission-list-behaviour">
+<h4>Empty Permission List Behaviour<a class="headerlink" href="#empty-permission-list-behaviour" title="Link to this heading">¶</a></h4>
+<p>When <code class="docutils literal notranslate"><span class="pre">.permissions.json</span></code> does not exist or has an empty <code class="docutils literal notranslate"><span class="pre">permissions</span></code>
+array, <strong>only users with <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> have access</strong>. All other
+authenticated users are blocked. This is by design — it prevents
+accidental open access before the admin configures the permission list.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="managing-permissions-step-by-step">
+<h3>Managing Permissions — Step by Step<a class="headerlink" href="#managing-permissions-step-by-step" title="Link to this heading">¶</a></h3>
+<section id="prerequisites">
+<h4>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p>You have <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> on the Databricks App (<code class="docutils literal notranslate"><span class="pre">ontobricks</span></code>).</p></li>
+<li><p>The app’s Service Principal also has <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> on itself (see
+<a class="reference internal" href="#service-principal-setup"><span class="xref myst">Service Principal Setup</span></a>).</p></li>
+<li><p>A Registry is configured in OntoBricks (Settings → Registry tab).</p></li>
+</ol>
+</section>
+<section id="adding-a-user-or-group">
+<h4>Adding a User or Group<a class="headerlink" href="#adding-a-user-or-group" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p>Open OntoBricks and click the <strong>gear icon</strong> (⚙) in the navbar to go
+to Settings.</p></li>
+<li><p>Select the <strong>Permissions</strong> tab.</p></li>
+<li><p>Click the <strong>Add</strong> button.</p></li>
+<li><p>In the modal:</p>
+<ul class="simple">
+<li><p>Select <strong>User</strong> or <strong>Group</strong>.</p></li>
+<li><p>Search and select from the dropdown. The list shows users and groups
+that have permissions on the Databricks App (CAN_USE or CAN_MANAGE).</p></li>
+<li><p>Choose a role: <strong>Viewer</strong> or <strong>Editor</strong>.</p></li>
+</ul>
+</li>
+<li><p>Click <strong>Add</strong>. The entry is immediately saved to the Registry.</p></li>
+</ol>
+</section>
+<section id="changing-a-role">
+<h4>Changing a Role<a class="headerlink" href="#changing-a-role" title="Link to this heading">¶</a></h4>
+<p>In the Permissions tab, use the <strong>role dropdown</strong> next to any entry to
+switch between Viewer and Editor. Changes are saved automatically.</p>
+</section>
+<section id="removing-a-user-or-group">
+<h4>Removing a User or Group<a class="headerlink" href="#removing-a-user-or-group" title="Link to this heading">¶</a></h4>
+<p>Click the <strong>trash icon</strong> next to the entry and confirm the deletion.</p>
+</section>
+<section id="important-notes">
+<h4>Important Notes<a class="headerlink" href="#important-notes" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>The permission list only controls users who are <strong>not</strong> admins.
+Users with <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> always have full admin access regardless of
+whether they appear in the list.</p></li>
+<li><p>The user/group picker only shows principals that already have
+permissions on the Databricks App (CAN_USE or CAN_MANAGE). To add
+someone who doesn’t appear in the list, first grant them <code class="docutils literal notranslate"><span class="pre">CAN_USE</span></code>
+on the Databricks App.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="service-principal-setup">
+<h3>Service Principal Setup<a class="headerlink" href="#service-principal-setup" title="Link to this heading">¶</a></h3>
+<p>The OntoBricks Databricks App runs under a <strong>Service Principal</strong> (SP).
+This SP needs <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> on the app itself so it can read the app’s
+access control list to determine which users are admins.</p>
+<section id="granting-can-manage-to-the-sp">
+<h4>Granting CAN_MANAGE to the SP<a class="headerlink" href="#granting-can-manage-to-the-sp" title="Link to this heading">¶</a></h4>
+<ol class="arabic">
+<li><p>Find the SP’s application ID. It appears in the app details (e.g.,
+<code class="docutils literal notranslate"><span class="pre">84eff7c5-778b-4c0b-a24d-36126bcc8cca</span></code>).</p></li>
+<li><p>Grant the permission using the Databricks CLI:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>permissions<span class="w"> </span>update<span class="w"> </span>apps<span class="w"> </span>ontobricks<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--json<span class="w"> </span><span class="s1">&#39;{</span>
+<span class="s1">    &quot;access_control_list&quot;: [</span>
+<span class="s1">      {</span>
+<span class="s1">        &quot;service_principal_name&quot;: &quot;84eff7c5-778b-4c0b-a24d-36126bcc8cca&quot;,</span>
+<span class="s1">        &quot;permission_level&quot;: &quot;CAN_MANAGE&quot;</span>
+<span class="s1">      }</span>
+<span class="s1">    ]</span>
+<span class="s1">  }&#39;</span>
+</pre></div>
+</div>
+</li>
+<li><p>Verify:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>permissions<span class="w"> </span>get<span class="w"> </span>apps<span class="w"> </span>ontobricks
+</pre></div>
+</div>
+<p>The SP should appear with <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> (non-inherited).</p>
+</li>
+</ol>
+</section>
+<section id="what-happens-without-sp-can-manage">
+<h4>What Happens Without SP CAN_MANAGE?<a class="headerlink" href="#what-happens-without-sp-can-manage" title="Link to this heading">¶</a></h4>
+<p>The admin check (<code class="docutils literal notranslate"><span class="pre">is_admin</span></code>) will fail because the SDK cannot read the
+app’s ACL. This causes <strong>all users to be denied access</strong>, including
+those with <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> set in the Databricks UI.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="local-development-mode">
+<h3>Local Development Mode<a class="headerlink" href="#local-development-mode" title="Link to this heading">¶</a></h3>
+<p>When running locally (i.e., <code class="docutils literal notranslate"><span class="pre">DATABRICKS_APP_PORT</span></code> is not set), the
+permission system is <strong>completely disabled</strong>:</p>
+<ul class="simple">
+<li><p>Every user gets <code class="docutils literal notranslate"><span class="pre">role</span> <span class="pre">=</span> <span class="pre">admin</span></code>.</p></li>
+<li><p>All pages and features are accessible.</p></li>
+<li><p>The Settings page and Permissions tab work normally.</p></li>
+<li><p>No Databricks App permissions or <code class="docutils literal notranslate"><span class="pre">.permissions.json</span></code> are checked.</p></li>
+</ul>
+<p>This allows local development and testing without any permission setup.</p>
+</section>
+<hr class="docutils" />
+<section id="settings-page-access">
+<h3>Settings Page Access<a class="headerlink" href="#settings-page-access" title="Link to this heading">¶</a></h3>
+<p>The entire Settings page (<code class="docutils literal notranslate"><span class="pre">/settings</span></code> and all sub-routes) is restricted
+to <strong>admin users only</strong>. This includes:</p>
+<ul class="simple">
+<li><p>The General tab (Databricks connection, SQL Warehouse).</p></li>
+<li><p>The Registry tab (Unity Catalog Volume configuration).</p></li>
+<li><p>The Permissions tab (user/group role management).</p></li>
+<li><p>The About tab.</p></li>
+</ul>
+<p>Non-admin users:</p>
+<ul class="simple">
+<li><p>Do not see the gear icon (⚙) or the SQL Warehouse status icon in the
+navbar.</p></li>
+<li><p>Do not see the “Settings” quick link on the home page.</p></li>
+<li><p>Are redirected to <code class="docutils literal notranslate"><span class="pre">/</span></code> if they navigate directly to <code class="docutils literal notranslate"><span class="pre">/settings</span></code>.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="access-denied-page">
+<h3>Access Denied Page<a class="headerlink" href="#access-denied-page" title="Link to this heading">¶</a></h3>
+<p>Users who are blocked (role = none) see a standalone page with:</p>
+<ul class="simple">
+<li><p>A shield icon and “Access Denied” heading.</p></li>
+<li><p>Their email address (from <code class="docutils literal notranslate"><span class="pre">X-Forwarded-Email</span></code>).</p></li>
+<li><p>Instructions to contact an OntoBricks administrator.</p></li>
+</ul>
+<p>The page has <strong>no navbar or navigation</strong> to prevent confusion, since the
+user has no access to any part of the application.</p>
+</section>
+<hr class="docutils" />
+<section id="configuration-reference">
+<h3>Configuration Reference<a class="headerlink" href="#configuration-reference" title="Link to this heading">¶</a></h3>
+<section id="app-yaml-environment-variables">
+<h4>app.yaml Environment Variables<a class="headerlink" href="#app-yaml-environment-variables" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Required</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_APP_NAME</span></code></p></td>
+<td><p>Yes</p></td>
+<td><p>Must match the deployed Databricks App name (e.g., <code class="docutils literal notranslate"><span class="pre">&quot;ontobricks&quot;</span></code>). Used to query the app’s permission ACL.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_CATALOG</span></code></p></td>
+<td><p>Yes</p></td>
+<td><p>Unity Catalog catalog for the Registry Volume where <code class="docutils literal notranslate"><span class="pre">.permissions.json</span></code> is stored.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_SCHEMA</span></code></p></td>
+<td><p>Yes</p></td>
+<td><p>Unity Catalog schema for the Registry Volume.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_VOLUME</span></code></p></td>
+<td><p>No</p></td>
+<td><p>Volume name (default: <code class="docutils literal notranslate"><span class="pre">&quot;OntoBricksRegistry&quot;</span></code>).</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="permission-file-location">
+<h4>Permission File Location<a class="headerlink" href="#permission-file-location" title="Link to this heading">¶</a></h4>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">/</span><span class="n">Volumes</span><span class="o">/</span><span class="p">{</span><span class="n">REGISTRY_CATALOG</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">REGISTRY_SCHEMA</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">REGISTRY_VOLUME</span><span class="p">}</span><span class="o">/</span><span class="n">projects</span><span class="o">/.</span><span class="n">permissions</span><span class="o">.</span><span class="n">json</span>
+</pre></div>
+</div>
+</section>
+<section id="api-endpoints">
+<h4>API Endpoints<a class="headerlink" href="#api-endpoints" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Auth</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/settings/permissions/me</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Bypassed</p></td>
+<td><p>Returns the current user’s email, role, and <code class="docutils literal notranslate"><span class="pre">is_app_admin</span></code> flag. Used by the UI to show/hide admin elements.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/settings/permissions/diag</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Bypassed</p></td>
+<td><p>Diagnostic: returns SDK auth details, CAN_MANAGE principals, cache state.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/settings/permissions</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Admin</p></td>
+<td><p>Lists all permission entries.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/settings/permissions</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Admin</p></td>
+<td><p>Adds or updates a permission entry. Body: <code class="docutils literal notranslate"><span class="pre">{</span> <span class="pre">principal,</span> <span class="pre">principal_type,</span> <span class="pre">display_name,</span> <span class="pre">role</span> <span class="pre">}</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/settings/permissions/{principal}</span></code></p></td>
+<td><p>DELETE</p></td>
+<td><p>Admin</p></td>
+<td><p>Removes a permission entry.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/settings/permissions/principals</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Admin</p></td>
+<td><p>Lists users and groups from the Databricks App permissions for the add-user picker.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="caching-behaviour">
+<h3>Caching Behaviour<a class="headerlink" href="#caching-behaviour" title="Link to this heading">¶</a></h3>
+<p>To reduce API calls, the permission system caches several results:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Cache</p></th>
+<th class="head"><p>TTL</p></th>
+<th class="head"><p>What is cached</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Admin check</p></td>
+<td><p>60 seconds</p></td>
+<td><p>Per-email <code class="docutils literal notranslate"><span class="pre">is_admin</span></code> result. Cleared on every page load and <code class="docutils literal notranslate"><span class="pre">/permissions/me</span></code> call.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Permission file</p></td>
+<td><p>5 minutes</p></td>
+<td><p>Contents of <code class="docutils literal notranslate"><span class="pre">.permissions.json</span></code>. Forced refresh on add/update/delete operations.</p></td>
+</tr>
+<tr class="row-even"><td><p>App principals</p></td>
+<td><p>10 minutes</p></td>
+<td><p>Users/groups from the Databricks App permissions API. Cleared before loading the add-user picker.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Permission changes made through the Settings UI take effect immediately
+because the relevant caches are invalidated. Changes made externally
+(e.g., granting <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> in the Databricks UI) are picked up on the
+next page load since the admin cache is always cleared before checking.</p>
+</section>
+<hr class="docutils" />
+<section id="diagnostic-endpoint">
+<h3>Diagnostic Endpoint<a class="headerlink" href="#diagnostic-endpoint" title="Link to this heading">¶</a></h3>
+<p>If admin access is not working as expected, visit:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">https</span><span class="p">:</span><span class="o">//&lt;</span><span class="n">your</span><span class="o">-</span><span class="n">app</span><span class="o">-</span><span class="n">url</span><span class="o">&gt;/</span><span class="n">settings</span><span class="o">/</span><span class="n">permissions</span><span class="o">/</span><span class="n">diag</span>
+</pre></div>
+</div>
+<p>This endpoint bypasses the permission middleware and returns:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;email&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user@example.com&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;app_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ontobricks&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;is_app_mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;sdk_host&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://your-workspace.cloud.databricks.com&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;sdk_auth_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;azure-client-secret&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;can_manage_principals&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="s2">&quot;user@example.com&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;84eff7c5-778b-4c0b-a24d-36126bcc8cca&quot;</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;email_is_manager&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;sdk_error&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;admin_cache&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;user@example.com&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;result&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;age_s&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">12.3</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Key fields to check:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">sdk_error</span></code></strong>: If not null, the SDK cannot read app permissions. Usually means the SP is missing <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">can_manage_principals</span></code></strong>: List of all principals with <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code>. Your email should appear here.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">email_is_manager</span></code></strong>: Whether the current user’s email matches a <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> principal.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="troubleshooting">
+<h3>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading">¶</a></h3>
+<section id="access-denied-despite-having-can-manage">
+<h4>“Access Denied” despite having CAN_MANAGE<a class="headerlink" href="#access-denied-despite-having-can-manage" title="Link to this heading">¶</a></h4>
+<ol class="arabic">
+<li><p>Visit <code class="docutils literal notranslate"><span class="pre">/settings/permissions/diag</span></code> to check the SDK status.</p></li>
+<li><p>Verify the SP has <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>permissions<span class="w"> </span>get<span class="w"> </span>apps<span class="w"> </span>ontobricks
+</pre></div>
+</div>
+</li>
+<li><p>If the SP is missing, grant it (see <a class="reference internal" href="#service-principal-setup"><span class="xref myst">Service Principal Setup</span></a>).</p></li>
+<li><p>Hard refresh the app (Cmd+Shift+R / Ctrl+Shift+R).</p></li>
+</ol>
+</section>
+<section id="settings-gear-icon-not-visible">
+<h4>Settings gear icon not visible<a class="headerlink" href="#settings-gear-icon-not-visible" title="Link to this heading">¶</a></h4>
+<p>The gear icon only appears for admins. Verify:</p>
+<ol class="arabic simple">
+<li><p>The user has <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> on the Databricks App.</p></li>
+<li><p>The SP has <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> (so the admin check can succeed).</p></li>
+<li><p>Hard refresh the page.</p></li>
+</ol>
+</section>
+<section id="user-added-to-in-app-permission-list-but-still-blocked">
+<h4>User added to in-app permission list but still blocked<a class="headerlink" href="#user-added-to-in-app-permission-list-but-still-blocked" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p>The user must also have at least <code class="docutils literal notranslate"><span class="pre">CAN_USE</span></code> on the Databricks App.
+Without it, they cannot reach the app at all.</p></li>
+<li><p>Check that the principal email matches exactly (case-insensitive).</p></li>
+</ol>
+</section>
+<section id="user-not-appearing-in-the-add-picker-dropdown">
+<h4>User not appearing in the “Add” picker dropdown<a class="headerlink" href="#user-not-appearing-in-the-add-picker-dropdown" title="Link to this heading">¶</a></h4>
+<p>The picker shows users/groups from the <strong>Databricks App permissions</strong>,
+not all workspace users. The person must first be granted <code class="docutils literal notranslate"><span class="pre">CAN_USE</span></code> (or
+<code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code>) on the app in the Databricks UI.</p>
+</section>
+<section id="permission-changes-not-taking-effect">
+<h4>Permission changes not taking effect<a class="headerlink" href="#permission-changes-not-taking-effect" title="Link to this heading">¶</a></h4>
+<p>Changes through the Settings UI are immediate. For changes made
+externally (Databricks UI), hard refresh the OntoBricks app. The admin
+cache is cleared on every page load.</p>
+</section>
+<section id="console-errors-unexpected-token">
+<h4>Console errors: “Unexpected token ‘&lt;’”<a class="headerlink" href="#console-errors-unexpected-token" title="Link to this heading">¶</a></h4>
+<p>This means API calls are returning HTML instead of JSON, usually because
+the permission middleware is redirecting to the access-denied page. Check
+that the admin check is succeeding (see diagnostic endpoint above).</p>
+</section>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/guides/development.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

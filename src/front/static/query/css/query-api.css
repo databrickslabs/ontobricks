@@ -1,0 +1,30 @@
+/* Digital Twin API card styles */
+
+.ob-api-card { border-color: #e2e8f0; }
+.ob-api-card .card-header { background: #fafbfc; border-bottom: 1px solid #e2e8f0; }
+.ob-api-card .card-header:hover { background: #f1f5f9; }
+.ob-api-card .card-header code { color: #1e293b; }
+.ob-api-chevron { transition: transform .2s ease; }
+.ob-api-card.open .ob-api-chevron { transform: rotate(180deg); }
+.ob-api-card .card-body { background: #fff; }
+.ob-api-card .card-body p,
+.ob-api-card .card-body td,
+.ob-api-card .card-body th { color: #334155; }
+.ob-api-card .card-body h6 { color: #1e293b; }
+.ob-api-card .card-body pre {
+    background: #1e293b !important; color: #f1f5f9 !important;
+    border-radius: .375rem; padding: .75rem;
+    max-height: 200px; overflow: auto; font-size: .8rem;
+}
+.ob-api-card .card-body pre code {
+    background: transparent !important; color: #f1f5f9 !important;
+}
+.ob-api-response pre {
+    background: #1e293b !important; color: #f1f5f9 !important;
+    border-radius: .375rem; padding: .75rem;
+    max-height: 300px; overflow: auto; font-size: .8rem;
+}
+.ob-api-response pre code {
+    background: transparent !important; color: #f1f5f9 !important;
+}
+.ob-api-note { background: #f8fafc; border: 1px solid #e2e8f0; }

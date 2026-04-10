@@ -1,0 +1,683 @@
+/**
+ * OntoViz - UI Components Styles
+ * Toolbar, Canvas, Context Menu, Modals, etc.
+ */
+
+/* Canvas */
+.ovz-canvas {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: var(--ovz-bg-primary);
+    background-image: 
+        radial-gradient(circle at 1px 1px, #d0d0d0 1px, transparent 0);
+    background-size: 24px 24px;
+    overflow: hidden;
+    font-family: var(--ovz-font-main);
+    user-select: none;
+}
+
+/* Inheritance mode - subtle visual feedback */
+.ovz-canvas.ovz-inheritance-mode {
+    background-image: 
+        radial-gradient(circle at 1px 1px, #a0a0a0 1px, transparent 0);
+}
+
+.ovz-canvas.ovz-inheritance-mode .ovz-connector {
+    border-color: #404040;
+    opacity: 1;
+}
+
+.ovz-canvas.ovz-inheritance-mode .ovz-entity {
+    cursor: default;
+}
+
+.ovz-canvas-inner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    /* Use large fixed size to accommodate all content when zooming out */
+    width: 10000px;
+    height: 10000px;
+    transform-origin: 0 0;
+}
+
+/* SVG Layer */
+.ovz-svg-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    /* Use large fixed size to match canvas-inner and prevent clipping */
+    width: 10000px;
+    height: 10000px;
+    pointer-events: none;
+    z-index: 5;
+    overflow: visible;
+}
+
+.ovz-svg-layer path,
+.ovz-svg-layer line,
+.ovz-svg-layer circle {
+    pointer-events: auto;
+}
+
+/* Toolbar */
+.ovz-toolbar {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    gap: 8px;
+    background: var(--ovz-toolbar-bg);
+    backdrop-filter: blur(12px);
+    padding: 8px;
+    border-radius: var(--ovz-radius-lg);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--ovz-toolbar-border);
+    z-index: 100;
+}
+
+.ovz-toolbar-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    border-radius: var(--ovz-radius-md);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: var(--ovz-text-secondary);
+    transition: all var(--ovz-transition);
+}
+
+.ovz-toolbar-btn:hover {
+    background: var(--ovz-bg-overlay);
+    color: var(--ovz-text-primary);
+}
+
+.ovz-toolbar-btn.ovz-primary {
+    background: #404040;
+    color: white;
+}
+
+.ovz-toolbar-btn.ovz-primary:hover {
+    background: #303030;
+}
+
+.ovz-toolbar-btn.ovz-active {
+    background: #303030;
+    color: white;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.2);
+}
+
+.ovz-toolbar-divider {
+    width: 1px;
+    background: var(--ovz-entity-border);
+    margin: 4px 0;
+}
+
+/* Status Bar - Note: JS uses .ovz-status */
+.ovz-status-bar,
+.ovz-status {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    display: flex;
+    gap: 16px;
+    background: var(--ovz-toolbar-bg);
+    backdrop-filter: blur(12px);
+    padding: 8px 16px;
+    border-radius: var(--ovz-radius-md);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--ovz-toolbar-border);
+    font-size: 12px;
+    color: var(--ovz-text-secondary);
+    z-index: 100;
+}
+
+.ovz-status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ovz-status-label {
+    color: var(--ovz-text-muted);
+}
+
+.ovz-status-value {
+    font-weight: 500;
+    color: var(--ovz-text-primary);
+}
+
+/* Context Menu */
+.ovz-context-menu {
+    position: fixed;
+    background: var(--ovz-bg-primary);
+    border: 1px solid var(--ovz-entity-border);
+    border-radius: var(--ovz-radius-md);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    padding: 6px 0;
+    min-width: 180px;
+    z-index: 1000;
+    animation: ovz-fade-in 0.1s ease;
+}
+
+@keyframes ovz-fade-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.ovz-context-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--ovz-text-primary);
+    transition: background var(--ovz-transition);
+}
+
+.ovz-context-item:hover {
+    background: var(--ovz-bg-overlay);
+}
+
+.ovz-context-item.ovz-danger:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #303030;
+}
+
+.ovz-context-icon {
+    width: 20px;
+    text-align: center;
+    font-size: 14px;
+    opacity: 0.7;
+}
+
+.ovz-context-divider {
+    height: 1px;
+    background: var(--ovz-entity-border);
+    margin: 6px 0;
+}
+
+/* Modal Dialog */
+.ovz-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    animation: ovz-fade-in 0.15s ease;
+}
+
+.ovz-modal-content {
+    background: var(--ovz-bg-primary);
+    border-radius: var(--ovz-radius-lg);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
+    max-width: 480px;
+    width: 90%;
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.ovz-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--ovz-entity-border);
+    background: var(--ovz-bg-surface);
+}
+
+.ovz-modal-title {
+    font-family: var(--ovz-font-display);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ovz-text-primary);
+}
+
+.ovz-modal-close {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--ovz-text-muted);
+    cursor: pointer;
+    border-radius: var(--ovz-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all var(--ovz-transition);
+}
+
+.ovz-modal-close:hover {
+    background: var(--ovz-bg-overlay);
+    color: var(--ovz-text-primary);
+}
+
+.ovz-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.ovz-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--ovz-entity-border);
+    background: var(--ovz-bg-surface);
+}
+
+/* Buttons */
+.ovz-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: var(--ovz-radius-md);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--ovz-transition);
+}
+
+.ovz-btn-primary {
+    background: #404040;
+    color: white;
+}
+
+.ovz-btn-primary:hover {
+    background: #303030;
+}
+
+.ovz-btn-secondary {
+    background: var(--ovz-bg-overlay);
+    color: var(--ovz-text-primary);
+}
+
+.ovz-btn-secondary:hover {
+    background: var(--ovz-entity-border);
+}
+
+.ovz-btn-danger {
+    background: #dc3545;
+    color: white;
+}
+
+.ovz-btn-danger:hover {
+    background: #c82333;
+}
+
+.ovz-btn-outline {
+    background: transparent;
+    color: var(--ovz-text-primary);
+    border: 1px solid var(--ovz-entity-border);
+}
+
+.ovz-btn-outline:hover {
+    background: var(--ovz-bg-overlay);
+}
+
+/* Delete/Hide Dialog */
+.ovz-delete-dialog {
+    max-width: 400px;
+}
+
+.ovz-delete-dialog .ovz-modal-body p {
+    color: var(--ovz-text-secondary);
+}
+
+/* Form elements */
+.ovz-form-group {
+    margin-bottom: 16px;
+}
+
+.ovz-form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ovz-text-secondary);
+    margin-bottom: 6px;
+}
+
+.ovz-form-input,
+.ovz-form-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--ovz-entity-border);
+    border-radius: var(--ovz-radius-md);
+    font-size: 14px;
+    color: var(--ovz-text-primary);
+    background: var(--ovz-bg-primary);
+    transition: all var(--ovz-transition);
+}
+
+.ovz-form-input:focus,
+.ovz-form-textarea:focus {
+    outline: none;
+    border-color: #404040;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+}
+
+.ovz-form-textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+/* Icon Picker */
+.ovz-icon-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+    margin-bottom: 16px;
+}
+
+.ovz-icon-option {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    border: 2px solid transparent;
+    border-radius: var(--ovz-radius-md);
+    cursor: pointer;
+    background: var(--ovz-bg-surface);
+    transition: all var(--ovz-transition);
+}
+
+.ovz-icon-option:hover {
+    background: var(--ovz-bg-overlay);
+    border-color: var(--ovz-entity-border);
+}
+
+.ovz-icon-option.ovz-selected {
+    border-color: #404040;
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* Minimap */
+.ovz-minimap {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    width: 160px;
+    height: 120px;
+    background: var(--ovz-bg-primary);
+    border: 1px solid var(--ovz-entity-border);
+    border-radius: var(--ovz-radius-md);
+    z-index: 100;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.ovz-minimap-content {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.ovz-minimap-viewport {
+    position: absolute;
+    border: 2px solid #404040;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 2px;
+}
+
+/* ==========================================================================
+   Read-Only Mode
+   Hide all edit/delete/add buttons and disable text editing
+   ========================================================================== */
+body.read-only-mode .ovz-toolbar {
+    display: none !important;
+}
+
+/* Hide entity action buttons (edit, delete, add property) */
+body.read-only-mode .ovz-entity-actions {
+    display: none !important;
+}
+
+/* Hide property delete buttons */
+body.read-only-mode .ovz-property-actions {
+    display: none !important;
+}
+
+/* Hide relationship edit controls (delete, add prop, direction toggle) */
+body.read-only-mode .ovz-rel-delete,
+body.read-only-mode .ovz-rel-add-prop,
+body.read-only-mode .ovz-rel-direction {
+    display: none !important;
+}
+
+/* Hide relationship property delete buttons */
+body.read-only-mode .ovz-rel-prop-delete {
+    display: none !important;
+}
+
+/* Make all inputs and text fields read-only */
+body.read-only-mode .ovz-entity-name,
+body.read-only-mode .ovz-property-name,
+body.read-only-mode .ovz-rel-name-input,
+body.read-only-mode .ovz-rel-prop-name {
+    pointer-events: none !important;
+    background: transparent !important;
+    border-color: transparent !important;
+    cursor: default !important;
+}
+
+/* Hide context menu edit options */
+body.read-only-mode .ovz-context-menu {
+    display: none !important;
+}
+
+/* Disable entity dragging */
+body.read-only-mode .ovz-entity {
+    cursor: default !important;
+}
+
+/* Hide connector points (used to create relationships) */
+body.read-only-mode .ovz-connector {
+    display: none !important;
+}
+
+/* Hide direction label click action */
+body.read-only-mode .ovz-rel-direction-label {
+    pointer-events: none !important;
+    cursor: default !important;
+}
+
+/* ==========================================================================
+   Palette Popup (Show/Hide Elements)
+   ========================================================================== */
+.ovz-palette-popup {
+    position: fixed;
+    background: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    width: 320px;
+    max-height: 500px;
+    z-index: 10000;
+    animation: ovz-fade-in 0.15s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.ovz-palette-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #dee2e6;
+    background: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #212529;
+}
+
+.ovz-palette-close {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: #6c757d;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    transition: all 0.15s ease;
+}
+
+.ovz-palette-close:hover {
+    background: #e9ecef;
+    color: #212529;
+}
+
+.ovz-palette-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid #dee2e6;
+    background: #f8f9fa;
+}
+
+.ovz-palette-action-btn {
+    padding: 6px 10px;
+    border: 1px solid #dee2e6;
+    background: #ffffff;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.ovz-palette-action-btn:hover:not(:disabled) {
+    background: #e9ecef;
+    color: #212529;
+    border-color: #adb5bd;
+}
+
+.ovz-palette-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ovz-palette-content {
+    overflow-y: auto;
+    max-height: 400px;
+    background: #ffffff;
+}
+
+.ovz-palette-section {
+    padding: 10px 0;
+}
+
+.ovz-palette-section:not(:last-child) {
+    border-bottom: 1px solid #dee2e6;
+}
+
+.ovz-palette-section-title {
+    padding: 4px 16px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #6c757d;
+    letter-spacing: 0.5px;
+}
+
+.ovz-palette-items {
+    display: flex;
+    flex-direction: column;
+}
+
+.ovz-palette-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.ovz-palette-item:hover {
+    background: #f8f9fa;
+}
+
+.ovz-palette-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #0d6efd;
+}
+
+.ovz-palette-icon {
+    font-size: 18px;
+    width: 28px;
+    text-align: center;
+}
+
+.ovz-palette-name {
+    font-size: 14px;
+    color: #212529;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ovz-palette-empty {
+    padding: 16px;
+    font-size: 13px;
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+}
+
+.ovz-palette-toggles {
+    display: flex;
+    flex-direction: column;
+}
+
+.ovz-palette-toggle-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.ovz-palette-toggle-item:last-child {
+    border-bottom: none;
+}
+
+.ovz-palette-toggle-item:hover {
+    background: #f8f9fa;
+}
+
+.ovz-palette-toggle-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #0d6efd;
+}

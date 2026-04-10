@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Overview: module code &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>All modules for which code is available</h1>
+<ul><li><a href="agents/agent_auto_assignment/engine.html">agents.agent_auto_assignment.engine</a></li>
+<li><a href="agents/agent_auto_icon_assign/engine.html">agents.agent_auto_icon_assign.engine</a></li>
+<li><a href="agents/agent_ontology_assistant/engine.html">agents.agent_ontology_assistant.engine</a></li>
+<li><a href="agents/agent_ontology_assistant/tools.html">agents.agent_ontology_assistant.tools</a></li>
+<li><a href="agents/agent_owl_generator/engine.html">agents.agent_owl_generator.engine</a></li>
+<li><a href="agents/llm_utils.html">agents.llm_utils</a></li>
+<li><a href="agents/tools/context.html">agents.tools.context</a></li>
+<li><a href="agents/tools/documents.html">agents.tools.documents</a></li>
+<li><a href="agents/tools/icons.html">agents.tools.icons</a></li>
+<li><a href="agents/tools/mapping.html">agents.tools.mapping</a></li>
+<li><a href="agents/tools/metadata.html">agents.tools.metadata</a></li>
+<li><a href="agents/tools/ontology.html">agents.tools.ontology</a></li>
+<li><a href="agents/tools/sql.html">agents.tools.sql</a></li>
+<li><a href="agents/tracing.html">agents.tracing</a></li>
+<li><a href="api/external_app.html">api.external_app</a></li>
+<li><a href="api/routers/digitaltwin.html">api.routers.digitaltwin</a></li>
+<li><a href="api/routers/internal/dtwin.html">api.routers.internal.dtwin</a></li>
+<li><a href="api/routers/internal/home.html">api.routers.internal.home</a></li>
+<li><a href="api/routers/internal/mapping.html">api.routers.internal.mapping</a></li>
+<li><a href="api/routers/internal/ontology.html">api.routers.internal.ontology</a></li>
+<li><a href="api/routers/internal/project.html">api.routers.internal.project</a></li>
+<li><a href="api/routers/internal/settings.html">api.routers.internal.settings</a></li>
+<li><a href="api/routers/internal/tasks.html">api.routers.internal.tasks</a></li>
+<li><a href="api/routers/projects.html">api.routers.projects</a></li>
+<li><a href="api/routers/v1.html">api.routers.v1</a></li>
+<li><a href="back/core/databricks/DashboardService.html">back.core.databricks.DashboardService</a></li>
+<li><a href="back/core/databricks/DatabricksAuth.html">back.core.databricks.DatabricksAuth</a></li>
+<li><a href="back/core/databricks/DatabricksClient.html">back.core.databricks.DatabricksClient</a></li>
+<li><a href="back/core/databricks/MetadataService.html">back.core.databricks.MetadataService</a></li>
+<li><a href="back/core/databricks/SQLWarehouse.html">back.core.databricks.SQLWarehouse</a></li>
+<li><a href="back/core/databricks/UCProjectIO.html">back.core.databricks.UCProjectIO</a></li>
+<li><a href="back/core/databricks/UnityCatalog.html">back.core.databricks.UnityCatalog</a></li>
+<li><a href="back/core/databricks/VolumeFileService.html">back.core.databricks.VolumeFileService</a></li>
+<li><a href="back/core/databricks/WorkspaceService.html">back.core.databricks.WorkspaceService</a></li>
+<li><a href="back/core/errors/AuthorizationError.html">back.core.errors.AuthorizationError</a></li>
+<li><a href="back/core/errors/ConflictError.html">back.core.errors.ConflictError</a></li>
+<li><a href="back/core/errors/ErrorResponse.html">back.core.errors.ErrorResponse</a></li>
+<li><a href="back/core/errors/InfrastructureError.html">back.core.errors.InfrastructureError</a></li>
+<li><a href="back/core/errors/NotFoundError.html">back.core.errors.NotFoundError</a></li>
+<li><a href="back/core/errors/OntoBricksError.html">back.core.errors.OntoBricksError</a></li>
+<li><a href="back/core/errors/ValidationError.html">back.core.errors.ValidationError</a></li>
+<li><a href="back/core/graphql/GraphQLSchemaBuilder.html">back.core.graphql.GraphQLSchemaBuilder</a></li>
+<li><a href="back/core/graphql/ResolverFactory.html">back.core.graphql.ResolverFactory</a></li>
+<li><a href="back/core/graphql/SchemaMetadata.html">back.core.graphql.SchemaMetadata</a></li>
+<li><a href="back/core/graphql/models.html">back.core.graphql.models</a></li>
+<li><a href="back/core/helpers/DatabricksHelpers.html">back.core.helpers.DatabricksHelpers</a></li>
+<li><a href="back/core/helpers/SQLHelpers.html">back.core.helpers.SQLHelpers</a></li>
+<li><a href="back/core/helpers/URIHelpers.html">back.core.helpers.URIHelpers</a></li>
+<li><a href="back/core/logging.html">back.core.logging</a></li>
+<ul><li><a href="back/core/logging/LogManager.html">back.core.logging.LogManager</a></li>
+</ul><li><a href="back/core/reasoning/AggregateRuleEngine.html">back.core.reasoning.AggregateRuleEngine</a></li>
+<li><a href="back/core/reasoning/DecisionTableEngine.html">back.core.reasoning.DecisionTableEngine</a></li>
+<li><a href="back/core/reasoning/OWLRLReasoner.html">back.core.reasoning.OWLRLReasoner</a></li>
+<li><a href="back/core/reasoning/ReasoningService.html">back.core.reasoning.ReasoningService</a></li>
+<li><a href="back/core/reasoning/SPARQLRuleEngine.html">back.core.reasoning.SPARQLRuleEngine</a></li>
+<li><a href="back/core/reasoning/SWRLBuiltinRegistry.html">back.core.reasoning.SWRLBuiltinRegistry</a></li>
+<li><a href="back/core/reasoning/SWRLCypherTranslator.html">back.core.reasoning.SWRLCypherTranslator</a></li>
+<li><a href="back/core/reasoning/SWRLEngine.html">back.core.reasoning.SWRLEngine</a></li>
+<li><a href="back/core/reasoning/SWRLFlatCypherTranslator.html">back.core.reasoning.SWRLFlatCypherTranslator</a></li>
+<li><a href="back/core/reasoning/SWRLParser.html">back.core.reasoning.SWRLParser</a></li>
+<li><a href="back/core/reasoning/SWRLSQLTranslator.html">back.core.reasoning.SWRLSQLTranslator</a></li>
+<li><a href="back/core/reasoning/models.html">back.core.reasoning.models</a></li>
+<li><a href="back/core/sqlwizard/SQLWizardService.html">back.core.sqlwizard.SQLWizardService</a></li>
+<li><a href="back/core/sqlwizard/models.html">back.core.sqlwizard.models</a></li>
+<li><a href="back/core/task_manager.html">back.core.task_manager</a></li>
+<ul><li><a href="back/core/task_manager/TaskManager.html">back.core.task_manager.TaskManager</a></li>
+<li><a href="back/core/task_manager/models.html">back.core.task_manager.models</a></li>
+</ul><li><a href="back/core/triplestore/IncrementalBuildService.html">back.core.triplestore.IncrementalBuildService</a></li>
+<li><a href="back/core/triplestore/TripleStoreBackend.html">back.core.triplestore.TripleStoreBackend</a></li>
+<li><a href="back/core/triplestore/TripleStoreFactory.html">back.core.triplestore.TripleStoreFactory</a></li>
+<li><a href="back/core/triplestore/delta/DeltaTripleStore.html">back.core.triplestore.delta.DeltaTripleStore</a></li>
+<li><a href="back/core/triplestore/ladybugdb/GraphSchema.html">back.core.triplestore.ladybugdb.GraphSchema</a></li>
+<li><a href="back/core/triplestore/ladybugdb/GraphSchemaBuilder.html">back.core.triplestore.ladybugdb.GraphSchemaBuilder</a></li>
+<li><a href="back/core/triplestore/ladybugdb/GraphSyncService.html">back.core.triplestore.ladybugdb.GraphSyncService</a></li>
+<li><a href="back/core/triplestore/ladybugdb/LadybugBase.html">back.core.triplestore.ladybugdb.LadybugBase</a></li>
+<li><a href="back/core/triplestore/ladybugdb/LadybugFlatStore.html">back.core.triplestore.ladybugdb.LadybugFlatStore</a></li>
+<li><a href="back/core/triplestore/ladybugdb/LadybugGraphStore.html">back.core.triplestore.ladybugdb.LadybugGraphStore</a></li>
+<li><a href="back/core/triplestore/ladybugdb/models.html">back.core.triplestore.ladybugdb.models</a></li>
+<li><a href="back/core/w3c/owl/OntologyGenerator.html">back.core.w3c.owl.OntologyGenerator</a></li>
+<li><a href="back/core/w3c/owl/OntologyParser.html">back.core.w3c.owl.OntologyParser</a></li>
+<li><a href="back/core/w3c/r2rml/R2RMLGenerator.html">back.core.w3c.r2rml.R2RMLGenerator</a></li>
+<li><a href="back/core/w3c/r2rml/R2RMLParser.html">back.core.w3c.r2rml.R2RMLParser</a></li>
+<li><a href="back/core/w3c/rdfs/RDFSParser.html">back.core.w3c.rdfs.RDFSParser</a></li>
+<li><a href="back/core/w3c/shacl/SHACLGenerator.html">back.core.w3c.shacl.SHACLGenerator</a></li>
+<li><a href="back/core/w3c/shacl/SHACLParser.html">back.core.w3c.shacl.SHACLParser</a></li>
+<li><a href="back/core/w3c/shacl/SHACLService.html">back.core.w3c.shacl.SHACLService</a></li>
+<li><a href="back/core/w3c/sparql/ProjectQueryService.html">back.core.w3c.sparql.ProjectQueryService</a></li>
+<li><a href="back/core/w3c/sparql/SparqlQueryRunner.html">back.core.w3c.sparql.SparqlQueryRunner</a></li>
+<li><a href="back/core/w3c/sparql/SparqlTranslator.html">back.core.w3c.sparql.SparqlTranslator</a></li>
+<li><a href="back/fastapi/graphql_routes.html">back.fastapi.graphql_routes</a></li>
+<li><a href="back/objects/digitaltwin/models.html">back.objects.digitaltwin.models</a></li>
+<li><a href="back/objects/mapping/json_views.html">back.objects.mapping.json_views</a></li>
+<li><a href="back/objects/mapping/mapping.html">back.objects.mapping.mapping</a></li>
+<li><a href="back/objects/ontology/json_views.html">back.objects.ontology.json_views</a></li>
+<li><a href="back/objects/ontology/ontology.html">back.objects.ontology.ontology</a></li>
+<li><a href="back/objects/project/payload.html">back.objects.project.payload</a></li>
+<li><a href="back/objects/project/project.html">back.objects.project.project</a></li>
+<li><a href="back/objects/project/version_status.html">back.objects.project.version_status</a></li>
+<li><a href="back/objects/registry/permissions.html">back.objects.registry.permissions</a></li>
+<li><a href="back/objects/registry/scheduler.html">back.objects.registry.scheduler</a></li>
+<li><a href="back/objects/registry/service.html">back.objects.registry.service</a></li>
+<li><a href="back/objects/session/global_config.html">back.objects.session.global_config</a></li>
+<li><a href="back/objects/session/manager.html">back.objects.session.manager</a></li>
+<li><a href="back/objects/session/middleware.html">back.objects.session.middleware</a></li>
+<li><a href="back/objects/session/project_session.html">back.objects.session.project_session</a></li>
+<li><a href="back/services/home.html">back.services.home</a></li>
+<li><a href="front/fastapi/dependencies.html">front.fastapi.dependencies</a></li>
+<li><a href="front/routes/dtwin.html">front.routes.dtwin</a></li>
+<li><a href="front/routes/home.html">front.routes.home</a></li>
+<li><a href="front/routes/mapping.html">front.routes.mapping</a></li>
+<li><a href="front/routes/ontology.html">front.routes.ontology</a></li>
+<li><a href="front/routes/project.html">front.routes.project</a></li>
+<li><a href="shared/config/settings.html">shared.config.settings</a></li>
+<li><a href="shared/fastapi/health.html">shared.fastapi.health</a></li>
+<li><a href="shared/fastapi/main.html">shared.fastapi.main</a></li>
+</ul>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

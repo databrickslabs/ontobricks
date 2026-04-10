@@ -1,0 +1,205 @@
+<!-- Data Quality (SHACL) Section -->
+<!-- JS: /static/ontology/js/ontology-dataquality.js -->
+<!-- CSS: /static/ontology/css/ontology-dataquality.css -->
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-shield-check me-2"></i>Data Quality</h4>
+        <p class="text-muted mb-0 small">Define SHACL-based data quality rules across six dimensions</p>
+    </div>
+    <div class="btn-group btn-group-sm ontology-edit-btn">
+        <button class="btn btn-outline-primary" onclick="DataQualityModule.openAddModal()">
+            <i class="bi bi-plus-lg me-1"></i> Add Rule
+        </button>
+        <button class="btn btn-outline-secondary" onclick="DataQualityModule.toggleShaclPanel()">
+            <i class="bi bi-code-slash me-1"></i> SHACL
+        </button>
+    </div>
+</div>
+
+<div class="card h-100">
+    <div class="card-body p-0">
+        <!-- Dimension Tabs -->
+        <ul class="nav nav-tabs nav-fill small px-3 pt-3" id="dqTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#dq-pane-completeness"
+                        data-dq-category="completeness" type="button" role="tab">
+                    <i class="bi bi-check2-all me-1"></i>Completeness
+                    <span class="badge bg-info bg-opacity-75 ms-1" id="dqBadgeCompleteness">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#dq-pane-cardinality"
+                        data-dq-category="cardinality" type="button" role="tab">
+                    <i class="bi bi-123 me-1"></i>Cardinality
+                    <span class="badge bg-primary bg-opacity-75 ms-1" id="dqBadgeCardinality">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#dq-pane-uniqueness"
+                        data-dq-category="uniqueness" type="button" role="tab">
+                    <i class="bi bi-fingerprint me-1"></i>Uniqueness
+                    <span class="badge bg-warning text-dark bg-opacity-75 ms-1" id="dqBadgeUniqueness">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#dq-pane-consistency"
+                        data-dq-category="consistency" type="button" role="tab">
+                    <i class="bi bi-link-45deg me-1"></i>Consistency
+                    <span class="badge bg-success bg-opacity-75 ms-1" id="dqBadgeConsistency">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#dq-pane-conformance"
+                        data-dq-category="conformance" type="button" role="tab">
+                    <i class="bi bi-regex me-1"></i>Conformance
+                    <span class="badge bg-danger bg-opacity-75 ms-1" id="dqBadgeConformance">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#dq-pane-structural"
+                        data-dq-category="structural" type="button" role="tab">
+                    <i class="bi bi-diagram-3 me-1"></i>Structural
+                    <span class="badge bg-dark bg-opacity-75 ms-1" id="dqBadgeStructural">0</span>
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Panes -->
+        <div class="tab-content p-3" id="dqTabContent">
+            <div class="tab-pane fade show active" id="dq-pane-completeness" role="tabpanel">
+                <div id="dqListCompleteness" class="dq-shapes-list"></div>
+            </div>
+            <div class="tab-pane fade" id="dq-pane-cardinality" role="tabpanel">
+                <div id="dqListCardinality" class="dq-shapes-list"></div>
+            </div>
+            <div class="tab-pane fade" id="dq-pane-uniqueness" role="tabpanel">
+                <div id="dqListUniqueness" class="dq-shapes-list"></div>
+            </div>
+            <div class="tab-pane fade" id="dq-pane-consistency" role="tabpanel">
+                <div id="dqListConsistency" class="dq-shapes-list"></div>
+            </div>
+            <div class="tab-pane fade" id="dq-pane-conformance" role="tabpanel">
+                <div id="dqListConformance" class="dq-shapes-list"></div>
+            </div>
+            <div class="tab-pane fade" id="dq-pane-structural" role="tabpanel">
+                <div id="dqListStructural" class="dq-shapes-list"></div>
+            </div>
+        </div>
+
+        <!-- SHACL Panel (toggle) -->
+        <div id="dqShaclPanel" class="border-top" style="display:none">
+            <div class="p-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0"><i class="bi bi-code-slash me-1"></i>SHACL Turtle</h6>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" onclick="DataQualityModule.refreshTurtle()">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="DataQualityModule.exportShacl()">
+                            <i class="bi bi-download me-1"></i>Export
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="DataQualityModule.showImportModal()">
+                            <i class="bi bi-upload me-1"></i>Import
+                        </button>
+                    </div>
+                </div>
+                <textarea class="form-control font-monospace small" id="dqShaclEditor" rows="12"
+                          placeholder="SHACL Turtle content will appear here..."></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ Add/Edit Shape Modal ═══ -->
+<div class="modal fade" id="dqShapeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="dqShapeModalTitle">
+                    <i class="bi bi-shield-plus me-2"></i>Add Data Quality Rule
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="dqEditShapeId" value="">
+
+                <!-- Hidden category (auto-set from active tab) -->
+                <input type="hidden" id="dqCategory" value="completeness">
+                <div id="dqCategoryHint" class="form-text text-muted small mt-1 mb-3"></div>
+
+                <!-- Target Class -->
+                <div class="mb-3" id="dqTargetClassGroup">
+                    <label class="form-label fw-bold">1. Target Entity</label>
+                    <select class="form-select" id="dqTargetClass" onchange="DataQualityModule.onTargetClassChange()">
+                        <option value="">Select entity...</option>
+                    </select>
+                </div>
+
+                <!-- Property / Relationship -->
+                <div class="mb-3" id="dqPropertyGroup">
+                    <label class="form-label fw-bold" id="dqPropertyLabel">2. Property</label>
+                    <select class="form-select" id="dqProperty" onchange="DataQualityModule._autoFillMessage()">
+                        <option value="">Select property...</option>
+                    </select>
+                </div>
+
+                <!-- Dynamic constraint fields (populated by JS based on category) -->
+                <div id="dqConstraintFields"></div>
+
+                <!-- Message -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Message</label>
+                    <input type="text" class="form-control" id="dqMessage"
+                           placeholder="Describe what this rule checks">
+                </div>
+
+                <!-- SHACL Preview -->
+                <div class="mb-0">
+                    <label class="form-label small fw-semibold mb-1">Generated SHACL</label>
+                    <div class="dq-shacl-preview small font-monospace p-2 rounded" id="dqShapePreview">
+                        <span class="text-muted fst-italic">Configure the rule to see SHACL output</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="DataQualityModule.saveShape()">
+                    <i class="bi bi-check-lg me-1"></i> Save Rule
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ Import SHACL Modal ═══ -->
+<div class="modal fade" id="dqImportModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Import SHACL Shapes</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small py-2">
+                    <i class="bi bi-info-circle"></i> Paste SHACL Turtle content or upload a <code>.ttl</code> file.
+                    Imported shapes will be added to existing rules.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Upload file</label>
+                    <input type="file" class="form-control" id="dqImportFile" accept=".ttl,.turtle,.rdf">
+                </div>
+                <div class="mb-0">
+                    <label class="form-label fw-bold">Or paste Turtle</label>
+                    <textarea class="form-control font-monospace small" id="dqImportText" rows="8"
+                              placeholder="@prefix sh: <http://www.w3.org/ns/shacl#> ..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="DataQualityModule.doImport()">
+                    <i class="bi bi-upload me-1"></i> Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

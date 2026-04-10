@@ -1,0 +1,78 @@
+# OntoBricks — files excluded from Databricks bundle sync
+# Only runtime-essential files should be deployed:
+#   src/          — application code
+#   app.yaml      — Databricks Apps runtime config
+#   run.py        — entry point
+#   pyproject.toml / uv.lock / requirements.txt — dependency resolution
+
+# ── Virtual environments ──────────────────────────────────────
+.venv/
+venv/
+
+# ── Python build artifacts ────────────────────────────────────
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# ── Git / IDE / CI ────────────────────────────────────────────
+.git/
+.github/
+.vscode/
+.cursor/
+.databricks/
+
+# ── Tests & coverage ─────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+
+# ── Local session, logs & databases ──────────────────────────
+fastapi_session/
+logs/
+*.pid
+.ontobricks.pid
+.ontobricks.log
+mlflow.db
+
+# ── Documentation (not needed at runtime) ────────────────────
+data/
+docs/
+licenses/
+dab/
+*.md
+documentation.html
+
+# ── DAB config (not needed at runtime) ───────────────────────
+databricks.yml
+.databricksignore
+
+# ── Old app directory (replaced by back/, front/, shared/) ──
+src/app-ARCHIVE/
+app-ARCHIVE/
+
+# ── MCP server (has its own source_code_path) ────────────────
+src/mcp-server/
+
+# ── OS / editor artifacts ────────────────────────────────────
+.DS_Store
+.env
+.env.example
+
+# ── Dev / deployment scripts & tooling ───────────────────────
+Makefile
+pytest.ini
+setup.sh
+start.sh
+stop.sh
+deploy.sh
+test_UI.sh
+run_tests.sh
+build_docs.sh
+mcp_server.py
+.cursorrules
+.gitignore
+features.md
+LICENSE

@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>OntoBricks MCP Server &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Development" href="development.html" />
+    <link rel="prev" title="OntoBricks External REST API" href="api.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="documentation.html">OntoBricks documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">OntoBricks MCP Server</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#workflow">Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#available-tools">Available Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#available-resources">Available Resources</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#databricks-playground-custom-mcp-server">Databricks Playground (Custom MCP Server)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#standalone-local-usage">Standalone / Local Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#client-configuration">Client Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#testing-with-mcp-inspector">Testing with MCP Inspector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#text-formatting-pipeline">Text Formatting Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#dependencies-src-mcp-server-pyproject-toml">Dependencies (src/mcp-server/pyproject.toml)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.html"><code class="docutils literal notranslate"><span class="pre">app</span></code> – Application Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.fastapi.html"><code class="docutils literal notranslate"><span class="pre">app.fastapi</span></code> — FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">app.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">app.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">app.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">app.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">app.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">app.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">app.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">app.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">app.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.html.html"><code class="docutils literal notranslate"><span class="pre">app.html</span></code> – Web UI Routers &amp; Services</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">app.config</span></code> – Application Constants &amp; Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="api.html" title="previous chapter">OntoBricks External REST API</a></li>
+      <li>Next: <a href="development.html" title="next chapter">Development</a></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="ontobricks-mcp-server">
+<h1>OntoBricks MCP Server<a class="headerlink" href="#ontobricks-mcp-server" title="Link to this heading">¶</a></h1>
+<p>OntoBricks exposes its Digital Twin knowledge-graph capabilities via the
+<a class="reference external" href="https://modelcontextprotocol.io/">Model Context Protocol (MCP)</a>, allowing
+LLM-based tools to browse projects, discover entity types, look up specific
+entities with full-text descriptions, and check triple-store health — all
+through a standardised interface.</p>
+<p>The MCP server lives in the <strong><code class="docutils literal notranslate"><span class="pre">src/mcp-server/</span></code></strong> directory as a self-contained
+Python project deployed separately from the main OntoBricks web application.</p>
+<hr class="docutils" />
+<section id="workflow">
+<h2>Workflow<a class="headerlink" href="#workflow" title="Link to this heading">¶</a></h2>
+<p>The MCP server follows a <strong>two-step workflow</strong>:</p>
+<ol class="arabic simple">
+<li><p><strong>Choose a project</strong> — call <code class="docutils literal notranslate"><span class="pre">list_projects</span></code> to see available knowledge graphs with descriptions, then <code class="docutils literal notranslate"><span class="pre">select_project</span></code> to activate one. Only projects with the <strong>API / MCP</strong> flag enabled in OntoBricks are listed.</p></li>
+<li><p><strong>Query the knowledge graph</strong> — use <code class="docutils literal notranslate"><span class="pre">list_entity_types</span></code>, <code class="docutils literal notranslate"><span class="pre">describe_entity</span></code>, or <code class="docutils literal notranslate"><span class="pre">get_status</span></code> on the selected project.</p></li>
+</ol>
+<p><strong>Advanced — GraphQL querying:</strong></p>
+<p>After selecting a project, the LLM can also leverage GraphQL for structured data retrieval:</p>
+<ol class="arabic simple">
+<li><p>Call <code class="docutils literal notranslate"><span class="pre">get_graphql_schema</span></code> to discover the typed schema (types, fields, relationships).</p></li>
+<li><p>Call <code class="docutils literal notranslate"><span class="pre">query_graphql</span></code> with a GraphQL query to retrieve data with nested traversal, specific field selection, and filtering.</p></li>
+</ol>
+<p>The LLM is instructed (via the MCP <code class="docutils literal notranslate"><span class="pre">instructions</span></code> field) to always select a
+project before querying entities. If the user’s question clearly refers to a
+domain covered by one of the projects, the LLM selects it automatically.</p>
+</section>
+<hr class="docutils" />
+<section id="available-tools">
+<h2>Available Tools<a class="headerlink" href="#available-tools" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tool</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">list_projects</span></code></p></td>
+<td><p>Lists all projects (knowledge graphs) in the registry with their names and descriptions</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">select_project</span></code></p></td>
+<td><p>Activates a project by name — all subsequent queries operate on this project’s triple store</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">list_entity_types</span></code></p></td>
+<td><p>Returns a human-readable overview of the selected project’s knowledge graph: total triples, distinct entities, every entity type with instance count, and predicate usage breakdown</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">describe_entity</span></code></p></td>
+<td><p>Searches for an entity by name/type and returns a <strong>full-text description</strong> — identity, attributes, relationships, and related entities discovered hop-by-hop (BFS traversal)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_status</span></code></p></td>
+<td><p>Compact diagnostic: project name, backend type, table name, data availability, triple count</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_graphql_schema</span></code></p></td>
+<td><p>Returns the auto-generated GraphQL schema (SDL) for the selected project — shows types, fields, and relationships</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">query_graphql</span></code></p></td>
+<td><p>Executes a GraphQL query against the selected project’s knowledge graph with structured, nested results</p></td>
+</tr>
+</tbody>
+</table>
+<section id="tool-details">
+<h3>Tool Details<a class="headerlink" href="#tool-details" title="Link to this heading">¶</a></h3>
+<section id="list-projects">
+<h4><code class="docutils literal notranslate"><span class="pre">list_projects</span></code><a class="headerlink" href="#list-projects" title="Link to this heading">¶</a></h4>
+<p>No arguments. Always call this first.</p>
+<blockquote>
+<div><p><strong>Note</strong>: Only projects with the <strong>API / MCP</strong> flag enabled (in Project
+Information → Global tab) are listed. Projects without this flag are hidden
+from both the REST API and MCP tools.</p>
+</div></blockquote>
+<p>Returns formatted text:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Available Projects (3)
+========================================
+  • customer360
+    Customer 360 knowledge graph with interactions, contracts, and claims
+  • supply_chain
+    Supply chain ontology covering suppliers, products, and logistics
+  • hr_analytics
+    HR data model with employees, departments, and org structure
+
+No project selected yet — call select_project(&lt;name&gt;) next.
+</pre></div>
+</div>
+</section>
+<section id="select-project">
+<h4><code class="docutils literal notranslate"><span class="pre">select_project</span></code><a class="headerlink" href="#select-project" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code></p></td>
+<td><p>string</p></td>
+<td><p>Exact project name as shown by <code class="docutils literal notranslate"><span class="pre">list_projects</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>Returns a confirmation with project status:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Project</span> <span class="s1">&#39;customer360&#39;</span> <span class="n">selected</span><span class="o">.</span>
+<span class="n">Backend</span><span class="p">:</span> <span class="n">delta</span>
+<span class="n">Table</span><span class="p">:</span>   <span class="n">catalog</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">triplestore</span>
+<span class="n">Data</span><span class="p">:</span>    <span class="n">Yes</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="mi">030</span> <span class="n">triples</span><span class="p">)</span>
+
+<span class="n">You</span> <span class="n">can</span> <span class="n">now</span> <span class="n">use</span> <span class="n">list_entity_types</span> <span class="ow">and</span> <span class="n">describe_entity</span><span class="o">.</span>
+</pre></div>
+</div>
+</section>
+<section id="list-entity-types">
+<h4><code class="docutils literal notranslate"><span class="pre">list_entity_types</span></code><a class="headerlink" href="#list-entity-types" title="Link to this heading">¶</a></h4>
+<p>No arguments. Requires a project to be selected first.</p>
+<p>Returns formatted text:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Knowledge Graph — customer360
+========================================
+Total triples:       12,030
+Distinct entities:   1,301
+Distinct predicates: 41
+Labels:              1,301
+Type assertions:     1,301
+Relationships:       900
+
+Entity Types
+----------------------------------------
+  • Customer  (100 instances)
+    URI: https://ontobricks.com/ontology#Customer
+  • Call  (300 instances)
+    URI: https://ontobricks.com/ontology#Call
+  ...
+
+Predicates (attributes &amp; relationships)
+----------------------------------------
+  • hasinteraction  (100 usages)
+  • lastname  (100 usages)
+  ...
+</pre></div>
+</div>
+</section>
+<section id="describe-entity">
+<h4><code class="docutils literal notranslate"><span class="pre">describe_entity</span></code><a class="headerlink" href="#describe-entity" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">search</span></code></p></td>
+<td><p>string</p></td>
+<td><p>—</p></td>
+<td><p>Text to search in entity names/labels/URIs (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;Jacob</span> <span class="pre">Martinez&quot;</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">entity_type</span></code></p></td>
+<td><p>string</p></td>
+<td><p>—</p></td>
+<td><p>Filter by type local name (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;Customer&quot;</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">depth</span></code></p></td>
+<td><p>int</p></td>
+<td><p>2</p></td>
+<td><p>BFS traversal depth (1–10)</p></td>
+</tr>
+</tbody>
+</table>
+<p>Requires a project to be selected first.
+At least one of <code class="docutils literal notranslate"><span class="pre">search</span></code> or <code class="docutils literal notranslate"><span class="pre">entity_type</span></code> is required.</p>
+<p>Returns formatted text:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Found 1 matching entity (33 triples across 3 entities, depth=2)
+
+── Matching Entities ──
+■ Jacob Martinez  (Customer)
+  URI: https://ontobricks.com/ontology/Customer/CUST00094
+  Attributes:
+    • firstname: Jacob
+    • lastname: Martinez
+    • email: customer00094@email.fr
+    • phone: 33624261017
+    • city: Aix-en-Provence
+    • country: France
+    • dateofbirth: 1988-12-07
+    • segment: professional
+    • loyaltypoints: 823
+  Relationships:
+    → hasinteraction: INT000019
+
+── Related Entities (neighbors) ──
+■ INT000019  (Interaction)
+  URI: https://ontobricks.com/ontology/Interaction/INT000019
+  Attributes:
+    • label: Service_Activation via in_person
+</pre></div>
+</div>
+<p>Key features of the text output:</p>
+<ul class="simple">
+<li><p><strong>URI alias merging</strong> — if an entity has multiple URI patterns (e.g. <code class="docutils literal notranslate"><span class="pre">…/Customer/CUST00094</span></code> and <code class="docutils literal notranslate"><span class="pre">…/CUST00094</span></code>), triples are merged into a single block</p></li>
+<li><p><strong>Predicate prettifying</strong> — URIs like <code class="docutils literal notranslate"><span class="pre">ontologylastname</span></code> become <code class="docutils literal notranslate"><span class="pre">lastname</span></code>, camelCase is split</p></li>
+<li><p><strong>Hop-by-hop structure</strong> — matching entities first, then related entities (neighbors)</p></li>
+</ul>
+</section>
+<section id="get-status">
+<h4><code class="docutils literal notranslate"><span class="pre">get_status</span></code><a class="headerlink" href="#get-status" title="Link to this heading">¶</a></h4>
+<p>No arguments. Requires a project to be selected first.</p>
+<p>Returns compact text:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Project</span><span class="p">:</span> <span class="n">customer360</span>
+<span class="n">Backend</span><span class="p">:</span> <span class="n">delta</span>
+<span class="n">Table</span><span class="p">:</span>   <span class="n">catalog</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">triplestore</span>
+<span class="n">Status</span><span class="p">:</span>  <span class="n">OK</span>
+<span class="n">Data</span><span class="p">:</span>    <span class="n">Yes</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="mi">030</span> <span class="n">triples</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="get-graphql-schema">
+<h4><code class="docutils literal notranslate"><span class="pre">get_graphql_schema</span></code><a class="headerlink" href="#get-graphql-schema" title="Link to this heading">¶</a></h4>
+<p>No arguments. Requires a project to be selected first.</p>
+<p>Returns the auto-generated GraphQL schema in SDL format. The schema is derived from the project’s ontology — each class becomes a GraphQL type, each data property becomes a field, and each object property becomes a typed relationship.</p>
+<p>Use this to discover available types and fields before calling <code class="docutils literal notranslate"><span class="pre">query_graphql</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>GraphQL Schema — customer360
+==================================================
+
+type Customer {
+  id: String!
+  label: String
+  firstname: String
+  lastname: String
+  email: String
+  city: String
+  hasInteraction: [Interaction]
+}
+
+type Interaction {
+  id: String!
+  label: String
+  date: String
+  channel: String
+}
+
+type Query {
+  allCustomer(limit: Int = 50, offset: Int = 0, search: String): [Customer!]!
+  customer(id: String!): Customer
+  allInteraction(limit: Int = 50, offset: Int = 0, search: String): [Interaction!]!
+  interaction(id: String!): Interaction
+}
+
+Use query_graphql to execute queries against this schema.
+</pre></div>
+</div>
+</section>
+<section id="query-graphql">
+<h4><code class="docutils literal notranslate"><span class="pre">query_graphql</span></code><a class="headerlink" href="#query-graphql" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">query</span></code></p></td>
+<td><p>string</p></td>
+<td><p>—</p></td>
+<td><p>A valid GraphQL query string</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">variables</span></code></p></td>
+<td><p>string</p></td>
+<td><p>—</p></td>
+<td><p>Optional JSON string of query variables</p></td>
+</tr>
+</tbody>
+</table>
+<p>Requires a project to be selected first.</p>
+<p>Executes a GraphQL query against the knowledge graph and returns structured, formatted results. Ideal for:</p>
+<ul class="simple">
+<li><p>Fetching specific fields without over-fetching</p></li>
+<li><p>Nested relationship traversal in a single request</p></li>
+<li><p>Filtering with <code class="docutils literal notranslate"><span class="pre">search</span></code>, pagination with <code class="docutils literal notranslate"><span class="pre">limit</span></code>/<code class="docutils literal notranslate"><span class="pre">offset</span></code></p></li>
+</ul>
+<p><strong>Example call:</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">query_graphql</span><span class="p">(</span>
+  <span class="n">query</span><span class="p">:</span> <span class="s2">&quot;{ allCustomer(limit: 3, search: </span><span class="se">\&quot;</span><span class="s2">Martinez</span><span class="se">\&quot;</span><span class="s2">) { id label email hasInteraction { label date } } }&quot;</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Returns:</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>GraphQL Result — customer360
+==================================================
+
+allCustomer (1 results)
+----------------------------------------
+  id: Customer/CUST00094
+  label: Jacob Martinez
+  email: customer00094@email.fr
+  hasInteraction:
+      label: Service_Activation via in_person
+      date: 2024-01-15
+      ---
+</pre></div>
+</div>
+<p><strong>When to use <code class="docutils literal notranslate"><span class="pre">query_graphql</span></code> vs <code class="docutils literal notranslate"><span class="pre">describe_entity</span></code>:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Use case</p></th>
+<th class="head"><p>Recommended tool</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Look up an entity by name with full traversal</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">describe_entity</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Fetch specific fields across many entities</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">query_graphql</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Get all attributes and relationships for one entity</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">describe_entity</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Nested relationship queries (2+ levels)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">query_graphql</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Explore an unfamiliar project</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">get_graphql_schema</span></code> → <code class="docutils literal notranslate"><span class="pre">query_graphql</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+</section>
+<section id="available-resources">
+<h2>Available Resources<a class="headerlink" href="#available-resources" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>URI</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ontobricks://projects</span></code></p></td>
+<td><p>List of projects in the registry (JSON)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ontobricks://status</span></code></p></td>
+<td><p>Current triple store status for the selected project (JSON)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ontobricks://stats</span></code></p></td>
+<td><p>Triple store content statistics for the selected project (JSON)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ontobricks://graphql-schema</span></code></p></td>
+<td><p>GraphQL schema (SDL) for the selected project (JSON)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="databricks-playground-custom-mcp-server">
+<h2>Databricks Playground (Custom MCP Server)<a class="headerlink" href="#databricks-playground-custom-mcp-server" title="Link to this heading">¶</a></h2>
+<p>The MCP server is deployed as <strong><code class="docutils literal notranslate"><span class="pre">mcp-ontobricks</span></code></strong>, a separate Databricks
+App whose name starts with <code class="docutils literal notranslate"><span class="pre">mcp-</span></code> so it is automatically discoverable in
+the Databricks Playground.</p>
+<section id="how-it-works">
+<h3>How it works<a class="headerlink" href="#how-it-works" title="Link to this heading">¶</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Databricks Playground / Agent
+    │
+    │  Streamable HTTP (Databricks OAuth)
+    ▼
+mcp-ontobricks  (Databricks App)
+    │
+    │  httpx  →  ONTOBRICKS_URL
+    ▼
+OntoBricks  (Databricks App)
+    ├── /api/v1/digitaltwin/*    (REST — entity search, stats, status)
+    └── /graphql/{project}       (GraphQL — typed queries, nested traversal)
+    │
+    ▼
+Triple Store (Delta Lake via SQL Warehouse)
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">mcp-ontobricks</span></code> is a lightweight FastAPI + FastMCP application that
+forwards every tool call to the main OntoBricks REST API via <code class="docutils literal notranslate"><span class="pre">httpx</span></code>.
+Authentication between the two apps uses Databricks OAuth (service principal).</p>
+</section>
+<section id="environment-variables">
+<h3>Environment Variables<a class="headerlink" href="#environment-variables" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Required</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_URL</span></code></p></td>
+<td><p>Yes</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">http://localhost:8000</span></code></p></td>
+<td><p>URL of the main OntoBricks app</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_CATALOG</span></code></p></td>
+<td><p>Yes (deployed)</p></td>
+<td><p>—</p></td>
+<td><p>Unity Catalog catalog containing the project registry</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_SCHEMA</span></code></p></td>
+<td><p>Yes (deployed)</p></td>
+<td><p>—</p></td>
+<td><p>Schema within the catalog</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_VOLUME</span></code></p></td>
+<td><p>No</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">OntoBricksRegistry</span></code></p></td>
+<td><p>Volume name for project storage</p></td>
+</tr>
+</tbody>
+</table>
+<p>The registry variables are passed as query parameters to every
+<code class="docutils literal notranslate"><span class="pre">/api/v1/digitaltwin/*</span></code> call, letting the MCP server operate without a
+browser session.  Set them in <code class="docutils literal notranslate"><span class="pre">src/mcp-server/app.yaml</span></code> to match the
+registry you configured in the OntoBricks Settings UI.</p>
+</section>
+<section id="project-structure">
+<h3>Project structure<a class="headerlink" href="#project-structure" title="Link to this heading">¶</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>src/mcp-server/
+├── app.yaml                 # Databricks App config (command + env vars)
+│                            #   ONTOBRICKS_URL, REGISTRY_CATALOG/SCHEMA/VOLUME
+├── deploy-mcp-server.sh     # One-command deployment script
+├── requirements.txt         # &quot;uv&quot; — dependency manager
+├── pyproject.toml           # Python dependencies
+└── server/
+    ├── __init__.py
+    ├── app.py               # MCP tools, project selection, text formatting,
+    │                        #   URI helpers, combined FastAPI+MCP app factory
+    └── main.py              # Entry point: uv run mcp-ontobricks
+</pre></div>
+</div>
+</section>
+<section id="deployment">
+<h3>Deployment<a class="headerlink" href="#deployment" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># One-command deploy (creates the app if it doesn&#39;t exist)</span>
+<span class="nb">cd</span><span class="w"> </span>mcp-server
+./deploy-mcp-server.sh
+
+<span class="c1"># Or manual steps:</span>
+databricks<span class="w"> </span>sync<span class="w"> </span>mcp-server<span class="w"> </span><span class="s2">&quot;/Users/</span><span class="nv">$USER</span><span class="s2">/mcp-ontobricks&quot;</span><span class="w"> </span>--watch<span class="o">=</span><span class="nb">false</span>
+databricks<span class="w"> </span>apps<span class="w"> </span>deploy<span class="w"> </span>mcp-ontobricks<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--source-code-path<span class="w"> </span><span class="s2">&quot;/Workspace/Users/</span><span class="nv">$USER</span><span class="s2">/mcp-ontobricks&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="using-in-playground">
+<h3>Using in Playground<a class="headerlink" href="#using-in-playground" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Go to your Databricks workspace</p></li>
+<li><p>Navigate to <strong>Playground</strong></p></li>
+<li><p><strong>mcp-ontobricks</strong> appears in the MCP Servers list (apps starting with <code class="docutils literal notranslate"><span class="pre">mcp-</span></code> are shown automatically)</p></li>
+<li><p>Select it — you now have access to <code class="docutils literal notranslate"><span class="pre">list_entity_types</span></code>, <code class="docutils literal notranslate"><span class="pre">describe_entity</span></code>, and <code class="docutils literal notranslate"><span class="pre">get_status</span></code></p></li>
+<li><p>Ask questions like <em>“What entity types are in the knowledge graph?”</em> or <em>“Tell me about Jacob Martinez”</em></p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="standalone-local-usage">
+<h2>Standalone / Local Usage<a class="headerlink" href="#standalone-local-usage" title="Link to this heading">¶</a></h2>
+<section id="stdio-for-cursor-claude-desktop-etc">
+<h3>stdio (for Cursor, Claude Desktop, etc.)<a class="headerlink" href="#stdio-for-cursor-claude-desktop-etc" title="Link to this heading">¶</a></h3>
+<p>Run the standalone entry point from the project root:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>mcp_server.py<span class="w">              </span><span class="c1"># stdio transport</span>
+python<span class="w"> </span>mcp_server.py<span class="w"> </span>--http<span class="w">       </span><span class="c1"># streamable-http on port 9100</span>
+</pre></div>
+</div>
+<p>Or from the <code class="docutils literal notranslate"><span class="pre">mcp-server</span></code> directory:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>mcp-server
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;from server.app import create_mcp_server; create_mcp_server(&#39;standalone&#39;).run(transport=&#39;stdio&#39;)&quot;</span>
+</pre></div>
+</div>
+<p>By default the server connects to <code class="docutils literal notranslate"><span class="pre">http://localhost:8000</span></code>. Override with:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">ONTOBRICKS_URL</span><span class="o">=</span>http://your-host:8000<span class="w"> </span>python<span class="w"> </span>mcp_server.py
+</pre></div>
+</div>
+<p>If the main app’s registry is configured only in the browser session
+(not via env vars), pass the registry explicitly:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">REGISTRY_CATALOG</span><span class="o">=</span>my_catalog<span class="w"> </span><span class="nv">REGISTRY_SCHEMA</span><span class="o">=</span>my_schema<span class="w"> </span>python<span class="w"> </span>mcp_server.py
+</pre></div>
+</div>
+</section>
+</section>
+<section id="client-configuration">
+<h2>Client Configuration<a class="headerlink" href="#client-configuration" title="Link to this heading">¶</a></h2>
+<section id="cursor">
+<h3>Cursor<a class="headerlink" href="#cursor" title="Link to this heading">¶</a></h3>
+<p>Add to your <code class="docutils literal notranslate"><span class="pre">.cursor/mcp.json</span></code>:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;mcpServers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;ontobricks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;python&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;mcp_server.py&quot;</span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;cwd&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/path/to/OntoBricks&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="claude-desktop">
+<h3>Claude Desktop<a class="headerlink" href="#claude-desktop" title="Link to this heading">¶</a></h3>
+<p>Add to <code class="docutils literal notranslate"><span class="pre">claude_desktop_config.json</span></code>:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;mcpServers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;ontobricks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;python&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;mcp_server.py&quot;</span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;cwd&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/path/to/OntoBricks&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;env&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;ONTOBRICKS_URL&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;http://localhost:8000&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;REGISTRY_CATALOG&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my_catalog&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;REGISTRY_SCHEMA&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my_schema&quot;</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="remote-http-client">
+<h3>Remote HTTP Client<a class="headerlink" href="#remote-http-client" title="Link to this heading">¶</a></h3>
+<p>For MCP clients that support Streamable HTTP transport, point to the
+deployed Databricks App:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;mcpServers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;ontobricks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;streamable-http&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://&lt;mcp-ontobricks-app-url&gt;/mcp&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="testing-with-mcp-inspector">
+<h2>Testing with MCP Inspector<a class="headerlink" href="#testing-with-mcp-inspector" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>npx<span class="w"> </span>-y<span class="w"> </span>@modelcontextprotocol/inspector
+</pre></div>
+</div>
+<p>Then connect to <code class="docutils literal notranslate"><span class="pre">https://&lt;mcp-ontobricks-app-url&gt;/mcp</span></code> (HTTP) or launch
+the stdio server and point the inspector at it.</p>
+</section>
+<hr class="docutils" />
+<section id="text-formatting-pipeline">
+<h2>Text Formatting Pipeline<a class="headerlink" href="#text-formatting-pipeline" title="Link to this heading">¶</a></h2>
+<p>The MCP server transforms raw JSON API responses into LLM-friendly text:</p>
+<section id="rest-api-responses-describe-entity-list-entity-types">
+<h3>REST API responses (<code class="docutils literal notranslate"><span class="pre">describe_entity</span></code>, <code class="docutils literal notranslate"><span class="pre">list_entity_types</span></code>)<a class="headerlink" href="#rest-api-responses-describe-entity-list-entity-types" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p><strong>URI local-name extraction</strong> — <code class="docutils literal notranslate"><span class="pre">https://…/Customer/CUST00094</span></code> → <code class="docutils literal notranslate"><span class="pre">CUST00094</span></code></p></li>
+<li><p><strong>Predicate prettifying</strong> — strips <code class="docutils literal notranslate"><span class="pre">ontology</span></code> prefix, splits camelCase, replaces underscores</p></li>
+<li><p><strong>Triple classification</strong> — each triple is classified as type assertion, label, attribute (literal object), or relationship (URI object)</p></li>
+<li><p><strong>URI alias merging</strong> — triples from different URI patterns for the same entity ID are merged into a single block</p></li>
+<li><p><strong>Entity block formatting</strong> — each entity shows name, type, URI, attributes, and relationships</p></li>
+<li><p><strong>Seed vs. neighbor grouping</strong> — matching entities are shown first, then related entities discovered by BFS</p></li>
+</ol>
+</section>
+<section id="graphql-responses-query-graphql">
+<h3>GraphQL responses (<code class="docutils literal notranslate"><span class="pre">query_graphql</span></code>)<a class="headerlink" href="#graphql-responses-query-graphql" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p><strong>Top-level field grouping</strong> — each root field in the response is rendered with a header and result count</p></li>
+<li><p><strong>Recursive entity formatting</strong> — nested objects are indented, with key-value pairs rendered inline</p></li>
+<li><p><strong>List handling</strong> — relationship lists are rendered with <code class="docutils literal notranslate"><span class="pre">---</span></code> separators between items</p></li>
+<li><p><strong>Error reporting</strong> — GraphQL errors are formatted as bullet-pointed warning lists</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="dependencies-src-mcp-server-pyproject-toml">
+<h2>Dependencies (src/mcp-server/pyproject.toml)<a class="headerlink" href="#dependencies-src-mcp-server-pyproject-toml" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">fastmcp</span> <span class="pre">&gt;=</span> <span class="pre">2.3.1</span></code> — MCP server SDK</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">httpx</span> <span class="pre">&gt;=</span> <span class="pre">0.25.0</span></code> — Async HTTP client for calling the OntoBricks REST API</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fastapi</span> <span class="pre">&gt;=</span> <span class="pre">0.115.0</span></code> — Web framework (health endpoint + combined app)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">uvicorn</span> <span class="pre">&gt;=</span> <span class="pre">0.34.0</span></code> — ASGI server</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pydantic</span> <span class="pre">&gt;=</span> <span class="pre">2</span></code> — Data validation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">databricks-sdk</span> <span class="pre">&gt;=</span> <span class="pre">0.20.0</span></code> — OAuth authentication in Databricks mode</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/guides/mcp.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

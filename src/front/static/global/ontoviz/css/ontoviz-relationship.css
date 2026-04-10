@@ -1,0 +1,427 @@
+/**
+ * OntoViz - Relationship Styles
+ */
+
+/* Relationship Lines */
+.ovz-relationship {
+    stroke: var(--ovz-rel-line);
+    stroke-width: 2;
+    fill: none;
+    cursor: pointer;
+    transition: stroke var(--ovz-transition), stroke-width var(--ovz-transition);
+}
+
+.ovz-relationship:hover {
+    stroke: var(--ovz-rel-line-hover);
+    stroke-width: 3;
+}
+
+.ovz-relationship.ovz-selected {
+    stroke: #404040;
+    stroke-width: 3;
+}
+
+.ovz-relationship-arrow {
+    fill: var(--ovz-rel-arrow);
+    stroke: var(--ovz-rel-arrow);
+    stroke-width: 1;
+}
+
+/* Relationship Label Box */
+.ovz-relationship-label {
+    position: absolute;
+    background: var(--ovz-bg-surface);
+    border: 1px solid var(--ovz-entity-border);
+    border-radius: var(--ovz-radius-md);
+    padding: 0;
+    font-size: 11px;
+    color: var(--ovz-text-primary);
+    cursor: pointer;
+    z-index: 15;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all var(--ovz-transition);
+    min-width: 100px;
+    overflow: visible;
+}
+
+.ovz-relationship-label:hover {
+    background: var(--ovz-bg-overlay);
+    border-color: #808080;
+}
+
+.ovz-relationship-label.ovz-selected {
+    border-color: #404040;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15);
+}
+
+.ovz-relationship-label.ovz-draggable {
+    cursor: move;
+}
+
+.ovz-relationship-label.ovz-dragging {
+    opacity: 0.85;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    z-index: 1000;
+}
+
+/* Relationship Anchors */
+.ovz-rel-anchor {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: var(--ovz-bg-surface);
+    border: 2px solid #606060;
+    border-radius: 50%;
+    z-index: 100;
+    opacity: 0;
+    transition: all var(--ovz-transition);
+    pointer-events: auto;
+    cursor: crosshair;
+}
+
+.ovz-relationship-label:hover .ovz-rel-anchor,
+.ovz-relationship-label.ovz-selected .ovz-rel-anchor {
+    opacity: 1;
+}
+
+/* Base hover effect for all anchors */
+.ovz-rel-anchor:hover {
+    background: #505050;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
+}
+
+.ovz-rel-anchor-left {
+    left: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.ovz-rel-anchor-right {
+    right: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.ovz-rel-anchor-top {
+    top: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.ovz-rel-anchor-bottom {
+    bottom: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Hover effects with correct transform preservation */
+.ovz-rel-anchor-left:hover {
+    transform: translateY(-50%) scale(1.3);
+}
+
+.ovz-rel-anchor-right:hover {
+    transform: translateY(-50%) scale(1.3);
+}
+
+.ovz-rel-anchor-top:hover {
+    transform: translateX(-50%) scale(1.3);
+}
+
+.ovz-rel-anchor-bottom:hover {
+    transform: translateX(-50%) scale(1.3);
+}
+
+/* Active anchor state (where lines connect) */
+.ovz-rel-anchor.ovz-anchor-active {
+    opacity: 1;
+    background: #404040;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
+}
+
+/* Relationship Header */
+.ovz-rel-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: linear-gradient(135deg, rgba(100, 100, 100, 0.08) 0%, rgba(80, 80, 80, 0.08) 100%);
+    border-bottom: 1px solid var(--ovz-entity-border);
+    border-radius: var(--ovz-radius-md) var(--ovz-radius-md) 0 0;
+    overflow: visible;
+}
+
+.ovz-rel-name-input {
+    background: transparent;
+    border: none;
+    color: var(--ovz-text-primary);
+    font: inherit;
+    font-weight: 500;
+    outline: none;
+    width: 80px;
+    text-align: center;
+    flex: 1;
+}
+
+.ovz-rel-name-input:focus {
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: var(--ovz-radius-sm);
+}
+
+.ovz-rel-add-prop {
+    width: 18px;
+    height: 18px;
+    border: none;
+    background: rgba(100, 100, 100, 0.15);
+    color: #505050;
+    border-radius: var(--ovz-radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all var(--ovz-transition);
+}
+
+.ovz-rel-add-prop:hover {
+    background: #505050;
+    color: white;
+}
+
+.ovz-rel-direction {
+    width: 22px;
+    height: 18px;
+    border: none;
+    background: rgba(100, 100, 100, 0.15);
+    color: var(--ovz-text-secondary);
+    border-radius: var(--ovz-radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    transition: all var(--ovz-transition);
+}
+
+.ovz-rel-direction:hover {
+    background: #505050;
+    color: white;
+}
+
+.ovz-rel-delete {
+    width: 18px;
+    height: 18px;
+    border: none;
+    background: rgba(100, 100, 100, 0.15);
+    color: var(--ovz-text-muted);
+    border-radius: var(--ovz-radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 400;
+    transition: all var(--ovz-transition);
+}
+
+.ovz-rel-delete:hover {
+    background: #303030;
+    color: white;
+}
+
+/* Relationship Direction Label */
+.ovz-rel-direction-label {
+    padding: 4px 10px;
+    font-size: 9px;
+    color: var(--ovz-text-muted);
+    text-align: center;
+    cursor: pointer;
+    transition: all var(--ovz-transition);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ovz-rel-direction-label:hover {
+    background: rgba(100, 100, 100, 0.15);
+    color: var(--ovz-text-primary);
+}
+
+/* Relationship Properties */
+.ovz-rel-properties {
+    padding: 4px 0;
+}
+
+.ovz-rel-prop {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    transition: background var(--ovz-transition);
+}
+
+.ovz-rel-prop:hover {
+    background: var(--ovz-bg-overlay);
+}
+
+.ovz-rel-prop-name {
+    flex: 1;
+    background: transparent;
+    border: none;
+    font: inherit;
+    font-size: 10px;
+    color: var(--ovz-text-primary);
+    outline: none;
+    padding: 2px 4px;
+    margin: -2px 0;
+    border-radius: var(--ovz-radius-sm);
+    transition: background var(--ovz-transition);
+}
+
+.ovz-rel-prop-name:focus {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.ovz-rel-prop-type {
+    font-size: 9px;
+    color: var(--ovz-text-muted);
+    font-family: var(--ovz-font-mono);
+}
+
+.ovz-rel-prop-delete {
+    width: 16px;
+    height: 16px;
+    border: none;
+    background: transparent;
+    color: var(--ovz-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    border-radius: var(--ovz-radius-sm);
+    opacity: 0;
+    transition: all var(--ovz-transition);
+}
+
+.ovz-rel-prop:hover .ovz-rel-prop-delete {
+    opacity: 1;
+}
+
+.ovz-rel-prop-delete:hover {
+    background: #303030;
+    color: white;
+}
+
+/* Cardinality badges */
+.ovz-cardinality {
+    position: absolute;
+    font-size: 10px;
+    font-weight: 600;
+    color: #606060;
+    background: var(--ovz-bg-primary);
+    padding: 2px 6px;
+    border-radius: var(--ovz-radius-sm);
+    border: 1px solid #808080;
+}
+
+/* Temporary connection line while dragging */
+.ovz-temp-line {
+    stroke: #606060;
+    stroke-width: 2;
+    stroke-dasharray: 8, 4;
+    fill: none;
+    pointer-events: none;
+}
+
+/* Inheritance mode temp line - thicker dotted line */
+.ovz-temp-line.ovz-temp-line-inheritance {
+    stroke: #404040;
+    stroke-width: 3;
+    stroke-dasharray: 10, 6;
+}
+
+/* Endpoint handles for anchor dragging */
+.ovz-endpoint-handle {
+    fill: #606060;
+    stroke: white;
+    stroke-width: 2;
+    cursor: grab;
+    transition: all var(--ovz-transition);
+}
+
+.ovz-endpoint-handle:hover {
+    fill: #404040;
+    transform: scale(1.3);
+}
+
+.ovz-endpoint-handle.ovz-dragging {
+    cursor: grabbing;
+    fill: #303030;
+}
+
+/* ==========================================
+   Inheritance Links
+   ========================================== */
+
+/* Inheritance line - dotted straight line */
+.ovz-inheritance {
+    stroke: var(--ovz-rel-line, #606060);
+    stroke-width: 2.5;
+    stroke-dasharray: 8, 6;
+    fill: none;
+    cursor: pointer;
+    transition: stroke var(--ovz-transition), stroke-width var(--ovz-transition);
+}
+
+.ovz-inheritance:hover {
+    stroke: var(--ovz-rel-line-hover, #404040);
+    stroke-width: 3.5;
+}
+
+.ovz-inheritance.ovz-selected {
+    stroke: #303030;
+    stroke-width: 3.5;
+    stroke-dasharray: 10, 5;
+}
+
+/* Inheritance arrow marker */
+.ovz-inheritance-arrow {
+    fill: white;
+    stroke: var(--ovz-rel-arrow, #606060);
+    stroke-width: 2;
+}
+
+/* Inheritance instructions overlay */
+.ovz-inheritance-instructions {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(48, 48, 48, 0.95);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.ovz-inheritance-cancel {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: background 0.2s;
+}
+
+.ovz-inheritance-cancel:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+

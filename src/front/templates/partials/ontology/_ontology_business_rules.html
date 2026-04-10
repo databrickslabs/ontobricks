@@ -1,0 +1,452 @@
+<!-- Business Rules Section — tabbed container for all rule types -->
+<!-- JS: /static/ontology/js/ontology-business-rules.js -->
+<!-- CSS: /static/ontology/css/ontology-business-rules.css -->
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-lightning me-2"></i>Business Rules</h4>
+        <p class="text-muted mb-0 small">Define inference and business rules across multiple rule paradigms</p>
+    </div>
+    <button class="btn btn-sm btn-outline-primary ontology-edit-btn" id="brAddBtn"
+            onclick="BusinessRulesModule.addRuleForActiveTab()">
+        <i class="bi bi-plus-lg me-1"></i> Add Rule
+    </button>
+</div>
+
+<div class="card h-100">
+    <div class="card-body p-0">
+        <!-- Rule-type tabs -->
+        <ul class="nav nav-tabs nav-fill small px-3 pt-3" id="brTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="br-tab-swrl" data-bs-toggle="tab"
+                        data-bs-target="#br-pane-swrl" type="button" role="tab">
+                    <i class="bi bi-code-square me-1"></i>SWRL
+                    <span class="badge bg-primary bg-opacity-75 ms-1" id="brBadgeSwrl">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="br-tab-dt" data-bs-toggle="tab"
+                        data-bs-target="#br-pane-dt" type="button" role="tab">
+                    <i class="bi bi-table me-1"></i>Decision Tables
+                    <span class="badge bg-success bg-opacity-75 ms-1" id="brBadgeDt">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="br-tab-sparql" data-bs-toggle="tab"
+                        data-bs-target="#br-pane-sparql" type="button" role="tab">
+                    <i class="bi bi-braces me-1"></i>SPARQL
+                    <span class="badge bg-warning text-dark bg-opacity-75 ms-1" id="brBadgeSparql">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="br-tab-agg" data-bs-toggle="tab"
+                        data-bs-target="#br-pane-agg" type="button" role="tab">
+                    <i class="bi bi-calculator me-1"></i>Aggregate
+                    <span class="badge bg-danger bg-opacity-75 ms-1" id="brBadgeAgg">0</span>
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab panes -->
+        <div class="tab-content" id="brTabContent">
+
+            <!-- ─── SWRL pane (delegates to existing SwrlModule) ─── -->
+            <div class="tab-pane fade show active p-3" id="br-pane-swrl" role="tabpanel">
+                <p class="text-muted small mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    IF&ndash;THEN rules using the Semantic Web Rule Language.
+                </p>
+                <div class="text-center py-4 text-muted" id="swrlRulesSpinner">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                    <p class="mt-2 mb-0 small">Loading rules&hellip;</p>
+                </div>
+                <div id="swrlRulesList" style="display:none">
+                    <div class="text-center py-4 text-muted" id="noSwrlRulesMessage">
+                        <i class="bi bi-lightning icon-lg"></i>
+                        <p class="mt-2 mb-0">No SWRL rules defined</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ─── Decision Tables pane ─── -->
+            <div class="tab-pane fade p-3" id="br-pane-dt" role="tabpanel">
+                <p class="text-muted small mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    DMN-style tabular business rules with conditions and actions.
+                </p>
+                <div id="dtList" class="br-rules-list">
+                    <div class="text-center py-4 text-muted" id="dtEmpty">
+                        <i class="bi bi-table fs-1 d-block mb-2"></i>
+                        <p class="mb-0">No decision tables defined</p>
+                        <small>Click <strong>Add Rule</strong> to create a decision table</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ─── SPARQL CONSTRUCT pane ─── -->
+            <div class="tab-pane fade p-3" id="br-pane-sparql" role="tabpanel">
+                <p class="text-muted small mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    SPARQL CONSTRUCT queries that infer new triples from graph patterns.
+                </p>
+                <div id="sparqlList" class="br-rules-list">
+                    <div class="text-center py-4 text-muted" id="sparqlEmpty">
+                        <i class="bi bi-braces fs-1 d-block mb-2"></i>
+                        <p class="mb-0">No SPARQL rules defined</p>
+                        <small>Click <strong>Add Rule</strong> to create a CONSTRUCT rule</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ─── Aggregate Rules pane ─── -->
+            <div class="tab-pane fade p-3" id="br-pane-agg" role="tabpanel">
+                <p class="text-muted small mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    Statistical rules using GROUP BY / HAVING (COUNT, SUM, AVG&hellip;).
+                </p>
+                <div id="aggList" class="br-rules-list">
+                    <div class="text-center py-4 text-muted" id="aggEmpty">
+                        <i class="bi bi-calculator fs-1 d-block mb-2"></i>
+                        <p class="mb-0">No aggregate rules defined</p>
+                        <small>Click <strong>Add Rule</strong> to create an aggregate rule</small>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- ═══ SWRL Visual Graph Editor Modal (unchanged from original) ═══ -->
+<div class="modal fade" id="swrlGraphEditorModal" tabindex="-1">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="swrlEditorTitle">
+                    <i class="bi bi-lightning me-2"></i>Add SWRL Rule
+                </h5>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="SwrlModule.zoomIn()" title="Zoom in">
+                        <i class="bi bi-zoom-in"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="SwrlModule.zoomOut()" title="Zoom out">
+                        <i class="bi bi-zoom-out"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="SwrlModule.fitToView()" title="Fit to view">
+                        <i class="bi bi-arrows-fullscreen"></i>
+                    </button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0">
+                <div class="swrl-editor-layout">
+                    <div class="swrl-graph-pane" id="swrlGraphContainer">
+                        <div class="swrl-graph-hint" id="swrlGraphHint">
+                            <i class="bi bi-hand-index me-1"></i>
+                            Click an entity or relationship to add it to the rule
+                        </div>
+                    </div>
+                    <div class="swrl-rule-pane" id="swrlRulePane">
+                        <div class="swrl-pane-scroll">
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold mb-1">Rule Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm" id="swrlRuleName"
+                                       placeholder="e.g., InferParentRelation">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold mb-1">Description</label>
+                                <input type="text" class="form-control form-control-sm" id="swrlRuleDescription"
+                                       placeholder="Optional &mdash; describe what this rule does">
+                            </div>
+                            <hr class="my-2">
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="fw-semibold small swrl-if-heading">
+                                        <i class="bi bi-funnel me-1"></i> IF &mdash; Conditions
+                                    </span>
+                                    <span class="badge swrl-badge-if-count" id="swrlIfCount">0</span>
+                                </div>
+                                <div id="swrlIfAtoms">
+                                    <div class="text-muted small fst-italic py-2" id="swrlIfEmpty">
+                                        Click entities or relationships on the graph
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-center my-2">
+                                <i class="bi bi-arrow-down fs-5 text-muted"></i>
+                            </div>
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="fw-semibold small swrl-then-heading">
+                                        <i class="bi bi-lightning-charge me-1"></i> THEN &mdash; Conclusions
+                                    </span>
+                                    <span class="badge swrl-badge-then-count" id="swrlThenCount">0</span>
+                                </div>
+                                <div id="swrlThenAtoms">
+                                    <div class="text-muted small fst-italic py-2" id="swrlThenEmpty">
+                                        Click entities or relationships on the graph
+                                    </div>
+                                </div>
+                            </div>
+                            <hr class="my-2">
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold mb-1">Generated SWRL</label>
+                                <div class="swrl-preview-block" id="swrlPreview">
+                                    <span class="text-muted fst-italic">Select elements to build the rule</span>
+                                </div>
+                            </div>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="swrlRawToggle"
+                                       onchange="SwrlModule.toggleRawMode()">
+                                <label class="form-check-label small" for="swrlRawToggle">Advanced: edit raw SWRL</label>
+                            </div>
+                            <div id="swrlRawEditor" style="display:none">
+                                <div class="mb-2">
+                                    <label class="form-label small mb-1">Antecedent (IF)</label>
+                                    <textarea class="form-control form-control-sm font-monospace" id="swrlRawAntecedent" rows="2"></textarea>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small mb-1">Consequent (THEN)</label>
+                                    <textarea class="form-control form-control-sm font-monospace" id="swrlRawConsequent" rows="2"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="swrl-pane-footer">
+                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-success btn-sm" id="swrlSaveBtn" onclick="SwrlModule.saveRule()">
+                                <i class="bi bi-check-lg me-1"></i> Save Rule
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="swrl-context-menu" id="swrlContextMenu" style="display:none">
+    <div class="swrl-ctx-item swrl-ctx-if" onclick="SwrlModule.ctxAddToIf()">
+        <i class="bi bi-plus-circle me-2"></i> Add to IF
+    </div>
+    <div class="swrl-ctx-item swrl-ctx-then" onclick="SwrlModule.ctxAddToThen()">
+        <i class="bi bi-plus-circle me-2"></i> Add to THEN
+    </div>
+    <div class="swrl-ctx-item swrl-ctx-remove" onclick="SwrlModule.ctxRemove()" style="display:none">
+        <i class="bi bi-x-circle me-2"></i> Remove
+    </div>
+</div>
+
+<!-- ═══ Decision Table Editor Modal ═══ -->
+<div class="modal fade" id="dtEditorModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="dtEditorTitle"><i class="bi bi-table me-2"></i>Add Decision Table</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="dtEditIndex" value="-1">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm" id="dtName" placeholder="e.g., RiskClassification">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Target Entity <span class="text-danger">*</span></label>
+                        <select class="form-select form-select-sm" id="dtTargetClass" onchange="BusinessRulesModule._dtTargetClassChanged()">
+                            <option value="">Select entity&hellip;</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Hit Policy</label>
+                        <select class="form-select form-select-sm" id="dtHitPolicy">
+                            <option value="first">First (first matching row wins)</option>
+                            <option value="all">All (all matching rows fire)</option>
+                            <option value="unique">Unique (at most one row matches)</option>
+                        </select>
+                    </div>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="d-flex align-items-center gap-3">
+                        <strong class="small">Conditions &amp; Actions</strong>
+                        <div class="btn-group btn-group-sm" id="dtRowLogicToggle" role="group" aria-label="Row logic">
+                            <input type="radio" class="btn-check" name="dtRowLogic" id="dtRowLogicOr" value="or"
+                                   onchange="BusinessRulesModule._dtRowLogicChanged()" checked>
+                            <label class="btn btn-outline-primary btn-sm py-0 px-2" for="dtRowLogicOr" style="font-size:.72rem">
+                                OR
+                            </label>
+                            <input type="radio" class="btn-check" name="dtRowLogic" id="dtRowLogicAnd" value="and"
+                                   onchange="BusinessRulesModule._dtRowLogicChanged()">
+                            <label class="btn btn-outline-primary btn-sm py-0 px-2" for="dtRowLogicAnd" style="font-size:.72rem">
+                                AND
+                            </label>
+                        </div>
+                        <small class="text-muted" id="dtRowLogicHint" style="font-size:.68rem">
+                            Rows match if <strong>any</strong> row fires
+                        </small>
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" onclick="BusinessRulesModule.dtAddColumn()">
+                            <i class="bi bi-plus-circle me-1"></i>Column
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="BusinessRulesModule.dtAddRow()">
+                            <i class="bi bi-plus-circle me-1"></i>Row
+                        </button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0" id="dtGrid">
+                        <thead id="dtGridHead"><tr><th class="text-center small text-muted" style="width:40px">#</th></tr></thead>
+                        <tbody id="dtGridBody"></tbody>
+                    </table>
+                </div>
+                <div class="mt-3">
+                    <label class="form-label small fw-semibold">Output Action</label>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <select class="form-select form-select-sm" id="dtOutputProperty">
+                                <option value="">Output property&hellip;</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <select class="form-select form-select-sm" id="dtOutputAction"
+                                    onchange="BusinessRulesModule._dtSyncOutputValue()">
+                                <option value="set_value">Set value</option>
+                                <option value="assign_class">Assign class</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4" id="dtOutputValueGroup">
+                            <input type="text" class="form-control form-control-sm" id="dtOutputValue"
+                                   placeholder="Value to set&hellip;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success btn-sm" onclick="BusinessRulesModule.dtSave()">
+                    <i class="bi bi-check-lg me-1"></i>Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ SPARQL Rule Editor Modal ═══ -->
+<div class="modal fade" id="sparqlEditorModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sparqlEditorTitle"><i class="bi bi-braces me-2"></i>Add SPARQL Rule</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="sparqlEditIndex" value="-1">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm" id="sparqlName" placeholder="e.g., InferTransitiveRelation">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Description</label>
+                    <input type="text" class="form-control form-control-sm" id="sparqlDescription" placeholder="Optional description">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">CONSTRUCT Query <span class="text-danger">*</span></label>
+                    <textarea class="form-control form-control-sm font-monospace" id="sparqlQuery" rows="10"
+                              placeholder="CONSTRUCT { ?s <predicate> ?o }&#10;WHERE {&#10;  ?s a <Class> .&#10;  ?s <prop> ?o .&#10;}"></textarea>
+                    <div class="form-text small">
+                        Use <code>CONSTRUCT { ... } WHERE { ... }</code> syntax. Variables start with <code>?</code>.
+                    </div>
+                </div>
+                <div id="sparqlValidationMsg" style="display:none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="BusinessRulesModule.sparqlValidate()">
+                    <i class="bi bi-check2-circle me-1"></i>Validate
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success btn-sm" onclick="BusinessRulesModule.sparqlSave()">
+                    <i class="bi bi-check-lg me-1"></i>Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ Aggregate Rule Editor Modal ═══ -->
+<div class="modal fade" id="aggEditorModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="aggEditorTitle"><i class="bi bi-calculator me-2"></i>Add Aggregate Rule</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="aggEditIndex" value="-1">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm" id="aggName" placeholder="e.g., HighOrderCountCheck">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Target Entity <span class="text-danger">*</span></label>
+                    <select class="form-select form-select-sm" id="aggTargetClass" onchange="BusinessRulesModule._aggTargetClassChanged()">
+                        <option value="">Select entity&hellip;</option>
+                    </select>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Group-by Property</label>
+                        <select class="form-select form-select-sm" id="aggGroupBy">
+                            <option value="">(none)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Aggregate Property</label>
+                        <select class="form-select form-select-sm" id="aggAggProp">
+                            <option value="">(none)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Function <span class="text-danger">*</span></label>
+                        <select class="form-select form-select-sm" id="aggFunction">
+                            <option value="count">COUNT</option>
+                            <option value="sum">SUM</option>
+                            <option value="avg">AVG</option>
+                            <option value="min">MIN</option>
+                            <option value="max">MAX</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Operator <span class="text-danger">*</span></label>
+                        <select class="form-select form-select-sm" id="aggOperator">
+                            <option value="gt">&gt; Greater than</option>
+                            <option value="gte">&ge; Greater or equal</option>
+                            <option value="eq">= Equal</option>
+                            <option value="lt">&lt; Less than</option>
+                            <option value="lte">&le; Less or equal</option>
+                            <option value="neq">&ne; Not equal</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Threshold <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control form-control-sm" id="aggThreshold" placeholder="e.g., 5">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Result Class <small class="text-muted">(optional)</small></label>
+                    <select class="form-select form-select-sm" id="aggResultClass">
+                        <option value="">(none &mdash; violation only)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success btn-sm" onclick="BusinessRulesModule.aggSave()">
+                    <i class="bi bi-check-lg me-1"></i>Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+

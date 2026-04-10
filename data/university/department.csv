@@ -1,0 +1,11 @@
+department_id,department_name,building,budget,head_faculty_id
+DEPT001,Computer Science,Engineering Hall,4768341.15,FAC00036
+DEPT002,Biology,Science Building,3808454.49,FAC00057
+DEPT003,Mathematics,Math Tower,3316969.12,FAC00012
+DEPT004,Physics,Science Building,3001328.0,FAC00028
+DEPT005,Chemistry,Science Building,4875306.06,FAC00004
+DEPT006,Psychology,Social Sciences Hall,3521041.36,FAC00042
+DEPT007,Economics,Business School,2860083.77,FAC00051
+DEPT008,English,Humanities Building,2373460.85,FAC00045
+DEPT009,History,Humanities Building,1849498.22,FAC00010
+DEPT010,Electrical Engineering,Engineering Hall,3894872.44,FAC00012

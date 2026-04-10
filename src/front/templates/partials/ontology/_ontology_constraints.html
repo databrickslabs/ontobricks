@@ -1,0 +1,253 @@
+<!-- Property Constraints Section -->
+<!-- JS: /static/ontology/js/ontology-constraints.js -->
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-sliders me-2"></i>Constraints</h4>
+        <p class="text-muted mb-0 small">Define cardinality, value, and global constraints on properties</p>
+    </div>
+    <div class="btn-group btn-group-sm ontology-edit-btn">
+        <button class="btn btn-outline-primary" onclick="ConstraintsModule.openCardinalityModal()">
+            <i class="bi bi-plus-lg me-1"></i> Relationship
+        </button>
+        <button class="btn btn-outline-primary" onclick="ConstraintsModule.openValueModal()">
+            <i class="bi bi-plus-lg me-1"></i> Value
+        </button>
+        <button class="btn btn-outline-primary" onclick="ConstraintsModule.openGlobalModal()">
+            <i class="bi bi-plus-lg me-1"></i> Global
+        </button>
+    </div>
+</div>
+<div class="card h-100">
+    <div class="card-body">
+        <!-- Constraints List -->
+        <div id="constraintsList">
+            <div class="text-muted small">No constraints defined yet</div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================= -->
+<!-- MODAL 1: Cardinality & Relationship Constraint -->
+<!-- ============================================= -->
+<div class="modal fade" id="cardinalityModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-123"></i> Relationship Constraints</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small py-2">
+                    <i class="bi bi-info-circle"></i> Define cardinality and properties for relationships.
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Relationship</label>
+                    <select class="form-select" id="cardinalityProperty" onchange="ConstraintsModule.loadRelationshipProperties()">
+                        <option value="">Select relationship...</option>
+                    </select>
+                    <small class="text-muted">Select a relationship to configure its constraints</small>
+                </div>
+                
+                <div id="cardinalityOptions" style="display: none;">
+                    <hr class="my-3">
+                    
+                    <h6 class="mb-2"><i class="bi bi-123 me-1"></i> Cardinality</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Type</label>
+                            <select class="form-select" id="cardinalityType">
+                                <option value="">No cardinality constraint</option>
+                                <option value="minCardinality">Minimum (at least N)</option>
+                                <option value="maxCardinality">Maximum (at most N)</option>
+                                <option value="exactCardinality">Exact (exactly N)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Value</label>
+                            <input type="number" class="form-control" id="cardinalityValue" min="0" value="1">
+                        </div>
+                    </div>
+                    
+                    <hr class="my-3">
+                    
+                    <h6 class="mb-2"><i class="bi bi-diagram-3 me-1"></i> Relationship Properties</h6>
+                    <p class="text-muted small mb-2">Enable properties for this relationship:</p>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="cardFunctional">
+                                <label class="form-check-label" for="cardFunctional">
+                                    <strong>Functional</strong>
+                                    <br><small class="text-muted">Each <b>A</b> has at most one <b>B</b> via <b>relates to</b></small>
+                                </label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="cardInverseFunctional">
+                                <label class="form-check-label" for="cardInverseFunctional">
+                                    <strong>Inverse Functional</strong>
+                                    <br><small class="text-muted">Each <b>B</b> is linked to at most one <b>A</b> via <b>relates to</b></small>
+                                </label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="cardTransitive">
+                                <label class="form-check-label" for="cardTransitive">
+                                    <strong>Transitive</strong>
+                                    <br><small class="text-muted">If <b>A</b> relates to <b>B</b> and <b>B</b> relates to <b>B'</b>, then infer <b>A</b> relates to <b>B'</b></small>
+                                </label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="cardSymmetric">
+                                <label class="form-check-label" for="cardSymmetric">
+                                    <strong>Symmetric</strong>
+                                    <br><small class="text-muted">If <b>A</b> relates to <b>B</b>, then infer <b>B</b> relates to <b>A</b></small>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="cardAsymmetric">
+                                <label class="form-check-label" for="cardAsymmetric">
+                                    <strong>Asymmetric</strong>
+                                    <br><small class="text-muted">If <b>A</b> relates to <b>B</b>, then <b>B</b> relates to <b>A</b> cannot exist</small>
+                                </label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="cardReflexive">
+                                <label class="form-check-label" for="cardReflexive">
+                                    <strong>Reflexive</strong>
+                                    <br><small class="text-muted">Every <b>A</b> relates to itself</small>
+                                </label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="cardIrreflexive">
+                                <label class="form-check-label" for="cardIrreflexive">
+                                    <strong>Irreflexive</strong>
+                                    <br><small class="text-muted">No <b>A</b> can relates to itself</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="ConstraintsModule.saveCardinality()">
+                    <i class="bi bi-check-lg"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================= -->
+<!-- MODAL 2: Value Constraint -->
+<!-- ============================================= -->
+<div class="modal fade" id="valueModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-check2-square"></i> Value Constraint</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small py-2">
+                    <i class="bi bi-info-circle"></i> Define constraints on attribute values.
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">1. Select Entity</label>
+                    <select class="form-select" id="valueEntity" onchange="ConstraintsModule.loadValueAttributes()">
+                        <option value="">Select entity...</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">2. Select Attribute</label>
+                    <select class="form-select" id="valueAttribute" disabled>
+                        <option value="">Select entity first...</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">3. Constraint</label>
+                    <select class="form-select" id="valueCheckType" onchange="ConstraintsModule.onValueCheckTypeChange()">
+                        <option value="startsWith">Starts with</option>
+                        <option value="endsWith">Ends with</option>
+                        <option value="contains">Contains</option>
+                        <option value="equals">Equals</option>
+                        <option value="notEquals">Not equals</option>
+                        <option value="matches">Matches pattern (regex)</option>
+                        <option value="notNull">Is not empty</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3" id="valueInputGroup">
+                    <label class="form-label fw-bold">4. Value</label>
+                    <input type="text" class="form-control" id="valueCheckValue" placeholder="Enter value to check against">
+                </div>
+                
+                <div class="form-check mb-3" id="valueCaseSensitiveGroup">
+                    <input class="form-check-input" type="checkbox" id="valueCaseSensitive">
+                    <label class="form-check-label" for="valueCaseSensitive">
+                        Case sensitive
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="ConstraintsModule.saveValue()">
+                    <i class="bi bi-check-lg"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================= -->
+<!-- MODAL 4: Global Constraints -->
+<!-- ============================================= -->
+<div class="modal fade" id="globalModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-globe"></i> Global Constraints</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small py-2">
+                    <i class="bi bi-info-circle"></i> Enable global data quality rules that apply across the entire ontology.
+                </div>
+                
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="globalNoOrphans" onchange="ConstraintsModule.toggleGlobalRule('noOrphans')">
+                    <label class="form-check-label" for="globalNoOrphans">
+                        <strong>No Orphan Entities</strong>
+                        <br><small class="text-muted">Every entity must have at least one relationship</small>
+                    </label>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="globalRequireLabels" onchange="ConstraintsModule.toggleGlobalRule('requireLabels')">
+                    <label class="form-check-label" for="globalRequireLabels">
+                        <strong>Require Labels</strong>
+                        <br><small class="text-muted">Every entity must have an rdfs:label</small>
+                    </label>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="globalUniqueIds" onchange="ConstraintsModule.toggleGlobalRule('uniqueIds')">
+                    <label class="form-check-label" for="globalUniqueIds">
+                        <strong>Unique Identifiers</strong>
+                        <br><small class="text-muted">All entity IDs must be unique across the dataset</small>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="ConstraintsModule.saveGlobalConstraints()">
+                    <i class="bi bi-check-lg"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

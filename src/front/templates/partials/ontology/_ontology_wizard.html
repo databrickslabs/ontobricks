@@ -1,0 +1,239 @@
+<!-- Ontology Wizard Section -->
+<!-- CSS: /static/ontology/css/ontology-wizard.css -->
+<div class="content-section">
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-magic me-2"></i>Generate Ontology</h4>
+        <p class="text-muted mb-0 small">Auto-generate an ontology from your project metadata using AI</p>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-primary" id="wizardTopGenerateBtn" onclick="generateOntologyFromWizard()">
+        <i class="bi bi-magic me-1"></i> Generate Ontology
+    </button>
+</div>
+
+        <!-- Tab Navigation -->
+        <ul class="nav nav-tabs" id="wizardTabs" role="tablist" style="gap: 2px;">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="wizard-tab-metadata" data-bs-toggle="tab" data-bs-target="#wizard-pane-metadata"
+                        type="button" role="tab" aria-controls="wizard-pane-metadata" aria-selected="true">
+                    <i class="bi bi-database"></i> Metadata
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="wizard-tab-documents" data-bs-toggle="tab" data-bs-target="#wizard-pane-documents"
+                        type="button" role="tab" aria-controls="wizard-pane-documents" aria-selected="false">
+                    <i class="bi bi-file-earmark-text"></i> Documents
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="wizard-tab-guidelines" data-bs-toggle="tab" data-bs-target="#wizard-pane-guidelines"
+                        type="button" role="tab" aria-controls="wizard-pane-guidelines" aria-selected="false">
+                    <i class="bi bi-lightbulb"></i> Guidelines
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="wizard-tab-options" data-bs-toggle="tab" data-bs-target="#wizard-pane-options"
+                        type="button" role="tab" aria-controls="wizard-pane-options" aria-selected="false">
+                    <i class="bi bi-gear"></i> Options
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content ob-tab-content" id="wizardTabContent">
+
+            <!-- Metadata Tab -->
+            <div class="tab-pane fade show active" id="wizard-pane-metadata" role="tabpanel" aria-labelledby="wizard-tab-metadata">
+                <h6 class="mb-2"><i class="bi bi-database"></i> Project Metadata</h6>
+                <p class="text-muted small mb-3">Select the tables whose schema will be sent to the AI model for ontology generation.</p>
+                <div id="wizardMetadataStatus">
+                    <div class="d-flex align-items-center text-muted">
+                        <div class="spinner-border spinner-border-sm me-2" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        Checking metadata...
+                    </div>
+                </div>
+                <div id="wizardMetadataPreview" class="mt-3" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small text-muted">Select tables to include in ontology generation:</span>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-secondary" onclick="selectAllWizardTables(true)">
+                                <i class="bi bi-check-all me-1"></i>Select All
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="selectAllWizardTables(false)">
+                                <i class="bi bi-x me-1"></i>Select None
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive" style="max-height: calc(100vh - 370px); overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th style="width: 40px;" class="text-center">
+                                        <input type="checkbox" class="form-check-input" id="wizardSelectAllCheckbox"
+                                               checked title="Select / deselect all tables"
+                                               onchange="selectAllWizardTables(this.checked)">
+                                    </th>
+                                    <th>Table</th>
+                                    <th style="width: 80px;" class="text-center">Columns</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wizardMetadataTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="wizardSelectedCount" class="mt-2 small text-muted"></div>
+                </div>
+                <div id="wizardNoMetadata" class="alert alert-info mt-3" style="display: none;">
+                    <i class="bi bi-info-circle me-2"></i>
+                    No metadata loaded. You can still generate an ontology from documents or guidelines alone, or load metadata in <a href="/project/#metadata">Project Metadata</a>.
+                </div>
+            </div>
+
+            <!-- Documents Tab -->
+            <div class="tab-pane fade" id="wizard-pane-documents" role="tabpanel" aria-labelledby="wizard-tab-documents">
+                <h6 class="mb-2"><i class="bi bi-file-earmark-text"></i> Project Documents</h6>
+                <p class="text-muted small mb-3">Select documents from the project volume to include as additional context for ontology generation.</p>
+                <div id="wizardDocsStatus">
+                    <div class="d-flex align-items-center text-muted">
+                        <div class="spinner-border spinner-border-sm me-2" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        Checking documents...
+                    </div>
+                </div>
+                <div id="wizardDocsPreview" class="mt-3" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small text-muted">Select documents to include as context for ontology generation:</span>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-secondary" onclick="selectAllWizardDocs(true)">
+                                <i class="bi bi-check-all me-1"></i>Select All
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="selectAllWizardDocs(false)">
+                                <i class="bi bi-x me-1"></i>Select None
+                            </button>
+                        </div>
+                    </div>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        <div id="wizardDocsList"></div>
+                    </div>
+                    <div id="wizardDocsSelectedCount" class="mt-2 small text-muted"></div>
+                </div>
+                <div id="wizardNoDocs" class="mt-3" style="display: none;">
+                    <div class="text-muted small fst-italic">
+                        <i class="bi bi-info-circle me-1"></i>No documents uploaded. You can upload documents in <a href="/project/?section=documents">Project &gt; Documents</a>.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guidelines Tab -->
+            <div class="tab-pane fade" id="wizard-pane-guidelines" role="tabpanel" aria-labelledby="wizard-tab-guidelines">
+                <h6 class="mb-2"><i class="bi bi-lightbulb"></i> Ontology Guidelines</h6>
+                <p class="text-muted small mb-3">
+                    Provide guidelines and instructions for generating your ontology. Be specific about the domain,
+                    entity naming conventions, relationships to create, and any business rules to consider.
+                </p>
+                <textarea id="wizardGuidelines" class="form-control" rows="8" placeholder="Example guidelines:
+
+- Create an ontology for a customer relationship management (CRM) domain
+- Use CamelCase for entity names (e.g., Customer, SalesOrder, Product)
+- Include relationships like 'hasOrder', 'belongsTo', 'contains'
+- Consider that customers can have multiple orders
+- Products belong to categories
+- Include properties for common attributes like name, date, status
+- Focus on the main business entities and their core relationships"></textarea>
+
+                <div class="mt-3">
+                    <label class="form-label small text-muted">Quick Templates:</label>
+                    <div class="btn-group btn-group-sm" role="group" id="wizardTemplateButtons">
+                        <!-- Buttons are rendered dynamically from backend templates -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Options Tab -->
+            <div class="tab-pane fade" id="wizard-pane-options" role="tabpanel" aria-labelledby="wizard-tab-options">
+                <h6 class="mb-2"><i class="bi bi-gear"></i> Generation Options</h6>
+                <p class="text-muted small mb-3">Fine-tune what the AI model should include in the generated ontology.</p>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="wizardIncludeDataProps" checked>
+                            <label class="form-check-label" for="wizardIncludeDataProps">
+                                Include data properties (attributes)
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="wizardIncludeRelationships" checked>
+                            <label class="form-check-label" for="wizardIncludeRelationships">
+                                Generate relationships between entities
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="wizardIncludeInheritance" checked>
+                            <label class="form-check-label" for="wizardIncludeInheritance">
+                                Suggest class hierarchy (inheritance)
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="wizardUseTableNames" checked>
+                            <label class="form-check-label" for="wizardUseTableNames">
+                                Use table names as entity basis
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="wizardUseColumnComments">
+                            <label class="form-check-label" for="wizardUseColumnComments">
+                                Use column comments for descriptions
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Info note -->
+        <div class="text-muted small mb-3 mt-3">
+            <i class="bi bi-info-circle me-1"></i>
+            Generation uses AI and may take a few seconds. The ontology will be applied automatically when ready.
+        </div>
+
+        <!-- Preview Card (hidden until generation) -->
+        <div id="wizardPreviewCard" class="card mt-4" style="display: none;">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-eye me-2"></i>Generated Ontology Preview</span>
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-secondary" onclick="copyWizardOWL()">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="downloadWizardOWL()">
+                        <i class="bi bi-download"></i> Download
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="wizardPreviewStats" class="mb-3">
+                    <!-- Stats will be populated here -->
+                </div>
+                <div class="position-relative">
+                    <textarea id="wizardOWLPreview" class="form-control font-monospace" rows="15" readonly style="font-size: 0.85rem;"></textarea>
+                </div>
+            </div>
+            <div class="card-footer d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-secondary" onclick="clearWizardPreview()">
+                    <i class="bi bi-x-lg me-1"></i>Discard
+                </button>
+                <button type="button" class="btn btn-success" onclick="applyWizardOntology()" title="Retry if auto-apply failed">
+                    <i class="bi bi-check-lg me-1"></i>Apply to Ontology
+                </button>
+            </div>
+        </div>
+
+        <!-- Progress overlay is now dynamically created by JavaScript -->
+    </div>
+</div>

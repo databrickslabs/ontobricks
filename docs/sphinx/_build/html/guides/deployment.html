@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>OntoBricks Deployment Guide &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="OntoBricks Architecture" href="architecture.html" />
+    <link rel="prev" title="Getting Started with OntoBricks" href="get-started.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">OntoBricks Deployment Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#local-development-setup">1. Local Development Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#databricks-apps-deployment-dab">2. Databricks Apps Deployment (DAB)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#permission-management">3. Permission Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#deploying-to-a-new-workspace">4. Deploying to a New Workspace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#triple-store-backend-configuration">5. Triple Store Backend Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mcp-server-deployment-databricks-playground">6. MCP Server Deployment (Databricks Playground)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mlflow-agent-observability">7. MLflow Agent Observability</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#dab-reference">8. DAB Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#full-deployment-checklist">9. Full Deployment Checklist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#troubleshooting">10. Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#production-considerations">11. Production Considerations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="get-started.html" title="previous chapter">Getting Started with OntoBricks</a></li>
+      <li>Next: <a href="architecture.html" title="next chapter">OntoBricks Architecture</a></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="ontobricks-deployment-guide">
+<h1>OntoBricks Deployment Guide<a class="headerlink" href="#ontobricks-deployment-guide" title="Link to this heading">¶</a></h1>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h2>
+<p>This guide covers deploying OntoBricks both locally for development and to Databricks Apps for production use, including the optional MCP server for Databricks Playground integration and instructions for deploying to a new workspace.</p>
+<p>Deployment uses <strong>Databricks Asset Bundles (DAB)</strong> — a declarative, repeatable approach that deploys both apps in a single command from <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code> at the project root.</p>
+<p><strong>Architecture at a glance:</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>┌──────────────────────┐      ┌──────────────────────┐
+│   ontobricks         │      │   mcp-ontobricks     │
+│   (Databricks App)   │◄─────│   (Databricks App)   │
+│                      │ REST │                      │
+│   Web UI + REST API  │ API  │   MCP Server for     │
+│   Knowledge Graph    │      │   Databricks         │
+│                      │      │   Playground          │
+└──────────┬───────────┘      └──────────────────────┘
+           │
+           ├──────────────────┐
+           ▼                  ▼
+   ┌───────────────────────────────────┐
+   │  SQL Warehouse (Delta backend)    │
+   │  + LadybugDB (embedded graph)     │
+   └───────────────────────────────────┘
+           │
+           ▼
+   ┌───────────────┐
+   │  MLflow        │
+   │  Tracking      │
+   │  (Experiments) │
+   └───────────────┘
+</pre></div>
+</div>
+<p><strong>Key files:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code></p></td>
+<td><p>DAB bundle definition — apps, permissions, targets</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">app.yaml</span></code></p></td>
+<td><p>Main app runtime config — command, env vars, resource declarations</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">src/mcp-server/app.yaml</span></code></p></td>
+<td><p>MCP server runtime config</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">.databricksignore</span></code></p></td>
+<td><p>Excludes non-runtime files from the bundle sync</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">deploy.sh</span></code></p></td>
+<td><p>Convenience wrapper around DAB commands</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="local-development-setup">
+<h2>1. Local Development Setup<a class="headerlink" href="#local-development-setup" title="Link to this heading">¶</a></h2>
+<section id="prerequisites">
+<h3>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Python 3.10 or higher</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">uv</span></code> package manager (recommended) or <code class="docutils literal notranslate"><span class="pre">pip</span></code></p></li>
+<li><p>Git</p></li>
+<li><p>Access to a Databricks workspace</p></li>
+<li><p>Databricks CLI installed and authenticated</p></li>
+</ul>
+</section>
+<section id="installation">
+<h3>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Clone the repository</span>
+git<span class="w"> </span>clone<span class="w"> </span>&lt;repository-url&gt;
+<span class="nb">cd</span><span class="w"> </span>OntoBricks
+
+<span class="c1"># Install uv (if not already installed)</span>
+curl<span class="w"> </span>-LsSf<span class="w"> </span>https://astral.sh/uv/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
+
+<span class="c1"># Create virtual environment and install dependencies</span>
+uv<span class="w"> </span>venv
+<span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+uv<span class="w"> </span>sync
+</pre></div>
+</div>
+</section>
+<section id="environment-variables">
+<h3>Environment Variables<a class="headerlink" href="#environment-variables" title="Link to this heading">¶</a></h3>
+<p>Create a <code class="docutils literal notranslate"><span class="pre">.env</span></code> file from the example:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
+</pre></div>
+</div>
+<p>Edit <code class="docutils literal notranslate"><span class="pre">.env</span></code> with your values:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Required</span>
+<span class="nv">DATABRICKS_HOST</span><span class="o">=</span>https://your-workspace.cloud.databricks.com
+<span class="nv">DATABRICKS_TOKEN</span><span class="o">=</span>your-personal-access-token
+<span class="nv">DATABRICKS_SQL_WAREHOUSE_ID</span><span class="o">=</span>your-warehouse-id
+
+<span class="c1"># Optional</span>
+<span class="nv">DATABRICKS_CATALOG</span><span class="o">=</span>main
+<span class="nv">DATABRICKS_SCHEMA</span><span class="o">=</span>default
+
+<span class="c1"># MLflow — persist agent traces to your workspace (recommended)</span>
+<span class="nv">MLFLOW_TRACKING_URI</span><span class="o">=</span>databricks
+</pre></div>
+</div>
+</section>
+<section id="run-locally">
+<h3>Run Locally<a class="headerlink" href="#run-locally" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>./start.sh
+<span class="c1"># Or directly: uv run python run.py</span>
+<span class="c1"># Open http://localhost:8000</span>
+</pre></div>
+</div>
+</section>
+<section id="running-tests">
+<h3>Running Tests<a class="headerlink" href="#running-tests" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w">                                      </span><span class="c1"># all tests</span>
+uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>--cov<span class="o">=</span>back<span class="w"> </span>--cov<span class="o">=</span>front<span class="w"> </span>--cov<span class="o">=</span>shared<span class="w"> </span>--cov<span class="o">=</span>api<span class="w"> </span>--cov<span class="o">=</span>agents<span class="w"> </span>--cov-report<span class="o">=</span>html<span class="w">   </span><span class="c1"># with coverage</span>
+uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/e2e/<span class="w"> </span>-v<span class="w">                        </span><span class="c1"># end-to-end tests</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="databricks-apps-deployment-dab">
+<h2>2. Databricks Apps Deployment (DAB)<a class="headerlink" href="#databricks-apps-deployment-dab" title="Link to this heading">¶</a></h2>
+<p>Deployment uses <strong>Databricks Asset Bundles</strong> to deploy both the main app and the MCP server declaratively from a single <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code> at the project root.</p>
+<section id="id1">
+<h3>Prerequisites<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Requirement</p></th>
+<th class="head"><p>Details</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Databricks CLI</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&gt;=</span> <span class="pre">0.250.0</span></code> — check with <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">-v</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Authenticated CLI</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">auth</span> <span class="pre">login</span> <span class="pre">--host</span> <span class="pre">https://&lt;workspace&gt;</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>SQL Warehouse</p></td>
+<td><p>A running SQL Warehouse in the workspace</p></td>
+</tr>
+<tr class="row-odd"><td><p>Apps feature</p></td>
+<td><p>Databricks Apps must be enabled on the workspace</p></td>
+</tr>
+<tr class="row-even"><td><p>Unity Catalog</p></td>
+<td><p>A catalog, schema, and volume for the project registry</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="step-1-authenticate">
+<h3>Step 1 — Authenticate<a class="headerlink" href="#step-1-authenticate" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>--host<span class="w"> </span>https://&lt;workspace&gt;.cloud.databricks.com
+
+<span class="c1"># Verify</span>
+databricks<span class="w"> </span>current-user<span class="w"> </span>me
+</pre></div>
+</div>
+</section>
+<section id="step-2-customize-app-yaml-workspace-specific-values">
+<h3>Step 2 — Customize <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code> (workspace-specific values)<a class="headerlink" href="#step-2-customize-app-yaml-workspace-specific-values" title="Link to this heading">¶</a></h3>
+<p>Edit the workspace-specific values in <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code> (main app) and <code class="docutils literal notranslate"><span class="pre">src/mcp-server/app.yaml</span></code> (MCP server):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>File</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>How to find it</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">app.yaml</span></code></p></td>
+<td><p>Fallback SQL Warehouse ID</p></td>
+<td><p><strong>SQL Warehouses</strong> &gt; select warehouse &gt; <strong>Connection details</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_TRIPLESTORE_TABLE</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">app.yaml</span></code></p></td>
+<td><p>Default triple store table</p></td>
+<td><p>Choose or create a <code class="docutils literal notranslate"><span class="pre">catalog.schema.table</span></code> for triple storage</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_APP_NAME</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">app.yaml</span></code></p></td>
+<td><p>Deployed app name (for permission checks)</p></td>
+<td><p>Must match the name in <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code> (default: <code class="docutils literal notranslate"><span class="pre">ontobricks</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_URL</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">src/mcp-server/app.yaml</span></code></p></td>
+<td><p>Main app URL</p></td>
+<td><p>Set after first deploy — <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">apps</span> <span class="pre">get</span> <span class="pre">ontobricks</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>The <code class="docutils literal notranslate"><span class="pre">REGISTRY_CATALOG</span></code>, <code class="docutils literal notranslate"><span class="pre">REGISTRY_SCHEMA</span></code>, and <code class="docutils literal notranslate"><span class="pre">REGISTRY_VOLUME</span></code> static variables are <strong>only needed for local development</strong>. In a deployed app the <code class="docutils literal notranslate"><span class="pre">volume</span></code> resource binding injects the registry path automatically.</p>
+</section>
+<section id="step-3-customize-databricks-yml-bundle-variables">
+<h3>Step 3 — Customize <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code> (bundle variables)<a class="headerlink" href="#step-3-customize-databricks-yml-bundle-variables" title="Link to this heading">¶</a></h3>
+<p>Update the default variable values to match your workspace:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">variables</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">warehouse_id</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;your-warehouse-id&gt;&quot;</span>
+<span class="w">  </span><span class="nt">registry_catalog</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;your-catalog&gt;&quot;</span>
+<span class="w">  </span><span class="nt">registry_schema</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;your-schema&gt;&quot;</span>
+<span class="w">  </span><span class="nt">registry_volume</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;OntoBricksRegistry&quot;</span>
+</pre></div>
+</div>
+<p>Update the <code class="docutils literal notranslate"><span class="pre">permissions</span></code> section to grant <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> to the deploying user:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">permissions</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CAN_MANAGE</span>
+<span class="w">    </span><span class="nt">user_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;your-email&gt;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CAN_USE</span>
+<span class="w">    </span><span class="nt">group_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">users</span>
+</pre></div>
+</div>
+</section>
+<section id="step-4-validate-the-bundle">
+<h3>Step 4 — Validate the bundle<a class="headerlink" href="#step-4-validate-the-bundle" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>bundle<span class="w"> </span>validate
+</pre></div>
+</div>
+<p>This checks the bundle configuration without deploying. Fix any errors before proceeding.</p>
+</section>
+<section id="step-5-deploy">
+<h3>Step 5 — Deploy<a class="headerlink" href="#step-5-deploy" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Deploy both apps (dev target)</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>deploy
+
+<span class="c1"># Or use the convenience script</span>
+./deploy.sh
+</pre></div>
+</div>
+<p>If the apps already exist in the workspace (e.g., from a previous manual deploy), bind them first:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>bundle<span class="w"> </span>deployment<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>ontobricks_app<span class="w"> </span>ontobricks
+databricks<span class="w"> </span>bundle<span class="w"> </span>deployment<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>mcp_ontobricks_app<span class="w"> </span>mcp-ontobricks
+databricks<span class="w"> </span>bundle<span class="w"> </span>deploy
+</pre></div>
+</div>
+</section>
+<section id="step-6-start-the-apps">
+<h3>Step 6 — Start the apps<a class="headerlink" href="#step-6-start-the-apps" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Start the main app</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>ontobricks_app
+
+<span class="c1"># Start the MCP server</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>mcp_ontobricks_app
+</pre></div>
+</div>
+<p>Or use the convenience script:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>./deploy.sh<span class="w">              </span><span class="c1"># deploy + start main app</span>
+./deploy.sh<span class="w"> </span>--all<span class="w">        </span><span class="c1"># deploy + start both apps</span>
+./deploy.sh<span class="w"> </span>--mcp-only<span class="w">   </span><span class="c1"># deploy + start MCP only</span>
+</pre></div>
+</div>
+</section>
+<section id="step-7-bind-resources-first-deploy-only">
+<h3>Step 7 — Bind resources (first deploy only)<a class="headerlink" href="#step-7-bind-resources-first-deploy-only" title="Link to this heading">¶</a></h3>
+<p>After the first deployment, bind the app resources in the Databricks workspace UI:</p>
+<ol class="arabic simple">
+<li><p>Go to <strong>Compute &gt; Apps</strong> and find <code class="docutils literal notranslate"><span class="pre">ontobricks</span></code></p></li>
+<li><p>Click <strong>Resources</strong></p></li>
+<li><p>Bind <code class="docutils literal notranslate"><span class="pre">sql-warehouse</span></code> to a running SQL Warehouse</p></li>
+<li><p>Bind <code class="docutils literal notranslate"><span class="pre">volume</span></code> to the Unity Catalog Volume for the project registry (e.g., <code class="docutils literal notranslate"><span class="pre">your_catalog.your_schema.OntoBricksRegistry</span></code>)</p></li>
+<li><p>Repeat for <code class="docutils literal notranslate"><span class="pre">mcp-ontobricks</span></code> (same warehouse and volume)</p></li>
+<li><p>Verify both apps show status <strong>Running</strong></p></li>
+</ol>
+<blockquote>
+<div><p><strong>Note:</strong> Resource bindings persist across redeployments — you only need to do this once per workspace. Once the <code class="docutils literal notranslate"><span class="pre">sql-warehouse</span></code> and <code class="docutils literal notranslate"><span class="pre">volume</span></code> resources are bound, the corresponding controls in the Settings page are <strong>locked</strong>. To change them, update the resource bindings in the Apps UI and restart the app.</p>
+</div></blockquote>
+</section>
+<section id="step-8-initialize-the-registry-first-deploy-only">
+<h3>Step 8 — Initialize the registry (first deploy only)<a class="headerlink" href="#step-8-initialize-the-registry-first-deploy-only" title="Link to this heading">¶</a></h3>
+<p>If the volume is empty (first deployment):</p>
+<ol class="arabic simple">
+<li><p>Open the app URL</p></li>
+<li><p>Go to <strong>Settings &gt; Registry</strong></p></li>
+<li><p>Click <strong>Initialize</strong> to bootstrap the registry</p></li>
+</ol>
+</section>
+<section id="step-9-verify">
+<h3>Step 9 — Verify<a class="headerlink" href="#step-9-verify" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check app status</span>
+databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>ontobricks
+databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>mcp-ontobricks
+
+<span class="c1"># Or via bundle</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>summary
+</pre></div>
+</div>
+</section>
+<section id="deploy-sh-reference">
+<h3><code class="docutils literal notranslate"><span class="pre">deploy.sh</span></code> Reference<a class="headerlink" href="#deploy-sh-reference" title="Link to this heading">¶</a></h3>
+<p>The convenience script wraps all DAB commands:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>./deploy.sh<span class="w">                  </span><span class="c1"># validate + deploy + run main app (dev)</span>
+./deploy.sh<span class="w"> </span>--all<span class="w">            </span><span class="c1"># validate + deploy + run both apps</span>
+./deploy.sh<span class="w"> </span>--mcp-only<span class="w">       </span><span class="c1"># validate + deploy + run MCP only</span>
+./deploy.sh<span class="w"> </span>-t<span class="w"> </span>prod<span class="w">          </span><span class="c1"># deploy to production target</span>
+./deploy.sh<span class="w"> </span>--no-run<span class="w">         </span><span class="c1"># deploy without starting apps</span>
+./deploy.sh<span class="w"> </span>--bind<span class="w">           </span><span class="c1"># also bind existing apps post-deploy</span>
+</pre></div>
+</div>
+</section>
+<section id="app-yaml-configuration-full-reference">
+<h3><code class="docutils literal notranslate"><span class="pre">app.yaml</span></code> Configuration — Full Reference<a class="headerlink" href="#app-yaml-configuration-full-reference" title="Link to this heading">¶</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code> file controls the Databricks App runtime. Here is every variable explained:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># Command to start the app — uv resolves dependencies from pyproject.toml</span>
+<span class="nt">command</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;uv&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;run&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;python&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;run.py&quot;</span>
+
+<span class="nt">env</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># ── SQL Warehouse ──────────────────────────────────────────────</span>
+<span class="w">  </span><span class="c1"># Injected from the sql-warehouse resource binding (configured in the Apps UI)</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DATABRICKS_SQL_WAREHOUSE_ID</span>
+<span class="w">    </span><span class="nt">valueFrom</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sql-warehouse</span>
+
+<span class="w">  </span><span class="c1"># Static fallback warehouse ID for MCP / session-less API calls</span>
+<span class="w">  </span><span class="c1"># (when no resource binding is available)</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT</span>
+<span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;your-warehouse-id&gt;&quot;</span>
+
+<span class="w">  </span><span class="c1"># ── Unity Catalog defaults ─────────────────────────────────────</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DATABRICKS_CATALOG</span>
+<span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;main&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DATABRICKS_SCHEMA</span>
+<span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;default&quot;</span>
+
+<span class="w">  </span><span class="c1"># ── Triple store fallback ──────────────────────────────────────</span>
+<span class="w">  </span><span class="c1"># Fully-qualified Delta triple store table used when no project session</span>
+<span class="w">  </span><span class="c1"># is active (e.g. MCP API calls). Format: catalog.schema.table</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DATABRICKS_TRIPLESTORE_TABLE</span>
+<span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;catalog&gt;.&lt;schema&gt;.&lt;table&gt;&quot;</span>
+
+<span class="w">  </span><span class="c1"># ── Project Registry ───────────────────────────────────────────</span>
+<span class="w">  </span><span class="c1"># Injected from the volume resource binding.</span>
+<span class="w">  </span><span class="c1"># The Databricks Apps runtime sets this to /Volumes/&lt;catalog&gt;/&lt;schema&gt;/&lt;volume&gt;.</span>
+<span class="w">  </span><span class="c1"># When present, it overrides the three static REGISTRY_* variables below.</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">REGISTRY_VOLUME_PATH</span>
+<span class="w">    </span><span class="nt">valueFrom</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">volume</span>
+
+<span class="w">  </span><span class="c1"># Static fallbacks — used for local development and MCP when no</span>
+<span class="w">  </span><span class="c1"># volume resource is bound.</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">REGISTRY_CATALOG</span>
+<span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;your-catalog&gt;&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">REGISTRY_SCHEMA</span>
+<span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;your-schema&gt;&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">REGISTRY_VOLUME</span>
+<span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;OntoBricksRegistry&quot;</span>
+
+<span class="w">  </span><span class="c1"># ── Permission Management ──────────────────────────────────────</span>
+<span class="w">  </span><span class="c1"># App name used to check CAN_MANAGE permissions via the Databricks API</span>
+<span class="w">  </span><span class="c1"># Must match the deployed app name exactly</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ONTOBRICKS_APP_NAME</span>
+<span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;ontobricks&quot;</span>
+
+<span class="w">  </span><span class="c1"># ── MLflow ─────────────────────────────────────────────────────</span>
+<span class="w">  </span><span class="c1"># Persist agent traces to the workspace tracking server</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MLFLOW_TRACKING_URI</span>
+<span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;databricks&quot;</span>
+
+<span class="c1"># ── Resources ──────────────────────────────────────────────────</span>
+<span class="c1"># Configure these resources in the Databricks Apps UI after deployment.</span>
+<span class="c1"># Once bound, the corresponding Settings UI controls are locked (read-only).</span>
+<span class="nt">resources</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sql-warehouse</span>
+<span class="w">    </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;SQL</span><span class="nv"> </span><span class="s">Warehouse</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">executing</span><span class="nv"> </span><span class="s">queries</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">metadata</span><span class="nv"> </span><span class="s">operations&quot;</span>
+<span class="w">    </span><span class="nt">sql_warehouse</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">permission</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CAN_USE</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">volume</span>
+<span class="w">    </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Unity</span><span class="nv"> </span><span class="s">Catalog</span><span class="nv"> </span><span class="s">Volume</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">OntoBricks</span><span class="nv"> </span><span class="s">project</span><span class="nv"> </span><span class="s">registry&quot;</span>
+<span class="w">    </span><span class="nt">volume</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">permission</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CAN_READ_WRITE</span>
+</pre></div>
+</div>
+</section>
+<section id="resource-locked-settings">
+<h3>Resource-Locked Settings<a class="headerlink" href="#resource-locked-settings" title="Link to this heading">¶</a></h3>
+<p>When OntoBricks detects that it is running as a Databricks App with resource bindings, the Settings page automatically locks the affected controls:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Resource</p></th>
+<th class="head"><p>What is locked</p></th>
+<th class="head"><p>How to change</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sql-warehouse</span></code></p></td>
+<td><p>SQL Warehouse dropdown + refresh button</p></td>
+<td><p>Rebind the <code class="docutils literal notranslate"><span class="pre">sql-warehouse</span></code> resource in <strong>Compute &gt; Apps &gt; Resources</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">volume</span></code></p></td>
+<td><p>Registry Change button</p></td>
+<td><p>Rebind the <code class="docutils literal notranslate"><span class="pre">volume</span></code> resource in <strong>Compute &gt; Apps &gt; Resources</strong></p></td>
+</tr>
+</tbody>
+</table>
+<p>The <strong>Initialize</strong> button remains available when the volume resource is bound but the registry has not been initialized yet (no <code class="docutils literal notranslate"><span class="pre">.registry</span></code> marker). This allows first-time setup without unlocking the UI.</p>
+<p>In <strong>local development mode</strong> (no Databricks App resources), all Settings controls remain fully editable.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="permission-management">
+<h2>3. Permission Management<a class="headerlink" href="#permission-management" title="Link to this heading">¶</a></h2>
+<p>OntoBricks includes a built-in permission system that controls who can access the app and what they can do. Permissions are managed in <strong>Settings &gt; Permissions</strong> and are only active when running as a Databricks App (local development has no restrictions).</p>
+<section id="how-it-works">
+<h3>How It Works<a class="headerlink" href="#how-it-works" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Role</p></th>
+<th class="head"><p>Access</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Admin</strong></p></td>
+<td><p>Full access + can manage the permission list. Determined by <strong>CAN_MANAGE</strong> on the Databricks App.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Editor</strong></p></td>
+<td><p>Full access to all features (read + write).</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Viewer</strong></p></td>
+<td><p>Read-only access (cannot create, edit, or delete).</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>No role</strong></p></td>
+<td><p>Blocked entirely (redirect to Access Denied page).</p></td>
+</tr>
+</tbody>
+</table>
+<p>When no permissions are configured yet, only users with <strong>CAN_MANAGE</strong> on the Databricks App have access. Everyone else is blocked until an admin adds them via the Permissions tab.</p>
+</section>
+<section id="how-admin-detection-works">
+<h3>How Admin Detection Works<a class="headerlink" href="#how-admin-detection-works" title="Link to this heading">¶</a></h3>
+<p>At runtime, the app checks whether the logged-in user has <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> on the Databricks App by calling the Permissions API. The check uses the <strong>user’s own OAuth token</strong> (forwarded by the Databricks Apps proxy via <code class="docutils literal notranslate"><span class="pre">x-forwarded-access-token</span></code>). This means:</p>
+<ul class="simple">
+<li><p><strong>No special SP setup is needed</strong> — admin detection works out of the box on a fresh deployment.</p></li>
+<li><p>The app’s service principal does not need <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> on itself.</p></li>
+<li><p>If the user’s forwarded token is not available (e.g., local dev), the app falls back to the SDK (service principal) and then a REST call with the SP token.</p></li>
+</ul>
+</section>
+<section id="managing-permissions">
+<h3>Managing Permissions<a class="headerlink" href="#managing-permissions" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Ensure you have <strong>CAN_MANAGE</strong> on the <code class="docutils literal notranslate"><span class="pre">ontobricks</span></code> app in the Databricks UI (Compute &gt; Apps &gt; ontobricks &gt; Permissions)</p></li>
+<li><p>Open the app and go to <strong>Settings &gt; Permissions</strong></p></li>
+<li><p>Click <strong>Add</strong> to grant access to workspace users or groups</p></li>
+<li><p>Assign each principal a <strong>Viewer</strong> or <strong>Editor</strong> role</p></li>
+<li><p>Users not in the list are blocked from accessing the app</p></li>
+</ol>
+</section>
+<section id="diagnostics">
+<h3>Diagnostics<a class="headerlink" href="#diagnostics" title="Link to this heading">¶</a></h3>
+<p>If a user reports “Access Denied”, hit the diagnostic endpoint (accessible even when blocked):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">https</span><span class="p">:</span><span class="o">//&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">url</span><span class="o">&gt;/</span><span class="n">settings</span><span class="o">/</span><span class="n">permissions</span><span class="o">/</span><span class="n">diag</span>
+</pre></div>
+</div>
+<p>This returns:</p>
+<ul class="simple">
+<li><p>The user’s email and forwarded token status</p></li>
+<li><p>SDK (SP token) check result</p></li>
+<li><p>User-token check result</p></li>
+<li><p>Which principals have <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code></p></li>
+<li><p>The cached admin decision and its age</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="deploying-to-a-new-workspace">
+<h2>4. Deploying to a New Workspace<a class="headerlink" href="#deploying-to-a-new-workspace" title="Link to this heading">¶</a></h2>
+<p>When moving OntoBricks to a different Databricks workspace, follow these steps.</p>
+<section id="authenticate-to-the-new-workspace">
+<h3>4.1 — Authenticate to the new workspace<a class="headerlink" href="#authenticate-to-the-new-workspace" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Option A: Set as default</span>
+databricks<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>--host<span class="w"> </span>https://&lt;new-workspace&gt;.cloud.databricks.com
+
+<span class="c1"># Option B: Use a named profile</span>
+databricks<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>--host<span class="w"> </span>https://&lt;new-workspace&gt;.cloud.databricks.com<span class="w"> </span>--profile<span class="w"> </span>new-ws
+</pre></div>
+</div>
+<p>Verify:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>current-user<span class="w"> </span>me
+<span class="c1"># Or with a profile: databricks current-user me --profile new-ws</span>
+</pre></div>
+</div>
+</section>
+<section id="prepare-unity-catalog-resources">
+<h3>4.2 — Prepare Unity Catalog resources<a class="headerlink" href="#prepare-unity-catalog-resources" title="Link to this heading">¶</a></h3>
+<p>The new workspace needs a catalog/schema where OntoBricks can store projects and triple stores:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create a schema for OntoBricks (adjust catalog name)</span>
+databricks<span class="w"> </span>sql<span class="w"> </span>query<span class="w"> </span><span class="s2">&quot;CREATE SCHEMA IF NOT EXISTS main.ontobricks&quot;</span>
+
+<span class="c1"># Create the registry volume</span>
+databricks<span class="w"> </span>sql<span class="w"> </span>query<span class="w"> </span><span class="s2">&quot;CREATE VOLUME IF NOT EXISTS main.ontobricks.OntoBricksRegistry&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="update-configuration-files">
+<h3>4.3 — Update configuration files<a class="headerlink" href="#update-configuration-files" title="Link to this heading">¶</a></h3>
+<p><strong><code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code></strong> — update the variable defaults:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">variables</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">warehouse_id</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;new-warehouse-id&gt;&quot;</span>
+<span class="w">  </span><span class="nt">registry_catalog</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;new-catalog&gt;&quot;</span>
+<span class="w">  </span><span class="nt">registry_schema</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;new-schema&gt;&quot;</span>
+</pre></div>
+</div>
+<p>Update the <code class="docutils literal notranslate"><span class="pre">permissions</span></code> section with the deploying user’s email.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">app.yaml</span></code></strong> — update workspace-specific values:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT</span>
+<span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;new-warehouse-id&gt;&quot;</span>
+<span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DATABRICKS_TRIPLESTORE_TABLE</span>
+<span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;catalog&gt;.&lt;schema&gt;.&lt;triplestore_table&gt;&quot;</span>
+</pre></div>
+</div>
+<p><strong><code class="docutils literal notranslate"><span class="pre">src/mcp-server/app.yaml</span></code></strong> — update the main app URL (after first deploy):</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ONTOBRICKS_URL</span>
+<span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://&lt;new-ontobricks-app-url&gt;&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="deploy">
+<h3>4.4 — Deploy<a class="headerlink" href="#deploy" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Validate first</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>validate
+
+<span class="c1"># Deploy and start</span>
+./deploy.sh<span class="w"> </span>--all
+</pre></div>
+</div>
+</section>
+<section id="bind-resources">
+<h3>4.5 — Bind resources<a class="headerlink" href="#bind-resources" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Go to <strong>Compute &gt; Apps &gt; ontobricks &gt; Resources</strong></p></li>
+<li><p>Bind <code class="docutils literal notranslate"><span class="pre">sql-warehouse</span></code> to a running SQL Warehouse</p></li>
+<li><p>Bind <code class="docutils literal notranslate"><span class="pre">volume</span></code> to the registry UC Volume</p></li>
+<li><p>Repeat for <code class="docutils literal notranslate"><span class="pre">mcp-ontobricks</span></code></p></li>
+</ol>
+</section>
+<section id="initialize-and-verify">
+<h3>4.6 — Initialize and verify<a class="headerlink" href="#initialize-and-verify" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Open the app URL</p></li>
+<li><p>Go to <strong>Settings &gt; Registry &gt; Initialize</strong> (if the volume is empty)</p></li>
+<li><p>Verify both apps are <strong>Running</strong>: <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">apps</span> <span class="pre">get</span> <span class="pre">ontobricks</span></code></p></li>
+</ol>
+</section>
+<section id="update-mcp-server-url">
+<h3>4.7 — Update MCP server URL<a class="headerlink" href="#update-mcp-server-url" title="Link to this heading">¶</a></h3>
+<p>After the main app is deployed and running:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Get the main app URL</span>
+databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>ontobricks<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys,json; print(json.load(sys.stdin)[&#39;url&#39;])&quot;</span>
+</pre></div>
+</div>
+<p>Update <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_URL</span></code> in <code class="docutils literal notranslate"><span class="pre">src/mcp-server/app.yaml</span></code> with this URL, then redeploy:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>./deploy.sh<span class="w"> </span>--mcp-only
+</pre></div>
+</div>
+</section>
+<section id="new-workspace-checklist">
+<h3>New Workspace Checklist<a class="headerlink" href="#new-workspace-checklist" title="Link to this heading">¶</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span> <span class="p">]</span> <span class="mf">1.</span>  <span class="n">databricks</span> <span class="n">auth</span> <span class="n">login</span> <span class="o">--</span><span class="n">host</span> <span class="n">https</span><span class="p">:</span><span class="o">//&lt;</span><span class="n">new</span><span class="o">-</span><span class="n">workspace</span><span class="o">&gt;</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">2.</span>  <span class="n">Verify</span><span class="p">:</span> <span class="n">databricks</span> <span class="n">current</span><span class="o">-</span><span class="n">user</span> <span class="n">me</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">3.</span>  <span class="n">Create</span> <span class="n">Unity</span> <span class="n">Catalog</span> <span class="n">resources</span> <span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">volume</span><span class="p">)</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">4.</span>  <span class="n">Update</span> <span class="n">databricks</span><span class="o">.</span><span class="n">yml</span> <span class="n">variables</span> <span class="p">(</span><span class="n">warehouse_id</span><span class="p">,</span> <span class="n">registry_</span><span class="o">*</span><span class="p">)</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">5.</span>  <span class="n">Update</span> <span class="n">databricks</span><span class="o">.</span><span class="n">yml</span> <span class="n">permissions</span> <span class="p">(</span><span class="n">your</span> <span class="n">email</span><span class="p">)</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">6.</span>  <span class="n">Update</span> <span class="n">app</span><span class="o">.</span><span class="n">yaml</span> <span class="p">(</span><span class="n">DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT</span><span class="p">,</span> <span class="n">DATABRICKS_TRIPLESTORE_TABLE</span><span class="p">)</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">7.</span>  <span class="n">databricks</span> <span class="n">bundle</span> <span class="n">validate</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">8.</span>  <span class="o">./</span><span class="n">deploy</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="nb">all</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">9.</span>  <span class="n">Bind</span> <span class="n">sql</span><span class="o">-</span><span class="n">warehouse</span> <span class="ow">and</span> <span class="n">volume</span> <span class="n">resources</span> <span class="ow">in</span> <span class="n">the</span> <span class="n">Apps</span> <span class="n">UI</span> <span class="p">(</span><span class="n">both</span> <span class="n">apps</span><span class="p">)</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">10.</span> <span class="n">Initialize</span> <span class="n">registry</span> <span class="p">(</span><span class="n">Settings</span> <span class="o">&gt;</span> <span class="n">Registry</span> <span class="o">&gt;</span> <span class="n">Initialize</span><span class="p">)</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">11.</span> <span class="n">Verify</span> <span class="n">both</span> <span class="n">apps</span> <span class="n">are</span> <span class="n">RUNNING</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">12.</span> <span class="n">Update</span> <span class="n">ONTOBRICKS_URL</span> <span class="ow">in</span> <span class="n">src</span><span class="o">/</span><span class="n">mcp</span><span class="o">-</span><span class="n">server</span><span class="o">/</span><span class="n">app</span><span class="o">.</span><span class="n">yaml</span> <span class="k">with</span> <span class="n">the</span> <span class="n">main</span> <span class="n">app</span> <span class="n">URL</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">13.</span> <span class="o">./</span><span class="n">deploy</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">mcp</span><span class="o">-</span><span class="n">only</span> <span class="p">(</span><span class="n">redeploy</span> <span class="n">MCP</span> <span class="k">with</span> <span class="n">correct</span> <span class="n">URL</span><span class="p">)</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">14.</span> <span class="n">Verify</span> <span class="n">MCP</span> <span class="n">appears</span> <span class="ow">in</span> <span class="n">Databricks</span> <span class="n">Playground</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="triple-store-backend-configuration">
+<h2>5. Triple Store Backend Configuration<a class="headerlink" href="#triple-store-backend-configuration" title="Link to this heading">¶</a></h2>
+<p>OntoBricks supports two triple store backends. Choose one in your project settings.</p>
+<section id="delta-view-no-extra-setup-required">
+<h3>Delta (<code class="docutils literal notranslate"><span class="pre">view</span></code>) — No Extra Setup Required<a class="headerlink" href="#delta-view-no-extra-setup-required" title="Link to this heading">¶</a></h3>
+<p>Delta uses a Databricks SQL Warehouse to store triples in a Delta table. On Databricks Apps, the app’s service principal authenticates via OAuth automatically — the only requirement is the SQL Warehouse resource declared in <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code> (already configured).</p>
+</section>
+<section id="ladybugdb-graph-no-extra-setup-required">
+<h3>LadybugDB (<code class="docutils literal notranslate"><span class="pre">graph</span></code>) — No Extra Setup Required<a class="headerlink" href="#ladybugdb-graph-no-extra-setup-required" title="Link to this heading">¶</a></h3>
+<p>LadybugDB is an embedded graph database that stores data locally at <code class="docutils literal notranslate"><span class="pre">/tmp</span></code>. When the project has an ontology loaded, LadybugDB uses a true graph model (OWL classes become node tables, object properties become relationship tables). Graph data is automatically archived to the registry UC Volume when saving a project and restored on load.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="mcp-server-deployment-databricks-playground">
+<h2>6. MCP Server Deployment (Databricks Playground)<a class="headerlink" href="#mcp-server-deployment-databricks-playground" title="Link to this heading">¶</a></h2>
+<p>The MCP server (<code class="docutils literal notranslate"><span class="pre">mcp-ontobricks</span></code>) is a <strong>separate</strong> Databricks App that exposes OntoBricks knowledge-graph tools to the Databricks Playground. It must have a name starting with <code class="docutils literal notranslate"><span class="pre">mcp-</span></code> to be discoverable.</p>
+<section id="id2">
+<h3>Prerequisites<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Requirement</p></th>
+<th class="head"><p>Details</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Main app deployed</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ontobricks</span></code> must be deployed and running first</p></td>
+</tr>
+<tr class="row-odd"><td><p>Databricks CLI</p></td>
+<td><p>Authenticated to the same workspace</p></td>
+</tr>
+<tr class="row-even"><td><p>Playground access</p></td>
+<td><p>Databricks Playground must be enabled</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="deploy-with-dab">
+<h3>Deploy with DAB<a class="headerlink" href="#deploy-with-dab" title="Link to this heading">¶</a></h3>
+<p>The MCP server is deployed alongside the main app by the same <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code> bundle:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Deploy both apps</span>
+./deploy.sh<span class="w"> </span>--all
+
+<span class="c1"># Or deploy MCP only (main app already running)</span>
+./deploy.sh<span class="w"> </span>--mcp-only
+</pre></div>
+</div>
+</section>
+<section id="mcp-app-yaml-configuration">
+<h3>MCP <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code> Configuration<a class="headerlink" href="#mcp-app-yaml-configuration" title="Link to this heading">¶</a></h3>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">command</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;uv&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;run&quot;</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;mcp-ontobricks&quot;</span>
+
+<span class="nt">env</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ONTOBRICKS_URL</span>
+<span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://&lt;your-ontobricks-app-url&gt;&quot;</span>
+
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DATABRICKS_SQL_WAREHOUSE_ID</span>
+<span class="w">    </span><span class="nt">valueFrom</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sql-warehouse</span>
+
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">REGISTRY_VOLUME_PATH</span>
+<span class="w">    </span><span class="nt">valueFrom</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">volume</span>
+
+<span class="nt">resources</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sql-warehouse</span>
+<span class="w">    </span><span class="nt">sql_warehouse</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">permission</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CAN_USE</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">volume</span>
+<span class="w">    </span><span class="nt">volume</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">permission</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CAN_READ_WRITE</span>
+</pre></div>
+</div>
+<blockquote>
+<div><p><strong>Important</strong>: Update <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_URL</span></code> to match your main app’s URL before deploying. Find it with:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>ontobricks<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys,json; print(json.load(sys.stdin)[&#39;url&#39;])&quot;</span>
+</pre></div>
+</div>
+</div></blockquote>
+</section>
+<section id="post-deployment-resource-binding">
+<h3>Post-Deployment Resource Binding<a class="headerlink" href="#post-deployment-resource-binding" title="Link to this heading">¶</a></h3>
+<p>After the first deployment, bind the MCP server’s resources:</p>
+<ol class="arabic simple">
+<li><p>Go to <strong>Compute &gt; Apps &gt; mcp-ontobricks &gt; Resources</strong></p></li>
+<li><p>Bind <code class="docutils literal notranslate"><span class="pre">sql-warehouse</span></code> to the same SQL Warehouse used by the main app</p></li>
+<li><p>Bind <code class="docutils literal notranslate"><span class="pre">volume</span></code> to the same registry UC Volume</p></li>
+</ol>
+</section>
+<section id="grant-the-mcp-app-access-to-the-main-app">
+<h3>Grant the MCP App Access to the Main App<a class="headerlink" href="#grant-the-mcp-app-access-to-the-main-app" title="Link to this heading">¶</a></h3>
+<p>The MCP server calls the main app’s REST API using its service principal’s OAuth token. The <code class="docutils literal notranslate"><span class="pre">users</span></code> group should already have <code class="docutils literal notranslate"><span class="pre">CAN_USE</span></code> on the main app (set in <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code>). If it doesn’t:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>apps<span class="w"> </span>update-permissions<span class="w"> </span>ontobricks<span class="w"> </span>--json<span class="w"> </span><span class="s1">&#39;{</span>
+<span class="s1">  &quot;access_control_list&quot;: [</span>
+<span class="s1">    { &quot;group_name&quot;: &quot;users&quot;, &quot;permission_level&quot;: &quot;CAN_USE&quot; }</span>
+<span class="s1">  ]</span>
+<span class="s1">}&#39;</span>
+</pre></div>
+</div>
+</section>
+<section id="using-in-databricks-playground">
+<h3>Using in Databricks Playground<a class="headerlink" href="#using-in-databricks-playground" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Go to your Databricks workspace</p></li>
+<li><p>Navigate to <strong>Playground</strong></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">mcp-ontobricks</span></code> appears in the <strong>MCP Servers</strong> list (apps starting with <code class="docutils literal notranslate"><span class="pre">mcp-</span></code> are shown automatically)</p></li>
+<li><p>Select it to use OntoBricks knowledge-graph tools in conversations</p></li>
+</ol>
+</section>
+<section id="available-mcp-tools">
+<h3>Available MCP Tools<a class="headerlink" href="#available-mcp-tools" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tool</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">list_projects</span></code></p></td>
+<td><p>List all projects (knowledge graphs) in the registry with names and descriptions</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">select_project</span></code></p></td>
+<td><p>Activate a project by name — subsequent queries operate on its triple store</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">list_entity_types</span></code></p></td>
+<td><p>Human-readable overview of the selected project’s knowledge graph (entity types, counts, predicates)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">describe_entity</span></code></p></td>
+<td><p>Search by name/type and get a full-text description with attributes, relationships, and BFS traversal</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_status</span></code></p></td>
+<td><p>Compact diagnostic: project, backend, table, data availability, triple count</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="standalone-local-mcp-usage">
+<h3>Standalone / Local MCP Usage<a class="headerlink" href="#standalone-local-mcp-usage" title="Link to this heading">¶</a></h3>
+<p>For LLM clients like Cursor or Claude Desktop (stdio transport):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>mcp-server
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;from server.app import create_mcp_server; create_mcp_server(&#39;standalone&#39;).run(transport=&#39;stdio&#39;)&quot;</span>
+</pre></div>
+</div>
+<p>Or via the convenience wrapper at the project root:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>mcp_server.py<span class="w">              </span><span class="c1"># stdio (default)</span>
+python<span class="w"> </span>mcp_server.py<span class="w"> </span>--http<span class="w">       </span><span class="c1"># streamable-http on port 9100</span>
+</pre></div>
+</div>
+<p>Override the target URL:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">ONTOBRICKS_URL</span><span class="o">=</span>http://your-host:8000<span class="w"> </span>python<span class="w"> </span>mcp_server.py
+</pre></div>
+</div>
+</section>
+<section id="client-configuration-examples">
+<h3>Client Configuration Examples<a class="headerlink" href="#client-configuration-examples" title="Link to this heading">¶</a></h3>
+<p><strong>Cursor</strong> (<code class="docutils literal notranslate"><span class="pre">.cursor/mcp.json</span></code>):</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;mcpServers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;ontobricks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;uv&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;run&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;python&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-c&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;from server.app import create_mcp_server; create_mcp_server(&#39;standalone&#39;).run(transport=&#39;stdio&#39;)&quot;</span>
+<span class="w">      </span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;cwd&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/path/to/OntoBricks/mcp-server&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>Claude Desktop</strong> (<code class="docutils literal notranslate"><span class="pre">claude_desktop_config.json</span></code>):</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;mcpServers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;ontobricks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;uv&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;run&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;python&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-c&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;from server.app import create_mcp_server; create_mcp_server(&#39;standalone&#39;).run(transport=&#39;stdio&#39;)&quot;</span>
+<span class="w">      </span><span class="p">],</span>
+<span class="w">      </span><span class="nt">&quot;cwd&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/path/to/OntoBricks/mcp-server&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;env&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;ONTOBRICKS_URL&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;http://localhost:8000&quot;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="mlflow-agent-observability">
+<h2>7. MLflow Agent Observability<a class="headerlink" href="#mlflow-agent-observability" title="Link to this heading">¶</a></h2>
+<p>OntoBricks agents are instrumented with MLflow tracing. When deployed to Databricks, traces are persisted to the workspace tracking server.</p>
+<section id="id3">
+<h3>How It Works<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">MLFLOW_TRACKING_URI=databricks</span></code> is set in <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code></p></li>
+<li><p>Application startup in <code class="docutils literal notranslate"><span class="pre">src/shared/fastapi/main.py</span></code> calls <code class="docutils literal notranslate"><span class="pre">setup_tracing()</span></code>, which creates the <code class="docutils literal notranslate"><span class="pre">/Shared/ontobricks-agents</span></code> experiment</p></li>
+<li><p>Every agent call (OWL Generator, Auto-Mapping, Auto Icon Assign, Ontology Assistant) produces a span tree:</p></li>
+</ul>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>AGENT (run_agent)
+├── LLM (_call_llm)        — endpoint, tokens, latency
+├── TOOL (tool:get_metadata) — arguments, result
+├── LLM (_call_llm)        — next iteration
+├── TOOL (tool:execute_sql)  — SQL query, result
+└── ...
+</pre></div>
+</div>
+</section>
+<section id="viewing-traces">
+<h3>Viewing Traces<a class="headerlink" href="#viewing-traces" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>In your Databricks workspace, go to <strong>Machine Learning &gt; Experiments</strong></p></li>
+<li><p>Open <strong><code class="docutils literal notranslate"><span class="pre">/Shared/ontobricks-agents</span></code></strong></p></li>
+<li><p>Click any run, then the <strong>Traces</strong> tab</p></li>
+</ol>
+</section>
+<section id="configuration">
+<h3>Configuration<a class="headerlink" href="#configuration" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">MLFLOW_TRACKING_URI</span></code></p></td>
+<td><p><em>(none)</em></p></td>
+<td><p>Set to <code class="docutils literal notranslate"><span class="pre">databricks</span></code> for persistent traces</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_MLFLOW_EXPERIMENT</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ontobricks-agents</span></code></p></td>
+<td><p>Experiment name (auto-prefixed with <code class="docutils literal notranslate"><span class="pre">/Shared/</span></code> on Databricks)</p></td>
+</tr>
+</tbody>
+</table>
+<p>Tracing degrades gracefully: if MLflow is not configured, agents run normally without traces.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="dab-reference">
+<h2>8. DAB Reference<a class="headerlink" href="#dab-reference" title="Link to this heading">¶</a></h2>
+<section id="bundle-structure">
+<h3>Bundle Structure<a class="headerlink" href="#bundle-structure" title="Link to this heading">¶</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>OntoBricks/
+├── databricks.yml          # Bundle definition (apps, permissions, targets)
+├── .databricksignore       # Excludes non-runtime files from sync
+├── app.yaml                # Main app runtime config
+├── src/mcp-server/
+│   └── app.yaml            # MCP server runtime config
+└── dab/
+    └── README.md           # DAB-specific documentation
+</pre></div>
+</div>
+</section>
+<section id="targets">
+<h3>Targets<a class="headerlink" href="#targets" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Target</p></th>
+<th class="head"><p>Mode</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dev</span></code></p></td>
+<td><p>development</p></td>
+<td><p>Default. Uses the authenticated user’s workspace path.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">prod</span></code></p></td>
+<td><p>production</p></td>
+<td><p>Explicit root path, restricted permissions.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>bundle<span class="w"> </span>deploy<span class="w"> </span>-t<span class="w"> </span>prod
+databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>ontobricks_app<span class="w"> </span>-t<span class="w"> </span>prod
+</pre></div>
+</div>
+</section>
+<section id="variables">
+<h3>Variables<a class="headerlink" href="#variables" title="Link to this heading">¶</a></h3>
+<p>Override defaults with <code class="docutils literal notranslate"><span class="pre">--var</span></code> flags or in a target-specific <code class="docutils literal notranslate"><span class="pre">variables:</span></code> block:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">warehouse_id</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">66e8366e84d57752</span></code></p></td>
+<td><p>SQL Warehouse ID</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">registry_catalog</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">benoit_cayla</span></code></p></td>
+<td><p>Catalog for the project registry</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">registry_schema</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ontobricks</span></code></p></td>
+<td><p>Schema for the project registry</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">registry_volume</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">OntoBricksRegistry</span></code></p></td>
+<td><p>Volume name for the project registry</p></td>
+</tr>
+</tbody>
+</table>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>bundle<span class="w"> </span>deploy<span class="w"> </span>--var<span class="w"> </span><span class="nv">warehouse_id</span><span class="o">=</span>abc123def456
+</pre></div>
+</div>
+</section>
+<section id="makefile-targets">
+<h3>Makefile Targets<a class="headerlink" href="#makefile-targets" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>bundle-validate<span class="w">        </span><span class="c1"># Validate the bundle config</span>
+make<span class="w"> </span>bundle-deploy<span class="w">          </span><span class="c1"># Deploy both apps (dev)</span>
+make<span class="w"> </span>bundle-deploy-prod<span class="w">     </span><span class="c1"># Deploy both apps (prod)</span>
+make<span class="w"> </span>bundle-run<span class="w">             </span><span class="c1"># Start the main app</span>
+make<span class="w"> </span>bundle-run-mcp<span class="w">         </span><span class="c1"># Start the MCP server</span>
+make<span class="w"> </span>bundle-summary<span class="w">         </span><span class="c1"># Show bundle summary</span>
+</pre></div>
+</div>
+</section>
+<section id="file-sync">
+<h3>File Sync<a class="headerlink" href="#file-sync" title="Link to this heading">¶</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">.databricksignore</span></code> at the project root excludes non-runtime files (tests, docs, data, IDE config, the MCP server source) from the main app sync. The MCP server has its own <code class="docutils literal notranslate"><span class="pre">source_code_path</span></code> pointing directly to <code class="docutils literal notranslate"><span class="pre">src/mcp-server/</span></code>.</p>
+</section>
+<section id="binding-existing-apps">
+<h3>Binding Existing Apps<a class="headerlink" href="#binding-existing-apps" title="Link to this heading">¶</a></h3>
+<p>If the apps already exist in the workspace from a previous manual deployment:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Bind the bundle definitions to existing workspace apps</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>deployment<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>ontobricks_app<span class="w"> </span>ontobricks
+databricks<span class="w"> </span>bundle<span class="w"> </span>deployment<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>mcp_ontobricks_app<span class="w"> </span>mcp-ontobricks
+
+<span class="c1"># Then deploy normally</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>deploy
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="full-deployment-checklist">
+<h2>9. Full Deployment Checklist<a class="headerlink" href="#full-deployment-checklist" title="Link to this heading">¶</a></h2>
+<p>Use this checklist when deploying OntoBricks from scratch on any workspace:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>[ ] 1.  Databricks CLI installed (&gt;= 0.250.0) and authenticated
+          databricks auth login --host https://&lt;workspace&gt;
+          databricks current-user me
+[ ] 2.  SQL Warehouse created and running
+[ ] 3.  Unity Catalog resources available:
+        [ ] A catalog you can use (e.g., main or your personal catalog)
+        [ ] A schema within that catalog (e.g., ontobricks)
+        [ ] A Volume for the project registry (e.g., OntoBricksRegistry)
+[ ] 4.  Update databricks.yml:
+        [ ] Variable defaults (warehouse_id, registry_catalog, registry_schema, registry_volume)
+        [ ] Permissions (your email with CAN_MANAGE)
+[ ] 5.  Update app.yaml:
+        [ ] DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT
+        [ ] DATABRICKS_TRIPLESTORE_TABLE
+        [ ] (local dev only) REGISTRY_CATALOG / REGISTRY_SCHEMA / REGISTRY_VOLUME
+[ ] 6.  Validate: databricks bundle validate
+[ ] 7.  Deploy main app:
+          ./deploy.sh
+[ ] 8.  Bind sql-warehouse resource in the Apps UI
+[ ] 9.  Bind volume resource to the registry UC Volume
+[ ] 10. Verify main app is RUNNING:
+          databricks apps get ontobricks
+[ ] 11. Initialize registry if the volume is empty:
+          Open app → Settings → Registry → Initialize
+[ ] 12. (If using MCP) Update ONTOBRICKS_URL in src/mcp-server/app.yaml:
+          databricks apps get ontobricks -o json | python3 -c &quot;import sys,json; print(json.load(sys.stdin)[&#39;url&#39;])&quot;
+[ ] 13. (If using MCP) Deploy MCP server:
+          ./deploy.sh --mcp-only
+[ ] 14. (If using MCP) Bind MCP resources (same warehouse + volume)
+[ ] 15. (If using MCP) Verify in Databricks Playground
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="troubleshooting">
+<h2>10. Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading">¶</a></h2>
+<section id="app-wont-start">
+<h3>App Won’t Start<a class="headerlink" href="#app-wont-start" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check app status</span>
+databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>ontobricks
+
+<span class="c1"># Check recent deployment status</span>
+databricks<span class="w"> </span>apps<span class="w"> </span>list-deployments<span class="w"> </span>ontobricks
+</pre></div>
+</div>
+</section>
+<section id="access-denied-despite-having-can-manage">
+<h3>“Access Denied” Despite Having CAN_MANAGE<a class="headerlink" href="#access-denied-despite-having-can-manage" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Hit the diagnostic endpoint: <code class="docutils literal notranslate"><span class="pre">https://&lt;app-url&gt;/settings/permissions/diag</span></code></p></li>
+<li><p>Check <code class="docutils literal notranslate"><span class="pre">user_token_present</span></code> — should be <code class="docutils literal notranslate"><span class="pre">true</span></code> in Databricks App mode</p></li>
+<li><p>Check <code class="docutils literal notranslate"><span class="pre">user_token_can_manage</span></code> — should list your email</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">email_is_manager</span></code> is <code class="docutils literal notranslate"><span class="pre">false</span></code>, verify your email matches the CAN_MANAGE grant exactly</p></li>
+<li><p>Check <code class="docutils literal notranslate"><span class="pre">admin_cache</span></code> — if stale, restart the app to clear it</p></li>
+</ol>
+</section>
+<section id="databricks-credentials-not-configured">
+<h3>“Databricks credentials not configured”<a class="headerlink" href="#databricks-credentials-not-configured" title="Link to this heading">¶</a></h3>
+<p>The agents need OAuth credentials to call the Foundation Model API. In a Databricks App, these are resolved automatically via the service principal. If you see this error:</p>
+<ol class="arabic simple">
+<li><p>Verify the app is running as a Databricks App (not locally)</p></li>
+<li><p>Check that the LLM endpoint is configured in the project settings</p></li>
+<li><p>Review app logs for OAuth token resolution errors</p></li>
+</ol>
+</section>
+<section id="connection-errors">
+<h3>Connection Errors<a class="headerlink" href="#connection-errors" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Verify the SQL Warehouse is running and the resource binding is correct</p></li>
+<li><p>Check the SP has correct permissions on catalogs/schemas</p></li>
+<li><p>Review app logs in the Databricks Apps UI</p></li>
+</ul>
+</section>
+<section id="localhost-redirects-when-deployed">
+<h3><code class="docutils literal notranslate"><span class="pre">localhost</span></code> Redirects When Deployed<a class="headerlink" href="#localhost-redirects-when-deployed" title="Link to this heading">¶</a></h3>
+<p>All internal navigation links must include a trailing slash (e.g., <code class="docutils literal notranslate"><span class="pre">/dtwin/</span></code> not <code class="docutils literal notranslate"><span class="pre">/dtwin</span></code>). FastAPI’s <code class="docutils literal notranslate"><span class="pre">redirect_slashes</span></code> generates <code class="docutils literal notranslate"><span class="pre">localhost:8000</span></code> redirects behind the Databricks proxy.</p>
+</section>
+<section id="module-import-errors-after-redeployment">
+<h3>Module Import Errors After Redeployment<a class="headerlink" href="#module-import-errors-after-redeployment" title="Link to this heading">¶</a></h3>
+<p>Stale <code class="docutils literal notranslate"><span class="pre">__pycache__</span></code> or old directories in the workspace can cause import conflicts:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Remove stale workspace files if needed</span>
+databricks<span class="w"> </span>workspace<span class="w"> </span>delete<span class="w"> </span>/Users/&lt;you&gt;/ontobricks/&lt;stale-dir&gt;<span class="w"> </span>--recursive
+</pre></div>
+</div>
+</section>
+<section id="mcp-server-returns-401-unauthorized">
+<h3>MCP Server Returns 401 Unauthorized<a class="headerlink" href="#mcp-server-returns-401-unauthorized" title="Link to this heading">¶</a></h3>
+<p>The MCP app’s SP needs <code class="docutils literal notranslate"><span class="pre">CAN_USE</span></code> permission on the main app. The <code class="docutils literal notranslate"><span class="pre">users</span></code> group should already have this via <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code>.</p>
+</section>
+<section id="agent-traces-not-appearing">
+<h3>Agent Traces Not Appearing<a class="headerlink" href="#agent-traces-not-appearing" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Verify <code class="docutils literal notranslate"><span class="pre">MLFLOW_TRACKING_URI=databricks</span></code> is set in <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code></p></li>
+<li><p>Check the app logs for <code class="docutils literal notranslate"><span class="pre">MLflow</span> <span class="pre">tracing</span> <span class="pre">enabled</span> <span class="pre">—</span> <span class="pre">experiment='/Shared/ontobricks-agents'</span></code></p></li>
+<li><p>Run an agent call (e.g., generate an ontology) to create the first trace</p></li>
+<li><p>The experiment is created on first use, not at startup</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="production-considerations">
+<h2>11. Production Considerations<a class="headerlink" href="#production-considerations" title="Link to this heading">¶</a></h2>
+<section id="security">
+<h3>Security<a class="headerlink" href="#security" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Never commit <code class="docutils literal notranslate"><span class="pre">.env</span></code> files or secrets to Git</p></li>
+<li><p>Use Databricks Secrets for sensitive data (passwords, tokens)</p></li>
+<li><p>Use service principals for production (automatically handled by Databricks Apps)</p></li>
+</ul>
+</section>
+<section id="performance">
+<h3>Performance<a class="headerlink" href="#performance" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Use an appropriately sized SQL Warehouse (enable auto-stop to save costs)</p></li>
+</ul>
+</section>
+<section id="monitoring">
+<h3>Monitoring<a class="headerlink" href="#monitoring" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>App logs</strong>: Available in the Databricks Apps console</p></li>
+<li><p><strong>Log level</strong>: Configure via <code class="docutils literal notranslate"><span class="pre">LOG_LEVEL</span></code> environment variable (<code class="docutils literal notranslate"><span class="pre">DEBUG</span></code>, <code class="docutils literal notranslate"><span class="pre">INFO</span></code>, <code class="docutils literal notranslate"><span class="pre">WARNING</span></code>, <code class="docutils literal notranslate"><span class="pre">ERROR</span></code>)</p></li>
+<li><p><strong>Health checks</strong>: <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health</span></code> and <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health/detailed</span></code></p></li>
+<li><p><strong>Agent traces</strong>: View under <strong>Machine Learning &gt; Experiments &gt; <code class="docutils literal notranslate"><span class="pre">/Shared/ontobricks-agents</span></code></strong> — each agent call shows a span tree with inputs, outputs, latency, and token usage</p></li>
+</ul>
+</section>
+<section id="updating">
+<h3>Updating<a class="headerlink" href="#updating" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Pull latest code and redeploy</span>
+git<span class="w"> </span>pull<span class="w"> </span>origin<span class="w"> </span>main
+./deploy.sh<span class="w"> </span>--all
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/guides/deployment.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

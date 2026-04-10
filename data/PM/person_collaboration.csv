@@ -1,0 +1,18 @@
+person_id_1,person_id_2,collaboration_type,project_id,start_date,hours_per_week
+P001,P010,Peer Collaboration,PR001,2023-01-10,15
+P001,P006,Cross-Team,PR002,2023-03-01,8
+P002,P006,Direct Collaboration,PR002,2023-03-01,20
+P003,P011,Project Team,PR007,2023-06-01,12
+P004,P003,Management,PR007,2023-06-01,5
+P005,P008,Reporting,PR003,2023-02-15,10
+P007,P012,Department,PR005,2023-01-20,18
+P009,P001,Mentorship,PR001,2023-01-10,3
+P010,P001,Peer Collaboration,PR004,2023-04-01,10
+P006,P002,Direct Collaboration,PR002,2023-03-15,20
+P011,P003,Project Team,PR007,2023-06-01,12
+P012,P007,Department,PR006,2023-05-10,15
+
+
+
+
+

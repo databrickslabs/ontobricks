@@ -1,0 +1,146 @@
+/**
+ * OntoBricks - query.js
+ * Main query page entry point: global state, initialization, and shared utilities.
+ *
+ * The remaining logic is split across:
+ *   query-loaders.js        – Ontology/mapping loaders, entity type validation
+ *   query-execute.js        – Query execution, results grid, filtering, grouping
+ *   query-d3graph.js        – D3.js graph build, render, visual filters, resize
+ *   query-entity-details.js – Entity/relationship detail panel, mapping lookup
+ *   query-dashboard.js      – Dashboard modal (URL builder, iframe)
+ *   query-sync.js           – Triple store sync, readiness checks
+ *   query-sigmagraph.js     – Sigma.js knowledge graph
+ *   query-quality.js        – Quality checks
+ *   query-api.js            – API documentation helpers
+ *   query-graphql.js        – Embedded GraphiQL playground
+ */
+
+// =====================================================
+// QUERY PAGE - State & Configuration
+// =====================================================
+
+// Bootstrap triplestore config from JSON script tag (keeps JS out of HTML)
+(function() {
+    var el = document.getElementById('triplestore-config');
+    if (el) {
+        try { window.__TRIPLESTORE_CONFIG = JSON.parse(el.textContent); }
+        catch (e) { window.__TRIPLESTORE_CONFIG = {}; }
+    }
+})();
+
+// Enable full-width layout for this page
+document.body.classList.add('full-width-layout');
+
+let queryResults = null;
+let generatedSql = null;
+
+// D3.js graph state (exposed globally for query-sigmagraph.js)
+var d3Simulation = null;
+var d3Svg = null;
+var d3Zoom = null;
+var d3NodesData = [];
+var d3LinksData = [];
+
+// Flag to prevent double graph building after query execution
+let graphJustBuilt = false;
+
+// Store last query results for entity details
+let lastQueryResults = null;
+
+// Store entity mappings (class -> label column mapping)
+let entityMappings = {};
+
+// Store ontology classes (for dashboard and other class metadata)
+let ontologyClasses = {};
+
+// Ontology icon map (class name/URI -> emoji)
+let taxonomyIcons = {};
+
+// Track all relationship types for filtering
+let allRelationshipTypes = new Set();
+
+// =====================================================
+// INITIALIZATION
+// =====================================================
+
+// Configure sidebar navigation
+window.SIDEBAR_NAV_MANUAL_INIT = true;
+document.addEventListener('DOMContentLoaded', function() {
+    // Check URL for section parameter (deep-link from top banner dropdown)
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialSection = urlParams.get('section');
+
+    SidebarNav.init({
+        onSectionChange: async function(section, targetSection) {
+            // Initialize sigma.js graph view (small delay for DOM layout)
+            if (section === 'sigmagraph') {
+                if (typeof SigmaGraph !== 'undefined') {
+                    setTimeout(function () { SigmaGraph.init(); }, 100);
+                }
+            }
+            // Initialize embedded GraphiQL playground
+            if (section === 'graphql') {
+                if (typeof GraphQLPlayground !== 'undefined') {
+                    setTimeout(function () { GraphQLPlayground.init(); }, 100);
+                }
+            }
+            // Initialize SHACL Data Quality execution module
+            if (section === 'dataquality') {
+                if (typeof DQExecModule !== 'undefined') {
+                    DQExecModule.init();
+                }
+            }
+        }
+    });
+    
+    loadOntologyIcons();
+    loadEntityMappings();
+
+    // Navigate to the requested section, or fall back to "sync" (Information)
+    const targetSection = initialSection || 'sync';
+    const link = document.querySelector(`[data-section="${targetSection}"]`);
+    if (link) {
+        setTimeout(() => link.click(), 300);
+    }
+});
+
+// =====================================================
+// UTILITY FUNCTIONS
+// =====================================================
+
+function copyGeneratedSql() {
+    if (!generatedSql) return;
+    navigator.clipboard.writeText(generatedSql).then(() => {
+        const btn = event.target.closest('button');
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check"></i> Copied!';
+        setTimeout(() => btn.innerHTML = original, 1500);
+    });
+}
+
+function downloadResults() {
+    if (!queryResults || queryResults.length === 0) return;
+    
+    const columns = Object.keys(queryResults[0]);
+    let csv = columns.join(',') + '\n';
+    
+    for (const row of queryResults) {
+        csv += columns.map(col => {
+            const val = row[col] || '';
+            if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+                return '"' + val.replace(/"/g, '""') + '"';
+            }
+            return val;
+        }).join(',') + '\n';
+    }
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sparql_results.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// escapeHtml is provided globally by utils.js

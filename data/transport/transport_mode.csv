@@ -1,0 +1,9 @@
+mode_id,mode_name,description,category,is_active,avg_speed_kmh,accessibility_compliant
+MODE01,Metro,Underground metro rail,rail,True,32,True
+MODE02,RER,Réseau Express Régional,rail,True,64,True
+MODE03,Tramway,Light rail / tramway,rail,True,59,True
+MODE04,Bus,Urban and suburban bus,road,True,56,False
+MODE05,Noctilien,Night bus network,road,True,68,True
+MODE06,Transilien,Suburban heavy rail,rail,True,42,False
+MODE07,Funicular,Montmartre funicular,rail,True,44,True
+MODE08,VAL,"Automated light rail (Orlyval, CDG Val)",rail,True,20,True

@@ -1,0 +1,51 @@
+grant_id,project_id,faculty_id,grant_name,agency,amount,start_date,end_date,status
+GRT00001,PRJ00001,FAC00017,DOE-ARPA-E Grant - Research in Organic Chemi,Moore Foundation,219535.95,2020-11-05,2023-02-12,pending
+GRT00002,PRJ00036,FAC00060,Sloan Foundation Grant - Research in Macroeconomic,DARPA,886678.18,2023-06-06,2027-05-12,terminated
+GRT00003,PRJ00007,FAC00015,DARPA Grant - Research in Materials Sci,NSF,1345116.13,2024-02-02,2025-12-16,active
+GRT00004,PRJ00032,FAC00010,DARPA Grant - Research in Macroeconomic,Sloan Foundation,489143.53,2019-10-23,2022-07-11,completed
+GRT00005,PRJ00035,FAC00041,NSF Grant - Research in Signal Proces,NSF,95091.29,2020-01-31,2022-02-25,active
+GRT00006,PRJ00014,FAC00012,NASA Grant - Research in Literary Theo,Moore Foundation,1428968.35,2019-10-20,2021-03-05,terminated
+GRT00007,PRJ00023,FAC00043,NASA Grant - Research in Literary Theo,DOE-ARPA-E,612233.6,2023-07-09,2024-07-29,completed
+GRT00008,PRJ00020,FAC00028,Moore Foundation Grant - Research in Social Psycho,NSF,774992.53,2024-05-13,2025-08-06,pending
+GRT00009,PRJ00002,FAC00017,NIH Grant - Research in Computational,Sloan Foundation,1048457.16,2024-04-23,2027-06-17,pending
+GRT00010,PRJ00032,FAC00002,Moore Foundation Grant - Research in Macroeconomic,NIH,738564.09,2023-04-06,2024-06-23,active
+GRT00011,PRJ00006,FAC00016,Sloan Foundation Grant - Research in Literary Theo,DOE-ARPA-E,399999.03,2020-01-21,2023-08-09,terminated
+GRT00012,PRJ00003,FAC00021,DARPA Grant - Research in Quantum Compu,Sloan Foundation,187682.95,2022-06-22,2026-01-01,completed
+GRT00013,PRJ00038,FAC00056,Moore Foundation Grant - Research in Computational,NIH,778005.29,2019-04-26,2023-02-25,terminated
+GRT00014,PRJ00018,FAC00045,NASA Grant - Research in Materials Sci,NIH,1062414.01,2023-05-09,2024-08-15,terminated
+GRT00015,PRJ00012,FAC00058,DOE Grant - Research in Materials Sci,NSF,470915.65,2024-01-25,2026-09-16,pending
+GRT00016,PRJ00028,FAC00008,DARPA Grant - Research in Macroeconomic,Moore Foundation,755058.81,2020-09-26,2022-03-02,active
+GRT00017,PRJ00025,FAC00050,NSF Grant - Research in Climate Scien,NASA,314882.81,2020-12-24,2024-02-03,pending
+GRT00018,PRJ00038,FAC00055,Moore Foundation Grant - Research in Computational,NIH,197229.69,2024-07-13,2026-10-24,completed
+GRT00019,PRJ00009,FAC00048,Moore Foundation Grant - Research in Quantum Compu,DOE-ARPA-E,1201789.16,2019-04-07,2022-09-20,terminated
+GRT00020,PRJ00002,FAC00046,NIH Grant - Research in Computational,Sloan Foundation,736804.1,2024-11-21,2027-12-15,pending
+GRT00021,PRJ00028,FAC00036,NIH Grant - Research in Macroeconomic,NIH,431024.59,2023-09-26,2025-02-09,pending
+GRT00022,PRJ00031,FAC00026,DOE Grant - Research in Climate Scien,NIH,84958.45,2024-09-08,2027-01-19,active
+GRT00023,PRJ00037,FAC00012,DOE-ARPA-E Grant - Research in Ancient Histo,NASA,742925.62,2021-03-15,2024-09-13,completed
+GRT00024,PRJ00038,FAC00027,DARPA Grant - Research in Computational,DARPA,263711.49,2020-04-19,2021-07-09,completed
+GRT00025,PRJ00026,FAC00001,NSF Grant - Research in Quantum Compu,NIH,810616.53,2023-03-04,2024-07-03,pending
+GRT00026,PRJ00038,FAC00034,DOE Grant - Research in Computational,DOE-ARPA-E,1385060.9,2019-02-06,2021-10-19,terminated
+GRT00027,PRJ00014,FAC00013,Moore Foundation Grant - Research in Literary Theo,DARPA,193618.17,2024-04-28,2028-01-02,terminated
+GRT00028,PRJ00036,FAC00041,DOE Grant - Research in Macroeconomic,DOE,1298718.94,2019-10-18,2021-08-12,active
+GRT00029,PRJ00031,FAC00033,DARPA Grant - Research in Climate Scien,Sloan Foundation,1267667.87,2019-10-25,2021-09-26,pending
+GRT00030,PRJ00015,FAC00053,NSF Grant - Research in Signal Proces,Sloan Foundation,112217.91,2021-12-11,2025-03-22,pending
+GRT00031,PRJ00026,FAC00002,Sloan Foundation Grant - Research in Quantum Compu,Moore Foundation,929332.94,2021-02-27,2024-04-02,completed
+GRT00032,PRJ00009,FAC00031,DOE Grant - Research in Quantum Compu,DARPA,918519.33,2024-09-18,2027-12-29,pending
+GRT00033,PRJ00032,FAC00050,NSF Grant - Research in Macroeconomic,Sloan Foundation,146184.27,2019-11-04,2023-04-08,active
+GRT00034,PRJ00010,FAC00050,NASA Grant - Research in Climate Scien,Sloan Foundation,457208.54,2019-06-13,2022-07-08,pending
+GRT00035,PRJ00020,FAC00054,Moore Foundation Grant - Research in Social Psycho,Moore Foundation,609836.09,2022-09-01,2025-05-24,completed
+GRT00036,PRJ00031,FAC00022,DOE-ARPA-E Grant - Research in Climate Scien,NIH,414809.76,2020-01-08,2023-10-06,pending
+GRT00037,PRJ00018,FAC00056,DARPA Grant - Research in Materials Sci,DOE-ARPA-E,1393888.76,2022-03-29,2026-02-12,pending
+GRT00038,PRJ00016,FAC00037,NASA Grant - Research in Signal Proces,DARPA,1247316.06,2021-02-22,2024-02-05,terminated
+GRT00039,PRJ00018,FAC00017,DOE Grant - Research in Materials Sci,NASA,325450.77,2023-10-03,2025-10-22,pending
+GRT00040,PRJ00035,FAC00036,Moore Foundation Grant - Research in Signal Proces,DOE,219955.61,2022-08-08,2024-09-29,pending
+GRT00041,PRJ00016,FAC00014,Moore Foundation Grant - Research in Signal Proces,DOE-ARPA-E,406169.03,2022-10-13,2024-10-21,terminated
+GRT00042,PRJ00018,FAC00060,DOE Grant - Research in Materials Sci,NASA,928676.45,2024-02-24,2027-01-23,pending
+GRT00043,PRJ00008,FAC00025,NIH Grant - Research in Machine Learn,DARPA,1227387.22,2023-05-30,2024-06-04,pending
+GRT00044,PRJ00032,FAC00030,Sloan Foundation Grant - Research in Macroeconomic,DARPA,435266.75,2022-02-08,2025-12-20,terminated
+GRT00045,PRJ00032,FAC00039,Sloan Foundation Grant - Research in Macroeconomic,Sloan Foundation,504055.87,2020-03-18,2023-11-18,completed
+GRT00046,PRJ00012,FAC00008,NSF Grant - Research in Materials Sci,NIH,452166.23,2023-01-20,2024-05-10,pending
+GRT00047,PRJ00009,FAC00051,DARPA Grant - Research in Quantum Compu,NSF,1342401.73,2020-01-28,2023-06-12,active
+GRT00048,PRJ00001,FAC00008,NASA Grant - Research in Organic Chemi,Sloan Foundation,398986.39,2022-10-14,2025-05-03,completed
+GRT00049,PRJ00040,FAC00039,DARPA Grant - Research in Computational,DOE,83283.4,2021-12-28,2024-12-21,pending
+GRT00050,PRJ00015,FAC00011,NSF Grant - Research in Signal Proces,DOE,182207.74,2023-04-19,2025-06-08,pending

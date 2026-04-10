@@ -1,0 +1,59 @@
+/**
+ * OntoViz - CSS Variables
+ * Design tokens and theme configuration
+ * Greyscale-only theme
+ */
+
+:root {
+    /* Colors - Greyscale theme */
+    --ovz-bg-primary: #ffffff;
+    --ovz-bg-surface: #fafafa;
+    --ovz-bg-overlay: #f0f0f0;
+    --ovz-text-primary: #1a1a1a;
+    --ovz-text-secondary: #555555;
+    --ovz-text-muted: #888888;
+    
+    /* Accent colors - Greyscale only */
+    --ovz-accent-blue: #404040;
+    --ovz-accent-green: #505050;
+    --ovz-accent-purple: #333333;
+    --ovz-accent-orange: #606060;
+    --ovz-accent-yellow: #707070;
+    --ovz-accent-red: #303030;
+    
+    /* Entity colors */
+    --ovz-entity-bg: #ffffff;
+    --ovz-entity-border: #d0d0d0;
+    --ovz-entity-header-bg: linear-gradient(135deg, rgba(0, 0, 0, 0.03) 0%, rgba(0, 0, 0, 0.06) 100%);
+    --ovz-entity-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    
+    /* Relationship colors */
+    --ovz-rel-line: #808080;
+    --ovz-rel-line-hover: #505050;
+    --ovz-rel-arrow: #505050;
+    
+    /* UI colors */
+    --ovz-toolbar-bg: rgba(255, 255, 255, 0.98);
+    --ovz-toolbar-border: rgba(0, 0, 0, 0.12);
+    
+    /* Spacing */
+    --ovz-spacing-xs: 4px;
+    --ovz-spacing-sm: 8px;
+    --ovz-spacing-md: 16px;
+    --ovz-spacing-lg: 24px;
+    
+    /* Border radius */
+    --ovz-radius-sm: 4px;
+    --ovz-radius-md: 8px;
+    --ovz-radius-lg: 12px;
+    
+    /* Typography */
+    --ovz-font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --ovz-font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+    --ovz-font-mono: 'SF Mono', Monaco, 'Courier New', monospace;
+    
+    /* Transitions */
+    --ovz-transition: 0.15s ease;
+    --ovz-transition-slow: 0.3s ease;
+}
+

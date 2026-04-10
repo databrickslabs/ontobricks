@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>back.core.databricks.MetadataService &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for back.core.databricks.MetadataService</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Unity Catalog Metadata Management Service.</span>
+
+<span class="sd">Handles loading, merging, and managing Unity Catalog metadata</span>
+<span class="sd">(tables, columns, descriptions / comments).</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.DatabricksAuth</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksAuth</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.UnityCatalog</span><span class="w"> </span><span class="kn">import</span> <span class="n">UnityCatalog</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="MetadataService">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.MetadataService.MetadataService">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">MetadataService</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Service for managing Unity Catalog table metadata.</span>
+
+<span class="sd">    Accepts either a ``UnityCatalog`` instance directly **or** the</span>
+<span class="sd">    legacy ``(host, token, warehouse_id)`` signature for backward</span>
+<span class="sd">    compatibility with existing call sites.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="MetadataService.build_metadata_dict">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.MetadataService.MetadataService.build_metadata_dict">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_metadata_dict</span><span class="p">(</span><span class="n">tables</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="n">tables</span><span class="p">,</span> <span class="s2">&quot;table_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">)}</span></div>
+
+
+<div class="viewcode-block" id="MetadataService.validate_metadata">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.MetadataService.MetadataService.validate_metadata">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_metadata</span><span class="p">(</span><span class="n">metadata</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">metadata</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Metadata is empty&quot;</span>
+        <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="MetadataService.has_metadata">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.MetadataService.MetadataService.has_metadata">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_metadata</span><span class="p">(</span><span class="n">metadata</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">metadata</span> <span class="ow">and</span> <span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">,</span> <span class="p">[]))</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="MetadataService.extract_catalog_schema_from_full_name">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.MetadataService.MetadataService.extract_catalog_schema_from_full_name">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">extract_catalog_schema_from_full_name</span><span class="p">(</span><span class="n">full_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="n">parts</span> <span class="o">=</span> <span class="n">full_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">parts</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">full_name</span></div>
+
+
+<div class="viewcode-block" id="MetadataService.get_catalog_schema_from_metadata">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.MetadataService.MetadataService.get_catalog_schema_from_metadata">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_catalog_schema_from_metadata</span><span class="p">(</span><span class="n">metadata</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="n">tables</span> <span class="o">=</span> <span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">if</span> <span class="n">tables</span> <span class="ow">and</span> <span class="n">tables</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;full_name&quot;</span><span class="p">):</span>
+            <span class="n">cat</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">MetadataService</span><span class="o">.</span><span class="n">extract_catalog_schema_from_full_name</span><span class="p">(</span><span class="n">tables</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;full_name&quot;</span><span class="p">])</span>
+            <span class="k">return</span> <span class="n">cat</span><span class="p">,</span> <span class="n">sch</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">warehouse_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">catalog_svc</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">UnityCatalog</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">catalog_svc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_catalog</span> <span class="o">=</span> <span class="n">catalog_svc</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">auth</span> <span class="o">=</span> <span class="n">DatabricksAuth</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span><span class="o">=</span><span class="n">warehouse_id</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_catalog</span> <span class="o">=</span> <span class="n">UnityCatalog</span><span class="p">(</span><span class="n">auth</span><span class="p">)</span>
+
+<div class="viewcode-block" id="MetadataService.load_schema_metadata">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.MetadataService.MetadataService.load_schema_metadata">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">load_schema_metadata</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">existing_metadata</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load metadata for all tables in a schema, merging with *existing_metadata*.&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">existing_tables</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">existing_names</span><span class="p">:</span> <span class="nb">set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="n">existing_metadata</span> <span class="ow">and</span> <span class="n">existing_metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">):</span>
+                <span class="n">existing_tables</span> <span class="o">=</span> <span class="n">existing_metadata</span><span class="p">[</span><span class="s2">&quot;tables&quot;</span><span class="p">]</span>
+                <span class="n">existing_names</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">existing_tables</span><span class="p">}</span>
+
+            <span class="n">uc_tables</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_catalog</span><span class="o">.</span><span class="n">get_tables</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">uc_tables</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;No tables found in </span><span class="si">{</span><span class="n">catalog</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">schema</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="p">{}</span>
+
+            <span class="n">new_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">uc_tables</span> <span class="k">if</span> <span class="n">t</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">existing_names</span><span class="p">]</span>
+            <span class="n">new_tables</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fetch_tables_metadata</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">new_names</span><span class="p">)</span>
+            <span class="n">merged</span> <span class="o">=</span> <span class="n">existing_tables</span> <span class="o">+</span> <span class="n">new_tables</span>
+
+            <span class="n">metadata</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="n">merged</span><span class="p">,</span> <span class="s2">&quot;table_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">merged</span><span class="p">)}</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">new_tables</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;No new tables found. All </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">uc_tables</span><span class="p">)</span><span class="si">}</span><span class="s2"> tables already in metadata.&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Added </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">new_tables</span><span class="p">)</span><span class="si">}</span><span class="s2"> new table(s). Total: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">merged</span><span class="p">)</span><span class="si">}</span><span class="s2"> tables.&quot;</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">metadata</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Failed to load schema metadata: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">),</span> <span class="p">{}</span></div>
+
+
+<div class="viewcode-block" id="MetadataService.load_selected_tables">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.MetadataService.MetadataService.load_selected_tables">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">load_selected_tables</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">table_names</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">existing_metadata</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load metadata for specific *table_names*, merging with existing.&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">table_names</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;No tables selected&quot;</span><span class="p">,</span> <span class="p">{}</span>
+
+            <span class="n">existing_tables</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">existing_names</span><span class="p">:</span> <span class="nb">set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="n">existing_metadata</span> <span class="ow">and</span> <span class="n">existing_metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">):</span>
+                <span class="n">existing_tables</span> <span class="o">=</span> <span class="n">existing_metadata</span><span class="p">[</span><span class="s2">&quot;tables&quot;</span><span class="p">]</span>
+                <span class="n">existing_names</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">existing_tables</span><span class="p">}</span>
+
+            <span class="n">new_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">table_names</span> <span class="k">if</span> <span class="n">t</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">existing_names</span><span class="p">]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">new_names</span><span class="p">:</span>
+                <span class="k">return</span> <span class="p">(</span>
+                    <span class="kc">True</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;All </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">table_names</span><span class="p">)</span><span class="si">}</span><span class="s2"> selected tables already loaded.&quot;</span><span class="p">,</span>
+                    <span class="p">{</span><span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="n">existing_tables</span><span class="p">,</span> <span class="s2">&quot;table_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">existing_tables</span><span class="p">)},</span>
+                <span class="p">)</span>
+
+            <span class="n">new_tables</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fetch_tables_metadata</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">new_names</span><span class="p">)</span>
+            <span class="n">merged</span> <span class="o">=</span> <span class="n">existing_tables</span> <span class="o">+</span> <span class="n">new_tables</span>
+            <span class="n">metadata</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="n">merged</span><span class="p">,</span> <span class="s2">&quot;table_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">merged</span><span class="p">)}</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Added </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">new_tables</span><span class="p">)</span><span class="si">}</span><span class="s2"> new table(s). Total: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">merged</span><span class="p">)</span><span class="si">}</span><span class="s2"> tables.&quot;</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">metadata</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Failed to load schema metadata: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">),</span> <span class="p">{}</span></div>
+
+
+<div class="viewcode-block" id="MetadataService.get_table_metadata">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.MetadataService.MetadataService.get_table_metadata">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_table_metadata</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="n">tables</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fetch_tables_metadata</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="p">[</span><span class="n">table_name</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">tables</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">tables</span> <span class="k">else</span> <span class="p">{}</span></div>
+
+
+<div class="viewcode-block" id="MetadataService.refresh_table_metadata">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.MetadataService.MetadataService.refresh_table_metadata">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">refresh_table_metadata</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">existing_metadata</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Re-fetch metadata for *table_name* and update *existing_metadata* in place.&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">fresh</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_table_metadata</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">fresh</span> <span class="ow">or</span> <span class="n">fresh</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Failed to get metadata for </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">existing_metadata</span>
+
+            <span class="n">tables</span> <span class="o">=</span> <span class="n">existing_metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="n">updated</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">tables</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">table_name</span><span class="p">:</span>
+                    <span class="n">tables</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">fresh</span>
+                    <span class="n">updated</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">updated</span><span class="p">:</span>
+                <span class="n">tables</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fresh</span><span class="p">)</span>
+
+            <span class="n">existing_metadata</span><span class="p">[</span><span class="s2">&quot;tables&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tables</span>
+            <span class="n">existing_metadata</span><span class="p">[</span><span class="s2">&quot;table_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Refreshed metadata for </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">existing_metadata</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Failed to refresh table metadata: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">),</span> <span class="n">existing_metadata</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_fetch_tables_metadata</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">table_names</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="n">tables</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">table_names</span><span class="p">:</span>
+            <span class="n">fqn</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">catalog</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">schema</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">columns</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_catalog</span><span class="o">.</span><span class="n">get_table_columns</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+                <span class="n">comment</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_catalog</span><span class="o">.</span><span class="n">get_table_comment</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+                <span class="n">tables</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+                    <span class="s2">&quot;full_name&quot;</span><span class="p">:</span> <span class="n">fqn</span><span class="p">,</span>
+                    <span class="s2">&quot;comment&quot;</span><span class="p">:</span> <span class="n">comment</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="n">comment</span><span class="p">,</span>
+                    <span class="s2">&quot;columns&quot;</span><span class="p">:</span> <span class="n">columns</span><span class="p">,</span>
+                <span class="p">})</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not get metadata for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+                <span class="n">tables</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+                    <span class="s2">&quot;full_name&quot;</span><span class="p">:</span> <span class="n">fqn</span><span class="p">,</span>
+                    <span class="s2">&quot;comment&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;columns&quot;</span><span class="p">:</span> <span class="p">[],</span>
+                    <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">),</span>
+                <span class="p">})</span>
+        <span class="k">return</span> <span class="n">tables</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

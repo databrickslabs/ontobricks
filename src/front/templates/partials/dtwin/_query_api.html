@@ -1,0 +1,1154 @@
+<!-- JS: /static/query/js/query-api.js -->
+<!-- Settings → API tab: external REST reference -->
+<div class="content-section">
+    <div class="section-header mb-3">
+        <h4 class="mb-1"><i class="bi bi-braces me-2"></i>External API</h4>
+        <p class="text-muted mb-0 small">
+            Programmatic REST surface mounted under <code>/api/v1</code>.
+            <a href="/api/docs" target="_blank" class="ms-2"><i class="bi bi-box-arrow-up-right"></i> Swagger UI</a>
+            <span class="text-muted">·</span>
+            <a href="/api/redoc" target="_blank">ReDoc</a>
+        </p>
+    </div>
+
+    <!-- ========== Project ========== -->
+    <div class="mb-4 pb-4 border-bottom">
+        <h5 class="fw-semibold mb-2 d-flex align-items-center gap-2">
+            <i class="bi bi-folder2 text-primary"></i> Project
+        </h5>
+        <p class="text-muted small mb-2">
+            List registry projects, discover versions, inspect design readiness (ontology, metadata, mappings),
+            and export artifacts (OWL, R2RML, generated Spark SQL).
+            Optional registry overrides: <code>registry_catalog</code>, <code>registry_schema</code>, <code>registry_volume</code>.
+        </p>
+        <p class="small mb-3">
+            <a href="/api/docs#/Project" target="_blank" class="text-decoration-none">
+                <i class="bi bi-journal-code me-1"></i>OpenAPI: Project
+            </a>
+        </p>
+
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="fw-semibold small" style="color:#475569">Base URL</span>
+            <code id="apiBaseUrl" class="user-select-all" style="font-size:.85rem; color:#1e293b"></code>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="copyApiBaseUrl()" title="Copy">
+                <i class="bi bi-clipboard"></i>
+            </button>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-0">
+            <span class="fw-semibold small" style="color:#475569; white-space:nowrap">Project</span>
+            <select class="form-select form-select-sm" id="apiProjectName" style="max-width:280px; font-size:.85rem;">
+                <option value="">Loading projects...</option>
+            </select>
+            <span class="fw-semibold small" style="color:#475569; white-space:nowrap">Version</span>
+            <select class="form-select form-select-sm" id="apiProjectVersion" style="max-width:140px; font-size:.85rem;">
+                <option value="">latest</option>
+            </select>
+            <small class="text-muted">Used as <code>project_name</code> / <code>project_version</code> for <strong>Try it</strong> requests below</small>
+        </div>
+    </div>
+
+    <div class="d-flex flex-column gap-3" id="apiEndpointCards">
+
+        <!-- GET /projects -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/projects</code>
+                <small class="text-muted">List registry projects</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Returns all projects stored in the registry with their name and description.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <p class="small mb-2" style="color:#64748b">None</p>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "projects": [
+    { "name": "customer_360", "description": "Customer 360 ontology" },
+    { "name": "supply_chain", "description": "Supply chain knowledge graph" }
+  ]
+}</code></pre>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/projects', this)">
+                    <i class="bi bi-play-fill"></i> Try it
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- GET /project/versions -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/project/versions</code>
+                <small class="text-muted">List project versions</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Returns all versions available for a given project in the registry,
+                    sorted from latest to oldest.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td><em>required</em></td><td>Project name in the registry</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "project_name": "customer_360",
+  "versions": [
+    { "version": "3", "is_latest": true },
+    { "version": "2", "is_latest": false },
+    { "version": "1", "is_latest": false }
+  ],
+  "latest_version": "3"
+}</code></pre>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/project/versions', this)">
+                    <i class="bi bi-play-fill"></i> Try it
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- GET /project/design-status -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/project/design-status</code>
+                <small class="text-muted">Design readiness status</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Returns the readiness status of the project's <strong>ontology</strong>,
+                    <strong>metadata</strong>, and <strong>mapping</strong> (entity, relationship,
+                    and attribute mapping progress). Indicates whether the project is ready to build.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "project_name": "Cust360Auto",
+  "ontology": {
+    "ready": true,
+    "base_uri": "https://ontobricks.com/ontology/",
+    "class_count": 5,
+    "property_count": 12,
+    "constraint_count": 3,
+    "has_owl": true
+  },
+  "metadata": {
+    "ready": true,
+    "table_count": 4
+  },
+  "assignment": {
+    "ready": true,
+    "entity_total": 5,
+    "entity_mapped": 5,
+    "relationship_total": 4,
+    "relationship_mapped": 4,
+    "attribute_total": 18,
+    "attribute_mapped": 18,
+    "progress_percent": 100,
+    "status": "complete",
+    "has_r2rml": true
+  },
+  "build_ready": true
+}</code></pre>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/project/design-status', this)">
+                    <i class="bi bi-play-fill"></i> Try it
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- GET /project/ontology -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/project/ontology</code>
+                <small class="text-muted">Get ontology (OWL/Turtle)</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Returns the project's ontology serialized as OWL in Turtle format.
+                    Includes the full OWL document, base URI, and class/property counts.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "format": "turtle",
+  "content": "@prefix : &lt;https://ontobricks.com/ontology/&gt; .\n@prefix owl: ...\n\n:Customer a owl:Class ;\n    rdfs:label \"Customer\" .\n...",
+  "base_uri": "https://ontobricks.com/ontology/",
+  "class_count": 5,
+  "property_count": 12
+}</code></pre>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/project/ontology', this)">
+                    <i class="bi bi-play-fill"></i> Try it
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- GET /project/r2rml -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/project/r2rml</code>
+                <small class="text-muted">Get R2RML mapping</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Returns the project's R2RML mapping document in Turtle format.
+                    R2RML defines how relational tables map to RDF triples &mdash;
+                    each TriplesMap specifies a source table, subject template, and predicate-object mappings.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "format": "turtle",
+  "content": "@prefix rr: &lt;http://www.w3.org/ns/r2rml#&gt; .\n\n:CustomerMap a rr:TriplesMap ;\n    rr:logicalTable [ rr:sqlQuery \"SELECT * FROM customers\" ] ;\n    ...",
+  "base_uri": "https://ontobricks.com/ontology/",
+  "entity_count": 5,
+  "relationship_count": 4
+}</code></pre>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/project/r2rml', this)">
+                    <i class="bi bi-play-fill"></i> Try it
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- GET /project/sparksql -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/project/sparksql</code>
+                <small class="text-muted">Get generated Spark SQL</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Returns the Spark SQL query generated from the project's R2RML mappings.
+                    This is the SQL that produces <code>(subject, predicate, object)</code> triples
+                    when executed against the source tables. The dialect adapts to the triple store backend
+                    (Spark SQL for Delta).
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "sql": "SELECT subject, predicate, object FROM (\n  SELECT\n    CONCAT('https://ontobricks.com/ontology/Customer/', customer_id) AS subject,\n    'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' AS predicate,\n    'https://ontobricks.com/ontology/Customer' AS object\n  FROM customers\n  UNION ALL\n  ...\n)",
+  "base_uri": "https://ontobricks.com/ontology/",
+  "dialect": "spark"
+}</code></pre>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/project/sparksql', this)">
+                    <i class="bi bi-play-fill"></i> Try it
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- ========== Digital Twin ========== -->
+        <div class="mt-2 pt-4 mb-1 border-top">
+            <h5 class="fw-semibold mb-2 d-flex align-items-center gap-2">
+                <i class="bi bi-diagram-3 text-primary"></i> Digital Twin
+            </h5>
+            <p class="text-muted small mb-2">
+                Registry discovery, triple store operations, builds, triple queries, data quality, and inference.
+            </p>
+            <p class="small mb-0">
+                <a href="/api/docs#/Digital%20Twin" target="_blank" class="text-decoration-none">
+                    <i class="bi bi-journal-code me-1"></i>OpenAPI: Digital Twin
+                </a>
+            </p>
+        </div>
+
+        <!-- GET /registry -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/registry</code>
+                <small class="text-muted">Get registry configuration</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Returns the project registry location (catalog, schema, volume).
+                    Reads from the current session if available, otherwise from environment variables.
+                    Used by external clients (e.g. MCP server) for registry discovery.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <p class="small mb-2" style="color:#64748b">None</p>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "catalog": "main",
+  "schema": "ontobricks",
+  "volume": "OntoBricksRegistry",
+  "configured": true
+}</code></pre>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/digitaltwin/registry', this)">
+                    <i class="bi bi-play-fill"></i> Try it
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- GET /status -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/status</code>
+                <small class="text-muted">Triple store status</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Returns whether the triple store is configured, which backend is active,
+                    whether the table exists and contains data, and its row count.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "view_table": "catalog.schema.triples",
+  "graph_name": "MyProject",
+  "has_data": true,
+  "count": 4230,
+  "last_modified": "2026-02-25T10:30:00"
+}</code></pre>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/digitaltwin/status', this)">
+                    <i class="bi bi-play-fill"></i> Try it
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- GET /stats -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/stats</code>
+                <small class="text-muted">Content insights</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Aggregated statistics about the triple store contents: entity type breakdown,
+                    predicate frequency, label and relationship counts.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "total_triples": 4230,
+  "distinct_subjects": 850,
+  "distinct_predicates": 12,
+  "entity_types": [
+    { "uri": "http://example.org/Person", "count": 500 },
+    { "uri": "http://example.org/Organization", "count": 200 }
+  ],
+  "top_predicates": [
+    { "uri": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "count": 700 }
+  ],
+  "label_count": 850,
+  "type_assertion_count": 700,
+  "relationship_count": 2680
+}</code></pre>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/digitaltwin/stats', this)">
+                    <i class="bi bi-play-fill"></i> Try it
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- POST /build -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-primary">POST</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/build</code>
+                <small class="text-muted">Start a build</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Trigger an asynchronous build that generates all triples from the current
+                    ontology and mapping configuration and writes them to the configured triple store.
+                    Returns a <code>task_id</code> to poll progress.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Request Body</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><code>build_mode</code></td>
+                            <td>string</td>
+                            <td><code>"incremental"</code></td>
+                            <td><code>"incremental"</code> (detect changes, apply diff) or <code>"full"</code> (drop and recreate)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Request</h6>
+<pre class="small mb-1"><code>POST /api/v1/digitaltwin/build?project_name=my_project
+Content-Type: application/json
+
+{ "build_mode": "incremental" }</code></pre>
+
+                <h6 class="small fw-semibold mb-1 mt-2">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "task_id": "abc123-def456",
+  "message": "Build started"
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- GET /build/{task_id} -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/build/{task_id}</code>
+                <small class="text-muted">Poll build progress</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Check the progress of a previously started build. Returns the current status,
+                    progress percentage, and final result once completed.
+                </p>
+                <h6 class="small fw-semibold mb-1">Path Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><code>task_id</code></td>
+                            <td>string</td>
+                            <td>Task identifier returned by <code>POST /build</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "task_id": "abc123-def456",
+  "status": "completed",
+  "progress": 100,
+  "message": "Synchronized 4230 triples",
+  "result": {
+    "triple_count": 4230,
+    "view_table": "catalog.schema.triples",
+    "graph_name": "MyProject",
+    "duration_seconds": 12.5
+  },
+  "error": null
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- GET /triples/find -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/triples/find</code>
+                <small class="text-muted">Find &amp; traverse</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Search for entities by type and/or label text, then traverse their relationships
+                    up to N levels deep (BFS graph walk). Returns all triples discovered during traversal,
+                    similar to the Knowledge Graph's Find &amp; Filter feature.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>entity_type</code></td><td>string</td><td>&mdash;</td><td>Filter by <code>rdf:type</code> local name (exact, case-insensitive)</td></tr>
+                        <tr><td><code>search</code></td><td>string</td><td>&mdash;</td><td>Text search on entity labels (<code>rdfs:label</code>) or URI local name</td></tr>
+                        <tr><td><code>depth</code></td><td>integer</td><td>1</td><td>Traversal depth (1 = direct neighbors, max 10)</td></tr>
+                        <tr><td><code>limit</code></td><td>integer</td><td>1000</td><td>Max triples per page (1–10 000)</td></tr>
+                        <tr><td><code>offset</code></td><td>integer</td><td>0</td><td>Number of triples to skip (for pagination)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "seed_count": 3,
+  "depth": 2,
+  "triples": [
+    { "subject": "http://ex.org/person/1", "predicate": "rdf:type", "object": "http://ex.org/Person" },
+    { "subject": "http://ex.org/person/1", "predicate": "http://ex.org/worksAt", "object": "http://ex.org/org/42" },
+    { "subject": "http://ex.org/org/42", "predicate": "rdf:type", "object": "http://ex.org/Organization" }
+  ],
+  "count": 3,
+  "total": 3,
+  "limit": 1000,
+  "offset": 0,
+  "entity_count": 2
+}</code></pre>
+
+                <!-- Interactive form -->
+                <h6 class="small fw-semibold mb-1">Try it</h6>
+                <div class="row g-2 mb-2">
+                    <div class="col-md-4">
+                        <input type="text" class="form-control form-control-sm" id="apiFindEntityType" placeholder="Entity type...">
+                    </div>
+                    <div class="col-md-5">
+                        <input type="text" class="form-control form-control-sm" id="apiFindSearch" placeholder="Search value...">
+                    </div>
+                    <div class="col-md-3">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">Depth</span>
+                            <input type="number" class="form-control form-control-sm" id="apiFindDepth" value="1" min="1" max="10">
+                        </div>
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-md-3">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">Limit</span>
+                            <input type="number" class="form-control form-control-sm" id="apiFindLimit" value="1000" min="1" max="10000">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">Offset</span>
+                            <input type="number" class="form-control form-control-sm" id="apiFindOffset" value="0" min="0">
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryFindEndpoint(this)">
+                    <i class="bi bi-play-fill"></i> Run search
+                </button>
+                <button class="btn btn-sm btn-outline-secondary ms-1" onclick="clearFindForm()">
+                    <i class="bi bi-x-lg"></i> Clear
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- GET /triples -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/triples</code>
+                <small class="text-muted">Retrieve triples</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Query triples from the triple store with optional filters.
+                    Supports filtering by entity type, predicate, subject/object text search, and pagination.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>subject</code></td><td>string</td><td>&mdash;</td><td>Filter by subject (partial match)</td></tr>
+                        <tr><td><code>predicate</code></td><td>string</td><td>&mdash;</td><td>Filter by predicate URI (exact match)</td></tr>
+                        <tr><td><code>object</code></td><td>string</td><td>&mdash;</td><td>Filter by object (partial match)</td></tr>
+                        <tr><td><code>entity_type</code></td><td>string</td><td>&mdash;</td><td>Filter subjects that have this <code>rdf:type</code> (partial match)</td></tr>
+                        <tr><td><code>search</code></td><td>string</td><td>&mdash;</td><td>Full-text search across subject, predicate, and object</td></tr>
+                        <tr><td><code>limit</code></td><td>integer</td><td>1000</td><td>Maximum rows to return</td></tr>
+                        <tr><td><code>offset</code></td><td>integer</td><td>0</td><td>Skip first N rows (pagination)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "triples": [
+    {
+      "subject": "http://example.org/person/1",
+      "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+      "object": "http://example.org/Person"
+    }
+  ],
+  "count": 1,
+  "total": 4230
+}</code></pre>
+
+                <!-- Interactive filter form -->
+                <h6 class="small fw-semibold mb-1">Try it</h6>
+                <div class="row g-2 mb-2">
+                    <div class="col-md-4">
+                        <input type="text" class="form-control form-control-sm" id="apiTripleSubject" placeholder="Subject filter...">
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" class="form-control form-control-sm" id="apiTriplePredicate" placeholder="Predicate filter...">
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" class="form-control form-control-sm" id="apiTripleObject" placeholder="Object filter...">
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-md-4">
+                        <input type="text" class="form-control form-control-sm" id="apiTripleEntityType" placeholder="Entity type...">
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" class="form-control form-control-sm" id="apiTripleSearch" placeholder="Full-text search...">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" class="form-control form-control-sm" id="apiTripleLimit" placeholder="Limit" value="100">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" class="form-control form-control-sm" id="apiTripleOffset" placeholder="Offset" value="0">
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryTriplesEndpoint(this)">
+                    <i class="bi bi-play-fill"></i> Run query
+                </button>
+                <button class="btn btn-sm btn-outline-secondary ms-1" onclick="clearTriplesForm()">
+                    <i class="bi bi-x-lg"></i> Clear
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- POST /dataquality/start -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-primary">POST</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/dataquality/start</code>
+                <small class="text-muted">Run data quality checks</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Start SHACL-based data quality checks as an asynchronous task.
+                    Evaluates all enabled SHACL shapes (or a filtered category) against the triple store.
+                    Returns a <code>task_id</code> to poll progress via <code>GET /dataquality/{task_id}</code>.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Request Body</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><code>category</code></td><td>string</td><td><code>null</code></td>
+                            <td>Filter shapes by category (e.g. <code>"cardinality"</code>, <code>"value"</code>)</td>
+                        </tr>
+                        <tr>
+                            <td><code>backend</code></td><td>string</td><td><code>"graph"</code></td>
+                            <td><code>"view"</code> (SQL via Databricks) or <code>"graph"</code> (in-memory via LadybugDB)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Request</h6>
+<pre class="small mb-1"><code>POST /api/v1/digitaltwin/dataquality/start?project_name=my_project
+Content-Type: application/json
+
+{ "category": null, "backend": "graph" }</code></pre>
+
+                <h6 class="small fw-semibold mb-1 mt-2">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "task_id": "dq-abc123",
+  "shape_count": 8,
+  "message": "Data quality checks started (8 shapes, backend=graph)"
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- GET /dataquality/{task_id} -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/dataquality/{task_id}</code>
+                <small class="text-muted">Poll data quality progress</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Check the progress of a previously started data quality check.
+                    Returns the current status, progress percentage, and per-shape results once completed.
+                </p>
+                <h6 class="small fw-semibold mb-1">Path Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>task_id</code></td><td>string</td><td>Task identifier returned by <code>POST /dataquality/start</code></td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "task_id": "dq-abc123",
+  "status": "completed",
+  "progress": 100,
+  "message": "8 checks completed: 6 passed, 2 violations",
+  "result": {
+    "results": [
+      { "name": "Customer has email", "status": "success", "violations": [] },
+      { "name": "Order requires date", "status": "error", "violations": [...] }
+    ],
+    "summary": { "total": 8, "passed": 6, "failed": 2 }
+  }
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- POST /inference/start -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-primary">POST</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/inference/start</code>
+                <small class="text-muted">Run inference</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Start OWL 2 RL inference, SWRL rule execution, graph reasoning,
+                    and constraint checking as an asynchronous task. Each phase can be toggled independently.
+                    Optionally append inferred triples to the knowledge graph or materialise to a Delta table.
+                    Returns a <code>task_id</code> to poll progress via <code>GET /inference/{task_id}</code>.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Request Body</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>tbox</code></td><td>boolean</td><td><code>true</code></td><td>Run T-Box (OWL 2 RL) inference</td></tr>
+                        <tr><td><code>swrl</code></td><td>boolean</td><td><code>true</code></td><td>Run SWRL rule execution</td></tr>
+                        <tr><td><code>graph</code></td><td>boolean</td><td><code>true</code></td><td>Run graph-structural reasoning</td></tr>
+                        <tr><td><code>constraints</code></td><td>boolean</td><td><code>true</code></td><td>Run constraint checks</td></tr>
+                        <tr><td><code>append_graph</code></td><td>boolean</td><td><code>false</code></td><td>Append inferred triples to the knowledge graph</td></tr>
+                        <tr><td><code>materialize</code></td><td>boolean</td><td><code>false</code></td><td>Write inferred triples to a Delta table</td></tr>
+                        <tr><td><code>materialize_table</code></td><td>string</td><td><code>null</code></td><td>Fully-qualified table name (catalog.schema.table)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Request</h6>
+<pre class="small mb-1"><code>POST /api/v1/digitaltwin/inference/start?project_name=my_project
+Content-Type: application/json
+
+{
+  "tbox": true,
+  "swrl": true,
+  "graph": true,
+  "constraints": true,
+  "append_graph": false,
+  "materialize": false
+}</code></pre>
+
+                <h6 class="small fw-semibold mb-1 mt-2">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "task_id": "rs-xyz789",
+  "message": "Inference started (phases: tbox, swrl, graph, constraints)"
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- GET /inference/{task_id} -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/inference/{task_id}</code>
+                <small class="text-muted">Poll inference progress</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Check the progress of a previously started inference task.
+                    Returns status, progress percentage, and full results when completed.
+                </p>
+                <h6 class="small fw-semibold mb-1">Path Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>task_id</code></td><td>string</td><td>Task identifier returned by <code>POST /inference/start</code></td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "task_id": "rs-xyz789",
+  "status": "completed",
+  "progress": 100,
+  "message": "Inference complete: 42 inferred, 3 violations",
+  "result": {
+    "inferred_count": 42,
+    "violations_count": 3,
+    "stats": {
+      "tbox_duration": 1.2,
+      "swrl_duration": 0.8,
+      "graph_duration": 0.5,
+      "constraints_duration": 0.3
+    }
+  }
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- GET /inference/results -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/inference/results</code>
+                <small class="text-muted">Get inference results</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Return cached inference results from the last completed inference run.
+                    Includes inferred triple counts, constraint violation counts, and detailed per-phase statistics.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "inferred_count": 42,
+  "violations_count": 3,
+  "reasoning": {
+    "inferred_count": 42,
+    "violations_count": 3,
+    "last_run": "2026-04-03T14:30:00",
+    "inferred_triples": [...],
+    "violations": [...]
+  }
+}</code></pre>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/digitaltwin/inference/results', this)">
+                    <i class="bi bi-play-fill"></i> Try it
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+    </div><!-- /apiEndpointCards -->
+
+    <!-- Authentication note -->
+    <div class="card border-0 ob-api-note mt-4">
+        <div class="card-body py-2 px-3 small" style="color:#475569">
+            <i class="bi bi-info-circle me-1"></i>
+            All endpoints accept a <code>project_name</code> query parameter to select a project
+            from the registry. If omitted, the current session's project is used. When called from
+            external clients, ensure the Databricks workspace URL and token are configured.
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- GraphQL API Section                                           -->
+    <!-- ============================================================ -->
+    <div class="section-header mb-4 mt-5">
+        <h4 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>GraphQL API</h4>
+        <p class="text-muted mb-0 small">
+            Auto-generated typed GraphQL schema from the project's ontology.
+            External base path: <code>/api/v1/graphql</code> (same endpoints also exist at <code>/graphql</code> for the in-app UI).
+            <a href="/api/docs#/GraphQL" target="_blank" class="ms-2">
+                <i class="bi bi-box-arrow-up-right"></i> OpenAPI (GraphQL)
+            </a>
+        </p>
+    </div>
+
+    <div class="d-flex flex-column gap-3" id="apiGraphqlCards">
+
+        <!-- GET /graphql — List projects -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql</code>
+                <small class="text-muted">List GraphQL-enabled projects</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Returns projects that have both MCP/API enabled and a populated ontology &mdash;
+                    the prerequisites for auto-generating a GraphQL schema.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <p class="small mb-2" style="color:#64748b">None</p>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "projects": [
+    { "name": "customer_360", "description": "Customer 360 knowledge graph" }
+  ]
+}</code></pre>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/graphql', this)">
+                    <i class="bi bi-play-fill"></i> Try it
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- GET /graphql/{project_name} — GraphiQL Playground -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql/{project_name}</code>
+                <small class="text-muted">GraphiQL playground</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Opens the interactive GraphiQL IDE for the selected project.
+                    The schema is auto-generated from the ontology &mdash; every class becomes a
+                    GraphQL type, every data property a field, and every object property a relationship.
+                </p>
+                <h6 class="small fw-semibold mb-1">Path Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>Project name in the registry</td></tr>
+                    </tbody>
+                </table>
+
+                <button class="btn btn-sm btn-outline-primary" onclick="openGraphiQL()">
+                    <i class="bi bi-box-arrow-up-right"></i> Open GraphiQL
+                </button>
+            </div>
+        </div>
+
+        <!-- POST /graphql/{project_name} — Execute query -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-primary">POST</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql/{project_name}</code>
+                <small class="text-muted">Execute GraphQL query</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Execute a GraphQL query against the project's knowledge graph.
+                    The schema is derived from the ontology; clients request exactly the fields
+                    they need, and relationships are resolved as nested objects.
+                </p>
+                <h6 class="small fw-semibold mb-1">Path Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>Project name in the registry</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Request Body</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>query</code></td><td>string</td><td>Yes</td><td>GraphQL query string</td></tr>
+                        <tr><td><code>variables</code></td><td>object</td><td>No</td><td>Query variables</td></tr>
+                        <tr><td><code>operationName</code></td><td>string</td><td>No</td><td>Operation to execute (when query has multiple)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Request</h6>
+<pre class="small mb-1"><code>POST /api/v1/graphql/customer_360
+Content-Type: application/json
+
+{
+  "query": "{ customers(limit: 5) { id firstname lastname email hasInteraction { label date } } }"
+}</code></pre>
+
+                <h6 class="small fw-semibold mb-1 mt-2">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "data": {
+    "customers": [
+      {
+        "id": "CUST00094",
+        "firstname": "Jacob",
+        "lastname": "Martinez",
+        "email": "customer00094@email.fr",
+        "hasInteraction": [
+          { "label": "Service_Activation via in_person", "date": "2024-03-15" }
+        ]
+      }
+    ]
+  }
+}</code></pre>
+
+                <!-- Interactive GraphQL query form -->
+                <h6 class="small fw-semibold mb-1">Try it</h6>
+                <textarea class="form-control form-control-sm mb-2 font-monospace" id="apiGraphqlQuery"
+                          rows="6" spellcheck="false" style="font-size:.8rem; tab-size:2"
+                          placeholder="Enter a GraphQL query...">{
+  customers(limit: 5) {
+    id
+    uri
+    label
+  }
+}</textarea>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryGraphqlQuery(this)">
+                    <i class="bi bi-play-fill"></i> Run query
+                </button>
+                <button class="btn btn-sm btn-outline-secondary ms-1" onclick="openGraphiQL()">
+                    <i class="bi bi-box-arrow-up-right"></i> Open GraphiQL
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- GET /graphql/{project_name}/schema — SDL introspection -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
+                 onclick="toggleApiCard(this)">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql/{project_name}/schema</code>
+                <small class="text-muted">Schema introspection (SDL)</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2" style="display:none">
+                <p class="small mb-2">
+                    Returns the auto-generated GraphQL schema in SDL (Schema Definition Language) format.
+                    The schema reflects the project's ontology: each class is a type, each data property
+                    a field, and each object property a typed relationship.
+                </p>
+                <h6 class="small fw-semibold mb-1">Path Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>project_name</code></td><td>string</td><td>Project name in the registry</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "sdl": "type Customer {\n  id: ID!\n  uri: String!\n  label: String\n  firstname: String\n  lastname: String\n  email: String\n  hasInteraction: [Interaction!]\n}\n\ntype Interaction {\n  id: ID!\n  uri: String!\n  label: String\n  date: String\n}\n\ntype Query {\n  customers(limit: Int! = 50, offset: Int! = 0, search: String = null): [Customer!]!\n  customer(id: ID!): Customer\n  interactions(limit: Int! = 50, offset: Int! = 0, search: String = null): [Interaction!]!\n  interaction(id: ID!): Interaction\n}"
+}</code></pre>
+                <button class="btn btn-sm btn-outline-primary" onclick="tryGraphqlSchema(this)">
+                    <i class="bi bi-play-fill"></i> View schema
+                </button>
+                <div class="ob-api-response mt-2" style="display:none"></div>
+            </div>
+        </div>
+
+    </div><!-- /apiGraphqlCards -->
+
+    <!-- GraphQL note -->
+    <div class="card border-0 ob-api-note mt-4">
+        <div class="card-body py-2 px-3 small" style="color:#475569">
+            <i class="bi bi-info-circle me-1"></i>
+            The GraphQL schema is <strong>auto-generated</strong> from the project's ontology.
+            Change the ontology and the schema updates automatically &mdash; no hand-written types needed.
+            Only projects with <em>MCP/API enabled</em> and a populated ontology expose a GraphQL endpoint.
+        </div>
+    </div>
+</div>
+
+<!-- CSS: /static/query/css/query-api.css -->

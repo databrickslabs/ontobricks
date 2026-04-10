@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>back.core.reasoning.SWRLSQLTranslator &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for back.core.reasoning.SWRLSQLTranslator</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Translate SWRL rules to SQL for violation detection and materialisation.</span>
+
+<span class="sd">Extracted from ``app/frontend/digitaltwin/routes.py`` to be reusable across the</span>
+<span class="sd">reasoning engine and quality-check pipeline.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.reasoning.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF_TYPE</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.reasoning.SWRLBuiltinRegistry</span><span class="w"> </span><span class="kn">import</span> <span class="n">SWRLBuiltinRegistry</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.reasoning.SWRLParser</span><span class="w"> </span><span class="kn">import</span> <span class="n">SWRLParser</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="SWRLSQLTranslator">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SWRLSQLTranslator</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build SQL from SWRL rules for the flat triple-store table.&quot;&quot;&quot;</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_escape</span><span class="p">(</span><span class="n">val</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Escape a string value for safe SQL embedding.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">val</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;&#39;&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\\\\</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_arg</span><span class="p">(</span><span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">var_bindings</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve a SWRL argument to a SQL expression.</span>
+
+<span class="sd">        Variables (``?x``) are resolved via *var_bindings*.  Literals are</span>
+<span class="sd">        converted to SQL literal syntax.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">SWRLBuiltinRegistry</span><span class="o">.</span><span class="n">is_literal</span><span class="p">(</span><span class="n">token</span><span class="p">):</span>
+            <span class="n">stripped</span> <span class="o">=</span> <span class="n">token</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s2">&quot;?&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">stripped</span> <span class="ow">in</span> <span class="n">var_bindings</span> <span class="ow">or</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                <span class="n">key</span> <span class="o">=</span> <span class="n">token</span> <span class="k">if</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">var_bindings</span> <span class="k">else</span> <span class="n">stripped</span>
+                <span class="n">a</span><span class="p">,</span> <span class="n">c</span> <span class="o">=</span> <span class="n">var_bindings</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">stripped</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+        <span class="k">return</span> <span class="n">SWRLBuiltinRegistry</span><span class="o">.</span><span class="n">literal_sql</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_builtin_filters</span><span class="p">(</span>
+        <span class="n">builtin_atoms</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="n">var_bindings</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">filters</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">builtin_atoms</span><span class="p">:</span>
+            <span class="n">bi</span> <span class="o">=</span> <span class="n">SWRLBuiltinRegistry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">atom</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">bi</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">resolved</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">SWRLSQLTranslator</span><span class="o">.</span><span class="n">_resolve_arg</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">var_bindings</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">]</span>
+            <span class="p">]</span>
+            <span class="k">if</span> <span class="n">bi</span><span class="o">.</span><span class="n">category</span> <span class="o">==</span> <span class="s2">&quot;comparison&quot;</span> <span class="ow">and</span> <span class="n">bi</span><span class="o">.</span><span class="n">arity</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">expr</span> <span class="o">=</span> <span class="n">bi</span><span class="o">.</span><span class="n">sql_template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">resolved</span><span class="p">[:</span><span class="mi">2</span><span class="p">])</span>
+                <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">expr</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">bi</span><span class="o">.</span><span class="n">category</span> <span class="o">==</span> <span class="s2">&quot;string&quot;</span> <span class="ow">and</span> <span class="n">bi</span><span class="o">.</span><span class="n">arity</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">expr</span> <span class="o">=</span> <span class="n">bi</span><span class="o">.</span><span class="n">sql_template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">resolved</span><span class="p">[:</span><span class="mi">2</span><span class="p">])</span>
+                <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">expr</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">bi</span><span class="o">.</span><span class="n">category</span> <span class="o">==</span> <span class="s2">&quot;math&quot;</span> <span class="ow">and</span> <span class="n">bi</span><span class="o">.</span><span class="n">arity</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="n">expr</span> <span class="o">=</span> <span class="n">bi</span><span class="o">.</span><span class="n">sql_template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">resolved</span><span class="p">[:</span><span class="mi">2</span><span class="p">])</span>
+                <span class="n">result_ref</span> <span class="o">=</span> <span class="n">SWRLSQLTranslator</span><span class="o">.</span><span class="n">_resolve_arg</span><span class="p">(</span>
+                    <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">2</span><span class="p">],</span> <span class="n">var_bindings</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">result_ref</span><span class="si">}</span><span class="s2"> = (</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">bi</span><span class="o">.</span><span class="n">category</span> <span class="o">==</span> <span class="s2">&quot;date&quot;</span> <span class="ow">and</span> <span class="n">bi</span><span class="o">.</span><span class="n">arity</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">expr</span> <span class="o">=</span> <span class="n">bi</span><span class="o">.</span><span class="n">sql_template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">resolved</span><span class="p">[:</span><span class="mi">2</span><span class="p">])</span>
+                <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">expr</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">bi</span><span class="o">.</span><span class="n">arity</span> <span class="o">&lt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">resolved</span><span class="p">):</span>
+                <span class="n">expr</span> <span class="o">=</span> <span class="n">bi</span><span class="o">.</span><span class="n">sql_template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">resolved</span><span class="p">[:</span><span class="n">bi</span><span class="o">.</span><span class="n">arity</span><span class="p">])</span>
+                <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">expr</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">filters</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_negated_atoms</span><span class="p">(</span>
+        <span class="n">negated_atoms</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+        <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">var_bindings</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">],</span>
+        <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">uri_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+        <span class="n">alias_factory</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">parts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">negated_atoms</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">atom</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">uri</span> <span class="o">=</span> <span class="n">SWRLSQLTranslator</span><span class="o">.</span><span class="n">_escape</span><span class="p">(</span>
+                <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">atom</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">alias</span> <span class="o">=</span> <span class="n">alias_factory</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">var</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">a</span><span class="p">,</span> <span class="n">c</span> <span class="o">=</span> <span class="n">var_bindings</span><span class="p">[</span><span class="n">var</span><span class="p">]</span>
+                <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2"> &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2">.object = &#39;</span><span class="si">{</span><span class="n">uri</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">a</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2">)&quot;</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">var_s</span><span class="p">,</span> <span class="n">var_o</span> <span class="o">=</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">var_s</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">sa</span><span class="p">,</span> <span class="n">sc</span> <span class="o">=</span> <span class="n">var_bindings</span><span class="p">[</span><span class="n">var_s</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">var_o</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                    <span class="n">oa</span><span class="p">,</span> <span class="n">oc</span> <span class="o">=</span> <span class="n">var_bindings</span><span class="p">[</span><span class="n">var_o</span><span class="p">]</span>
+                    <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2"> &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">uri</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">sa</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">sc</span><span class="si">}</span><span class="s2"> &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2">.object = </span><span class="si">{</span><span class="n">oa</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">oc</span><span class="si">}</span><span class="s2">)&quot;</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2"> &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">uri</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">sa</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">sc</span><span class="si">}</span><span class="s2">)&quot;</span>
+                    <span class="p">)</span>
+        <span class="k">return</span> <span class="n">parts</span>
+
+<div class="viewcode-block" id="SWRLSQLTranslator.build_violation_sql">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator.build_violation_sql">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_violation_sql</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build SQL that finds subjects violating a SWRL rule.</span>
+
+<span class="sd">        The violation subject is determined from the consequent (first</span>
+<span class="sd">        property-atom subject, or first class-atom variable).  When</span>
+<span class="sd">        antecedent variables are not connected through property atoms,</span>
+<span class="sd">        their type constraints are folded into the NOT EXISTS sub-query</span>
+<span class="sd">        instead of creating a Cartesian product in the main query.</span>
+
+<span class="sd">        Supports built-in filter atoms (comparison, math, string, date)</span>
+<span class="sd">        and negated antecedent atoms (closed-world assumption).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">antecedent</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;antecedent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">consequent</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;consequent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">base_uri</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">uri_map</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri_map&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+
+        <span class="n">ante_atoms</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">parse_atoms</span><span class="p">(</span><span class="n">antecedent</span><span class="p">)</span>
+        <span class="n">cons_atoms</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">parse_atoms</span><span class="p">(</span><span class="n">consequent</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ante_atoms</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cons_atoms</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">class_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
+                       <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
+        <span class="n">prop_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
+                      <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
+        <span class="n">builtin_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
+        <span class="n">negated_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">class_atoms</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">var_class</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">class_atoms</span><span class="p">:</span>
+            <span class="n">var_class</span><span class="p">[</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_escape</span><span class="p">(</span>
+                <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">),</span>
+            <span class="p">)</span>
+
+        <span class="n">violation_var</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">determine_violation_subject</span><span class="p">(</span><span class="n">cons_atoms</span><span class="p">,</span> <span class="n">class_atoms</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">violation_var</span> <span class="ow">or</span> <span class="n">violation_var</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var_class</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">connected</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">find_connected_vars</span><span class="p">(</span><span class="n">violation_var</span><span class="p">,</span> <span class="n">prop_atoms</span><span class="p">)</span>
+
+        <span class="n">alias_counter</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">var_bindings</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_next</span><span class="p">():</span>
+            <span class="k">nonlocal</span> <span class="n">alias_counter</span>
+            <span class="n">alias_counter</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;a</span><span class="si">{</span><span class="n">alias_counter</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_ref</span><span class="p">(</span><span class="n">var</span><span class="p">):</span>
+            <span class="n">a</span><span class="p">,</span> <span class="n">c</span> <span class="o">=</span> <span class="n">var_bindings</span><span class="p">[</span><span class="n">var</span><span class="p">]</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="n">a_prim</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+        <span class="n">from_part</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">a_prim</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">where_parts</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a_prim</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a_prim</span><span class="si">}</span><span class="s2">.object = &#39;</span><span class="si">{</span><span class="n">var_class</span><span class="p">[</span><span class="n">violation_var</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+        <span class="p">]</span>
+        <span class="n">var_bindings</span><span class="p">[</span><span class="n">violation_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a_prim</span><span class="p">,</span> <span class="s2">&quot;subject&quot;</span><span class="p">)</span>
+
+        <span class="n">join_parts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">left_join_parts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">null_checks</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">connected_props</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">order_connected_props</span><span class="p">(</span>
+            <span class="n">violation_var</span><span class="p">,</span>
+            <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">prop_atoms</span>
+             <span class="k">if</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="n">connected</span> <span class="ow">and</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="ow">in</span> <span class="n">connected</span><span class="p">],</span>
+        <span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">prop</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">connected_props</span><span class="p">):</span>
+            <span class="n">p_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_escape</span><span class="p">(</span>
+                <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">prop</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">subj_var</span> <span class="o">=</span> <span class="n">prop</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">obj_var</span> <span class="o">=</span> <span class="n">prop</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">a_prop</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+            <span class="n">left</span> <span class="o">=</span> <span class="n">idx</span> <span class="o">&gt;</span> <span class="mi">0</span>
+            <span class="n">kind</span> <span class="o">=</span> <span class="s2">&quot;LEFT JOIN&quot;</span> <span class="k">if</span> <span class="n">left</span> <span class="k">else</span> <span class="s2">&quot;JOIN&quot;</span>
+
+            <span class="n">on_clause</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">p_uri</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+            <span class="k">if</span> <span class="n">subj_var</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                <span class="n">on_clause</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; AND </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">subj_var</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">obj_var</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                <span class="n">on_clause</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; AND </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.object = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">obj_var</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+
+            <span class="n">clause</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">kind</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2"> ON </span><span class="si">{</span><span class="n">on_clause</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">if</span> <span class="n">left</span><span class="p">:</span>
+                <span class="n">left_join_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">clause</span><span class="p">)</span>
+                <span class="n">null_checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.subject IS NULL&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">join_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">clause</span><span class="p">)</span>
+
+            <span class="n">new_var</span> <span class="o">=</span> <span class="n">obj_var</span> <span class="k">if</span> <span class="n">subj_var</span> <span class="ow">in</span> <span class="n">var_bindings</span> <span class="k">else</span> <span class="n">subj_var</span>
+            <span class="k">if</span> <span class="n">new_var</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                <span class="n">col</span> <span class="o">=</span> <span class="s2">&quot;object&quot;</span> <span class="k">if</span> <span class="n">new_var</span> <span class="o">==</span> <span class="n">obj_var</span> <span class="k">else</span> <span class="s2">&quot;subject&quot;</span>
+                <span class="k">if</span> <span class="n">new_var</span> <span class="ow">in</span> <span class="n">var_class</span><span class="p">:</span>
+                    <span class="n">a_cls</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+                    <span class="n">cls_clause</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">kind</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2"> &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;ON </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2">.object = &#39;</span><span class="si">{</span><span class="n">var_class</span><span class="p">[</span><span class="n">new_var</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="p">)</span>
+                    <span class="k">if</span> <span class="n">left</span><span class="p">:</span>
+                        <span class="n">left_join_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cls_clause</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">join_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cls_clause</span><span class="p">)</span>
+                    <span class="n">var_bindings</span><span class="p">[</span><span class="n">new_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a_cls</span><span class="p">,</span> <span class="s2">&quot;subject&quot;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">var_bindings</span><span class="p">[</span><span class="n">new_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a_prop</span><span class="p">,</span> <span class="n">col</span><span class="p">)</span>
+
+        <span class="c1"># -- Built-in filter atoms (Phase 1) ----------------------------------</span>
+        <span class="n">builtin_filters</span> <span class="o">=</span> <span class="n">SWRLSQLTranslator</span><span class="o">.</span><span class="n">_build_builtin_filters</span><span class="p">(</span>
+            <span class="n">builtin_atoms</span><span class="p">,</span> <span class="n">var_bindings</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">builtin_filters</span><span class="p">:</span>
+            <span class="n">where_parts</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">builtin_filters</span><span class="p">)</span>
+
+        <span class="c1"># -- Negated antecedent atoms (Phase 3: closed-world) ----------------</span>
+        <span class="n">negated_sql</span> <span class="o">=</span> <span class="n">SWRLSQLTranslator</span><span class="o">.</span><span class="n">_build_negated_atoms</span><span class="p">(</span>
+            <span class="n">negated_atoms</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">var_bindings</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">,</span> <span class="n">_next</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">negated_sql</span><span class="p">:</span>
+            <span class="n">where_parts</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">negated_sql</span><span class="p">)</span>
+
+        <span class="n">disconnected_class_uris</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">ca</span> <span class="ow">in</span> <span class="n">class_atoms</span><span class="p">:</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="n">ca</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">var</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">connected</span><span class="p">:</span>
+                <span class="n">disconnected_class_uris</span><span class="p">[</span><span class="n">var</span><span class="p">]</span> <span class="o">=</span> <span class="n">var_class</span><span class="p">[</span><span class="n">var</span><span class="p">]</span>
+
+        <span class="n">not_exists_parts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">cons_atoms</span><span class="p">:</span>
+            <span class="n">c_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_escape</span><span class="p">(</span>
+                <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">atom</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">c_alias</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">var</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">not_exists_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2"> &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.object = &#39;</span><span class="si">{</span><span class="n">c_uri</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">var_s</span><span class="p">,</span> <span class="n">var_o</span> <span class="o">=</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">var_s</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="n">var_o</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                    <span class="n">cond</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2"> &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">c_uri</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var_s</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot; AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.object = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var_o</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+                    <span class="p">)</span>
+                <span class="k">elif</span> <span class="n">var_o</span> <span class="ow">in</span> <span class="n">disconnected_class_uris</span><span class="p">:</span>
+                    <span class="n">c_alias2</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+                    <span class="n">cond</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2"> &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;JOIN </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">c_alias2</span><span class="si">}</span><span class="s2"> &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;ON </span><span class="si">{</span><span class="n">c_alias2</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">c_alias2</span><span class="si">}</span><span class="s2">.object = &#39;</span><span class="si">{</span><span class="n">disconnected_class_uris</span><span class="p">[</span><span class="n">var_o</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">c_alias2</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.object &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">c_uri</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var_s</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">cond</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2"> &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">c_uri</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var_s</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+                    <span class="p">)</span>
+                <span class="n">not_exists_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cond</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">not_exists_parts</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">null_checks</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">violation_cond</span> <span class="o">=</span> <span class="s2">&quot; OR &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">null_checks</span> <span class="o">+</span> <span class="n">not_exists_parts</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;SELECT DISTINCT </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">violation_var</span><span class="p">)</span><span class="si">}</span><span class="s2"> AS s&quot;</span><span class="p">]</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;FROM </span><span class="si">{</span><span class="n">from_part</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">join_parts</span><span class="p">)</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">left_join_parts</span><span class="p">)</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="s1">&#39; AND &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">where_parts</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  AND (</span><span class="si">{</span><span class="n">violation_cond</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+        <span class="n">sql</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;SWRL SQL [</span><span class="si">%s</span><span class="s2"> -&gt; </span><span class="si">%s</span><span class="s2">]:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">antecedent</span><span class="p">,</span> <span class="n">consequent</span><span class="p">,</span> <span class="n">sql</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sql</span></div>
+
+
+<div class="viewcode-block" id="SWRLSQLTranslator.build_antecedent_count_sql">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator.build_antecedent_count_sql">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_antecedent_count_sql</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build SQL that counts entities matching the antecedent.</span>
+
+<span class="sd">        Returns a query with a single ``cnt`` column — the number of</span>
+<span class="sd">        distinct subjects that satisfy the antecedent conditions</span>
+<span class="sd">        (ignoring the consequent).  This is the denominator for</span>
+<span class="sd">        computing the pass rate of a SWRL rule used as a DQ indicator.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">antecedent</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;antecedent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">consequent</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;consequent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">base_uri</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">uri_map</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri_map&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+
+        <span class="n">ante_atoms</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">parse_atoms</span><span class="p">(</span><span class="n">antecedent</span><span class="p">)</span>
+        <span class="n">cons_atoms</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">parse_atoms</span><span class="p">(</span><span class="n">consequent</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ante_atoms</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cons_atoms</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">class_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
+                       <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
+        <span class="n">prop_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
+                      <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
+        <span class="n">builtin_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
+        <span class="n">negated_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">class_atoms</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">var_class</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">class_atoms</span><span class="p">:</span>
+            <span class="n">var_class</span><span class="p">[</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_escape</span><span class="p">(</span>
+                <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">),</span>
+            <span class="p">)</span>
+
+        <span class="n">violation_var</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">determine_violation_subject</span><span class="p">(</span><span class="n">cons_atoms</span><span class="p">,</span> <span class="n">class_atoms</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">violation_var</span> <span class="ow">or</span> <span class="n">violation_var</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var_class</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">connected</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">find_connected_vars</span><span class="p">(</span><span class="n">violation_var</span><span class="p">,</span> <span class="n">prop_atoms</span><span class="p">)</span>
+
+        <span class="n">alias_counter</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">var_bindings</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_next</span><span class="p">():</span>
+            <span class="k">nonlocal</span> <span class="n">alias_counter</span>
+            <span class="n">alias_counter</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;a</span><span class="si">{</span><span class="n">alias_counter</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_ref</span><span class="p">(</span><span class="n">var</span><span class="p">):</span>
+            <span class="n">a</span><span class="p">,</span> <span class="n">c</span> <span class="o">=</span> <span class="n">var_bindings</span><span class="p">[</span><span class="n">var</span><span class="p">]</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="n">a_prim</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+        <span class="n">from_part</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">a_prim</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">where_parts</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a_prim</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a_prim</span><span class="si">}</span><span class="s2">.object = &#39;</span><span class="si">{</span><span class="n">var_class</span><span class="p">[</span><span class="n">violation_var</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+        <span class="p">]</span>
+        <span class="n">var_bindings</span><span class="p">[</span><span class="n">violation_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a_prim</span><span class="p">,</span> <span class="s2">&quot;subject&quot;</span><span class="p">)</span>
+
+        <span class="n">join_parts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">connected_props</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">order_connected_props</span><span class="p">(</span>
+            <span class="n">violation_var</span><span class="p">,</span>
+            <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">prop_atoms</span>
+             <span class="k">if</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="n">connected</span> <span class="ow">and</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="ow">in</span> <span class="n">connected</span><span class="p">],</span>
+        <span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">prop</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">connected_props</span><span class="p">):</span>
+            <span class="n">p_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_escape</span><span class="p">(</span>
+                <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">prop</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">subj_var</span> <span class="o">=</span> <span class="n">prop</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">obj_var</span> <span class="o">=</span> <span class="n">prop</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">a_prop</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+
+            <span class="n">on_clause</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">p_uri</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+            <span class="k">if</span> <span class="n">subj_var</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                <span class="n">on_clause</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; AND </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">subj_var</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">obj_var</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                <span class="n">on_clause</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; AND </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.object = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">obj_var</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+
+            <span class="n">join_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;JOIN </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2"> ON </span><span class="si">{</span><span class="n">on_clause</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="n">new_var</span> <span class="o">=</span> <span class="n">obj_var</span> <span class="k">if</span> <span class="n">subj_var</span> <span class="ow">in</span> <span class="n">var_bindings</span> <span class="k">else</span> <span class="n">subj_var</span>
+            <span class="k">if</span> <span class="n">new_var</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                <span class="n">col</span> <span class="o">=</span> <span class="s2">&quot;object&quot;</span> <span class="k">if</span> <span class="n">new_var</span> <span class="o">==</span> <span class="n">obj_var</span> <span class="k">else</span> <span class="s2">&quot;subject&quot;</span>
+                <span class="k">if</span> <span class="n">new_var</span> <span class="ow">in</span> <span class="n">var_class</span><span class="p">:</span>
+                    <span class="n">a_cls</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+                    <span class="n">join_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;JOIN </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2"> &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;ON </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2">.object = &#39;</span><span class="si">{</span><span class="n">var_class</span><span class="p">[</span><span class="n">new_var</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="p">)</span>
+                    <span class="n">var_bindings</span><span class="p">[</span><span class="n">new_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a_cls</span><span class="p">,</span> <span class="s2">&quot;subject&quot;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">var_bindings</span><span class="p">[</span><span class="n">new_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a_prop</span><span class="p">,</span> <span class="n">col</span><span class="p">)</span>
+
+        <span class="n">builtin_filters</span> <span class="o">=</span> <span class="n">SWRLSQLTranslator</span><span class="o">.</span><span class="n">_build_builtin_filters</span><span class="p">(</span>
+            <span class="n">builtin_atoms</span><span class="p">,</span> <span class="n">var_bindings</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">builtin_filters</span><span class="p">:</span>
+            <span class="n">where_parts</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">builtin_filters</span><span class="p">)</span>
+
+        <span class="n">negated_sql</span> <span class="o">=</span> <span class="n">SWRLSQLTranslator</span><span class="o">.</span><span class="n">_build_negated_atoms</span><span class="p">(</span>
+            <span class="n">negated_atoms</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">var_bindings</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">,</span> <span class="n">_next</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">negated_sql</span><span class="p">:</span>
+            <span class="n">where_parts</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">negated_sql</span><span class="p">)</span>
+
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;SELECT COUNT(DISTINCT </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">violation_var</span><span class="p">)</span><span class="si">}</span><span class="s2">) AS cnt&quot;</span><span class="p">]</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;FROM </span><span class="si">{</span><span class="n">from_part</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">join_parts</span><span class="p">)</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="s1">&#39; AND &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">where_parts</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SWRLSQLTranslator.build_materialization_sql">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator.build_materialization_sql">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_materialization_sql</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build INSERT SQL that materialises consequent triples.</span>
+
+<span class="sd">        Finds rows where the antecedent matches AND the consequent is</span>
+<span class="sd">        missing, then inserts the missing consequent triples.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">antecedent</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;antecedent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">consequent</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;consequent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">base_uri</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">uri_map</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri_map&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+
+        <span class="n">ante_atoms</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">parse_atoms</span><span class="p">(</span><span class="n">antecedent</span><span class="p">)</span>
+        <span class="n">cons_atoms</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">parse_atoms</span><span class="p">(</span><span class="n">consequent</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ante_atoms</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cons_atoms</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">class_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span> <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="n">prop_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span> <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">class_atoms</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">var_class</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">class_atoms</span><span class="p">:</span>
+            <span class="n">var_class</span><span class="p">[</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_escape</span><span class="p">(</span>
+                <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">),</span>
+            <span class="p">)</span>
+
+        <span class="n">primary_var</span> <span class="o">=</span> <span class="n">class_atoms</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">primary_props</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">prop_atoms</span> <span class="k">if</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">primary_var</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">primary_props</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">alias_counter</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">var_bindings</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_next</span><span class="p">():</span>
+            <span class="k">nonlocal</span> <span class="n">alias_counter</span>
+            <span class="n">alias_counter</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;a</span><span class="si">{</span><span class="n">alias_counter</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_ref</span><span class="p">(</span><span class="n">var</span><span class="p">):</span>
+            <span class="n">a</span><span class="p">,</span> <span class="n">c</span> <span class="o">=</span> <span class="n">var_bindings</span><span class="p">[</span><span class="n">var</span><span class="p">]</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="n">a_prim</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+        <span class="n">from_part</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">a_prim</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">where_parts</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a_prim</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a_prim</span><span class="si">}</span><span class="s2">.object = &#39;</span><span class="si">{</span><span class="n">var_class</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">primary_var</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+        <span class="p">]</span>
+        <span class="n">var_bindings</span><span class="p">[</span><span class="n">primary_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a_prim</span><span class="p">,</span> <span class="s2">&quot;subject&quot;</span><span class="p">)</span>
+
+        <span class="n">join_parts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">prop</span> <span class="ow">in</span> <span class="n">primary_props</span><span class="p">:</span>
+            <span class="n">p_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_escape</span><span class="p">(</span>
+                <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">prop</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">obj_var</span> <span class="o">=</span> <span class="n">prop</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">a_prop</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+            <span class="n">join_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;JOIN </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;ON </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">p_uri</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">primary_var</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">obj_var</span> <span class="ow">in</span> <span class="n">var_class</span><span class="p">:</span>
+                <span class="n">a_cls</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+                <span class="n">join_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;JOIN </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2"> &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;ON </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2">.object = &#39;</span><span class="si">{</span><span class="n">var_class</span><span class="p">[</span><span class="n">obj_var</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.object&quot;</span>
+                <span class="p">)</span>
+                <span class="n">var_bindings</span><span class="p">[</span><span class="n">obj_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a_cls</span><span class="p">,</span> <span class="s2">&quot;subject&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">var_bindings</span><span class="p">[</span><span class="n">obj_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a_prop</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">)</span>
+
+        <span class="n">stmts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">cons_atoms</span><span class="p">:</span>
+            <span class="n">c_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_escape</span><span class="p">(</span>
+                <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">atom</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">c_alias</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">var</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">not_exists</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2"> &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.object = &#39;</span><span class="si">{</span><span class="n">c_uri</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+                <span class="p">)</span>
+                <span class="n">stmts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;INSERT INTO </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> (subject, predicate, object)</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;SELECT DISTINCT </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var</span><span class="p">)</span><span class="si">}</span><span class="s2">, &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39;, &#39;</span><span class="si">{</span><span class="n">c_uri</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;FROM </span><span class="si">{</span><span class="n">from_part</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">join_parts</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="s1">&#39; AND &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">where_parts</span><span class="p">)</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;  AND </span><span class="si">{</span><span class="n">not_exists</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">var_s</span><span class="p">,</span> <span class="n">var_o</span> <span class="o">=</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">var_s</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">not_exists</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2"> &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">c_uri</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var_s</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">var_o</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                    <span class="n">not_exists</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.object = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var_o</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="n">not_exists</span> <span class="o">+=</span> <span class="s2">&quot;)&quot;</span>
+                <span class="n">obj_expr</span> <span class="o">=</span> <span class="n">_ref</span><span class="p">(</span><span class="n">var_o</span><span class="p">)</span> <span class="k">if</span> <span class="n">var_o</span> <span class="ow">in</span> <span class="n">var_bindings</span> <span class="k">else</span> <span class="s2">&quot;&#39;&#39;&quot;</span>
+                <span class="n">stmts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;INSERT INTO </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> (subject, predicate, object)</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;SELECT DISTINCT </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var_s</span><span class="p">)</span><span class="si">}</span><span class="s2">, &#39;</span><span class="si">{</span><span class="n">c_uri</span><span class="si">}</span><span class="s2">&#39;, </span><span class="si">{</span><span class="n">obj_expr</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;FROM </span><span class="si">{</span><span class="n">from_part</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">join_parts</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="s1">&#39; AND &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">where_parts</span><span class="p">)</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;  AND </span><span class="si">{</span><span class="n">not_exists</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+
+        <span class="k">return</span> <span class="s2">&quot;;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">stmts</span><span class="p">)</span> <span class="k">if</span> <span class="n">stmts</span> <span class="k">else</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="SWRLSQLTranslator.build_inference_sql">
+<a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator.build_inference_sql">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_inference_sql</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build SELECT SQL that returns inferred consequent triples.</span>
+
+<span class="sd">        Uses the same antecedent binding as ``build_materialization_sql``</span>
+<span class="sd">        but emits ``SELECT subject, predicate, object`` instead of</span>
+<span class="sd">        ``INSERT INTO``.  Multiple consequent atoms are combined with</span>
+<span class="sd">        ``UNION ALL``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">antecedent</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;antecedent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">consequent</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;consequent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">base_uri</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">uri_map</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri_map&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+
+        <span class="n">ante_atoms</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">parse_atoms</span><span class="p">(</span><span class="n">antecedent</span><span class="p">)</span>
+        <span class="n">cons_atoms</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">parse_atoms</span><span class="p">(</span><span class="n">consequent</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ante_atoms</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cons_atoms</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">class_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span> <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="n">prop_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span> <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">class_atoms</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">var_class</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">class_atoms</span><span class="p">:</span>
+            <span class="n">var_class</span><span class="p">[</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_escape</span><span class="p">(</span>
+                <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">),</span>
+            <span class="p">)</span>
+
+        <span class="n">primary_var</span> <span class="o">=</span> <span class="n">class_atoms</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">primary_props</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">prop_atoms</span> <span class="k">if</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">primary_var</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">primary_props</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">alias_counter</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">var_bindings</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_next</span><span class="p">():</span>
+            <span class="k">nonlocal</span> <span class="n">alias_counter</span>
+            <span class="n">alias_counter</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;a</span><span class="si">{</span><span class="n">alias_counter</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_ref</span><span class="p">(</span><span class="n">var</span><span class="p">):</span>
+            <span class="n">a</span><span class="p">,</span> <span class="n">c</span> <span class="o">=</span> <span class="n">var_bindings</span><span class="p">[</span><span class="n">var</span><span class="p">]</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="n">a_prim</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+        <span class="n">from_part</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">a_prim</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">where_parts</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a_prim</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">a_prim</span><span class="si">}</span><span class="s2">.object = &#39;</span><span class="si">{</span><span class="n">var_class</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">primary_var</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+        <span class="p">]</span>
+        <span class="n">var_bindings</span><span class="p">[</span><span class="n">primary_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a_prim</span><span class="p">,</span> <span class="s2">&quot;subject&quot;</span><span class="p">)</span>
+
+        <span class="n">join_parts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">prop</span> <span class="ow">in</span> <span class="n">primary_props</span><span class="p">:</span>
+            <span class="n">p_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_escape</span><span class="p">(</span>
+                <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">prop</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">obj_var</span> <span class="o">=</span> <span class="n">prop</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">a_prop</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+            <span class="n">join_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;JOIN </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;ON </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">p_uri</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">primary_var</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">obj_var</span> <span class="ow">in</span> <span class="n">var_class</span><span class="p">:</span>
+                <span class="n">a_cls</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+                <span class="n">join_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;JOIN </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2"> &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;ON </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2">.object = &#39;</span><span class="si">{</span><span class="n">var_class</span><span class="p">[</span><span class="n">obj_var</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">a_cls</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">a_prop</span><span class="si">}</span><span class="s2">.object&quot;</span>
+                <span class="p">)</span>
+                <span class="n">var_bindings</span><span class="p">[</span><span class="n">obj_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a_cls</span><span class="p">,</span> <span class="s2">&quot;subject&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">var_bindings</span><span class="p">[</span><span class="n">obj_var</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a_prop</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">)</span>
+
+        <span class="n">selects</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">cons_atoms</span><span class="p">:</span>
+            <span class="n">c_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_escape</span><span class="p">(</span>
+                <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">atom</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">c_alias</span> <span class="o">=</span> <span class="n">_next</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">var</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">not_exists</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2"> &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.object = &#39;</span><span class="si">{</span><span class="n">c_uri</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+                <span class="p">)</span>
+                <span class="n">selects</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;SELECT DISTINCT </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var</span><span class="p">)</span><span class="si">}</span><span class="s2"> AS subject, &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39; AS predicate, &#39;</span><span class="si">{</span><span class="n">c_uri</span><span class="si">}</span><span class="s2">&#39; AS object</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;FROM </span><span class="si">{</span><span class="n">from_part</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">join_parts</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="s1">&#39; AND &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">where_parts</span><span class="p">)</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;  AND </span><span class="si">{</span><span class="n">not_exists</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">var_s</span><span class="p">,</span> <span class="n">var_o</span> <span class="o">=</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">var_s</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">not_exists</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2"> &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.predicate = &#39;</span><span class="si">{</span><span class="n">c_uri</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.subject = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var_s</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">var_o</span> <span class="ow">in</span> <span class="n">var_bindings</span><span class="p">:</span>
+                    <span class="n">not_exists</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; AND </span><span class="si">{</span><span class="n">c_alias</span><span class="si">}</span><span class="s2">.object = </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var_o</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="n">not_exists</span> <span class="o">+=</span> <span class="s2">&quot;)&quot;</span>
+                <span class="n">obj_expr</span> <span class="o">=</span> <span class="n">_ref</span><span class="p">(</span><span class="n">var_o</span><span class="p">)</span> <span class="k">if</span> <span class="n">var_o</span> <span class="ow">in</span> <span class="n">var_bindings</span> <span class="k">else</span> <span class="s2">&quot;&#39;&#39;&quot;</span>
+                <span class="n">selects</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;SELECT DISTINCT </span><span class="si">{</span><span class="n">_ref</span><span class="p">(</span><span class="n">var_s</span><span class="p">)</span><span class="si">}</span><span class="s2"> AS subject, &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">c_uri</span><span class="si">}</span><span class="s2">&#39; AS predicate, </span><span class="si">{</span><span class="n">obj_expr</span><span class="si">}</span><span class="s2"> AS object</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;FROM </span><span class="si">{</span><span class="n">from_part</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">join_parts</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="s1">&#39; AND &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">where_parts</span><span class="p">)</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;  AND </span><span class="si">{</span><span class="n">not_exists</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">selects</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">sql</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">UNION ALL</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">selects</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;SWRL inference SQL [</span><span class="si">%s</span><span class="s2"> -&gt; </span><span class="si">%s</span><span class="s2">]:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">antecedent</span><span class="p">,</span> <span class="n">consequent</span><span class="p">,</span> <span class="n">sql</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sql</span></div>
+</div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

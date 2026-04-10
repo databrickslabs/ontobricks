@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Ontology Design - OntoBricks{% endblock %}
+
+{% block extra_css %}
+<!-- Ontology page specific styles -->
+<link rel="stylesheet" href="{{ url_for('static', filename='global/css/ontology.css') }}?v={{ asset_version }}">
+<!-- OntoViz library styles for Design section -->
+<link rel="stylesheet" href="{{ url_for('static', filename='global/ontoviz/css/ontoviz.css') }}?v={{ asset_version }}">
+<!-- Ontology module styles (extracted from partials) -->
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-map.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-shared-panels.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-swrl.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-business-rules.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-dataquality.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-wizard.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-assistant.css') }}?v={{ asset_version }}">
+{% endblock %}
+
+{% block content %}
+<!-- Ontology Core Module (shared state across all partials) -->
+<script src="{{ url_for('static', filename='global/js/ontology-core.js') }}"></script>
+
+<div class="container-fluid px-0">
+    <div class="sidebar-layout">
+        <!-- Left Sidebar Menu (driven by menu_config.json) -->
+        <div class="sidebar-nav">
+            {% set sidebar_menu = get_menu('ontology') %}
+            {% include "partials/layout/_sidebar_nav.html" %}
+        </div>
+        
+        <!-- Right Content Area -->
+        <div class="sidebar-content">
+            
+            <!-- Wizard Section -->
+            <div id="wizard-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_wizard.html" %}
+            </div>
+            
+            <!-- Information Section - Default view -->
+            <div id="information-section" class="sidebar-section active">
+                {% include "partials/ontology/_ontology_information.html" %}
+            </div>
+            
+            <!-- Import Section -->
+            <div id="import-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_import.html" %}
+            </div>
+            
+            <!-- Design Section (OntoViz Visual Editor) -->
+            <div id="design-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_design.html" %}
+            </div>
+            
+            <!-- Model Section (D3.js Force-Directed Graph) -->
+            <div id="map-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_map.html" %}
+            </div>
+            
+            <!-- Entities Section -->
+            <div id="entities-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_entities.html" %}
+            </div>
+            
+            <!-- Relationships Section -->
+            <div id="relationships-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_relationships.html" %}
+            </div>
+            
+            <!-- Data Quality (SHACL) Section -->
+            <div id="dataquality-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_dataquality.html" %}
+            </div>
+            
+            <!-- Business Rules Section (SWRL + Decision Tables + SPARQL + Aggregate + SHACL) -->
+            <div id="swrl-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_business_rules.html" %}
+            </div>
+            
+            <!-- Expressions & Axioms Section -->
+            <div id="axioms-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_axioms.html" %}
+            </div>
+            
+            <!-- OWL Content Section -->
+            <div id="owl-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_owl_content.html" %}
+            </div>
+            
+            <!-- Shared Edit Panels (Entity & Relationship) - positioned within sidebar-content -->
+            {% include "partials/ontology/_ontology_shared_panels.html" %}
+        </div>
+    </div>
+</div>
+
+<!-- OntoViz library for Design section -->
+<script src="{{ url_for('static', filename='global/ontoviz/ontoviz.js') }}?v={{ range(1000000) | random }}"></script>
+
+<!-- Ontology Design module (extracted from _ontology_design.html partial) -->
+<script src="{{ url_for('static', filename='global/js/ontology-design.js') }}?v={{ asset_version }}"></script>
+
+<!-- Ontology modules (extracted from partials) -->
+<script src="{{ url_for('static', filename='ontology/js/ontology-map.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-shared-panels.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-entities.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-relationships.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-dataquality.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-axioms.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-swrl.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-business-rules.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-owl-content.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-information.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-import.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-wizard.js') }}?v={{ asset_version }}"></script>
+<!-- Markdown rendering for assistant chat -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-assistant.js') }}?v={{ asset_version }}"></script>
+
+<!-- Ontology page initialization (extracted from template) -->
+<script src="{{ url_for('static', filename='ontology/js/ontology-init.js') }}?v={{ asset_version }}"></script>
+
+{% endblock %}

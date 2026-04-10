@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>back.core.databricks.VolumeFileService &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for back.core.databricks.VolumeFileService</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Volume file I/O service for Unity Catalog.</span>
+
+<span class="sd">Provides file read / write / list / delete operations on UC Volumes</span>
+<span class="sd">through the Databricks Files API.  Uses a shared ``DatabricksAuth``</span>
+<span class="sd">instance so OAuth / PAT logic is not duplicated.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">quote</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">_REQUEST_TIMEOUT</span><span class="p">,</span> <span class="n">FS_FILES_PATH</span><span class="p">,</span> <span class="n">FS_DIRS_PATH</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.DatabricksAuth</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksAuth</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="VolumeFileService">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">VolumeFileService</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;File operations on Unity Catalog Volumes.</span>
+
+<span class="sd">    Accepts either explicit ``host`` / ``token`` strings **or** a</span>
+<span class="sd">    pre-built ``DatabricksAuth`` instance.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_fs_api_path_suffix</span><span class="p">(</span><span class="n">absolute_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;URL-encode path for Files API (matches Databricks SDK ``_escape_multi_segment_path_parameter``).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">quote</span><span class="p">(</span><span class="n">absolute_path</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">auth</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">DatabricksAuth</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">auth</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span> <span class="o">=</span> <span class="n">auth</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span> <span class="o">=</span> <span class="n">DatabricksAuth</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_session</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_headers</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;Authorization&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Bearer </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">get_bearer_token</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_host</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">host</span>
+
+<div class="viewcode-block" id="VolumeFileService.is_configured">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.is_configured">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_configured</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return *True* when host + credentials are available.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">()</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">has_valid_auth</span><span class="p">())</span></div>
+
+
+<div class="viewcode-block" id="VolumeFileService.get_volume_path">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.get_volume_path">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_volume_path</span><span class="p">(</span><span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">volume</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;/Volumes/</span><span class="si">{</span><span class="n">catalog</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">schema</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">volume</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+
+<div class="viewcode-block" id="VolumeFileService.list_files">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.list_files">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_files</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">volume</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">extensions</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List files in a UC Volume.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            ``(success, files_list, message)``</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_configured</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="s2">&quot;Databricks configuration missing&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">volume_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_volume_path</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">volume</span><span class="p">)</span>
+            <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">()</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}{</span><span class="n">FS_DIRS_PATH</span><span class="si">}{</span><span class="n">VolumeFileService</span><span class="o">.</span><span class="n">_fs_api_path_suffix</span><span class="p">(</span><span class="n">volume_path</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">headers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_headers</span><span class="p">(),</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="n">_REQUEST_TIMEOUT</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">200</span><span class="p">:</span>
+                <span class="n">files</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_directory_contents</span><span class="p">(</span>
+                    <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">(),</span> <span class="n">volume_path</span><span class="p">,</span> <span class="n">extensions</span><span class="o">=</span><span class="n">extensions</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">files</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">files</span><span class="p">)</span><span class="si">}</span><span class="s2"> files&quot;</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">404</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="sa">f</span><span class="s2">&quot;Volume not found: </span><span class="si">{</span><span class="n">volume_path</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="sa">f</span><span class="s2">&quot;Error listing files: </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error listing files: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+
+<div class="viewcode-block" id="VolumeFileService.list_directory">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.list_directory">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_directory</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">dir_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">extensions</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">dirs_only</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List contents at an arbitrary ``/Volumes/…`` path.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_configured</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="s2">&quot;Databricks configuration missing&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">()</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}{</span><span class="n">FS_DIRS_PATH</span><span class="si">}{</span><span class="n">VolumeFileService</span><span class="o">.</span><span class="n">_fs_api_path_suffix</span><span class="p">(</span><span class="n">dir_path</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">headers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_headers</span><span class="p">(),</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="n">_REQUEST_TIMEOUT</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">200</span><span class="p">:</span>
+                <span class="n">items</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_directory_contents</span><span class="p">(</span>
+                    <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">(),</span> <span class="n">dir_path</span><span class="p">,</span>
+                    <span class="n">extensions</span><span class="o">=</span><span class="n">extensions</span><span class="p">,</span> <span class="n">dirs_only</span><span class="o">=</span><span class="n">dirs_only</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">items</span><span class="p">)</span><span class="si">}</span><span class="s2"> items&quot;</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">404</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="sa">f</span><span class="s2">&quot;Directory not found: </span><span class="si">{</span><span class="n">dir_path</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="sa">f</span><span class="s2">&quot;Error listing directory: </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error listing directory </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">dir_path</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_read_file_raw</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">requests</span><span class="o">.</span><span class="n">Response</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;GET a file from the Files API and return ``(success, response, message)``.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_configured</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Databricks configuration missing&quot;</span>  <span class="c1"># type: ignore[return-value]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">()</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}{</span><span class="n">FS_FILES_PATH</span><span class="si">}{</span><span class="n">VolumeFileService</span><span class="o">.</span><span class="n">_fs_api_path_suffix</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">headers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_headers</span><span class="p">(),</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="n">_REQUEST_TIMEOUT</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">200</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">response</span><span class="p">,</span> <span class="s2">&quot;File read successfully&quot;</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">404</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">response</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;File not found: </span><span class="si">{</span><span class="n">file_path</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">403</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">response</span><span class="p">,</span> <span class="s2">&quot;Access denied. Check your permissions.&quot;</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">response</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Error reading file: </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error reading file </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">file_path</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>  <span class="c1"># type: ignore[return-value]</span>
+
+<div class="viewcode-block" id="VolumeFileService.read_file">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.read_file">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">read_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Read a text file. Returns ``(success, content, message)``.&quot;&quot;&quot;</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">resp</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_file_raw</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ok</span> <span class="ow">and</span> <span class="n">resp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">resp</span><span class="o">.</span><span class="n">text</span><span class="p">,</span> <span class="n">msg</span>
+        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">msg</span></div>
+
+
+<div class="viewcode-block" id="VolumeFileService.read_binary_file">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.read_binary_file">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">read_binary_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Read raw bytes. Returns ``(success, data, message)``.&quot;&quot;&quot;</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">resp</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_file_raw</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ok</span> <span class="ow">and</span> <span class="n">resp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">resp</span><span class="o">.</span><span class="n">content</span><span class="p">,</span> <span class="n">msg</span>
+        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">msg</span></div>
+
+
+<div class="viewcode-block" id="VolumeFileService.create_directory">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.create_directory">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_directory</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">directory_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a directory and parents if missing (idempotent). Matches Files API PUT directories.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_configured</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Databricks configuration missing&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">()</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_session</span><span class="o">.</span><span class="n">put</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}{</span><span class="n">FS_DIRS_PATH</span><span class="si">}{</span><span class="n">VolumeFileService</span><span class="o">.</span><span class="n">_fs_api_path_suffix</span><span class="p">(</span><span class="n">directory_path</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">headers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_headers</span><span class="p">(),</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="n">_REQUEST_TIMEOUT</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">201</span><span class="p">,</span> <span class="mi">204</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Directory ensured: </span><span class="si">{</span><span class="n">directory_path</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Failed to create directory: </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error creating directory </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">directory_path</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+
+<div class="viewcode-block" id="VolumeFileService.write_file">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.write_file">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">write_file</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">content</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">overwrite</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write text to a file. Returns ``(success, message)``.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_configured</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Databricks configuration missing&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">()</span>
+            <span class="n">headers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_headers</span><span class="p">()</span>
+            <span class="n">headers</span><span class="p">[</span><span class="s2">&quot;Content-Type&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;application/octet-stream&quot;</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_session</span><span class="o">.</span><span class="n">put</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}{</span><span class="n">FS_FILES_PATH</span><span class="si">}{</span><span class="n">VolumeFileService</span><span class="o">.</span><span class="n">_fs_api_path_suffix</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span>
+                <span class="n">data</span><span class="o">=</span><span class="n">content</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">),</span>
+                <span class="n">params</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;overwrite&quot;</span><span class="p">:</span> <span class="s2">&quot;true&quot;</span> <span class="k">if</span> <span class="n">overwrite</span> <span class="k">else</span> <span class="s2">&quot;false&quot;</span><span class="p">},</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="n">_REQUEST_TIMEOUT</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">201</span><span class="p">,</span> <span class="mi">204</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;File saved successfully: </span><span class="si">{</span><span class="n">file_path</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Failed to write file: </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error writing file: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+
+<div class="viewcode-block" id="VolumeFileService.write_binary_file">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.write_binary_file">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">write_binary_file</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span> <span class="n">overwrite</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write raw bytes to a file. Returns ``(success, message)``.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_configured</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Databricks configuration missing&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">()</span>
+            <span class="n">headers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_headers</span><span class="p">()</span>
+            <span class="n">headers</span><span class="p">[</span><span class="s2">&quot;Content-Type&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;application/octet-stream&quot;</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_session</span><span class="o">.</span><span class="n">put</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}{</span><span class="n">FS_FILES_PATH</span><span class="si">}{</span><span class="n">VolumeFileService</span><span class="o">.</span><span class="n">_fs_api_path_suffix</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span>
+                <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
+                <span class="n">params</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;overwrite&quot;</span><span class="p">:</span> <span class="s2">&quot;true&quot;</span> <span class="k">if</span> <span class="n">overwrite</span> <span class="k">else</span> <span class="s2">&quot;false&quot;</span><span class="p">},</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="n">_REQUEST_TIMEOUT</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">201</span><span class="p">,</span> <span class="mi">204</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;File saved successfully: </span><span class="si">{</span><span class="n">file_path</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Failed to write file: </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error writing binary file: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+
+<div class="viewcode-block" id="VolumeFileService.delete_file">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.delete_file">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete a file. Returns ``(success, message)``.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_configured</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Databricks configuration missing&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">()</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_session</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}{</span><span class="n">FS_FILES_PATH</span><span class="si">}{</span><span class="n">VolumeFileService</span><span class="o">.</span><span class="n">_fs_api_path_suffix</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">headers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_headers</span><span class="p">(),</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="n">_REQUEST_TIMEOUT</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">204</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;File deleted successfully&quot;</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">404</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;File not found: </span><span class="si">{</span><span class="n">file_path</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Failed to delete file (</span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">): </span><span class="si">{</span><span class="n">file_path</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error deleting file </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">file_path</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+
+<div class="viewcode-block" id="VolumeFileService.delete_directory">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.delete_directory">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_directory</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dir_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete an empty directory. Returns ``(success, message)``.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_configured</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Databricks configuration missing&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">()</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_session</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}{</span><span class="n">FS_DIRS_PATH</span><span class="si">}{</span><span class="n">VolumeFileService</span><span class="o">.</span><span class="n">_fs_api_path_suffix</span><span class="p">(</span><span class="n">dir_path</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">headers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_headers</span><span class="p">(),</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="n">_REQUEST_TIMEOUT</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">204</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;Directory deleted successfully&quot;</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">404</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;Directory already gone&quot;</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Failed to delete directory (</span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">): </span><span class="si">{</span><span class="n">dir_path</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error deleting directory </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">dir_path</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_parse_directory_contents</span><span class="p">(</span>
+        <span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
+        <span class="n">base_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">extensions</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">dirs_only</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+        <span class="n">items</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;contents&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="n">is_dir</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;is_directory&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">dirs_only</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_dir</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">extensions</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_dir</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="n">ext</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span> <span class="k">for</span> <span class="n">ext</span> <span class="ow">in</span> <span class="n">extensions</span><span class="p">):</span>
+                    <span class="k">continue</span>
+            <span class="n">items</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">),</span>
+                <span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_path</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;//&quot;</span><span class="p">,</span> <span class="s2">&quot;/&quot;</span><span class="p">),</span>
+                <span class="s2">&quot;is_directory&quot;</span><span class="p">:</span> <span class="n">is_dir</span><span class="p">,</span>
+                <span class="s2">&quot;size&quot;</span><span class="p">:</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;file_size&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="p">})</span>
+        <span class="k">return</span> <span class="n">items</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

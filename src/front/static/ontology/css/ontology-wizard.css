@@ -1,0 +1,13 @@
+/* Ontology wizard progress & table styles */
+
+.cursor-pointer { cursor: pointer; }
+#wizardMetadataTableBody tr:hover { background-color: #f8f9fa; }
+.wizard-table-checkbox { cursor: pointer; }
+
+/* Progress steps styling */
+.wizard-step { transition: all 0.3s ease; padding: 8px 10px; margin: 0 -10px; border-radius: 8px; }
+.wizard-step.active { background: #e7f1ff; }
+.wizard-step.active .fw-semibold { color: #0d6efd; }
+.wizard-step.completed .fw-semibold { color: #198754; }
+.wizard-step-icon { width: 24px; text-align: center; }
+.wizard-step-icon i { font-size: 1.2rem; transition: all 0.3s ease; }

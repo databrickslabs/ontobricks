@@ -1,0 +1,310 @@
+<!-- Data Quality Checks Section — SHACL-driven validation against the triple store -->
+<!-- JS: /static/query/js/query-dataquality.js -->
+<!-- CSS: /static/query/css/query-dataquality.css -->
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-shield-check me-2"></i>Data Quality</h4>
+        <p class="text-muted mb-0 small">Validate SHACL shapes against the triple store</p>
+    </div>
+    <button class="btn btn-sm btn-outline-primary" onclick="DQExecModule.runAllChecks()" id="runDQChecksBtn">
+        <i class="bi bi-play-fill me-1"></i> Run All
+    </button>
+</div>
+<div class="card dq-card-fill">
+    <div class="card-body d-flex flex-column p-0">
+
+        <!-- Tabs -->
+        <ul class="nav nav-tabs nav-fill small flex-shrink-0 px-3 pt-3" id="dqTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="dq-tab-options" data-bs-toggle="tab"
+                        data-bs-target="#dq-pane-options" type="button" role="tab"
+                        aria-controls="dq-pane-options" aria-selected="true">
+                    <i class="bi bi-gear me-1"></i>Options
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="dq-tab-report" data-bs-toggle="tab"
+                        data-bs-target="#dq-pane-report" type="button" role="tab"
+                        aria-controls="dq-pane-report" aria-selected="false">
+                    <i class="bi bi-clipboard-data me-1"></i>Report
+                </button>
+            </li>
+        </ul>
+
+        <!-- Progress area (visible across all tabs) -->
+        <div id="dqExecProgressArea" class="flex-shrink-0" style="display:none">
+            <div class="card bg-light border border-top-0 rounded-0 mx-3 mb-0">
+                <div class="card-body py-3">
+                    <div class="text-center mb-2">
+                        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                        <strong id="dqExecProgressStep" class="text-muted">Starting...</strong>
+                    </div>
+                    <div class="progress" style="height:20px">
+                        <div id="dqExecProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                             style="width:0%" role="progressbar">0%</div>
+                    </div>
+                    <small id="dqExecProgressDetail" class="text-muted mt-1 d-block text-center"></small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab panes -->
+        <div class="tab-content flex-grow-1 overflow-auto" id="dqPanes" style="min-height:0;">
+
+            <!-- Options pane -->
+            <div class="tab-pane fade show active p-3" id="dq-pane-options" role="tabpanel" aria-labelledby="dq-tab-options">
+                <!-- Backend Selector -->
+                <div class="mb-3 d-flex align-items-center gap-3">
+                    <div class="btn-group btn-group-sm" role="group" id="dqBackendToggle">
+                        <button type="button" class="btn btn-outline-secondary" data-backend="view"
+                                title="Run SHACL checks as SQL against the zero-copy VIEW via SQL Warehouse">
+                            <i class="bi bi-table me-1"></i>Zero-Copy
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary active" data-backend="graph"
+                                title="Run SHACL checks against the graph database">
+                            <i class="bi bi-diagram-3 me-1"></i>Graph
+                        </button>
+                    </div>
+                    <span class="small text-muted">
+                        <i class="bi bi-database me-1"></i>
+                        <span id="dqExecTripleStoreTable">Loading...</span>
+                    </span>
+                </div>
+
+                <!-- Dimension Selection Tiles -->
+                <div class="d-flex justify-content-end gap-2 mb-2">
+                    <a href="#" class="small text-decoration-none" onclick="DQExecModule.toggleAllDimensions(true);return false;">
+                        <i class="bi bi-check-all me-1"></i>Select all
+                    </a>
+                    <span class="text-muted small">|</span>
+                    <a href="#" class="small text-decoration-none" onclick="DQExecModule.toggleAllDimensions(false);return false;">
+                        <i class="bi bi-x-circle me-1"></i>Unselect all
+                    </a>
+                </div>
+                <div class="row g-2">
+                    <div class="col-4">
+                        <label class="reasoning-tile active w-100" for="dqDimCompleteness">
+                            <input class="form-check-input rt-check" type="checkbox" id="dqDimCompleteness" checked
+                                   data-dimension="completeness" onchange="DQExecModule._syncTile(this)">
+                            <i class="bi bi-check2-all rt-icon text-info"></i>
+                            <span class="rt-title">Completeness</span>
+                            <span class="rt-desc">Required properties present</span>
+                        </label>
+                    </div>
+                    <div class="col-4">
+                        <label class="reasoning-tile active w-100" for="dqDimCardinality">
+                            <input class="form-check-input rt-check" type="checkbox" id="dqDimCardinality" checked
+                                   data-dimension="cardinality" onchange="DQExecModule._syncTile(this)">
+                            <i class="bi bi-123 rt-icon text-primary"></i>
+                            <span class="rt-title">Cardinality</span>
+                            <span class="rt-desc">Min / max value counts</span>
+                        </label>
+                    </div>
+                    <div class="col-4">
+                        <label class="reasoning-tile active w-100" for="dqDimUniqueness">
+                            <input class="form-check-input rt-check" type="checkbox" id="dqDimUniqueness" checked
+                                   data-dimension="uniqueness" onchange="DQExecModule._syncTile(this)">
+                            <i class="bi bi-fingerprint rt-icon text-warning"></i>
+                            <span class="rt-title">Uniqueness</span>
+                            <span class="rt-desc">No duplicate values</span>
+                        </label>
+                    </div>
+                    <div class="col-4">
+                        <label class="reasoning-tile active w-100" for="dqDimConsistency">
+                            <input class="form-check-input rt-check" type="checkbox" id="dqDimConsistency" checked
+                                   data-dimension="consistency" onchange="DQExecModule._syncTile(this)">
+                            <i class="bi bi-link-45deg rt-icon text-success"></i>
+                            <span class="rt-title">Consistency</span>
+                            <span class="rt-desc">Cross-property constraints</span>
+                        </label>
+                    </div>
+                    <div class="col-4">
+                        <label class="reasoning-tile active w-100" for="dqDimConformance">
+                            <input class="form-check-input rt-check" type="checkbox" id="dqDimConformance" checked
+                                   data-dimension="conformance" onchange="DQExecModule._syncTile(this)">
+                            <i class="bi bi-regex rt-icon text-danger"></i>
+                            <span class="rt-title">Conformance</span>
+                            <span class="rt-desc">Pattern &amp; type validation</span>
+                        </label>
+                    </div>
+                    <div class="col-4">
+                        <label class="reasoning-tile active w-100" for="dqDimStructural">
+                            <input class="form-check-input rt-check" type="checkbox" id="dqDimStructural" checked
+                                   data-dimension="structural" onchange="DQExecModule._syncTile(this)">
+                            <i class="bi bi-diagram-3 rt-icon text-dark"></i>
+                            <span class="rt-title">Structural</span>
+                            <span class="rt-desc">Transitive &amp; reflexive integrity</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Report pane -->
+            <div class="tab-pane fade p-3" id="dq-pane-report" role="tabpanel" aria-labelledby="dq-tab-report">
+                <!-- Initial message -->
+                <div id="dqExecInitMessage" class="text-center text-muted py-4">
+                    <i class="bi bi-shield-check fs-1 d-block mb-2"></i>
+                    <p>Run data quality checks to validate business rules and constraints against the triple store.</p>
+                    <small>Rules are defined in <strong>Ontology &gt; Data Quality</strong> and <strong>Business Rules</strong>.</small>
+                </div>
+
+                <!-- Dimension Gauges -->
+                <div id="dqGaugesArea" class="mb-3" style="display:none">
+                    <div class="row g-2">
+                        <div class="col-4"><div class="dq-gauge-box text-center"><canvas id="gaugeCompleteness" width="150" height="80"></canvas><small class="text-muted">Completeness</small></div></div>
+                        <div class="col-4"><div class="dq-gauge-box text-center"><canvas id="gaugeCardinality" width="150" height="80"></canvas><small class="text-muted">Cardinality</small></div></div>
+                        <div class="col-4"><div class="dq-gauge-box text-center"><canvas id="gaugeUniqueness" width="150" height="80"></canvas><small class="text-muted">Uniqueness</small></div></div>
+                    </div>
+                    <div class="row g-2 mt-1">
+                        <div class="col-4"><div class="dq-gauge-box text-center"><canvas id="gaugeConsistency" width="150" height="80"></canvas><small class="text-muted">Consistency</small></div></div>
+                        <div class="col-4"><div class="dq-gauge-box text-center"><canvas id="gaugeConformance" width="150" height="80"></canvas><small class="text-muted">Conformance</small></div></div>
+                        <div class="col-4"><div class="dq-gauge-box text-center"><canvas id="gaugeStructural" width="150" height="80"></canvas><small class="text-muted">Structural</small></div></div>
+                    </div>
+                </div>
+
+                <!-- Results by dimension (accordion) -->
+                <div id="dqExecResults" style="display:none">
+                    <div class="accordion accordion-flush" id="dqExecAccordion">
+                        <div class="accordion-item" id="dqExecResultsCompleteness">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2 px-3" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#dqCollapseCompleteness">
+                                    <i class="bi bi-check2-all me-2 text-info"></i>
+                                    <span class="fw-semibold small">Completeness</span>
+                                    <span class="dq-cat-score ms-auto me-2" data-cat-score="completeness"></span>
+                                    <span class="badge bg-secondary bg-opacity-50 dq-cat-count" data-cat-count="completeness">0</span>
+                                </button>
+                            </h2>
+                            <div id="dqCollapseCompleteness" class="accordion-collapse collapse" data-bs-parent="#dqExecAccordion">
+                                <div class="accordion-body p-2">
+                                    <div class="dq-exec-result-list" data-category="completeness"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item" id="dqExecResultsCardinality">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2 px-3" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#dqCollapseCardinality">
+                                    <i class="bi bi-123 me-2 text-primary"></i>
+                                    <span class="fw-semibold small">Cardinality</span>
+                                    <span class="dq-cat-score ms-auto me-2" data-cat-score="cardinality"></span>
+                                    <span class="badge bg-secondary bg-opacity-50 dq-cat-count" data-cat-count="cardinality">0</span>
+                                </button>
+                            </h2>
+                            <div id="dqCollapseCardinality" class="accordion-collapse collapse" data-bs-parent="#dqExecAccordion">
+                                <div class="accordion-body p-2">
+                                    <div class="dq-exec-result-list" data-category="cardinality"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item" id="dqExecResultsUniqueness">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2 px-3" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#dqCollapseUniqueness">
+                                    <i class="bi bi-fingerprint me-2 text-warning"></i>
+                                    <span class="fw-semibold small">Uniqueness</span>
+                                    <span class="dq-cat-score ms-auto me-2" data-cat-score="uniqueness"></span>
+                                    <span class="badge bg-secondary bg-opacity-50 dq-cat-count" data-cat-count="uniqueness">0</span>
+                                </button>
+                            </h2>
+                            <div id="dqCollapseUniqueness" class="accordion-collapse collapse" data-bs-parent="#dqExecAccordion">
+                                <div class="accordion-body p-2">
+                                    <div class="dq-exec-result-list" data-category="uniqueness"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item" id="dqExecResultsConsistency">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2 px-3" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#dqCollapseConsistency">
+                                    <i class="bi bi-link-45deg me-2 text-success"></i>
+                                    <span class="fw-semibold small">Consistency</span>
+                                    <span class="dq-cat-score ms-auto me-2" data-cat-score="consistency"></span>
+                                    <span class="badge bg-secondary bg-opacity-50 dq-cat-count" data-cat-count="consistency">0</span>
+                                </button>
+                            </h2>
+                            <div id="dqCollapseConsistency" class="accordion-collapse collapse" data-bs-parent="#dqExecAccordion">
+                                <div class="accordion-body p-2">
+                                    <div class="dq-exec-result-list" data-category="consistency"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item" id="dqExecResultsConformance">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2 px-3" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#dqCollapseConformance">
+                                    <i class="bi bi-regex me-2 text-danger"></i>
+                                    <span class="fw-semibold small">Conformance</span>
+                                    <span class="dq-cat-score ms-auto me-2" data-cat-score="conformance"></span>
+                                    <span class="badge bg-secondary bg-opacity-50 dq-cat-count" data-cat-count="conformance">0</span>
+                                </button>
+                            </h2>
+                            <div id="dqCollapseConformance" class="accordion-collapse collapse" data-bs-parent="#dqExecAccordion">
+                                <div class="accordion-body p-2">
+                                    <div class="dq-exec-result-list" data-category="conformance"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item" id="dqExecResultsStructural">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2 px-3" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#dqCollapseStructural">
+                                    <i class="bi bi-diagram-3 me-2 text-dark"></i>
+                                    <span class="fw-semibold small">Structural</span>
+                                    <span class="dq-cat-score ms-auto me-2" data-cat-score="structural"></span>
+                                    <span class="badge bg-secondary bg-opacity-50 dq-cat-count" data-cat-count="structural">0</span>
+                                </button>
+                            </h2>
+                            <div id="dqCollapseStructural" class="accordion-collapse collapse" data-bs-parent="#dqExecAccordion">
+                                <div class="accordion-body p-2">
+                                    <div class="dq-exec-result-list" data-category="structural"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SQL Query Viewer -->
+                <div id="dqExecQueryViewer" class="mt-4" style="display:none">
+                    <h6 class="text-secondary mb-2">
+                        <i class="bi bi-code-slash me-1"></i> SQL Query
+                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="DQExecModule.hideQueryViewer()">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </h6>
+                    <pre class="bg-dark text-light p-3 rounded small" id="dqExecQueryCode" style="max-height:200px;overflow:auto"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Violations Modal -->
+<div class="modal fade" id="dqExecViolationsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="dqExecViolationsTitle">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Violations
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="bg-light p-2 border-bottom text-muted small">
+                    <i class="bi bi-list-ul me-1"></i> <span id="dqExecViolationsCount">0 violations</span>
+                </div>
+                <div style="max-height:400px;overflow:auto">
+                    <table class="table table-sm table-striped table-hover mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr id="dqExecViolationsHeader"></tr>
+                        </thead>
+                        <tbody id="dqExecViolationsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

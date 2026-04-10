@@ -1,0 +1,89 @@
+``app.html`` -- Web UI Routers & Services
+==========================================
+
+Home
+----
+
+.. automodule:: app.html.home.routes
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: app.html.home.service
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Configuration
+-------------
+
+.. automodule:: app.html.config.routes
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: app.html.config.service
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Ontology
+--------
+
+.. automodule:: app.html.ontology.routes
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: app.html.ontology.service
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Mapping
+-------
+
+.. automodule:: app.html.mapping.routes
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: app.html.mapping.service
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Digital Twin
+------------
+
+.. automodule:: app.html.dtwin.routes
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: app.html.dtwin.service
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :exclude-members: DigitalTwin, ProjectSnapshot
+
+Project
+-------
+
+.. automodule:: app.html.project.routes
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: app.html.project.service
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Tasks
+-----
+
+.. automodule:: app.html.tasks.routes
+   :members:
+   :undoc-members:
+   :show-inheritance:

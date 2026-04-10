@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>app.core.w3c.shacl.parser &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/documentation.html">OntoBricks documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.html"><code class="docutils literal notranslate"><span class="pre">app</span></code> – Application Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.fastapi.html"><code class="docutils literal notranslate"><span class="pre">app.fastapi</span></code> — FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">app.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">app.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">app.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">app.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">app.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">app.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">app.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">app.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">app.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.html.html"><code class="docutils literal notranslate"><span class="pre">app.html</span></code> – Web UI Routers &amp; Services</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">app.config</span></code> – Application Constants &amp; Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for app.core.w3c.shacl.parser</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;SHACL shapes graph parser.</span>
+
+<span class="sd">Reads SHACL Turtle (or other RDF serialisations) and extracts internal</span>
+<span class="sd">shape dicts compatible with ``SHACLService``.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Namespace</span><span class="p">,</span> <span class="n">URIRef</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib.namespace</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF</span><span class="p">,</span> <span class="n">RDFS</span><span class="p">,</span> <span class="n">XSD</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">app.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="n">SH</span> <span class="o">=</span> <span class="n">Namespace</span><span class="p">(</span><span class="s2">&quot;http://www.w3.org/ns/shacl#&quot;</span><span class="p">)</span>
+
+<span class="n">_PARAM_CATEGORY_HINTS</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">minCount</span><span class="p">):</span> <span class="s2">&quot;completeness&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">maxCount</span><span class="p">):</span> <span class="s2">&quot;cardinality&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">pattern</span><span class="p">):</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">flags</span><span class="p">):</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">hasValue</span><span class="p">):</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="p">[</span><span class="s2">&quot;in&quot;</span><span class="p">]):</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">minInclusive</span><span class="p">):</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">maxInclusive</span><span class="p">):</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">minExclusive</span><span class="p">):</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">maxExclusive</span><span class="p">):</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">minLength</span><span class="p">):</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">maxLength</span><span class="p">):</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="p">[</span><span class="s2">&quot;class&quot;</span><span class="p">]):</span> <span class="s2">&quot;consistency&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">node</span><span class="p">):</span> <span class="s2">&quot;consistency&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">datatype</span><span class="p">):</span> <span class="s2">&quot;consistency&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">_SEVERITY_REVERSE</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">Violation</span><span class="p">):</span> <span class="s2">&quot;sh:Violation&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">Warning</span><span class="p">):</span> <span class="s2">&quot;sh:Warning&quot;</span><span class="p">,</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">Info</span><span class="p">):</span> <span class="s2">&quot;sh:Info&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_local_name</span><span class="p">(</span><span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">if</span> <span class="s2">&quot;#&quot;</span> <span class="ow">in</span> <span class="n">uri</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="SHACLParser">
+<a class="viewcode-back" href="../../../../../api/app.core.w3c.html#app.core.w3c.shacl.parser.SHACLParser">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SHACLParser</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Parse a SHACL shapes graph into internal shape dicts.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="SHACLParser.parse">
+<a class="viewcode-back" href="../../../../../api/app.core.w3c.html#app.core.w3c.shacl.parser.SHACLParser.parse">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">turtle_content</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;turtle&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse SHACL Turtle and return a list of shape dicts.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            turtle_content: SHACL serialised as Turtle (or another RDF format).</span>
+<span class="sd">            format: RDFLib parse format (default ``turtle``).</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            List of internal shape dicts.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">g</span> <span class="o">=</span> <span class="n">Graph</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">g</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">turtle_content</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="nb">format</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Failed to parse SHACL content: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="n">shapes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">node_shape</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">NodeShape</span><span class="p">):</span>
+            <span class="n">target_class_uri</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">target_class</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">for</span> <span class="n">tc</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">node_shape</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">targetClass</span><span class="p">):</span>
+                <span class="n">target_class_uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">tc</span><span class="p">)</span>
+                <span class="n">target_class</span> <span class="o">=</span> <span class="n">_local_name</span><span class="p">(</span><span class="n">target_class_uri</span><span class="p">)</span>
+                <span class="k">break</span>
+
+            <span class="k">for</span> <span class="n">ps</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">node_shape</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">property</span><span class="p">):</span>
+                <span class="n">shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_property_shape</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">target_class</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">shape</span><span class="p">:</span>
+                    <span class="n">shapes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">sparql_node</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">node_shape</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">sparql</span><span class="p">):</span>
+                <span class="n">shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_sparql_constraint</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">sparql_node</span><span class="p">,</span> <span class="n">target_class</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">shape</span><span class="p">:</span>
+                    <span class="n">shapes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+
+            <span class="n">closed</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">node_shape</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">closed</span><span class="p">):</span>
+                <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;true&quot;</span><span class="p">:</span>
+                    <span class="n">closed</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">if</span> <span class="n">closed</span><span class="p">:</span>
+                <span class="n">shapes</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;shape_structural_</span><span class="si">{</span><span class="n">target_class</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;global&#39;</span><span class="si">}</span><span class="s2">_closed_</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">6</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;structural&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">target_class</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;Global&#39;</span><span class="si">}</span><span class="s2"> is a closed shape&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;target_class&quot;</span><span class="p">:</span> <span class="n">target_class</span><span class="p">,</span>
+                    <span class="s2">&quot;target_class_uri&quot;</span><span class="p">:</span> <span class="n">target_class_uri</span><span class="p">,</span>
+                    <span class="s2">&quot;property_path&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;property_uri&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;shacl_type&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:closed&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{},</span>
+                    <span class="s2">&quot;severity&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:Violation&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">target_class</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;Shape&#39;</span><span class="si">}</span><span class="s2"> does not allow unexpected properties&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="p">})</span>
+
+        <span class="k">return</span> <span class="n">shapes</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_parse_property_shape</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">target_class</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+        <span class="n">prop_uri</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">prop_path</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">ps</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">path</span><span class="p">):</span>
+            <span class="n">prop_uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+            <span class="n">prop_path</span> <span class="o">=</span> <span class="n">_local_name</span><span class="p">(</span><span class="n">prop_uri</span><span class="p">)</span>
+            <span class="k">break</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">prop_uri</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">shacl_type</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">category</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="n">param_predicates</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">minCount</span><span class="p">,</span> <span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">maxCount</span><span class="p">,</span> <span class="s2">&quot;sh:maxCount&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">pattern</span><span class="p">,</span> <span class="s2">&quot;sh:pattern&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">flags</span><span class="p">,</span> <span class="s2">&quot;sh:flags&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">hasValue</span><span class="p">,</span> <span class="s2">&quot;sh:hasValue&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">minInclusive</span><span class="p">,</span> <span class="s2">&quot;sh:minInclusive&quot;</span><span class="p">,</span> <span class="nb">float</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">maxInclusive</span><span class="p">,</span> <span class="s2">&quot;sh:maxInclusive&quot;</span><span class="p">,</span> <span class="nb">float</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">minExclusive</span><span class="p">,</span> <span class="s2">&quot;sh:minExclusive&quot;</span><span class="p">,</span> <span class="nb">float</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">maxExclusive</span><span class="p">,</span> <span class="s2">&quot;sh:maxExclusive&quot;</span><span class="p">,</span> <span class="nb">float</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">minLength</span><span class="p">,</span> <span class="s2">&quot;sh:minLength&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">maxLength</span><span class="p">,</span> <span class="s2">&quot;sh:maxLength&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">SH</span><span class="p">[</span><span class="s2">&quot;class&quot;</span><span class="p">],</span> <span class="s2">&quot;sh:class&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">node</span><span class="p">,</span> <span class="s2">&quot;sh:node&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">SH</span><span class="o">.</span><span class="n">datatype</span><span class="p">,</span> <span class="s2">&quot;sh:datatype&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">),</span>
+        <span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">pred</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">conv</span> <span class="ow">in</span> <span class="n">param_predicates</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">ps</span><span class="p">,</span> <span class="n">pred</span><span class="p">):</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">conv</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+                <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+                    <span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">shacl_type</span><span class="p">:</span>
+                    <span class="n">shacl_type</span> <span class="o">=</span> <span class="n">key</span>
+                <span class="n">hint</span> <span class="o">=</span> <span class="n">_PARAM_CATEGORY_HINTS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">pred</span><span class="p">),</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">hint</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">category</span><span class="p">:</span>
+                    <span class="n">category</span> <span class="o">=</span> <span class="n">hint</span>
+
+        <span class="n">category</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_refine_category</span><span class="p">(</span><span class="n">category</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">shacl_type</span><span class="p">:</span>
+            <span class="n">shacl_type</span> <span class="o">=</span> <span class="s2">&quot;sh:minCount&quot;</span>
+
+        <span class="n">severity</span> <span class="o">=</span> <span class="s2">&quot;sh:Violation&quot;</span>
+        <span class="k">for</span> <span class="n">sev</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">ps</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">severity</span><span class="p">):</span>
+            <span class="n">severity</span> <span class="o">=</span> <span class="n">_SEVERITY_REVERSE</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">sev</span><span class="p">),</span> <span class="s2">&quot;sh:Violation&quot;</span><span class="p">)</span>
+            <span class="k">break</span>
+
+        <span class="n">message</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">msg</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">ps</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">message</span><span class="p">):</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+            <span class="k">break</span>
+
+        <span class="n">label</span> <span class="o">=</span> <span class="n">message</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">shacl_type</span><span class="si">}</span><span class="s2"> on </span><span class="si">{</span><span class="n">target_class</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">prop_path</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;shape_</span><span class="si">{</span><span class="n">category</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">target_class</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">prop_path</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">6</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="n">category</span> <span class="ow">or</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
+            <span class="s2">&quot;target_class&quot;</span><span class="p">:</span> <span class="n">target_class</span><span class="p">,</span>
+            <span class="s2">&quot;target_class_uri&quot;</span><span class="p">:</span> <span class="n">target_class_uri</span><span class="p">,</span>
+            <span class="s2">&quot;property_path&quot;</span><span class="p">:</span> <span class="n">prop_path</span><span class="p">,</span>
+            <span class="s2">&quot;property_uri&quot;</span><span class="p">:</span> <span class="n">prop_uri</span><span class="p">,</span>
+            <span class="s2">&quot;shacl_type&quot;</span><span class="p">:</span> <span class="n">shacl_type</span><span class="p">,</span>
+            <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="n">params</span><span class="p">,</span>
+            <span class="s2">&quot;severity&quot;</span><span class="p">:</span> <span class="n">severity</span><span class="p">,</span>
+            <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span>
+            <span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_parse_sparql_constraint</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">sparql_node</span><span class="p">,</span> <span class="n">target_class</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">sel</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">sparql_node</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">select</span><span class="p">):</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">sel</span><span class="p">)</span>
+            <span class="k">break</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">query</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">message</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">msg</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">sparql_node</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">message</span><span class="p">):</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+            <span class="k">break</span>
+
+        <span class="n">severity</span> <span class="o">=</span> <span class="s2">&quot;sh:Violation&quot;</span>
+        <span class="k">for</span> <span class="n">sev</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">sparql_node</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">severity</span><span class="p">):</span>
+            <span class="n">severity</span> <span class="o">=</span> <span class="n">_SEVERITY_REVERSE</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">sev</span><span class="p">),</span> <span class="s2">&quot;sh:Violation&quot;</span><span class="p">)</span>
+            <span class="k">break</span>
+
+        <span class="n">category</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_infer_sparql_category</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;shape_</span><span class="si">{</span><span class="n">category</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">target_class</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;global&#39;</span><span class="si">}</span><span class="s2">_sparql_</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">6</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="n">category</span><span class="p">,</span>
+            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">message</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;SPARQL constraint on </span><span class="si">{</span><span class="n">target_class</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;graph&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;target_class&quot;</span><span class="p">:</span> <span class="n">target_class</span><span class="p">,</span>
+            <span class="s2">&quot;target_class_uri&quot;</span><span class="p">:</span> <span class="n">target_class_uri</span><span class="p">,</span>
+            <span class="s2">&quot;property_path&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;property_uri&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;shacl_type&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:sparql&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;sh:select&quot;</span><span class="p">:</span> <span class="n">query</span><span class="p">},</span>
+            <span class="s2">&quot;severity&quot;</span><span class="p">:</span> <span class="n">severity</span><span class="p">,</span>
+            <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span>
+            <span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="p">}</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_refine_category</span><span class="p">(</span><span class="n">category</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Refine the auto-detected category using parameter combinations.&quot;&quot;&quot;</span>
+        <span class="n">has_min</span> <span class="o">=</span> <span class="s2">&quot;sh:minCount&quot;</span> <span class="ow">in</span> <span class="n">params</span>
+        <span class="n">has_max</span> <span class="o">=</span> <span class="s2">&quot;sh:maxCount&quot;</span> <span class="ow">in</span> <span class="n">params</span>
+        <span class="k">if</span> <span class="n">has_min</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">has_max</span><span class="p">:</span>
+            <span class="n">min_val</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">min_val</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">params</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">return</span> <span class="s2">&quot;completeness&quot;</span>
+            <span class="k">return</span> <span class="s2">&quot;cardinality&quot;</span>
+        <span class="k">if</span> <span class="n">has_max</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">has_min</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;cardinality&quot;</span>
+        <span class="k">if</span> <span class="n">has_min</span> <span class="ow">and</span> <span class="n">has_max</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;cardinality&quot;</span>
+        <span class="k">return</span> <span class="n">category</span> <span class="ow">or</span> <span class="s2">&quot;conformance&quot;</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_infer_sparql_category</span><span class="p">(</span><span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Guess the quality dimension from a SPARQL constraint&#39;s content.&quot;&quot;&quot;</span>
+        <span class="n">lower_q</span> <span class="o">=</span> <span class="p">(</span><span class="n">query</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">message</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">if</span> <span class="s2">&quot;orphan&quot;</span> <span class="ow">in</span> <span class="n">lower_q</span> <span class="ow">or</span> <span class="s2">&quot;no relationship&quot;</span> <span class="ow">in</span> <span class="n">lower_q</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;structural&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;unique&quot;</span> <span class="ow">in</span> <span class="n">lower_q</span> <span class="ow">or</span> <span class="s2">&quot;duplicate&quot;</span> <span class="ow">in</span> <span class="n">lower_q</span> <span class="ow">or</span> <span class="s2">&quot;distinct&quot;</span> <span class="ow">in</span> <span class="n">lower_q</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;uniqueness&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;missing&quot;</span> <span class="ow">in</span> <span class="n">lower_q</span> <span class="ow">or</span> <span class="s2">&quot;required&quot;</span> <span class="ow">in</span> <span class="n">lower_q</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;completeness&quot;</span>
+        <span class="k">return</span> <span class="s2">&quot;structural&quot;</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

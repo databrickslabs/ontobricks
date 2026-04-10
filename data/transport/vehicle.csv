@@ -1,0 +1,121 @@
+vehicle_id,fleet_type,vehicle_category,capacity,manufacture_year,manufacturer,energy_type,is_air_conditioned,status,last_maintenance_date
+VH0001,MP14,metro,722,2022,Alstom,electric,True,in_service,2025-02-10
+VH0002,Solaris Urbino 18,bus_articulated,150,2020,Mercedes,electric,True,in_service,2025-06-29
+VH0003,Solaris Urbino 18,bus_articulated,150,2020,MAN,electric,False,in_service,2025-04-21
+VH0004,MP73,metro,583,1977,Bombardier,electric,False,in_service,2024-06-30
+VH0005,MP73,metro,583,1976,Iveco,hydrogen,True,maintenance,2024-05-31
+VH0006,Heuliez GX 337,bus,95,2018,CAF,electric,True,in_service,2024-12-11
+VH0007,MF01,metro,600,2010,Iveco,diesel,True,retired,2025-11-04
+VH0008,Bluebus 12m,bus_electric,80,2018,Iveco,electric,True,in_service,2025-09-03
+VH0009,Citadis 402,tramway,304,2006,Bombardier,diesel,True,in_service,2024-03-25
+VH0010,Alstom Régiolis,transilien,500,2015,MAN,diesel,False,in_service,2024-09-14
+VH0011,Iveco Urbanway,bus,100,2020,Mercedes,hydrogen,True,maintenance,2025-04-29
+VH0012,MI2N,rer,1300,2001,Mercedes,hydrogen,True,in_service,2025-12-15
+VH0013,MF77,metro,560,1981,Heuliez,hydrogen,False,retired,2024-03-27
+VH0014,MAN Lion's City,bus,90,2016,Iveco,electric,True,maintenance,2025-06-20
+VH0015,Citadis 302,tramway,210,2001,MAN,electric,True,in_service,2025-07-12
+VH0016,MF67,metro,560,1969,MAN,electric,False,in_service,2024-07-02
+VH0017,Citadis 302,tramway,210,2000,Solaris,electric,False,in_service,2024-04-15
+VH0018,MF67,metro,560,1969,Bombardier,electric,True,in_service,2024-12-25
+VH0019,Alstom Régiolis,transilien,500,2016,Mercedes,diesel,False,retired,2024-01-20
+VH0020,Iveco Urbanway,bus,100,2016,Heuliez,hydrogen,True,maintenance,2025-11-27
+VH0021,MF01,metro,600,2010,Iveco,electric,True,in_service,2024-08-10
+VH0022,MI79,rer,900,1979,Iveco,electric,True,in_service,2024-12-07
+VH0023,MI09,rer,1060,2013,CAF,hybrid,True,retired,2025-08-20
+VH0024,MI2N,rer,1300,2003,Solaris,hydrogen,False,in_service,2025-06-29
+VH0025,MAN Lion's City,bus,90,2018,CAF,electric,True,retired,2025-11-24
+VH0026,MP14,metro,722,2024,Iveco,electric,True,in_service,2024-05-13
+VH0027,MI79,rer,900,1981,CAF,hybrid,True,retired,2024-12-14
+VH0028,Alstom Régiolis,transilien,500,2012,MAN,electric,False,in_service,2024-08-28
+VH0029,Citadis 302,tramway,210,1998,Alstom,electric,True,maintenance,2025-07-29
+VH0030,MP73,metro,583,1978,MAN,hybrid,False,maintenance,2025-12-14
+VH0031,MI09,rer,1060,2012,Solaris,hybrid,True,in_service,2025-10-24
+VH0032,Alstom Régiolis,transilien,500,2014,Mercedes,electric,True,retired,2025-05-19
+VH0033,Heuliez GX 337,bus,95,2020,CAF,hydrogen,False,maintenance,2025-04-17
+VH0034,Iveco Urbanway,bus,100,2017,Bombardier,electric,True,maintenance,2024-10-09
+VH0035,Citadis 302,tramway,210,2002,CAF,electric,False,retired,2025-08-04
+VH0036,MF77,metro,560,1978,CAF,hydrogen,False,in_service,2025-09-27
+VH0037,MP73,metro,583,1977,Alstom,hybrid,True,retired,2025-07-08
+VH0038,Citadis 302,tramway,210,1996,MAN,hybrid,True,in_service,2024-05-17
+VH0039,MP14,metro,722,2024,Solaris,electric,False,maintenance,2025-03-01
+VH0040,MAN Lion's City,bus,90,2013,Iveco,hybrid,False,maintenance,2024-02-04
+VH0041,MF01,metro,600,2011,MAN,hybrid,False,in_service,2025-08-24
+VH0042,MF01,metro,600,2007,Heuliez,hybrid,True,in_service,2024-07-08
+VH0043,MP14,metro,722,2027,Mercedes,electric,False,retired,2025-01-04
+VH0044,MP73,metro,583,1972,Bombardier,diesel,True,in_service,2024-06-13
+VH0045,MI09,rer,1060,2010,Iveco,electric,True,retired,2025-07-09
+VH0046,MF01,metro,600,2006,Mercedes,electric,False,in_service,2025-01-05
+VH0047,Solaris Urbino 18,bus_articulated,150,2020,Iveco,electric,False,in_service,2024-06-13
+VH0048,Bluebus 12m,bus_electric,80,2020,CAF,diesel,True,in_service,2024-11-21
+VH0049,Mercedes Citaro,bus,105,2020,Heuliez,hydrogen,False,in_service,2025-05-28
+VH0050,Citadis 402,tramway,304,2008,Alstom,electric,True,in_service,2025-09-16
+VH0051,MF01,metro,600,2008,Solaris,electric,True,maintenance,2025-07-20
+VH0052,Mercedes Citaro,bus,105,2020,Bombardier,hydrogen,True,in_service,2025-11-09
+VH0053,MF01,metro,600,2006,MAN,electric,False,in_service,2024-03-22
+VH0054,MI79,rer,900,1981,Alstom,hydrogen,False,maintenance,2025-08-09
+VH0055,MP73,metro,583,1975,CAF,electric,True,in_service,2025-03-07
+VH0056,MI79,rer,900,1978,Iveco,electric,False,in_service,2025-05-22
+VH0057,MP73,metro,583,1975,Solaris,hydrogen,False,in_service,2024-08-28
+VH0058,Alstom Régiolis,transilien,500,2016,Heuliez,electric,True,in_service,2024-03-19
+VH0059,Solaris Urbino 18,bus_articulated,150,2020,Bombardier,hydrogen,True,maintenance,2024-06-22
+VH0060,Bluebus 12m,bus_electric,80,2021,Mercedes,hydrogen,False,in_service,2024-02-24
+VH0061,Mercedes Citaro,bus,105,2017,Solaris,hybrid,True,in_service,2025-02-02
+VH0062,Alstom Régiolis,transilien,500,2016,Heuliez,electric,True,in_service,2025-11-11
+VH0063,MF77,metro,560,1982,Solaris,electric,False,maintenance,2024-02-18
+VH0064,Heuliez GX 337,bus,95,2019,Alstom,electric,False,in_service,2024-07-04
+VH0065,MF01,metro,600,2010,Bombardier,hydrogen,False,retired,2025-11-29
+VH0066,MP14,metro,722,2025,CAF,electric,False,in_service,2025-07-17
+VH0067,MF67,metro,560,1968,MAN,diesel,True,maintenance,2024-10-19
+VH0068,Mercedes Citaro,bus,105,2016,Iveco,hydrogen,True,in_service,2025-11-09
+VH0069,MI79,rer,900,1980,Mercedes,hydrogen,True,in_service,2025-01-10
+VH0070,MI09,rer,1060,2012,Mercedes,hydrogen,True,maintenance,2025-09-23
+VH0071,MF77,metro,560,1981,MAN,electric,True,in_service,2024-10-07
+VH0072,Alstom Régiolis,transilien,500,2014,Iveco,diesel,False,in_service,2025-10-07
+VH0073,MI09,rer,1060,2009,Alstom,hybrid,True,retired,2025-02-05
+VH0074,Alstom Régiolis,transilien,500,2015,Mercedes,electric,True,retired,2025-12-05
+VH0075,Bluebus 12m,bus_electric,80,2022,Solaris,hydrogen,True,in_service,2025-10-22
+VH0076,Alstom Régiolis,transilien,500,2016,CAF,electric,False,in_service,2025-10-24
+VH0077,Citadis 402,tramway,304,2005,Bombardier,electric,True,in_service,2024-10-13
+VH0078,MF77,metro,560,1979,Solaris,hydrogen,False,retired,2024-08-21
+VH0079,MF67,metro,560,1965,MAN,diesel,True,in_service,2024-08-23
+VH0080,Citadis 302,tramway,210,2001,Bombardier,hydrogen,False,in_service,2024-08-23
+VH0081,MP73,metro,583,1973,Solaris,hybrid,True,in_service,2025-04-08
+VH0082,Iveco Urbanway,bus,100,2016,Alstom,hydrogen,True,in_service,2024-06-22
+VH0083,MI79,rer,900,1978,CAF,electric,False,in_service,2025-08-15
+VH0084,MAN Lion's City,bus,90,2013,Mercedes,hydrogen,True,maintenance,2024-05-16
+VH0085,MP14,metro,722,2027,Mercedes,hydrogen,False,in_service,2025-01-03
+VH0086,MI09,rer,1060,2015,Bombardier,electric,True,retired,2025-05-04
+VH0087,Solaris Urbino 18,bus_articulated,150,2021,Heuliez,electric,False,in_service,2024-07-28
+VH0088,Mercedes Citaro,bus,105,2020,Mercedes,hydrogen,True,in_service,2025-02-07
+VH0089,Alstom Régiolis,transilien,500,2013,Iveco,diesel,True,retired,2024-01-31
+VH0090,Iveco Urbanway,bus,100,2016,Solaris,hydrogen,False,in_service,2025-02-04
+VH0091,Citadis 302,tramway,210,2000,Solaris,electric,True,retired,2024-06-19
+VH0092,MF01,metro,600,2005,Heuliez,hybrid,False,in_service,2025-02-17
+VH0093,MF01,metro,600,2006,Heuliez,electric,True,in_service,2024-08-06
+VH0094,MI79,rer,900,1979,Bombardier,electric,True,maintenance,2025-05-31
+VH0095,Alstom Régiolis,transilien,500,2015,Bombardier,electric,False,in_service,2024-03-17
+VH0096,Bluebus 12m,bus_electric,80,2024,MAN,electric,True,retired,2024-12-14
+VH0097,Iveco Urbanway,bus,100,2021,Iveco,diesel,True,in_service,2025-03-14
+VH0098,MP89,metro,583,1997,MAN,diesel,True,in_service,2025-01-08
+VH0099,Mercedes Citaro,bus,105,2016,Bombardier,electric,True,in_service,2024-03-06
+VH0100,Citadis 402,tramway,304,2004,Iveco,electric,True,retired,2024-01-17
+VH0101,MP73,metro,583,1977,Bombardier,diesel,True,retired,2025-11-08
+VH0102,Bluebus 12m,bus_electric,80,2024,Iveco,electric,True,maintenance,2024-02-04
+VH0103,MI79,rer,900,1984,Alstom,hydrogen,True,in_service,2025-04-01
+VH0104,MP73,metro,583,1974,Heuliez,electric,True,maintenance,2025-04-06
+VH0105,Solaris Urbino 18,bus_articulated,150,2020,Iveco,hybrid,False,retired,2024-08-20
+VH0106,MF77,metro,560,1981,Solaris,hybrid,True,in_service,2024-10-25
+VH0107,MAN Lion's City,bus,90,2014,CAF,electric,False,in_service,2024-10-21
+VH0108,MI79,rer,900,1982,MAN,electric,True,retired,2024-12-16
+VH0109,MP73,metro,583,1976,Iveco,diesel,True,in_service,2025-06-10
+VH0110,Solaris Urbino 18,bus_articulated,150,2019,Alstom,hydrogen,True,in_service,2024-01-10
+VH0111,MP89,metro,583,1998,CAF,hydrogen,True,in_service,2024-10-15
+VH0112,Citadis 402,tramway,304,2010,Heuliez,electric,True,in_service,2024-10-21
+VH0113,Bluebus 12m,bus_electric,80,2024,Alstom,electric,False,in_service,2024-06-03
+VH0114,Iveco Urbanway,bus,100,2017,Bombardier,electric,True,in_service,2025-08-06
+VH0115,MF77,metro,560,1981,Solaris,electric,True,maintenance,2024-04-19
+VH0116,Alstom Régiolis,transilien,500,2014,Mercedes,electric,True,retired,2025-08-02
+VH0117,MI79,rer,900,1980,Mercedes,hydrogen,False,in_service,2024-02-29
+VH0118,MI09,rer,1060,2014,Alstom,electric,True,in_service,2025-04-08
+VH0119,MI79,rer,900,1982,Bombardier,diesel,True,maintenance,2025-11-17
+VH0120,Citadis 302,tramway,210,1996,CAF,hybrid,False,maintenance,2025-06-06

@@ -1,0 +1,66 @@
+/**
+ * OntoViz - Main Stylesheet
+ * Entity-Relationship Visual Editor
+ * 
+ * This file imports all modular CSS files.
+ * For individual component styles, see the respective files.
+ */
+
+@import url('ontoviz-variables.css');
+@import url('ontoviz-entity.css');
+@import url('ontoviz-relationship.css');
+@import url('ontoviz-ui.css');
+
+/* ==========================================================================
+   Read-Only Mode (inlined here to avoid caching issues with @import)
+   Hide all edit/delete/add buttons and disable text editing
+   ========================================================================== */
+body.read-only-mode .ovz-toolbar {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-entity-actions {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-property-actions {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-rel-delete,
+body.read-only-mode .ovz-rel-add-prop,
+body.read-only-mode .ovz-rel-direction {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-rel-prop-delete {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-entity-name,
+body.read-only-mode .ovz-property-name,
+body.read-only-mode .ovz-rel-name-input,
+body.read-only-mode .ovz-rel-prop-name {
+    pointer-events: none !important;
+    background: transparent !important;
+    border-color: transparent !important;
+    cursor: default !important;
+}
+
+body.read-only-mode .ovz-context-menu {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-entity {
+    cursor: default !important;
+}
+
+body.read-only-mode .ovz-connector {
+    display: none !important;
+}
+
+body.read-only-mode .ovz-rel-direction-label {
+    pointer-events: none !important;
+    cursor: default !important;
+}
+

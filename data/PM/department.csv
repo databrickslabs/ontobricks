@@ -1,0 +1,11 @@
+department_id,department_name,location,budget,manager_id
+D001,Data Engineering,New York,1500000,P009
+D002,Data Science,San Francisco,1200000,P002
+D003,Product Development,Boston,2000000,P004
+D004,IT Operations,Chicago,800000,P012
+D005,Analytics,Austin,950000,P008
+
+
+
+
+

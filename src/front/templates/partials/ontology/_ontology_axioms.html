@@ -1,0 +1,158 @@
+<!-- Expressions & Axioms Section -->
+<!-- JS: /static/ontology/js/ontology-axioms.js -->
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-diagram-2 me-2"></i>Expressions & Axioms</h4>
+        <p class="text-muted mb-0 small">Build class definitions with set operations, and assert logical relationships between classes and properties</p>
+    </div>
+    <button class="btn btn-sm btn-outline-primary ontology-edit-btn" onclick="AxiomsModule.addForActiveTab()">
+        <i class="bi bi-plus-lg me-1"></i> Add
+    </button>
+</div>
+
+<div class="card h-100">
+    <div class="card-body p-0">
+        <ul class="nav nav-tabs nav-fill small px-3 pt-3" id="axiomsTabNav" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="expressions-tab" data-bs-toggle="tab"
+                        data-bs-target="#expressionsPane" type="button" role="tab">
+                    <i class="bi bi-collection me-1"></i>Expressions
+                    <span class="badge bg-primary bg-opacity-75 ms-1" id="expressionsCount" style="font-size:.65rem"></span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="axioms-tab" data-bs-toggle="tab"
+                        data-bs-target="#axiomsPane" type="button" role="tab">
+                    <i class="bi bi-signpost-split me-1"></i>Axioms
+                    <span class="badge bg-success bg-opacity-75 ms-1" id="axiomsCount" style="font-size:.65rem"></span>
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content p-3" id="axiomsTabContent">
+            <!-- Expressions pane -->
+            <div class="tab-pane fade show active" id="expressionsPane" role="tabpanel">
+                <p class="text-muted small mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    Define how a class is <em>composed</em> from other classes — union, intersection, complement, or enumeration.
+                </p>
+                <div id="expressionsList">
+                    <div class="text-center py-4 text-muted" id="noExpressionsMessage">
+                        <i class="bi bi-collection" style="font-size:1.5rem"></i>
+                        <p class="mt-2 mb-0 small">No expressions defined</p>
+                        <small>Click <strong>+ Expression</strong> to compose classes with set operations (union, intersection, ...)</small>
+                    </div>
+                </div>
+            </div>
+            <!-- Axioms pane -->
+            <div class="tab-pane fade" id="axiomsPane" role="tabpanel">
+                <p class="text-muted small mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    Assert logical <em>facts</em> — equivalence, disjointness, inverse, or property chains between existing classes and properties.
+                </p>
+                <div id="axiomsList">
+                    <div class="text-center py-4 text-muted" id="noAxiomsMessage">
+                        <i class="bi bi-signpost-split" style="font-size:1.5rem"></i>
+                        <p class="mt-2 mb-0 small">No axioms defined</p>
+                        <small>Click <strong>+ Axiom</strong> to declare relationships like equivalence, disjointness, or inverse</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Shared Editor Modal -->
+<div class="modal fade" id="axiomModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="axiomModalTitle">Add Axiom</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Context hint -->
+                <div class="alert alert-light border small py-2 mb-3" id="axiomModalHint"></div>
+
+                <div class="mb-3">
+                    <label class="form-label">Type</label>
+                    <select class="form-select" id="axiomType" onchange="AxiomsModule.onTypeChange()">
+                        <option value="">Select type...</option>
+                        <optgroup label="Expressions — compose a class from other classes">
+                            <option value="unionOf">Union Of (⊔)</option>
+                            <option value="intersectionOf">Intersection Of (⊓)</option>
+                            <option value="complementOf">Complement Of (¬)</option>
+                            <option value="oneOf">One Of (Enumeration)</option>
+                        </optgroup>
+                        <optgroup label="Axioms — class relationships">
+                            <option value="equivalentClass">Equivalent Classes (≡)</option>
+                            <option value="disjointWith">Disjoint With</option>
+                            <option value="disjointUnion">Disjoint Union</option>
+                        </optgroup>
+                        <optgroup label="Axioms — property relationships">
+                            <option value="equivalentProperty">Equivalent Properties</option>
+                            <option value="inverseOf">Inverse Of</option>
+                            <option value="propertyChain">Property Chain</option>
+                            <option value="disjointProperties">Disjoint Properties</option>
+                        </optgroup>
+                    </select>
+                </div>
+                
+                <!-- Subject Class/Property -->
+                <div class="mb-3" id="subjectGroup">
+                    <label class="form-label" id="subjectLabel">Subject Class</label>
+                    <select class="form-select" id="axiomSubject">
+                        <option value="">Select...</option>
+                    </select>
+                </div>
+                
+                <!-- Object Class(es)/Property(ies) -->
+                <div class="mb-3" id="objectGroup">
+                    <label class="form-label" id="objectLabel">Object Class(es)</label>
+                    <div id="objectSelectContainer">
+                        <select class="form-select mb-2" id="axiomObject">
+                            <option value="">Select...</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="addObjectBtn" onclick="AxiomsModule.addObjectSelect()" style="display: none;">
+                        <i class="bi bi-plus"></i> Add Another
+                    </button>
+                </div>
+                
+                <!-- Individuals for OneOf -->
+                <div class="mb-3" id="individualsGroup" style="display: none;">
+                    <label class="form-label">Individuals (comma-separated)</label>
+                    <input type="text" class="form-control" id="axiomIndividuals" placeholder="e.g., Red, Green, Blue">
+                    <small class="text-muted">List the individual names that make up this enumeration</small>
+                </div>
+                
+                <!-- Property Chain -->
+                <div class="mb-3" id="chainGroup" style="display: none;">
+                    <label class="form-label">Property Chain</label>
+                    <div id="chainSelectContainer">
+                        <div class="input-group mb-2">
+                            <select class="form-select chain-select">
+                                <option value="">Select property...</option>
+                            </select>
+                            <span class="input-group-text">∘</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="AxiomsModule.addChainSelect()">
+                        <i class="bi bi-plus"></i> Add Property
+                    </button>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Description (optional)</label>
+                    <input type="text" class="form-control" id="axiomDescription" placeholder="Optional description">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="axiomSaveBtn" onclick="AxiomsModule.saveAxiom()">
+                    <i class="bi bi-check-lg"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

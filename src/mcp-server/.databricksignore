@@ -1,0 +1,9 @@
+# mcp-ontobricks — files excluded from bundle sync
+# Only runtime files should be deployed: server/, app.yaml, pyproject.toml, requirements.txt
+
+.databricks/
+deploy-mcp-server.sh
+.databricksignore
+.DS_Store
+__pycache__/
+*.pyc

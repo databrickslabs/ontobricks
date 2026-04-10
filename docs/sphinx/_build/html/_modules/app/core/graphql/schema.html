@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>app.core.graphql.schema &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/documentation.html">OntoBricks documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.html"><code class="docutils literal notranslate"><span class="pre">app</span></code> – Application Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.fastapi.html"><code class="docutils literal notranslate"><span class="pre">app.fastapi</span></code> — FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">app.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">app.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">app.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">app.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">app.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">app.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">app.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">app.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">app.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.html.html"><code class="docutils literal notranslate"><span class="pre">app.html</span></code> – Web UI Routers &amp; Services</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">app.config</span></code> – Application Constants &amp; Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for app.core.graphql.schema</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Generate a Strawberry GraphQL schema from OntoBricks ontology definitions.</span>
+
+<span class="sd">Each ontology class becomes a GraphQL object type with:</span>
+<span class="sd">- ``id: ID!`` — local name extracted from the subject URI</span>
+<span class="sd">- ``uri: String!`` — full subject URI</span>
+<span class="sd">- ``label: String`` — rdfs:label value</span>
+<span class="sd">- One ``Optional[String]`` field per data property</span>
+<span class="sd">- One ``Optional[List[TargetType]]`` field per object property</span>
+
+<span class="sd">Types are created in topological order so that relationship targets</span>
+<span class="sd">are always defined before the types that reference them.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">OrderedDict</span><span class="p">,</span> <span class="n">defaultdict</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">strawberry</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">strawberry.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_type</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">app.core.graphql.resolvers</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">SchemaMetadata</span><span class="p">,</span>
+    <span class="n">TypeInfo</span><span class="p">,</span>
+    <span class="n">make_list_resolver</span><span class="p">,</span>
+    <span class="n">make_single_resolver</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">app.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="GraphQLSchemaBuilder">
+<a class="viewcode-back" href="../../../../api/app.core.graphql.html#app.core.graphql.schema.GraphQLSchemaBuilder">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">GraphQLSchemaBuilder</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build and cache Strawberry GraphQL schemas from ontology metadata.</span>
+
+<span class="sd">    A single instance manages a per-project cache so that repeated</span>
+<span class="sd">    calls with the same ontology fingerprint return the same schema.</span>
+
+<span class="sd">    Usage::</span>
+
+<span class="sd">        builder = GraphQLSchemaBuilder()</span>
+<span class="sd">        result  = builder.build_for_project(classes, props, base_uri, &quot;my_project&quot;)</span>
+<span class="sd">        if result:</span>
+<span class="sd">            schema, metadata = result</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">SchemaMetadata</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Public API</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="GraphQLSchemaBuilder.build_for_project">
+<a class="viewcode-back" href="../../../../api/app.core.graphql.html#app.core.graphql.schema.GraphQLSchemaBuilder.build_for_project">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_for_project</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ontology_classes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+        <span class="n">ontology_properties</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+        <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">project_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">strawberry</span><span class="o">.</span><span class="n">Schema</span><span class="p">,</span> <span class="n">SchemaMetadata</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build (or return cached) a Strawberry Schema from ontology metadata.</span>
+
+<span class="sd">        Returns ``(schema, metadata)`` or ``None`` if the ontology is empty.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">h</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ontology_hash</span><span class="p">(</span><span class="n">ontology_classes</span><span class="p">,</span> <span class="n">ontology_properties</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">project_name</span> <span class="ow">and</span> <span class="n">project_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="p">:</span>
+            <span class="n">cached_schema</span><span class="p">,</span> <span class="n">cached_hash</span><span class="p">,</span> <span class="n">cached_meta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="p">[</span><span class="n">project_name</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">cached_hash</span> <span class="o">==</span> <span class="n">h</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;GraphQL schema cache hit for project &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">project_name</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">cached_schema</span><span class="p">,</span> <span class="n">cached_meta</span>
+
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build</span><span class="p">(</span><span class="n">ontology_classes</span><span class="p">,</span> <span class="n">ontology_properties</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">result</span> <span class="ow">and</span> <span class="n">project_name</span><span class="p">:</span>
+            <span class="n">schema</span><span class="p">,</span> <span class="n">meta</span> <span class="o">=</span> <span class="n">result</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="p">[</span><span class="n">project_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">h</span><span class="p">,</span> <span class="n">meta</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+
+<div class="viewcode-block" id="GraphQLSchemaBuilder.invalidate_cache">
+<a class="viewcode-back" href="../../../../api/app.core.graphql.html#app.core.graphql.schema.GraphQLSchemaBuilder.invalidate_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">invalidate_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">project_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Remove a project&#39;s cached schema.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">project_name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Text / URI helpers (static)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="GraphQLSchemaBuilder.safe_name">
+<a class="viewcode-back" href="../../../../api/app.core.graphql.html#app.core.graphql.schema.GraphQLSchemaBuilder.safe_name">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">safe_name</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Sanitise *raw* into a valid Python / GraphQL identifier.&quot;&quot;&quot;</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^a-zA-Z0-9_]&quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="n">raw</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">s</span> <span class="ow">and</span> <span class="n">s</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;_</span><span class="si">{</span><span class="n">s</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="n">s</span> <span class="ow">or</span> <span class="s2">&quot;_unnamed&quot;</span></div>
+
+
+<div class="viewcode-block" id="GraphQLSchemaBuilder.extract_local">
+<a class="viewcode-back" href="../../../../api/app.core.graphql.html#app.core.graphql.schema.GraphQLSchemaBuilder.extract_local">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">extract_local</span><span class="p">(</span><span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the fragment / last path segment of *uri*.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;#&quot;</span> <span class="ow">in</span> <span class="n">uri</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="GraphQLSchemaBuilder.pluralize">
+<a class="viewcode-back" href="../../../../api/app.core.graphql.html#app.core.graphql.schema.GraphQLSchemaBuilder.pluralize">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">pluralize</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Naive English pluralisation for query-field names.&quot;&quot;&quot;</span>
+        <span class="n">low</span> <span class="o">=</span> <span class="n">name</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">+</span> <span class="n">name</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="k">if</span> <span class="n">name</span> <span class="k">else</span> <span class="n">name</span>
+        <span class="k">if</span> <span class="n">low</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">&quot;s&quot;</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="s2">&quot;z&quot;</span><span class="p">,</span> <span class="s2">&quot;sh&quot;</span><span class="p">,</span> <span class="s2">&quot;ch&quot;</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="n">low</span> <span class="o">+</span> <span class="s2">&quot;es&quot;</span>
+        <span class="k">if</span> <span class="n">low</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;y&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">low</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">low</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="s2">&quot;aeiou&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">low</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;ies&quot;</span>
+        <span class="k">return</span> <span class="n">low</span> <span class="o">+</span> <span class="s2">&quot;s&quot;</span></div>
+
+
+<div class="viewcode-block" id="GraphQLSchemaBuilder.normalize_base">
+<a class="viewcode-back" href="../../../../api/app.core.graphql.html#app.core.graphql.schema.GraphQLSchemaBuilder.normalize_base">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">normalize_base</span><span class="p">(</span><span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Normalise *base_uri* to always end with ``/``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">base_uri</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;/&quot;</span></div>
+
+
+<div class="viewcode-block" id="GraphQLSchemaBuilder.ontology_hash">
+<a class="viewcode-back" href="../../../../api/app.core.graphql.html#app.core.graphql.schema.GraphQLSchemaBuilder.ontology_hash">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ontology_hash</span><span class="p">(</span><span class="n">classes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="n">properties</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;MD5 fingerprint of the ontology definition lists.&quot;&quot;&quot;</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">classes</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">+</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">properties</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">md5</span><span class="p">(</span><span class="n">raw</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="GraphQLSchemaBuilder.topo_sort">
+<a class="viewcode-back" href="../../../../api/app.core.graphql.html#app.core.graphql.schema.GraphQLSchemaBuilder.topo_sort">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">topo_sort</span><span class="p">(</span><span class="n">names</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">deps</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Topological sort (leaves first). Breaks cycles by skipping back-edges.&quot;&quot;&quot;</span>
+        <span class="n">result</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">visited</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="n">in_stack</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">visit</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">visited</span> <span class="ow">or</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">in_stack</span><span class="p">:</span>
+                <span class="k">return</span>
+            <span class="n">in_stack</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">dep</span> <span class="ow">in</span> <span class="n">deps</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="nb">set</span><span class="p">()):</span>
+                <span class="n">visit</span><span class="p">(</span><span class="n">dep</span><span class="p">)</span>
+            <span class="n">in_stack</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+            <span class="n">visited</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">names</span><span class="p">):</span>
+            <span class="n">visit</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Private — kept as instance aliases for brevity in _build</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="n">_ontology_hash</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">ontology_hash</span><span class="o">.</span><span class="vm">__func__</span><span class="p">)</span>      <span class="c1"># type: ignore[attr-defined]</span>
+    <span class="n">_safe_name</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">safe_name</span><span class="o">.</span><span class="vm">__func__</span><span class="p">)</span>               <span class="c1"># type: ignore[attr-defined]</span>
+    <span class="n">_extract_local</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">extract_local</span><span class="o">.</span><span class="vm">__func__</span><span class="p">)</span>       <span class="c1"># type: ignore[attr-defined]</span>
+    <span class="n">_pluralize</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">pluralize</span><span class="o">.</span><span class="vm">__func__</span><span class="p">)</span>               <span class="c1"># type: ignore[attr-defined]</span>
+    <span class="n">_normalize_base</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">normalize_base</span><span class="o">.</span><span class="vm">__func__</span><span class="p">)</span>     <span class="c1"># type: ignore[attr-defined]</span>
+    <span class="n">_topo_sort</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">topo_sort</span><span class="o">.</span><span class="vm">__func__</span><span class="p">)</span>               <span class="c1"># type: ignore[attr-defined]</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_ensure_uri</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">GraphQLSchemaBuilder</span><span class="o">.</span><span class="n">normalize_base</span><span class="p">(</span><span class="n">base_uri</span><span class="p">)</span><span class="si">}{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_data_properties</span><span class="p">(</span><span class="n">cls_data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">norm</span> <span class="o">=</span> <span class="n">GraphQLSchemaBuilder</span><span class="o">.</span><span class="n">normalize_base</span><span class="p">(</span><span class="n">base_uri</span><span class="p">)</span>
+        <span class="n">results</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;dataProperties&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="s2">&quot;attributes&quot;</span><span class="p">):</span>
+            <span class="n">items</span> <span class="o">=</span> <span class="n">cls_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">items</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">items</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                    <span class="n">name</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                    <span class="n">uri</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                    <span class="n">name</span> <span class="o">=</span> <span class="n">item</span>
+                    <span class="n">uri</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="n">name</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">uri</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">norm</span><span class="p">):</span>
+                        <span class="n">uri</span> <span class="o">=</span> <span class="n">GraphQLSchemaBuilder</span><span class="o">.</span><span class="n">_ensure_uri</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">)</span>
+                    <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">name</span><span class="p">,</span> <span class="n">uri</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">results</span><span class="p">:</span>
+                <span class="k">break</span>
+        <span class="k">return</span> <span class="n">results</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Core schema builder</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">classes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+        <span class="n">properties</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+        <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">strawberry</span><span class="o">.</span><span class="n">Schema</span><span class="p">,</span> <span class="n">SchemaMetadata</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">classes</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;No ontology classes — cannot build GraphQL schema&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">class_names</span><span class="p">,</span> <span class="n">class_by_name</span><span class="p">,</span> <span class="n">uri_to_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_index_classes</span><span class="p">(</span><span class="n">classes</span><span class="p">)</span>
+        <span class="n">rel_by_domain</span><span class="p">,</span> <span class="n">dep_graph</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_index_relationships</span><span class="p">(</span>
+            <span class="n">properties</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">class_names</span><span class="p">,</span> <span class="n">uri_to_name</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">order</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">topo_sort</span><span class="p">(</span><span class="n">class_names</span><span class="p">,</span> <span class="n">dep_graph</span><span class="p">)</span>
+
+        <span class="n">py_classes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_python_classes</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">class_by_name</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_add_relationship_annotations</span><span class="p">(</span><span class="n">py_classes</span><span class="p">,</span> <span class="n">rel_by_domain</span><span class="p">)</span>
+
+        <span class="n">gql_types</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_strawberry_types</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">py_classes</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">gql_types</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;No GraphQL types could be created&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">metadata</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_metadata</span><span class="p">(</span>
+            <span class="n">order</span><span class="p">,</span> <span class="n">gql_types</span><span class="p">,</span> <span class="n">class_by_name</span><span class="p">,</span> <span class="n">rel_by_domain</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">schema</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_query</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">gql_types</span><span class="p">,</span> <span class="n">metadata</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">schema</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;GraphQL schema built: </span><span class="si">%d</span><span class="s2"> types, </span><span class="si">%d</span><span class="s2"> query fields&quot;</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">gql_types</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">gql_types</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">schema</span><span class="p">,</span> <span class="n">metadata</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Build sub-steps</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_index_classes</span><span class="p">(</span><span class="n">classes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">class_names</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="n">class_by_name</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">uri_to_name</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="n">classes</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="n">uri</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">class_names</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="n">class_by_name</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">cls</span>
+            <span class="k">if</span> <span class="n">uri</span><span class="p">:</span>
+                <span class="n">uri_to_name</span><span class="p">[</span><span class="n">uri</span><span class="p">]</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="k">return</span> <span class="n">class_names</span><span class="p">,</span> <span class="n">class_by_name</span><span class="p">,</span> <span class="n">uri_to_name</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_index_relationships</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">properties</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+        <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">class_names</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">uri_to_name</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]:</span>
+        <span class="n">rel_by_domain</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+        <span class="n">dep_graph</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">set</span><span class="p">)</span>
+        <span class="n">norm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">normalize_base</span><span class="p">(</span><span class="n">base_uri</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">prop</span> <span class="ow">in</span> <span class="n">properties</span><span class="p">:</span>
+            <span class="n">domain_uri</span> <span class="o">=</span> <span class="n">prop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domain&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="n">range_uri</span> <span class="o">=</span> <span class="n">prop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;range&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="n">prop_name</span> <span class="o">=</span> <span class="n">prop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract_local</span><span class="p">(</span><span class="n">prop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)))</span>
+            <span class="n">prop_uri</span> <span class="o">=</span> <span class="n">prop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">prop_uri</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">prop_uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">norm</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">prop_name</span><span class="p">:</span>
+                    <span class="n">prop_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_uri</span><span class="p">(</span><span class="n">prop_name</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">)</span>
+
+            <span class="n">domain_name</span> <span class="o">=</span> <span class="n">uri_to_name</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">domain_uri</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract_local</span><span class="p">(</span><span class="n">domain_uri</span><span class="p">)</span>
+            <span class="n">range_name</span> <span class="o">=</span> <span class="n">uri_to_name</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">range_uri</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract_local</span><span class="p">(</span><span class="n">range_uri</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">domain_name</span> <span class="ow">in</span> <span class="n">class_names</span> <span class="ow">and</span> <span class="n">range_name</span> <span class="ow">in</span> <span class="n">class_names</span> <span class="ow">and</span> <span class="n">prop_name</span><span class="p">:</span>
+                <span class="n">rel_by_domain</span><span class="p">[</span><span class="n">domain_name</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">prop_name</span><span class="p">,</span> <span class="n">range_name</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">))</span>
+                <span class="k">if</span> <span class="n">range_name</span> <span class="o">!=</span> <span class="n">domain_name</span><span class="p">:</span>
+                    <span class="n">dep_graph</span><span class="p">[</span><span class="n">domain_name</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">range_name</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">rel_by_domain</span><span class="p">,</span> <span class="n">dep_graph</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_python_classes</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">order</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">class_by_name</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">],</span>
+        <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">]:</span>
+        <span class="n">py_classes</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">]</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">order</span><span class="p">:</span>
+            <span class="n">cls_data</span> <span class="o">=</span> <span class="n">class_by_name</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cls_data</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">annots</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+            <span class="n">annots</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">strawberry</span><span class="o">.</span><span class="n">ID</span>
+            <span class="n">annots</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span>
+            <span class="n">annots</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+            <span class="n">defaults</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">}</span>
+
+            <span class="k">for</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_data_properties</span><span class="p">(</span><span class="n">cls_data</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">):</span>
+                <span class="n">safe</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">safe_name</span><span class="p">(</span><span class="n">attr_name</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">safe</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">annots</span><span class="p">:</span>
+                    <span class="n">annots</span><span class="p">[</span><span class="n">safe</span><span class="p">]</span> <span class="o">=</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+                    <span class="n">defaults</span><span class="p">[</span><span class="n">safe</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+            <span class="n">ns</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;__annotations__&quot;</span><span class="p">:</span> <span class="n">annots</span><span class="p">,</span> <span class="o">**</span><span class="n">defaults</span><span class="p">}</span>
+            <span class="n">py_classes</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="p">(),</span> <span class="n">ns</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">py_classes</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_add_relationship_annotations</span><span class="p">(</span>
+        <span class="n">py_classes</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">],</span>
+        <span class="n">rel_by_domain</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">rels</span> <span class="ow">in</span> <span class="n">rel_by_domain</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">domain_cls</span> <span class="o">=</span> <span class="n">py_classes</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">domain_name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">domain_cls</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">for</span> <span class="n">prop_name</span><span class="p">,</span> <span class="n">range_name</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">rels</span><span class="p">:</span>
+                <span class="n">range_cls</span> <span class="o">=</span> <span class="n">py_classes</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">range_name</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">range_cls</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">safe</span> <span class="o">=</span> <span class="n">GraphQLSchemaBuilder</span><span class="o">.</span><span class="n">safe_name</span><span class="p">(</span><span class="n">prop_name</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">safe</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">domain_cls</span><span class="o">.</span><span class="vm">__annotations__</span><span class="p">:</span>
+                    <span class="n">domain_cls</span><span class="o">.</span><span class="vm">__annotations__</span><span class="p">[</span><span class="n">safe</span><span class="p">]</span> <span class="o">=</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">range_cls</span><span class="p">]]</span>
+                    <span class="nb">setattr</span><span class="p">(</span><span class="n">domain_cls</span><span class="p">,</span> <span class="n">safe</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_apply_strawberry_types</span><span class="p">(</span>
+        <span class="n">order</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">py_classes</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">]:</span>
+        <span class="n">gql_types</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">]</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">order</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">py_classes</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">gql_types</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">strawberry</span><span class="o">.</span><span class="n">type</span><span class="p">(</span><span class="n">py_classes</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Failed to create GraphQL type for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">gql_types</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_metadata</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">order</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">gql_types</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">],</span>
+        <span class="n">class_by_name</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">],</span>
+        <span class="n">rel_by_domain</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]],</span>
+        <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SchemaMetadata</span><span class="p">:</span>
+        <span class="n">metadata</span> <span class="o">=</span> <span class="n">SchemaMetadata</span><span class="p">(</span><span class="n">base_uri</span><span class="o">=</span><span class="n">base_uri</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">order</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">gql_types</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">cls_data</span> <span class="o">=</span> <span class="n">class_by_name</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="n">cls_uri</span> <span class="o">=</span> <span class="n">cls_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_uri</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">))</span>
+
+            <span class="n">pred_to_field</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="n">field_to_pred</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+            <span class="k">for</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">attr_uri</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_data_properties</span><span class="p">(</span><span class="n">cls_data</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">):</span>
+                <span class="n">safe</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">safe_name</span><span class="p">(</span><span class="n">attr_name</span><span class="p">)</span>
+                <span class="n">pred_to_field</span><span class="p">[</span><span class="n">attr_uri</span><span class="p">]</span> <span class="o">=</span> <span class="n">safe</span>
+                <span class="n">field_to_pred</span><span class="p">[</span><span class="n">safe</span><span class="p">]</span> <span class="o">=</span> <span class="n">attr_uri</span>
+
+            <span class="n">rel_info</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">prop_name</span><span class="p">,</span> <span class="n">range_name</span><span class="p">,</span> <span class="n">prop_uri</span> <span class="ow">in</span> <span class="n">rel_by_domain</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="p">[]):</span>
+                <span class="n">safe</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">safe_name</span><span class="p">(</span><span class="n">prop_name</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">range_name</span> <span class="ow">in</span> <span class="n">gql_types</span><span class="p">:</span>
+                    <span class="n">pred_to_field</span><span class="p">[</span><span class="n">prop_uri</span><span class="p">]</span> <span class="o">=</span> <span class="n">safe</span>
+                    <span class="n">field_to_pred</span><span class="p">[</span><span class="n">safe</span><span class="p">]</span> <span class="o">=</span> <span class="n">prop_uri</span>
+                    <span class="n">rel_info</span><span class="p">[</span><span class="n">safe</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">prop_uri</span><span class="p">,</span> <span class="n">range_name</span><span class="p">)</span>
+
+            <span class="n">metadata</span><span class="o">.</span><span class="n">register</span><span class="p">(</span>
+                <span class="n">TypeInfo</span><span class="p">(</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">cls_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
+                    <span class="n">gql_type</span><span class="o">=</span><span class="n">gql_types</span><span class="p">[</span><span class="n">name</span><span class="p">],</span>
+                    <span class="n">predicate_to_field</span><span class="o">=</span><span class="n">pred_to_field</span><span class="p">,</span>
+                    <span class="n">field_to_predicate</span><span class="o">=</span><span class="n">field_to_pred</span><span class="p">,</span>
+                    <span class="n">relationships</span><span class="o">=</span><span class="n">rel_info</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">metadata</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_query</span><span class="p">(</span>
+        <span class="n">order</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">gql_types</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">],</span>
+        <span class="n">metadata</span><span class="p">:</span> <span class="n">SchemaMetadata</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">strawberry</span><span class="o">.</span><span class="n">Schema</span><span class="p">]:</span>
+        <span class="n">query_fields</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">order</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">gql_types</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">gql_type</span> <span class="o">=</span> <span class="n">gql_types</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+            <span class="n">plural</span> <span class="o">=</span> <span class="n">GraphQLSchemaBuilder</span><span class="o">.</span><span class="n">pluralize</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="n">query_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">strawberry</span><span class="o">.</span><span class="n">field</span><span class="p">(</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">plural</span><span class="p">,</span>
+                    <span class="n">resolver</span><span class="o">=</span><span class="n">make_list_resolver</span><span class="p">(</span><span class="n">metadata</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">gql_type</span><span class="p">),</span>
+                    <span class="n">description</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;List </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> entities from the knowledge graph.&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">singular</span> <span class="o">=</span> <span class="n">name</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">+</span> <span class="n">name</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="k">if</span> <span class="n">name</span> <span class="k">else</span> <span class="n">name</span>
+            <span class="n">query_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">strawberry</span><span class="o">.</span><span class="n">field</span><span class="p">(</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">singular</span><span class="p">,</span>
+                    <span class="n">resolver</span><span class="o">=</span><span class="n">make_single_resolver</span><span class="p">(</span><span class="n">metadata</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">gql_type</span><span class="p">),</span>
+                    <span class="n">description</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Get a single </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> by ID.&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">query_fields</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;No query fields could be created&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">Query</span> <span class="o">=</span> <span class="n">create_type</span><span class="p">(</span><span class="s2">&quot;Query&quot;</span><span class="p">,</span> <span class="n">query_fields</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">strawberry</span><span class="o">.</span><span class="n">Schema</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="n">Query</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ------------------------------------------------------------------</span>
+<span class="c1"># Module-level singleton + backward-compatible API</span>
+<span class="c1"># ------------------------------------------------------------------</span>
+
+<span class="n">_default_builder</span> <span class="o">=</span> <span class="n">GraphQLSchemaBuilder</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="build_schema_for_project">
+<a class="viewcode-back" href="../../../../api/app.core.graphql.html#app.core.graphql.schema.build_schema_for_project">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_schema_for_project</span><span class="p">(</span>
+    <span class="n">ontology_classes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+    <span class="n">ontology_properties</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+    <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">project_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">strawberry</span><span class="o">.</span><span class="n">Schema</span><span class="p">,</span> <span class="n">SchemaMetadata</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Module-level delegate — uses the default ``GraphQLSchemaBuilder``.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_default_builder</span><span class="o">.</span><span class="n">build_for_project</span><span class="p">(</span>
+        <span class="n">ontology_classes</span><span class="p">,</span> <span class="n">ontology_properties</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">project_name</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="invalidate_cache">
+<a class="viewcode-back" href="../../../../api/app.core.graphql.html#app.core.graphql.schema.invalidate_cache">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">invalidate_cache</span><span class="p">(</span><span class="n">project_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Module-level delegate — invalidates on the default builder.&quot;&quot;&quot;</span>
+    <span class="n">_default_builder</span><span class="o">.</span><span class="n">invalidate_cache</span><span class="p">(</span><span class="n">project_name</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># Backward-compatible aliases for helpers used by tests</span>
+<span class="n">_safe_name</span> <span class="o">=</span> <span class="n">GraphQLSchemaBuilder</span><span class="o">.</span><span class="n">safe_name</span>
+<span class="n">_extract_local</span> <span class="o">=</span> <span class="n">GraphQLSchemaBuilder</span><span class="o">.</span><span class="n">extract_local</span>
+<span class="n">_pluralize</span> <span class="o">=</span> <span class="n">GraphQLSchemaBuilder</span><span class="o">.</span><span class="n">pluralize</span>
+<span class="n">_normalize_base</span> <span class="o">=</span> <span class="n">GraphQLSchemaBuilder</span><span class="o">.</span><span class="n">normalize_base</span>
+<span class="n">_topo_sort</span> <span class="o">=</span> <span class="n">GraphQLSchemaBuilder</span><span class="o">.</span><span class="n">topo_sort</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

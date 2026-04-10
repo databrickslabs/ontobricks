@@ -1,0 +1,23 @@
+{#
+  Reusable sidebar navigation partial.
+  Renders the left sidebar nav links from a menu_config menu entry.
+
+  Usage in a page template:
+    {% set sidebar_menu = get_menu('ontology') %}
+    {% include "partials/layout/_sidebar_nav.html" %}
+
+  Expects `sidebar_menu` to be set before including.
+#}
+
+{% if sidebar_menu %}
+{% for group in sidebar_menu.groups %}
+<div class="sidebar-title{% if not loop.first %} mt-4{% endif %}">{{ group.title }}</div>
+<nav class="nav flex-column">
+    {% for item in group['items'] %}
+    <a class="nav-link{% if item.default %} active{% endif %}{% if item.requires|default('') == 'project_saved' %} sidebar-requires-project{% endif %}{% if item.requires|default('') == 'sync_ready' %} sync-requires-ready disabled{% endif %}{% if item.disabled_during|default('') == 'autoassign' %} autoassign-disables{% endif %}{% if item.hidden_in_view_mode|default(false) %} view-mode-hidden{% endif %}" href="#" data-section="{{ item.id }}"{% if item.requires|default('') == 'sync_ready' %} title="Triple store is empty — run Sync first" style="pointer-events:none;opacity:0.45"{% endif %}>
+        <i class="bi {{ item.icon }}"></i> {{ item.label }}
+    </a>
+    {% endfor %}
+</nav>
+{% endfor %}
+{% endif %}

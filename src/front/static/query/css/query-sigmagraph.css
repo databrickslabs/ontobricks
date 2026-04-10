@@ -1,0 +1,167 @@
+/**
+ * OntoBricks - query-sigmagraph.css
+ * Sigma.js Knowledge Graph view layout
+ */
+
+#sigmagraph-section.active {
+    height: calc(100vh - 80px);
+    max-height: calc(100vh - 80px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+#sigmagraph-section > .visualization-layout {
+    flex: 1;
+    display: flex;
+    gap: 0.5rem;
+    overflow: hidden;
+    min-height: 0;
+}
+
+#sigmagraph-section .graph-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 300px;
+}
+
+#sigmagraph-section .graph-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 200px;
+}
+
+#sigmagraph-section .graph-panel .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 0;
+}
+
+#sigmagraph-section .card-header {
+    flex-shrink: 0;
+}
+
+#sigmagraph-section .graph-panel .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+#sgContainer {
+    flex: 1 1 0%;
+    min-height: 300px;
+    position: relative;
+}
+
+/* Details panel */
+#sigmagraph-section .details-panel {
+    width: 320px;
+    min-width: 200px;
+    max-width: 50%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#sigmagraph-section .details-panel .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 0;
+}
+
+#sigmagraph-section .details-panel .card-body {
+    flex: 1;
+    overflow-y: auto;
+    font-size: 0.85rem;
+}
+
+#sigmagraph-section .entity-details-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #adb5bd;
+}
+
+#sigmagraph-section .entity-details-placeholder i {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Resize handle */
+#sigmagraph-section .resize-handle {
+    width: 8px;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+#sigmagraph-section .resize-handle .resize-handle-bar {
+    width: 3px;
+    height: 40px;
+    background: #dee2e6;
+    border-radius: 2px;
+    transition: background 0.15s;
+}
+
+#sigmagraph-section .resize-handle:hover .resize-handle-bar {
+    background: #adb5bd;
+}
+
+/* Filter pane */
+.sg-filter-pane {
+    flex-shrink: 0;
+}
+
+.sg-filter-pane .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 0;
+}
+
+.sg-filter-pane .card-header {
+    padding: 0.4rem 0.75rem;
+    background: #f8f9fa;
+}
+
+.sg-filter-pane .card-body {
+    padding: 0.5rem 0.75rem;
+}
+
+.sg-filter-pane .search-field {
+    min-width: 100px;
+}
+
+.sg-filter-pane .search-field.flex-grow-1 {
+    min-width: 150px;
+}
+
+/* Sigma.js hover tooltip */
+.sg-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    white-space: nowrap;
+    z-index: 100;
+    display: none;
+}

@@ -1,0 +1,230 @@
+/**
+ * OntoBricks - Manual Mapping CSS
+ * Styles for the Manual Mapping Tree View with Bottom Panel
+ */
+
+/* Vertical split container */
+.manual-vertical-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* Tree pane (top) */
+.manual-tree-pane {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 150px;
+    transition: flex 0.25s ease;
+}
+
+.manual-vertical-container.panel-open .manual-tree-pane {
+    flex: 1;
+    min-height: 120px;
+}
+
+/* Bottom Panel - Horizontal layout matching Designer panel */
+.manual-bottom-panel {
+    position: relative;
+    display: flex;
+    flex-direction: row; /* Horizontal layout like Designer panel */
+    background: #fff;
+    border-top: 2px solid #dee2e6;
+    height: 0;
+    min-height: 0;
+    overflow: hidden;
+    transition: height 0.25s ease, min-height 0.25s ease;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+}
+
+.manual-vertical-container.panel-open .manual-bottom-panel {
+    flex: 1;
+    height: 50%;
+    min-height: 200px;
+    max-height: 50%;
+}
+
+/* Panel header, body, footer, tabs, tab-content, forms, tables, and buttons
+   are all defined in the shared rules in mapping.css */
+
+/* Tree Styles */
+.manual-tree-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.manual-tree-list.nested {
+    padding-left: 20px;
+}
+
+.manual-tree-node {
+    margin: 2px 0;
+}
+
+.manual-tree-node-content {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.manual-tree-node-content:hover {
+    background: #f0f0f0;
+}
+
+.manual-tree-node-content.selected {
+    background: #e7f1ff;
+    border-left: 3px solid #0d6efd;
+}
+
+/* Root nodes (Assigned / Not Assigned) */
+.manual-tree-node.root-node > .manual-tree-node-content {
+    background: #f8f9fa;
+    font-weight: 600;
+    cursor: default;
+}
+
+.manual-tree-node.root-node > .manual-tree-node-content:hover {
+    background: #f0f1f2;
+}
+
+/* Category nodes (Entities / Relationships) */
+.manual-tree-node.category-node > .manual-tree-node-content {
+    font-weight: 500;
+    color: #495057;
+    cursor: default;
+}
+
+.manual-tree-node.category-node > .manual-tree-node-content:hover {
+    background: #f5f5f5;
+}
+
+/* Item nodes - clickable */
+.manual-tree-node.item-node > .manual-tree-node-content {
+    padding-left: 12px;
+    cursor: pointer;
+}
+
+.manual-tree-node.item-node > .manual-tree-node-content:hover {
+    background: #e7f1ff;
+}
+
+/* Toggle button */
+.manual-tree-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.manual-tree-toggle:hover {
+    color: #212529;
+}
+
+.manual-tree-spacer {
+    width: 20px;
+    flex-shrink: 0;
+}
+
+/* Node label */
+.manual-tree-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.manual-tree-label .emoji-inline {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.manual-tree-label .item-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Status badge */
+.manual-status-badge {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+
+.manual-status-badge.assigned {
+    background: #d1e7dd;
+    color: #0f5132;
+}
+
+.manual-status-badge.not-assigned {
+    background: #f8d7da;
+    color: #842029;
+}
+
+.manual-status-badge.excluded {
+    background: #e2e3e5;
+    color: #6c757d;
+}
+
+/* Root status colors */
+.manual-tree-node.root-node.assigned > .manual-tree-node-content {
+    border-left: 4px solid #198754;
+}
+
+.manual-tree-node.root-node.not-assigned > .manual-tree-node-content {
+    border-left: 4px solid #dc3545;
+}
+
+.manual-tree-node.root-node.excluded > .manual-tree-node-content {
+    border-left: 4px solid #adb5bd;
+}
+
+.manual-tree-node.root-node.excluded .item-node .manual-tree-label {
+    opacity: 0.6;
+}
+
+/* Tree children container */
+.manual-tree-children {
+    display: block;
+}
+
+.manual-tree-children.collapsed {
+    display: none;
+}
+
+/* Count badge */
+.manual-count-badge {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #e9ecef;
+    color: #495057;
+    margin-left: 8px;
+}
+
+/* Item type icon colors */
+.manual-tree-node.item-node.entity-item .bi-box {
+    color: #0d6efd;
+}
+
+.manual-tree-node.item-node.relationship-item .bi-arrow-left-right {
+    color: #6f42c1;
+}
+
+/* Column header click styles are defined in the shared rules in mapping.css */

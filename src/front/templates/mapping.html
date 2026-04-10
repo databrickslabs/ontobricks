@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Mapping - OntoBricks{% endblock %}
+
+{% block extra_css %}
+<!-- Mapping page specific styles -->
+<link rel="stylesheet" href="{{ url_for('static', filename='global/css/mapping.css') }}?v={{ asset_version }}">
+<!-- Mapping module styles (extracted from partials) -->
+<link rel="stylesheet" href="{{ url_for('static', filename='mapping/css/mapping-design.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='mapping/css/mapping-shared.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='mapping/css/mapping-manual.css') }}?v={{ asset_version }}">
+{% endblock %}
+
+{% block content %}
+<!-- Mapping Core Module (shared state across all partials) -->
+<script src="{{ url_for('static', filename='global/js/mapping-core.js') }}?v={{ range(1000000) | random }}"></script>
+
+<!-- Mapping Information module (extracted from _mapping_information.html partial) -->
+<script src="{{ url_for('static', filename='global/js/mapping-information.js') }}?v={{ asset_version }}"></script>
+
+<!-- Mapping Design module (Visual Mapping Designer - extracted from _mapping_design.html partial) -->
+<script src="{{ url_for('static', filename='mapping/js/mapping-design.js') }}?v={{ asset_version }}"></script>
+
+<!-- Mapping modules (extracted from partials) -->
+<script src="{{ url_for('static', filename='mapping/js/mapping-shared.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='mapping/js/mapping-entity-modal.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='mapping/js/mapping-relationship-modal.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='mapping/js/mapping-r2rml.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='mapping/js/mapping-manual.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='mapping/js/mapping-autoassign.js') }}?v={{ asset_version }}"></script>
+
+<!-- Pre-render section switcher (must load synchronously before DOM renders) -->
+<script src="{{ url_for('static', filename='mapping/js/mapping-init-section.js') }}?v={{ asset_version }}"></script>
+
+<div class="container-fluid px-0">
+    <div class="sidebar-layout">
+        <!-- Left Sidebar Menu (driven by menu_config.json) -->
+        <div class="sidebar-nav">
+            {% set sidebar_menu = get_menu('assignment') %}
+            {% include "partials/layout/_sidebar_nav.html" %}
+        </div>
+        
+        <!-- Right Content Area -->
+        <div class="sidebar-content">
+            <!-- Information Section - Default view -->
+            <div id="information-section" class="sidebar-section active">
+                {% include "partials/mapping/_mapping_information.html" %}
+            </div>
+
+            <!-- Design Section -->
+            <div id="design-section" class="sidebar-section">
+                {% include "partials/mapping/_mapping_design.html" %}
+            </div>
+            
+            <!-- Manual Section -->
+            <div id="manual-section" class="sidebar-section">
+                {% include "partials/mapping/_mapping_manual.html" %}
+            </div>
+            
+            <!-- Auto-Map Section -->
+            <div id="autoassign-section" class="sidebar-section">
+                {% include "partials/mapping/_mapping_autoassign.html" %}
+            </div>
+            
+            <!-- R2RML Section -->
+            <div id="r2rml-section" class="sidebar-section">
+                {% include "partials/mapping/_mapping_r2rml.html" %}
+            </div>
+            
+            <!-- Spark SQL Section -->
+            <div id="sparksql-section" class="sidebar-section">
+                {% include "partials/mapping/_mapping_sparksql.html" %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Mapping page initialization (extracted from template) -->
+<script src="{{ url_for('static', filename='mapping/js/mapping-init.js') }}?v={{ range(1000000) | random }}"></script>
+
+{% endblock %}

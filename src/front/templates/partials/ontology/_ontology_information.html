@@ -1,0 +1,32 @@
+<!-- Ontology Information Section -->
+<!-- JS: /static/ontology/js/ontology-information.js -->
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-info-circle me-2"></i>Ontology Information</h4>
+        <p class="text-muted mb-0 small">Define your ontology name and base URI</p>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-danger ontology-edit-btn" id="resetOntology">
+        <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+    </button>
+</div>
+<div class="card">
+    <div class="card-body">
+        <div class="mb-3">
+            <label for="ontologyName" class="form-label">Ontology Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="ontologyName" value="MyOntology" required>
+            <small class="text-muted">The ontology name will be used in the URI</small>
+        </div>
+        <div class="mb-3">
+            <label for="baseUri" class="form-label">Base URI</label>
+            <input type="text" class="form-control" id="baseUri" value="" readonly disabled style="background-color: #e9ecef;">
+            <small class="text-muted"><i class="bi bi-info-circle"></i> Managed in <a href="/project/">Project Information</a>. This URI is the namespace for all ontology entities.</small>
+        </div>
+        
+        <!-- Validation Status (auto-updated) -->
+        <div class="mt-3 mb-3" id="ontologyValidationStatus">
+            <span class="badge bg-secondary"><i class="bi bi-hourglass-split"></i> Checking...</span>
+        </div>
+        
+        <p class="text-muted small mt-3">Use <a href="/project/?section=import">Project &gt; Import</a> to load OWL/RDFS ontologies.</p>
+    </div>
+</div>

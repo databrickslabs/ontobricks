@@ -1,0 +1,301 @@
+student_id,first_name,last_name,email,enrollment_year,major,gpa,status,date_of_birth
+STU00001,Thomas,Davis,thomas.davis1@university.edu,2020,Neuroscience,2.55,graduated,1998-02-17
+STU00002,Aurora,Miller,aurora.miller2@university.edu,2020,Electrical Engineering,2.84,active,1997-02-06
+STU00003,Charlotte,Anderson,charlotte.anderson3@university.edu,2020,History,2.4,withdrawn,1999-12-11
+STU00004,Joshua,Nguyen,joshua.nguyen4@university.edu,2022,Political Science,3.74,graduated,2004-06-24
+STU00005,Abigail,Moore,abigail.moore5@university.edu,2021,Physics,3.91,on_leave,1997-04-17
+STU00006,Ava,Harris,ava.harris6@university.edu,2020,Psychology,3.69,on_leave,1995-12-22
+STU00007,Robert,Robinson,robert.robinson7@university.edu,2020,Art History,2.76,on_leave,2003-02-10
+STU00008,Jacob,Gonzalez,jacob.gonzalez8@university.edu,2020,Computer Science,3.32,on_leave,1996-10-15
+STU00009,Sebastian,Anderson,sebastian.anderson9@university.edu,2020,Economics,2.56,on_leave,1998-08-25
+STU00010,Emily,Thompson,emily.thompson10@university.edu,2021,Data Science,2.53,active,1998-11-02
+STU00011,Ryan,Thomas,ryan.thomas11@university.edu,2021,English,2.76,graduated,2002-04-10
+STU00012,Layla,Brown,layla.brown12@university.edu,2021,Sociology,2.06,on_leave,2003-12-31
+STU00013,Harper,Jones,harper.jones13@university.edu,2021,Art History,3.89,on_leave,1999-10-08
+STU00014,Riley,Young,riley.young14@university.edu,2023,Art History,3.83,withdrawn,1998-03-16
+STU00015,Matthew,Rodriguez,matthew.rodriguez15@university.edu,2021,Neuroscience,3.12,on_leave,2004-08-10
+STU00016,Chloe,Sanchez,chloe.sanchez16@university.edu,2022,Physics,3.99,graduated,2006-06-06
+STU00017,Ella,Garcia,ella.garcia17@university.edu,2020,Sociology,2.22,graduated,2004-06-20
+STU00018,Nicholas,Jones,nicholas.jones18@university.edu,2023,Economics,3.19,withdrawn,2006-11-13
+STU00019,Matthew,Scott,matthew.scott19@university.edu,2020,Data Science,3.44,on_leave,2002-08-18
+STU00020,Sophia,Jackson,sophia.jackson20@university.edu,2023,Mathematics,2.91,on_leave,2006-03-24
+STU00021,John,Lopez,john.lopez21@university.edu,2020,Sociology,3.25,graduated,1998-06-06
+STU00022,Emily,Hernandez,emily.hernandez22@university.edu,2020,Electrical Engineering,2.65,active,1997-07-05
+STU00023,Emily,Martin,emily.martin23@university.edu,2021,Computer Science,2.48,active,1996-12-02
+STU00024,Robert,Young,robert.young24@university.edu,2020,Political Science,3.07,graduated,1997-11-17
+STU00025,Charles,Walker,charles.walker25@university.edu,2021,Chemistry,3.06,withdrawn,1999-10-02
+STU00026,Ryan,Gonzalez,ryan.gonzalez26@university.edu,2022,Economics,3.99,on_leave,2004-10-28
+STU00027,Scarlett,Lewis,scarlett.lewis27@university.edu,2020,Physics,2.45,on_leave,1995-06-22
+STU00028,Chloe,Scott,chloe.scott28@university.edu,2021,Electrical Engineering,2.44,active,1996-04-27
+STU00029,Daniel,Jones,daniel.jones29@university.edu,2020,Sociology,2.66,graduated,2001-03-31
+STU00030,Charles,Young,charles.young30@university.edu,2021,History,2.26,withdrawn,2000-06-13
+STU00031,Edward,Walker,edward.walker31@university.edu,2023,Physics,2.19,withdrawn,2002-12-12
+STU00032,Sofia,Clark,sofia.clark32@university.edu,2023,Sociology,3.46,active,1996-05-11
+STU00033,Elizabeth,Perez,elizabeth.perez33@university.edu,2020,Physics,2.38,withdrawn,1998-02-22
+STU00034,Sofia,Lopez,sofia.lopez34@university.edu,2022,English,2.5,active,2004-12-09
+STU00035,Penelope,Scott,penelope.scott35@university.edu,2020,Computer Science,3.3,active,1997-02-03
+STU00036,John,Thomas,john.thomas36@university.edu,2021,Economics,2.97,graduated,2003-12-30
+STU00037,Olivia,Hernandez,olivia.hernandez37@university.edu,2023,Computer Science,3.97,on_leave,2005-03-16
+STU00038,Joseph,Ramirez,joseph.ramirez38@university.edu,2023,Mathematics,2.38,graduated,1996-04-24
+STU00039,Chloe,Wright,chloe.wright39@university.edu,2020,Neuroscience,2.63,active,2005-09-10
+STU00040,Nathan,King,nathan.king40@university.edu,2021,Computer Science,3.92,active,1999-03-03
+STU00041,William,Hill,william.hill41@university.edu,2020,Data Science,3.72,withdrawn,1997-09-09
+STU00042,Jacob,Thomas,jacob.thomas42@university.edu,2020,Electrical Engineering,2.16,on_leave,2000-11-06
+STU00043,Charlotte,Lee,charlotte.lee43@university.edu,2021,Chemistry,2.79,on_leave,2005-04-03
+STU00044,David,Jones,david.jones44@university.edu,2020,English,3.24,active,1996-08-23
+STU00045,Ryan,Wilson,ryan.wilson45@university.edu,2022,Mathematics,3.87,active,2000-06-24
+STU00046,Emily,Jackson,emily.jackson46@university.edu,2021,English,3.67,on_leave,2006-11-12
+STU00047,James,Scott,james.scott47@university.edu,2022,Art History,3.33,graduated,2000-12-06
+STU00048,Sophia,Miller,sophia.miller48@university.edu,2021,Chemistry,2.56,graduated,2002-09-09
+STU00049,Charlotte,Taylor,charlotte.taylor49@university.edu,2023,Chemistry,3.81,active,1997-01-26
+STU00050,Thomas,Ramirez,thomas.ramirez50@university.edu,2022,Computer Science,2.01,graduated,2000-11-15
+STU00051,Lucas,Lewis,lucas.lewis51@university.edu,2023,History,2.02,active,1998-05-06
+STU00052,Ryan,Williams,ryan.williams52@university.edu,2022,Electrical Engineering,3.11,withdrawn,1997-11-10
+STU00053,Michael,Martin,michael.martin53@university.edu,2022,Art History,3.87,active,2003-01-10
+STU00054,Charlotte,Thomas,charlotte.thomas54@university.edu,2020,Psychology,3.56,withdrawn,1998-06-20
+STU00055,Amelia,Hernandez,amelia.hernandez55@university.edu,2021,Art History,2.82,graduated,2002-06-14
+STU00056,Edward,Clark,edward.clark56@university.edu,2021,Chemistry,2.32,active,2003-07-31
+STU00057,Nora,Williams,nora.williams57@university.edu,2023,Physics,2.4,withdrawn,2002-11-04
+STU00058,Evelyn,Anderson,evelyn.anderson58@university.edu,2021,Computer Science,3.32,withdrawn,2002-05-13
+STU00059,Harper,Jones,harper.jones59@university.edu,2022,Psychology,3.28,withdrawn,2002-06-05
+STU00060,Emma,Davis,emma.davis60@university.edu,2022,Mathematics,3.16,on_leave,1995-11-10
+STU00061,Alexander,Hill,alexander.hill61@university.edu,2023,Psychology,3.46,on_leave,2004-10-14
+STU00062,Nicholas,Allen,nicholas.allen62@university.edu,2020,Economics,3.8,graduated,2000-09-17
+STU00063,Michael,Ramirez,michael.ramirez63@university.edu,2020,History,3.85,graduated,2003-03-03
+STU00064,Sofia,Jones,sofia.jones64@university.edu,2022,Electrical Engineering,2.63,active,2001-09-26
+STU00065,Nathan,Martin,nathan.martin65@university.edu,2023,Psychology,2.8,on_leave,1997-11-08
+STU00066,Henry,Clark,henry.clark66@university.edu,2023,Data Science,3.5,graduated,2001-10-01
+STU00067,Elizabeth,Scott,elizabeth.scott67@university.edu,2020,Chemistry,2.57,withdrawn,2002-03-24
+STU00068,Avery,Lewis,avery.lewis68@university.edu,2023,Data Science,2.43,withdrawn,1998-10-22
+STU00069,Charles,Garcia,charles.garcia69@university.edu,2022,History,3.33,on_leave,1997-02-04
+STU00070,Oliver,Thomas,oliver.thomas70@university.edu,2022,Physics,3.61,graduated,1995-07-20
+STU00071,Michael,Thomas,michael.thomas71@university.edu,2023,Electrical Engineering,3.7,active,2005-03-19
+STU00072,Andrew,Torres,andrew.torres72@university.edu,2021,Neuroscience,3.39,withdrawn,2003-12-18
+STU00073,Amelia,Martinez,amelia.martinez73@university.edu,2020,Art History,3.5,active,2004-07-14
+STU00074,Daniel,Lopez,daniel.lopez74@university.edu,2023,Computer Science,3.11,active,2005-03-28
+STU00075,Benjamin,Robinson,benjamin.robinson75@university.edu,2022,Political Science,3.78,withdrawn,2004-12-31
+STU00076,Lucas,Walker,lucas.walker76@university.edu,2023,Chemistry,3.5,on_leave,2006-09-10
+STU00077,Ella,Thomas,ella.thomas77@university.edu,2022,English,2.15,on_leave,2000-04-04
+STU00078,Harper,Perez,harper.perez78@university.edu,2022,Art History,3.08,graduated,1998-05-20
+STU00079,Daniel,Harris,daniel.harris79@university.edu,2021,Neuroscience,2.43,withdrawn,2004-02-22
+STU00080,Abigail,Wright,abigail.wright80@university.edu,2023,Economics,2.12,withdrawn,2003-09-26
+STU00081,Zoey,Nguyen,zoey.nguyen81@university.edu,2020,Sociology,3.76,withdrawn,2005-09-12
+STU00082,James,Thompson,james.thompson82@university.edu,2022,Political Science,2.78,withdrawn,1999-12-12
+STU00083,Ella,Anderson,ella.anderson83@university.edu,2022,Economics,2.97,withdrawn,2002-07-16
+STU00084,Charles,Sanchez,charles.sanchez84@university.edu,2021,Sociology,2.93,graduated,2006-12-24
+STU00085,Emma,Sanchez,emma.sanchez85@university.edu,2020,Biology,3.29,graduated,2005-05-10
+STU00086,Mia,Brown,mia.brown86@university.edu,2022,Economics,2.65,withdrawn,2002-05-01
+STU00087,Abigail,Harris,abigail.harris87@university.edu,2022,Political Science,3.9,withdrawn,2000-08-28
+STU00088,Layla,Garcia,layla.garcia88@university.edu,2023,Computer Science,3.5,active,2002-11-06
+STU00089,Daniel,Jones,daniel.jones89@university.edu,2020,Political Science,2.06,graduated,1999-06-22
+STU00090,Layla,Johnson,layla.johnson90@university.edu,2021,Physics,2.25,active,1999-11-21
+STU00091,Avery,Taylor,avery.taylor91@university.edu,2022,Mathematics,3.21,active,1998-09-03
+STU00092,Evelyn,Miller,evelyn.miller92@university.edu,2020,Art History,2.62,withdrawn,2003-11-24
+STU00093,Lily,Gonzalez,lily.gonzalez93@university.edu,2020,Electrical Engineering,3.38,graduated,1997-04-14
+STU00094,George,Martin,george.martin94@university.edu,2020,Political Science,3.97,active,2002-10-15
+STU00095,Ryan,Ramirez,ryan.ramirez95@university.edu,2022,Biology,3.01,on_leave,1995-04-14
+STU00096,Sebastian,Clark,sebastian.clark96@university.edu,2023,Biology,2.87,on_leave,2005-04-24
+STU00097,Lily,Martinez,lily.martinez97@university.edu,2023,Mathematics,3.47,on_leave,2005-11-04
+STU00098,Avery,Ramirez,avery.ramirez98@university.edu,2022,Psychology,3.7,active,2001-04-03
+STU00099,Joshua,Thomas,joshua.thomas99@university.edu,2023,Electrical Engineering,3.22,withdrawn,2002-07-18
+STU00100,Emma,Young,emma.young0@university.edu,2022,Mathematics,2.98,on_leave,2000-10-17
+STU00101,Abigail,Moore,abigail.moore1@university.edu,2022,History,2.02,graduated,1996-12-02
+STU00102,Amelia,Clark,amelia.clark2@university.edu,2023,History,3.52,withdrawn,2006-01-03
+STU00103,Joshua,Johnson,joshua.johnson3@university.edu,2020,Chemistry,2.44,graduated,2001-11-13
+STU00104,Charles,Nguyen,charles.nguyen4@university.edu,2022,English,3.11,on_leave,2004-07-17
+STU00105,Aurora,Scott,aurora.scott5@university.edu,2022,Psychology,3.41,on_leave,2001-11-16
+STU00106,Matthew,Anderson,matthew.anderson6@university.edu,2020,Neuroscience,2.39,active,1999-02-25
+STU00107,Henry,Wilson,henry.wilson7@university.edu,2023,Chemistry,3.45,on_leave,1997-04-03
+STU00108,Layla,Gonzalez,layla.gonzalez8@university.edu,2022,Physics,2.72,on_leave,1995-04-26
+STU00109,Lily,Wright,lily.wright9@university.edu,2021,Chemistry,2.09,active,2001-07-21
+STU00110,George,Rodriguez,george.rodriguez10@university.edu,2023,Biology,3.75,on_leave,2005-07-12
+STU00111,Ethan,Lewis,ethan.lewis11@university.edu,2022,Mathematics,3.93,on_leave,2005-09-18
+STU00112,Sophia,Jones,sophia.jones12@university.edu,2023,English,2.15,active,1998-05-27
+STU00113,Isabella,Torres,isabella.torres13@university.edu,2022,Biology,3.99,active,2004-05-02
+STU00114,Nicholas,Hill,nicholas.hill14@university.edu,2021,Political Science,3.05,withdrawn,2004-12-05
+STU00115,Evelyn,Nguyen,evelyn.nguyen15@university.edu,2023,Chemistry,3.14,active,1997-03-23
+STU00116,John,Wilson,john.wilson16@university.edu,2021,Chemistry,3.32,graduated,2000-05-18
+STU00117,Mia,Scott,mia.scott17@university.edu,2020,Mathematics,2.01,withdrawn,2005-07-16
+STU00118,Joseph,Williams,joseph.williams18@university.edu,2021,Chemistry,3.41,withdrawn,1996-08-06
+STU00119,Aria,Anderson,aria.anderson19@university.edu,2022,Political Science,3.58,graduated,2004-07-14
+STU00120,Sophia,Wright,sophia.wright20@university.edu,2021,Data Science,2.3,on_leave,1998-03-11
+STU00121,William,Brown,william.brown21@university.edu,2021,Political Science,2.62,on_leave,2004-11-06
+STU00122,Sophia,Robinson,sophia.robinson22@university.edu,2022,Neuroscience,2.81,on_leave,2006-03-23
+STU00123,Ryan,Young,ryan.young23@university.edu,2023,Biology,3.2,withdrawn,2002-03-25
+STU00124,Nicholas,Taylor,nicholas.taylor24@university.edu,2020,Biology,2.46,active,2001-01-16
+STU00125,Jacob,Williams,jacob.williams25@university.edu,2021,English,3.04,withdrawn,2001-03-28
+STU00126,Mia,Nguyen,mia.nguyen26@university.edu,2023,Data Science,3.63,active,2005-07-17
+STU00127,Samuel,Clark,samuel.clark27@university.edu,2022,Psychology,3.34,graduated,2002-05-25
+STU00128,Andrew,Young,andrew.young28@university.edu,2022,Data Science,3.89,active,2005-03-14
+STU00129,Ava,Lee,ava.lee29@university.edu,2022,Psychology,2.23,withdrawn,2006-07-17
+STU00130,Oliver,Smith,oliver.smith30@university.edu,2023,Economics,2.11,on_leave,2006-03-07
+STU00131,Thomas,Lewis,thomas.lewis31@university.edu,2020,Physics,2.53,graduated,2001-06-17
+STU00132,Joshua,Young,joshua.young32@university.edu,2020,Computer Science,3.95,graduated,1998-07-21
+STU00133,Evelyn,Scott,evelyn.scott33@university.edu,2020,History,2.82,graduated,1997-07-18
+STU00134,Avery,Davis,avery.davis34@university.edu,2021,English,3.87,on_leave,2006-05-31
+STU00135,Lily,Moore,lily.moore35@university.edu,2023,Sociology,2.96,withdrawn,2000-06-19
+STU00136,Avery,Scott,avery.scott36@university.edu,2021,Economics,2.38,graduated,1996-07-25
+STU00137,Harper,Clark,harper.clark37@university.edu,2022,Art History,3.58,on_leave,1995-01-22
+STU00138,Joseph,Martin,joseph.martin38@university.edu,2023,Sociology,2.3,withdrawn,2002-09-28
+STU00139,Abigail,Scott,abigail.scott39@university.edu,2023,English,3.87,graduated,2000-05-10
+STU00140,Jacob,Harris,jacob.harris40@university.edu,2021,Sociology,3.55,active,2002-02-19
+STU00141,Aurora,Walker,aurora.walker41@university.edu,2023,Economics,3.98,graduated,2006-02-09
+STU00142,Michael,Rodriguez,michael.rodriguez42@university.edu,2022,Sociology,2.2,withdrawn,1997-03-27
+STU00143,Scarlett,Robinson,scarlett.robinson43@university.edu,2020,Neuroscience,2.29,graduated,1996-09-04
+STU00144,Ethan,Taylor,ethan.taylor44@university.edu,2022,Electrical Engineering,3.39,active,2002-05-15
+STU00145,Sebastian,Wright,sebastian.wright45@university.edu,2023,Psychology,3.25,withdrawn,1995-10-22
+STU00146,Victoria,Jones,victoria.jones46@university.edu,2021,Data Science,3.37,on_leave,2000-02-07
+STU00147,Aurora,Garcia,aurora.garcia47@university.edu,2023,Biology,3.52,active,2004-12-13
+STU00148,Lucas,Martin,lucas.martin48@university.edu,2020,Computer Science,2.65,active,2001-07-31
+STU00149,Samuel,White,samuel.white49@university.edu,2023,Mathematics,2.49,withdrawn,1999-01-15
+STU00150,Lucas,Lopez,lucas.lopez50@university.edu,2020,Electrical Engineering,3.74,graduated,2006-02-28
+STU00151,Chloe,Martinez,chloe.martinez51@university.edu,2021,English,3.28,withdrawn,2000-09-22
+STU00152,Charles,Smith,charles.smith52@university.edu,2023,Art History,2.58,graduated,1996-08-28
+STU00153,Joshua,Thompson,joshua.thompson53@university.edu,2022,Data Science,3.92,on_leave,2005-03-31
+STU00154,Sebastian,Martin,sebastian.martin54@university.edu,2021,Economics,3.71,active,2000-04-27
+STU00155,Christopher,Torres,christopher.torres55@university.edu,2022,Electrical Engineering,2.59,on_leave,1995-06-29
+STU00156,Layla,Sanchez,layla.sanchez56@university.edu,2022,Computer Science,3.13,active,2006-02-21
+STU00157,Layla,Jackson,layla.jackson57@university.edu,2021,Electrical Engineering,3.6,graduated,1999-04-07
+STU00158,Victoria,Taylor,victoria.taylor58@university.edu,2021,Data Science,2.19,active,2001-12-05
+STU00159,Edward,Lewis,edward.lewis59@university.edu,2020,Electrical Engineering,2.73,graduated,1997-01-08
+STU00160,Joseph,Lee,joseph.lee60@university.edu,2023,Mathematics,2.4,on_leave,2006-11-27
+STU00161,Nathan,Moore,nathan.moore61@university.edu,2021,Chemistry,3.83,withdrawn,2001-08-14
+STU00162,Aurora,Perez,aurora.perez62@university.edu,2020,English,3.93,graduated,2000-01-23
+STU00163,Nora,Sanchez,nora.sanchez63@university.edu,2022,Biology,3.58,active,2000-12-06
+STU00164,Ryan,Davis,ryan.davis64@university.edu,2023,Psychology,3.35,on_leave,2003-07-19
+STU00165,Oliver,White,oliver.white65@university.edu,2020,Data Science,2.47,active,2002-05-11
+STU00166,Victoria,Anderson,victoria.anderson66@university.edu,2020,Data Science,3.65,on_leave,2004-02-27
+STU00167,Sophia,Rodriguez,sophia.rodriguez67@university.edu,2020,Computer Science,2.61,withdrawn,1997-08-09
+STU00168,Alexander,Thomas,alexander.thomas68@university.edu,2021,Economics,2.91,withdrawn,1998-06-19
+STU00169,Andrew,Miller,andrew.miller69@university.edu,2023,Electrical Engineering,2.82,on_leave,1995-09-26
+STU00170,George,White,george.white70@university.edu,2021,English,2.89,graduated,2003-02-19
+STU00171,Alexander,White,alexander.white71@university.edu,2022,Computer Science,2.8,graduated,1997-09-27
+STU00172,Sebastian,Robinson,sebastian.robinson72@university.edu,2020,Data Science,2.42,active,1996-02-19
+STU00173,Edward,Perez,edward.perez73@university.edu,2021,Mathematics,3.57,graduated,1996-07-16
+STU00174,Layla,Scott,layla.scott74@university.edu,2021,Electrical Engineering,2.43,graduated,2002-05-15
+STU00175,Zoey,Martinez,zoey.martinez75@university.edu,2020,Chemistry,3.72,graduated,1997-11-30
+STU00176,Ryan,Taylor,ryan.taylor76@university.edu,2021,Biology,3.32,active,1997-12-15
+STU00177,James,Thompson,james.thompson77@university.edu,2021,Electrical Engineering,2.65,graduated,2000-12-13
+STU00178,Olivia,Rodriguez,olivia.rodriguez78@university.edu,2023,History,2.23,active,2005-09-06
+STU00179,Joshua,White,joshua.white79@university.edu,2020,English,3.01,active,2006-09-11
+STU00180,Evelyn,Robinson,evelyn.robinson80@university.edu,2020,Computer Science,4.0,withdrawn,2004-07-24
+STU00181,Aria,Miller,aria.miller81@university.edu,2023,Neuroscience,3.82,active,1996-10-23
+STU00182,David,Hill,david.hill82@university.edu,2021,Biology,2.25,on_leave,2003-07-18
+STU00183,Nicholas,King,nicholas.king83@university.edu,2022,English,3.01,withdrawn,1997-03-23
+STU00184,Edward,Davis,edward.davis84@university.edu,2021,Economics,2.9,graduated,2004-04-12
+STU00185,Abigail,Robinson,abigail.robinson85@university.edu,2023,Economics,3.46,on_leave,2004-07-28
+STU00186,David,Taylor,david.taylor86@university.edu,2022,Mathematics,3.37,withdrawn,1996-07-03
+STU00187,Ava,Garcia,ava.garcia87@university.edu,2020,Economics,2.19,on_leave,1997-12-01
+STU00188,Grace,Brown,grace.brown88@university.edu,2022,Data Science,2.24,on_leave,2004-06-26
+STU00189,Nora,Brown,nora.brown89@university.edu,2022,Electrical Engineering,2.62,active,2006-05-19
+STU00190,Charlotte,Martinez,charlotte.martinez90@university.edu,2023,Physics,3.69,on_leave,2003-03-31
+STU00191,Sophia,Moore,sophia.moore91@university.edu,2021,Political Science,2.86,active,2000-12-30
+STU00192,Emma,Lopez,emma.lopez92@university.edu,2022,Neuroscience,3.52,on_leave,2002-11-15
+STU00193,James,Lopez,james.lopez93@university.edu,2021,Electrical Engineering,3.31,active,1998-03-08
+STU00194,Aurora,Johnson,aurora.johnson94@university.edu,2020,Neuroscience,3.06,withdrawn,2004-06-01
+STU00195,Avery,Perez,avery.perez95@university.edu,2021,Psychology,2.62,on_leave,1996-11-26
+STU00196,Olivia,Martinez,olivia.martinez96@university.edu,2021,Political Science,3.24,active,2001-02-07
+STU00197,Joshua,Ramirez,joshua.ramirez97@university.edu,2023,Electrical Engineering,2.88,on_leave,1999-11-01
+STU00198,John,Allen,john.allen98@university.edu,2020,Psychology,2.86,on_leave,2005-11-30
+STU00199,Scarlett,Martin,scarlett.martin99@university.edu,2020,Physics,2.79,active,1995-03-04
+STU00200,Charlotte,Martin,charlotte.martin0@university.edu,2021,Political Science,2.27,on_leave,2001-06-29
+STU00201,David,Davis,david.davis1@university.edu,2020,English,3.49,graduated,1997-11-24
+STU00202,Christopher,Wright,christopher.wright2@university.edu,2021,History,3.12,on_leave,1996-08-13
+STU00203,Elizabeth,Williams,elizabeth.williams3@university.edu,2023,Computer Science,2.92,active,2002-01-08
+STU00204,Jacob,Ramirez,jacob.ramirez4@university.edu,2023,Neuroscience,3.28,on_leave,1997-08-01
+STU00205,Elizabeth,Johnson,elizabeth.johnson5@university.edu,2022,Mathematics,3.6,withdrawn,2003-02-12
+STU00206,Ava,Ramirez,ava.ramirez6@university.edu,2020,Physics,2.87,withdrawn,2006-10-02
+STU00207,Ava,Sanchez,ava.sanchez7@university.edu,2022,Neuroscience,2.68,on_leave,1998-10-09
+STU00208,William,Allen,william.allen8@university.edu,2020,History,3.02,on_leave,2002-11-16
+STU00209,Robert,Martinez,robert.martinez9@university.edu,2021,Biology,2.29,graduated,1998-11-22
+STU00210,Nicholas,Martinez,nicholas.martinez10@university.edu,2020,Mathematics,3.9,withdrawn,2005-05-28
+STU00211,John,Torres,john.torres11@university.edu,2023,Data Science,3.85,on_leave,2002-02-02
+STU00212,Isabella,Lewis,isabella.lewis12@university.edu,2020,English,2.88,on_leave,2001-02-28
+STU00213,Chloe,Brown,chloe.brown13@university.edu,2022,History,2.15,withdrawn,2005-02-19
+STU00214,Michael,Brown,michael.brown14@university.edu,2022,Sociology,2.57,active,2006-05-16
+STU00215,Christopher,Robinson,christopher.robinson15@university.edu,2020,English,3.82,graduated,2002-03-18
+STU00216,Nicholas,Walker,nicholas.walker16@university.edu,2021,Computer Science,2.9,on_leave,1996-11-21
+STU00217,Nathan,Lopez,nathan.lopez17@university.edu,2020,Physics,3.42,withdrawn,2006-10-03
+STU00218,Scarlett,Flores,scarlett.flores18@university.edu,2021,Psychology,2.75,on_leave,2003-09-09
+STU00219,Andrew,Perez,andrew.perez19@university.edu,2020,Political Science,3.26,on_leave,1996-06-23
+STU00220,Abigail,Miller,abigail.miller20@university.edu,2023,Chemistry,2.5,graduated,2002-06-23
+STU00221,Ava,Nguyen,ava.nguyen21@university.edu,2021,Art History,2.7,withdrawn,1997-11-22
+STU00222,Nicholas,Garcia,nicholas.garcia22@university.edu,2022,History,2.75,on_leave,1997-11-12
+STU00223,Charles,King,charles.king23@university.edu,2020,Data Science,3.34,on_leave,1995-05-30
+STU00224,Emily,Martin,emily.martin24@university.edu,2021,Physics,2.68,withdrawn,1999-04-22
+STU00225,Daniel,Rodriguez,daniel.rodriguez25@university.edu,2021,Biology,2.59,active,2006-05-21
+STU00226,Zoey,Wright,zoey.wright26@university.edu,2020,Data Science,2.67,graduated,2003-06-14
+STU00227,Isabella,Hernandez,isabella.hernandez27@university.edu,2021,Sociology,3.39,graduated,2004-10-25
+STU00228,Michael,Clark,michael.clark28@university.edu,2022,Data Science,3.44,withdrawn,2001-05-23
+STU00229,John,Lewis,john.lewis29@university.edu,2021,History,2.48,withdrawn,1999-05-09
+STU00230,Emily,Torres,emily.torres30@university.edu,2023,English,3.54,withdrawn,2006-04-12
+STU00231,Scarlett,Clark,scarlett.clark31@university.edu,2021,Sociology,2.4,graduated,2000-08-10
+STU00232,Olivia,Walker,olivia.walker32@university.edu,2022,History,3.87,active,2001-05-24
+STU00233,Ava,Hernandez,ava.hernandez33@university.edu,2022,English,3.81,graduated,2004-10-23
+STU00234,Ava,Anderson,ava.anderson34@university.edu,2023,Art History,2.7,active,2004-04-21
+STU00235,Olivia,Sanchez,olivia.sanchez35@university.edu,2022,Physics,2.77,active,2003-05-30
+STU00236,Daniel,Johnson,daniel.johnson36@university.edu,2022,Art History,2.2,on_leave,1998-04-11
+STU00237,Benjamin,Williams,benjamin.williams37@university.edu,2022,Art History,3.66,graduated,2005-07-09
+STU00238,Joshua,Flores,joshua.flores38@university.edu,2020,Art History,2.16,on_leave,1999-11-02
+STU00239,Layla,Martinez,layla.martinez39@university.edu,2023,Biology,3.55,graduated,2001-10-03
+STU00240,Sophia,Brown,sophia.brown40@university.edu,2021,Economics,3.28,withdrawn,1996-05-29
+STU00241,Sophia,Young,sophia.young41@university.edu,2020,Data Science,3.03,graduated,1998-03-22
+STU00242,Joseph,Ramirez,joseph.ramirez42@university.edu,2020,Electrical Engineering,2.71,withdrawn,1999-03-15
+STU00243,Charles,Garcia,charles.garcia43@university.edu,2022,Biology,3.91,active,2003-10-04
+STU00244,Nora,Walker,nora.walker44@university.edu,2020,Data Science,2.77,on_leave,2000-09-08
+STU00245,Aurora,Johnson,aurora.johnson45@university.edu,2022,Political Science,2.14,graduated,1997-04-29
+STU00246,Zoey,Nguyen,zoey.nguyen46@university.edu,2022,Mathematics,2.09,on_leave,1998-12-05
+STU00247,Layla,Robinson,layla.robinson47@university.edu,2023,Data Science,2.36,graduated,1996-05-31
+STU00248,Lily,Robinson,lily.robinson48@university.edu,2020,Chemistry,2.4,graduated,1995-12-10
+STU00249,David,Martin,david.martin49@university.edu,2023,Sociology,3.09,on_leave,1995-10-27
+STU00250,John,Gonzalez,john.gonzalez50@university.edu,2022,Psychology,3.72,active,2002-06-12
+STU00251,Harper,Davis,harper.davis51@university.edu,2022,Economics,3.78,withdrawn,2003-09-03
+STU00252,Abigail,Lopez,abigail.lopez52@university.edu,2023,Neuroscience,3.0,on_leave,1996-11-07
+STU00253,Robert,Ramirez,robert.ramirez53@university.edu,2020,Economics,3.2,graduated,2001-08-03
+STU00254,David,Miller,david.miller54@university.edu,2020,Psychology,3.32,on_leave,2004-12-31
+STU00255,Nicholas,Ramirez,nicholas.ramirez55@university.edu,2021,Neuroscience,2.89,withdrawn,1995-12-13
+STU00256,Robert,Thompson,robert.thompson56@university.edu,2023,Chemistry,3.28,active,1996-09-06
+STU00257,Charles,Sanchez,charles.sanchez57@university.edu,2022,History,3.6,graduated,1995-09-13
+STU00258,Isabella,Hill,isabella.hill58@university.edu,2023,Computer Science,2.25,graduated,2003-03-20
+STU00259,Emily,Harris,emily.harris59@university.edu,2020,Electrical Engineering,2.31,withdrawn,2003-04-27
+STU00260,Emily,Lewis,emily.lewis60@university.edu,2020,Electrical Engineering,2.28,on_leave,2003-12-05
+STU00261,David,Moore,david.moore61@university.edu,2021,Biology,2.05,graduated,2006-03-12
+STU00262,Scarlett,Harris,scarlett.harris62@university.edu,2020,Chemistry,3.55,withdrawn,1999-10-24
+STU00263,Victoria,Jackson,victoria.jackson63@university.edu,2023,Physics,2.25,active,2005-02-20
+STU00264,Mia,Lewis,mia.lewis64@university.edu,2020,Political Science,3.36,on_leave,2002-10-17
+STU00265,Lily,Jones,lily.jones65@university.edu,2022,Art History,2.6,graduated,1998-11-27
+STU00266,Edward,White,edward.white66@university.edu,2021,Biology,3.97,graduated,2000-04-23
+STU00267,Edward,Young,edward.young67@university.edu,2020,Psychology,3.11,on_leave,2005-06-25
+STU00268,Penelope,Scott,penelope.scott68@university.edu,2021,Electrical Engineering,3.77,active,2001-12-08
+STU00269,Elizabeth,Walker,elizabeth.walker69@university.edu,2023,Political Science,2.82,active,1997-10-23
+STU00270,David,Jones,david.jones70@university.edu,2023,English,3.36,on_leave,1997-11-17
+STU00271,Layla,Scott,layla.scott71@university.edu,2021,Political Science,3.93,withdrawn,2006-04-12
+STU00272,Nora,Brown,nora.brown72@university.edu,2020,History,2.31,graduated,1998-08-19
+STU00273,David,Anderson,david.anderson73@university.edu,2022,History,3.79,active,2000-08-14
+STU00274,Henry,Scott,henry.scott74@university.edu,2022,Mathematics,3.25,active,2006-04-10
+STU00275,Riley,Hernandez,riley.hernandez75@university.edu,2021,Mathematics,3.32,on_leave,1995-12-04
+STU00276,Oliver,Johnson,oliver.johnson76@university.edu,2020,Computer Science,3.9,on_leave,1999-09-23
+STU00277,Zoey,Torres,zoey.torres77@university.edu,2023,Electrical Engineering,3.28,withdrawn,2001-06-30
+STU00278,Riley,Martin,riley.martin78@university.edu,2023,Physics,3.61,withdrawn,2001-09-02
+STU00279,Avery,Jones,avery.jones79@university.edu,2020,Mathematics,2.88,withdrawn,2005-06-01
+STU00280,Charlotte,Perez,charlotte.perez80@university.edu,2021,Psychology,3.72,on_leave,2002-09-30
+STU00281,Elizabeth,Rodriguez,elizabeth.rodriguez81@university.edu,2022,History,3.12,on_leave,2000-06-03
+STU00282,Avery,Davis,avery.davis82@university.edu,2022,English,2.5,active,1996-02-19
+STU00283,Joseph,Harris,joseph.harris83@university.edu,2023,Physics,3.93,graduated,2002-05-06
+STU00284,Jacob,Lee,jacob.lee84@university.edu,2021,Political Science,2.32,withdrawn,2006-03-09
+STU00285,Evelyn,Young,evelyn.young85@university.edu,2020,Biology,3.89,withdrawn,2000-05-26
+STU00286,Charlotte,Nguyen,charlotte.nguyen86@university.edu,2022,Computer Science,2.1,withdrawn,2005-07-22
+STU00287,Joseph,Wright,joseph.wright87@university.edu,2020,Sociology,2.21,graduated,2000-12-06
+STU00288,Robert,White,robert.white88@university.edu,2023,Psychology,2.09,active,1999-05-14
+STU00289,Emily,Scott,emily.scott89@university.edu,2022,Biology,2.77,withdrawn,2001-04-10
+STU00290,Oliver,Flores,oliver.flores90@university.edu,2020,Mathematics,3.95,withdrawn,2003-05-16
+STU00291,Edward,Perez,edward.perez91@university.edu,2022,Political Science,2.29,withdrawn,2006-03-20
+STU00292,Michael,Williams,michael.williams92@university.edu,2020,Mathematics,3.43,withdrawn,2006-08-25
+STU00293,Avery,Martinez,avery.martinez93@university.edu,2021,Psychology,3.86,on_leave,1998-08-24
+STU00294,Elizabeth,Flores,elizabeth.flores94@university.edu,2022,Electrical Engineering,2.67,withdrawn,2001-09-21
+STU00295,Ethan,Johnson,ethan.johnson95@university.edu,2022,Psychology,3.35,withdrawn,2001-11-25
+STU00296,Edward,Johnson,edward.johnson96@university.edu,2023,Chemistry,3.93,graduated,1996-02-25
+STU00297,Chloe,Walker,chloe.walker97@university.edu,2021,History,3.26,withdrawn,1998-04-25
+STU00298,Oliver,Thomas,oliver.thomas98@university.edu,2020,Electrical Engineering,3.9,active,1999-04-12
+STU00299,Emma,Lewis,emma.lewis99@university.edu,2022,Economics,2.3,graduated,2004-03-15
+STU00300,Nathan,Flores,nathan.flores0@university.edu,2023,Sociology,3.7,active,1998-02-05

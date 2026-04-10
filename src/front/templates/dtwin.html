@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Digital Twin - OntoBricks{% endblock %}
+
+{% block extra_css %}
+<!-- Query module styles (extracted from partials) -->
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-visualization.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-sigmagraph.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-dataquality.css') }}?v={{ asset_version }}">
+<!-- Query page specific styles -->
+<link rel="stylesheet" href="{{ url_for('static', filename='global/css/query.css') }}">
+<!-- Ontology map styles for read-only viewer modal -->
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-map.css') }}?v={{ asset_version }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="sidebar-layout">
+        <!-- Left Sidebar Menu (driven by menu_config.json) -->
+        <div class="sidebar-nav">
+            {% set sidebar_menu = get_menu('digitaltwin') %}
+            {% include "partials/layout/_sidebar_nav.html" %}
+        </div>
+        
+        <!-- Right Content Area -->
+        <div class="sidebar-content">
+            <!-- Sync Section -->
+            <div id="sync-section" class="sidebar-section active">
+                {% include "partials/dtwin/_query_sync.html" %}
+            </div>
+            
+            <!-- Data Quality Section (SHACL) -->
+            <div id="dataquality-section" class="sidebar-section">
+                {% include "partials/dtwin/_query_dataquality.html" %}
+            </div>
+
+            <!-- Inference Section -->
+            <div id="reasoning-section" class="sidebar-section">
+                {% include "partials/dtwin/_query_reasoning.html" %}
+            </div>
+            
+            <!-- Knowledge Graph Section -->
+            <div id="sigmagraph-section" class="sidebar-section">
+                {% include "partials/dtwin/_query_sigmagraph.html" %}
+            </div>
+            
+            <!-- GraphQL Playground Section -->
+            <div id="graphql-section" class="sidebar-section">
+                {% include "partials/dtwin/_query_graphql.html" %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Triplestore config injected from session — avoids API round-trips on load -->
+<script id="triplestore-config" type="application/json">
+{
+    "view_table": "{{ view_table|default('', true) }}",
+    "graph_name": "{{ graph_name|default('', true) }}",
+    "cache": {{ triplestore_cache|default({})|tojson }}
+}
+</script>
+
+<!-- All scripts use defer: page paints immediately, scripts run in order after HTML parsing.
+     CDN libs (D3, Graphology, Sigma, GraphiQL) are lazy-loaded on first use by their modules. -->
+<script defer src="{{ url_for('static', filename='query/js/query.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-loaders.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-execute.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-sync.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-d3graph.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-entity-details.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-dashboard.js') }}?v={{ asset_version }}"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-dataquality.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-reasoning.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-sigmagraph.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-graphql.js') }}?v={{ asset_version }}"></script>
+<!-- Read-only ontology model viewer modal (D3.js) -->
+<script defer src="{{ url_for('static', filename='query/js/query-ontology-viewer.js') }}?v={{ asset_version }}"></script>
+{% endblock %}

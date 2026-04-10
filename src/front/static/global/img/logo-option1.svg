@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Background glow effect -->
+  <defs>
+    <linearGradient id="brickGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF3621;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF6B35;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Main brick shape (Databricks inspired) -->
+  <path d="M8 24 L32 12 L56 24 L56 44 L32 56 L8 44 Z" 
+        fill="url(#brickGrad)" opacity="0.15" stroke="#FF3621" stroke-width="1"/>
+  
+  <!-- Graph nodes arranged in brick pattern -->
+  <!-- Top row -->
+  <circle cx="32" cy="16" r="5" fill="#FF3621" filter="url(#glow)"/>
+  
+  <!-- Middle row (3 nodes) -->
+  <circle cx="18" cy="28" r="5" fill="#4ECDC4"/>
+  <circle cx="32" cy="28" r="6" fill="#6366F1"/>
+  <circle cx="46" cy="28" r="5" fill="#4ECDC4"/>
+  
+  <!-- Bottom row (2 nodes) -->
+  <circle cx="24" cy="42" r="5" fill="#F59E0B"/>
+  <circle cx="40" cy="42" r="5" fill="#F59E0B"/>
+  
+  <!-- Center node (the "O" in OntoBricks) -->
+  <circle cx="32" cy="52" r="4" fill="#FF3621"/>
+  
+  <!-- Connection lines (knowledge graph edges) -->
+  <g stroke="#1E293B" stroke-width="2" stroke-linecap="round" opacity="0.7">
+    <!-- From top -->
+    <line x1="32" y1="21" x2="18" y2="23"/>
+    <line x1="32" y1="21" x2="32" y2="22"/>
+    <line x1="32" y1="21" x2="46" y2="23"/>
+    
+    <!-- Middle connections -->
+    <line x1="18" y1="33" x2="24" y2="37"/>
+    <line x1="32" y1="34" x2="24" y2="37"/>
+    <line x1="32" y1="34" x2="40" y2="37"/>
+    <line x1="46" y1="33" x2="40" y2="37"/>
+    
+    <!-- To bottom -->
+    <line x1="24" y1="47" x2="32" y2="48"/>
+    <line x1="40" y1="47" x2="32" y2="48"/>
+  </g>
+  
+  <!-- Inner node details (white dots) -->
+  <circle cx="32" cy="28" r="2" fill="white" opacity="0.8"/>
+</svg>

@@ -1,0 +1,145 @@
+<!-- Mapping Information Section -->
+
+<!-- Loading placeholder (shown until JS loads data) -->
+<div id="mappingLoadingPlaceholder" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(248, 249, 250, 0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;">
+    <div class="ob-loading-spinner">
+        <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
+            <g class="ob-ring">
+                <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
+                    <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
+                    <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
+                    <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
+                    <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
+                </g>
+                <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
+                <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
+                <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
+                <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
+            </g>
+            <g transform="translate(40,40)">
+                <g class="ob-center">
+                    <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
+                    <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
+                    <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
+                </g>
+            </g>
+        </svg>
+        <span class="ob-spinner-label">Loading mapping data...</span>
+    </div>
+</div>
+
+<!-- Full content (hidden until loaded) -->
+<div id="mappingLoadedContent" style="display: none;">
+
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-diagram-2 me-2"></i>Mapping Summary</h4>
+        <p class="text-muted mb-0 small">Overview of mappings between ontology and data sources</p>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-danger ontology-edit-btn" id="resetMappingsBtn" onclick="confirmResetMappings()">
+        <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+    </button>
+</div>
+
+<!-- Prerequisite: Metadata Check -->
+<div class="alert alert-secondary" id="metadataPrerequisite" role="alert">
+    <div class="d-flex align-items-center justify-content-between">
+        <div>
+            <span id="metadataCheckIcon"><i class="bi bi-database me-2"></i></span>
+            <strong>Metadata:</strong>
+            <span id="metadataCheckStatus">Checking...</span>
+        </div>
+        <a href="/project/?section=metadata" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-database"></i> Project Metadata
+        </a>
+    </div>
+</div>
+
+<!-- Prerequisite: Ontology Check -->
+<div class="alert alert-secondary" id="ontologyPrerequisite" role="alert">
+    <div class="d-flex align-items-center justify-content-between">
+        <div>
+            <span id="ontologyCheckIcon"><i class="bi bi-diagram-3 me-2"></i></span>
+            <strong>Ontology:</strong>
+            <span id="ontologyCheckStatus">Checking...</span>
+        </div>
+        <a href="/ontology/" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-diagram-3"></i> Ontology Page
+        </a>
+    </div>
+</div>
+
+<!-- Mapping Summary Card -->
+<div class="card mb-4">
+    <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3">
+                            <i class="bi bi-box fs-2 text-muted"></i>
+                        </div>
+                        <div>
+                            <h5 class="mb-0" id="entityMappingCount">0 / 0</h5>
+                            <small class="text-muted">Entities Mapped</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3">
+                            <i class="bi bi-arrow-left-right fs-2 text-muted"></i>
+                        </div>
+                        <div>
+                            <h5 class="mb-0" id="relationshipMappingCount">0 / 0</h5>
+                            <small class="text-muted">Relationships Mapped</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3">
+                            <i class="bi bi-tags fs-2 text-muted"></i>
+                        </div>
+                        <div>
+                            <h5 class="mb-0" id="attributeMappingCount">0 / 0</h5>
+                            <small class="text-muted">Attributes Mapped</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Detail Lists: Entities & Relationships -->
+            <div class="row mt-3" id="summaryDetailGrid">
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-2"><i class="bi bi-box"></i> Entities</h6>
+                    <div class="summary-detail-list" id="entityDetailList">
+                        <div class="text-muted small fst-italic">No ontology loaded</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-2"><i class="bi bi-arrow-left-right"></i> Relationships</h6>
+                    <div class="summary-detail-list" id="relationshipDetailList">
+                        <div class="text-muted small fst-italic">No ontology loaded</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress bar -->
+            <div class="progress mapping-progress mt-3">
+                <div class="progress-bar" id="mappingProgressBar" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="d-flex justify-content-between mt-2">
+                <small class="text-muted" id="mappingProgressText">0% complete</small>
+                <span id="mappingStatusBadge" class="badge bg-secondary">Not Started</span>
+            </div>
+
+            <!-- Status -->
+            <div id="mappingStatusMessage" class="text-muted small mt-3 pt-3 border-top">
+                <i class="bi bi-info-circle"></i> Load or create entity and relationship to get started.
+            </div>
+    </div>
+</div>
+
+</div><!-- /mappingLoadedContent -->
+
+<!-- JS loaded from /static/js/mapping-information.js -->

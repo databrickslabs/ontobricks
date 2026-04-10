@@ -1,0 +1,169 @@
+<!-- SWRL Rules Section -->
+<!-- JS: /static/ontology/js/ontology-swrl.js -->
+<!-- CSS: /static/ontology/css/ontology-swrl.css -->
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-lightning me-2"></i>Business Rules</h4>
+        <p class="text-muted mb-0 small">Define inference/business rules using the Semantic Web Rule Language (SWRL)</p>
+    </div>
+    <button class="btn btn-sm btn-outline-primary ontology-edit-btn" onclick="SwrlModule.addRule()">
+        <i class="bi bi-plus-lg me-1"></i> Add Rule
+    </button>
+</div>
+<div class="card h-100">
+    <div class="card-body">
+        <p class="text-muted small mb-3">
+            <i class="bi bi-info-circle"></i>
+            Define business rules for automatic inference.
+            Rules use the format: antecedent &rarr; consequent
+        </p>
+
+        <div class="text-center py-4 text-muted" id="swrlRulesSpinner">
+            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            <p class="mt-2 mb-0 small">Loading rules&hellip;</p>
+        </div>
+
+        <div id="swrlRulesList" style="display:none">
+            <div class="text-center py-4 text-muted" id="noSwrlRulesMessage">
+                <i class="bi bi-lightning icon-lg"></i>
+                <p class="mt-2 mb-0">No SWRL rules defined</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ SWRL Visual Graph Editor Modal ═══ -->
+<div class="modal fade" id="swrlGraphEditorModal" tabindex="-1">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="swrlEditorTitle">
+                    <i class="bi bi-lightning me-2"></i>Add SWRL Rule
+                </h5>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="SwrlModule.zoomIn()" title="Zoom in">
+                        <i class="bi bi-zoom-in"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="SwrlModule.zoomOut()" title="Zoom out">
+                        <i class="bi bi-zoom-out"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="SwrlModule.fitToView()" title="Fit to view">
+                        <i class="bi bi-arrows-fullscreen"></i>
+                    </button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0">
+                <div class="swrl-editor-layout">
+                    <!-- Left: Ontology Graph -->
+                    <div class="swrl-graph-pane" id="swrlGraphContainer">
+                        <div class="swrl-graph-hint" id="swrlGraphHint">
+                            <i class="bi bi-hand-index me-1"></i>
+                            Click an entity or relationship to add it to the rule
+                        </div>
+                    </div>
+                    <!-- Right: Rule Builder Pane -->
+                    <div class="swrl-rule-pane" id="swrlRulePane">
+                        <div class="swrl-pane-scroll">
+                            <!-- Name & Description -->
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold mb-1">Rule Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm" id="swrlRuleName"
+                                       placeholder="e.g., InferParentRelation">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold mb-1">Description</label>
+                                <input type="text" class="form-control form-control-sm" id="swrlRuleDescription"
+                                       placeholder="Optional &mdash; describe what this rule does">
+                            </div>
+
+                            <hr class="my-2">
+
+                            <!-- IF (Antecedent) atoms -->
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="fw-semibold small swrl-if-heading">
+                                        <i class="bi bi-funnel me-1"></i> IF &mdash; Conditions
+                                    </span>
+                                    <span class="badge swrl-badge-if-count" id="swrlIfCount">0</span>
+                                </div>
+                                <div id="swrlIfAtoms">
+                                    <div class="text-muted small fst-italic py-2" id="swrlIfEmpty">
+                                        Click entities or relationships on the graph
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="text-center my-2">
+                                <i class="bi bi-arrow-down fs-5 text-muted"></i>
+                            </div>
+
+                            <!-- THEN (Consequent) atoms -->
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="fw-semibold small swrl-then-heading">
+                                        <i class="bi bi-lightning-charge me-1"></i> THEN &mdash; Conclusions
+                                    </span>
+                                    <span class="badge swrl-badge-then-count" id="swrlThenCount">0</span>
+                                </div>
+                                <div id="swrlThenAtoms">
+                                    <div class="text-muted small fst-italic py-2" id="swrlThenEmpty">
+                                        Click entities or relationships on the graph
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="my-2">
+
+                            <!-- SWRL Preview -->
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold mb-1">Generated SWRL</label>
+                                <div class="swrl-preview-block" id="swrlPreview">
+                                    <span class="text-muted fst-italic">Select elements to build the rule</span>
+                                </div>
+                            </div>
+
+                            <!-- Raw edit toggle -->
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="swrlRawToggle"
+                                       onchange="SwrlModule.toggleRawMode()">
+                                <label class="form-check-label small" for="swrlRawToggle">Advanced: edit raw SWRL</label>
+                            </div>
+                            <div id="swrlRawEditor" style="display:none">
+                                <div class="mb-2">
+                                    <label class="form-label small mb-1">Antecedent (IF)</label>
+                                    <textarea class="form-control form-control-sm font-monospace" id="swrlRawAntecedent" rows="2"></textarea>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small mb-1">Consequent (THEN)</label>
+                                    <textarea class="form-control form-control-sm font-monospace" id="swrlRawConsequent" rows="2"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="swrl-pane-footer">
+                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-success btn-sm" id="swrlSaveBtn" onclick="SwrlModule.saveRule()">
+                                <i class="bi bi-check-lg me-1"></i> Save Rule
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Context menu (positioned absolutely within graph pane) -->
+<div class="swrl-context-menu" id="swrlContextMenu" style="display:none">
+    <div class="swrl-ctx-item swrl-ctx-if" onclick="SwrlModule.ctxAddToIf()">
+        <i class="bi bi-plus-circle me-2"></i> Add to IF
+    </div>
+    <div class="swrl-ctx-item swrl-ctx-then" onclick="SwrlModule.ctxAddToThen()">
+        <i class="bi bi-plus-circle me-2"></i> Add to THEN
+    </div>
+    <div class="swrl-ctx-item swrl-ctx-remove" onclick="SwrlModule.ctxRemove()" style="display:none">
+        <i class="bi bi-x-circle me-2"></i> Remove
+    </div>
+</div>

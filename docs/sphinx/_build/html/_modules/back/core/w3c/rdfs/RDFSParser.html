@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>back.core.w3c.rdfs.RDFSParser &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for back.core.w3c.rdfs.RDFSParser</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;RDFS vocabulary parser.</span>
+
+<span class="sd">Parses RDFS (RDF Schema) files to extract classes and properties.</span>
+<span class="sd">RDFS is simpler than OWL and uses rdfs:Class instead of owl:Class.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">RDF</span><span class="p">,</span> <span class="n">RDFS</span><span class="p">,</span> <span class="n">Namespace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="RDFSParser">
+<a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.rdfs.RDFSParser.RDFSParser">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">RDFSParser</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Parse RDFS vocabularies to extract classes and properties.&quot;&quot;&quot;</span>
+    
+<div class="viewcode-block" id="RDFSParser.__init__">
+<a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.rdfs.RDFSParser.RDFSParser.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rdfs_content</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize the parser with RDFS content.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            rdfs_content: RDFS content (Turtle, RDF/XML, N-Triples, etc.)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph</span> <span class="o">=</span> <span class="n">Graph</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_parse_content</span><span class="p">(</span><span class="n">rdfs_content</span><span class="p">)</span></div>
+
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_parse_content</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">content</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Try to parse the content in various RDF formats.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            content: RDF content string</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.rdf_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">parse_rdf_flexible</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">graph</span> <span class="o">=</span> <span class="n">parse_rdf_flexible</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Could not parse RDFS content. Supported formats: Turtle, RDF/XML, N3, N-Triples, JSON-LD&quot;</span><span class="p">)</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_local_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract the local name from a URI.&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">extract_local_name</span>
+        <span class="k">return</span> <span class="n">extract_local_name</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_base_uri</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Try to determine the base URI from the graph.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Base URI string</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Try to find from namespace bindings</span>
+        <span class="k">for</span> <span class="n">prefix</span><span class="p">,</span> <span class="n">namespace</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">namespaces</span><span class="p">():</span>
+            <span class="n">ns_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">namespace</span><span class="p">)</span>
+            <span class="c1"># Skip common prefixes</span>
+            <span class="k">if</span> <span class="n">prefix</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;rdf&#39;</span><span class="p">,</span> <span class="s1">&#39;rdfs&#39;</span><span class="p">,</span> <span class="s1">&#39;owl&#39;</span><span class="p">,</span> <span class="s1">&#39;xsd&#39;</span><span class="p">,</span> <span class="s1">&#39;xml&#39;</span><span class="p">]:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">ns_str</span> <span class="ow">and</span> <span class="p">(</span><span class="n">ns_str</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">ns_str</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)):</span>
+                <span class="k">return</span> <span class="n">ns_str</span>
+        
+        <span class="c1"># Try to extract from first class or property URI</span>
+        <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">Class</span><span class="p">):</span>
+            <span class="n">uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s1">&#39;#&#39;</span> <span class="ow">in</span> <span class="n">uri</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;#&#39;</span>
+            <span class="k">elif</span> <span class="s1">&#39;/&#39;</span> <span class="ow">in</span> <span class="n">uri</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;/&#39;</span>
+        
+        <span class="k">return</span> <span class="s1">&#39;http://example.org/schema#&#39;</span>
+    
+<div class="viewcode-block" id="RDFSParser.get_classes">
+<a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.rdfs.RDFSParser.RDFSParser.get_classes">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_classes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract all RDFS classes from the vocabulary.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            List of dicts with &#39;uri&#39;, &#39;name&#39;, &#39;label&#39;, &#39;comment&#39;, &#39;emoji&#39;, &#39;parent&#39;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">classes</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">seen_uris</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        
+        <span class="c1"># Get rdfs:Class instances</span>
+        <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">Class</span><span class="p">):</span>
+            <span class="n">uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
+            
+            <span class="c1"># Skip blank nodes and already seen</span>
+            <span class="k">if</span> <span class="n">uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;_:&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">seen_uris</span><span class="p">:</span>
+                <span class="k">continue</span>
+            
+            <span class="c1"># Skip RDFS/RDF built-in classes</span>
+            <span class="k">if</span> <span class="n">uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;http://www.w3.org/1999/02/22-rdf-syntax-ns#&#39;</span><span class="p">)</span> <span class="ow">or</span> \
+               <span class="n">uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;http://www.w3.org/2000/01/rdf-schema#&#39;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            
+            <span class="n">seen_uris</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+            <span class="n">classes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_extract_class_info</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">uri</span><span class="p">))</span>
+        
+        <span class="c1"># Also check for owl:Class (some RDFS files use OWL declarations)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">OWL</span>
+            <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">Class</span><span class="p">):</span>
+                <span class="n">uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;_:&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">seen_uris</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">seen_uris</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+                <span class="n">classes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_extract_class_info</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">uri</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+            <span class="k">pass</span>
+        
+        <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">classes</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">])</span></div>
+
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_class_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">cls</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract information about a class.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            cls: RDFLib class node</span>
+<span class="sd">            uri: Class URI</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Dict with class information</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_local_name</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+        
+        <span class="c1"># Get label (try multiple languages, prefer English or no language tag)</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">label</span><span class="p">):</span>
+            <span class="n">lbl_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">lbl</span><span class="p">)</span>
+            <span class="c1"># Prefer label without language tag or English</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">lbl</span><span class="p">,</span> <span class="s1">&#39;language&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">lbl</span><span class="o">.</span><span class="n">language</span> <span class="ow">in</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="s1">&#39;en&#39;</span><span class="p">]:</span>
+                <span class="n">label</span> <span class="o">=</span> <span class="n">lbl_str</span>
+                <span class="k">break</span>
+            <span class="k">if</span> <span class="n">label</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">label</span> <span class="o">=</span> <span class="n">lbl_str</span>
+        
+        <span class="c1"># Get comment/description</span>
+        <span class="n">comment</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">cmt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">comment</span><span class="p">):</span>
+            <span class="n">cmt_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">cmt</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">cmt</span><span class="p">,</span> <span class="s1">&#39;language&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">cmt</span><span class="o">.</span><span class="n">language</span> <span class="ow">in</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="s1">&#39;en&#39;</span><span class="p">]:</span>
+                <span class="n">comment</span> <span class="o">=</span> <span class="n">cmt_str</span>
+                <span class="k">break</span>
+            <span class="k">if</span> <span class="n">comment</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">comment</span> <span class="o">=</span> <span class="n">cmt_str</span>
+        
+        <span class="c1"># Get parent class (subClassOf)</span>
+        <span class="n">parent</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">parent_cls</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">subClassOf</span><span class="p">):</span>
+            <span class="n">parent_uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">parent_cls</span><span class="p">)</span>
+            <span class="c1"># Skip blank nodes and Resource/Thing</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">parent_uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;_:&#39;</span><span class="p">)</span> <span class="ow">and</span> \
+               <span class="ow">not</span> <span class="n">parent_uri</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;Resource&#39;</span><span class="p">)</span> <span class="ow">and</span> \
+               <span class="ow">not</span> <span class="n">parent_uri</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;Thing&#39;</span><span class="p">):</span>
+                <span class="n">parent</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_local_name</span><span class="p">(</span><span class="n">parent_uri</span><span class="p">)</span>
+                <span class="k">break</span>
+        
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;uri&#39;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span>
+            <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+            <span class="s1">&#39;label&#39;</span><span class="p">:</span> <span class="n">label</span> <span class="ow">or</span> <span class="n">name</span><span class="p">,</span>
+            <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="n">comment</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;emoji&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>  <span class="c1"># RDFS doesn&#39;t have icons</span>
+            <span class="s1">&#39;parent&#39;</span><span class="p">:</span> <span class="n">parent</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span>
+        <span class="p">}</span>
+    
+<div class="viewcode-block" id="RDFSParser.get_properties">
+<a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.rdfs.RDFSParser.RDFSParser.get_properties">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_properties</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract all RDFS properties from the vocabulary.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            List of dicts with &#39;uri&#39;, &#39;name&#39;, &#39;label&#39;, &#39;comment&#39;, &#39;type&#39;, &#39;domain&#39;, &#39;range&#39;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">properties</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">seen_uris</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        
+        <span class="c1"># Get rdf:Property instances</span>
+        <span class="k">for</span> <span class="n">prop</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">Property</span><span class="p">):</span>
+            <span class="n">uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">prop</span><span class="p">)</span>
+            
+            <span class="c1"># Skip blank nodes and already seen</span>
+            <span class="k">if</span> <span class="n">uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;_:&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">seen_uris</span><span class="p">:</span>
+                <span class="k">continue</span>
+            
+            <span class="c1"># Skip RDF/RDFS built-in properties</span>
+            <span class="k">if</span> <span class="n">uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;http://www.w3.org/1999/02/22-rdf-syntax-ns#&#39;</span><span class="p">)</span> <span class="ow">or</span> \
+               <span class="n">uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;http://www.w3.org/2000/01/rdf-schema#&#39;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            
+            <span class="n">seen_uris</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+            <span class="n">properties</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_extract_property_info</span><span class="p">(</span><span class="n">prop</span><span class="p">,</span> <span class="n">uri</span><span class="p">,</span> <span class="s1">&#39;Property&#39;</span><span class="p">))</span>
+        
+        <span class="c1"># Also check for owl:ObjectProperty and owl:DatatypeProperty</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">OWL</span>
+            <span class="k">for</span> <span class="n">prop</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">ObjectProperty</span><span class="p">):</span>
+                <span class="n">uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">prop</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;_:&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">seen_uris</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">seen_uris</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+                <span class="n">properties</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_extract_property_info</span><span class="p">(</span><span class="n">prop</span><span class="p">,</span> <span class="n">uri</span><span class="p">,</span> <span class="s1">&#39;ObjectProperty&#39;</span><span class="p">))</span>
+            
+            <span class="k">for</span> <span class="n">prop</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">DatatypeProperty</span><span class="p">):</span>
+                <span class="n">uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">prop</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;_:&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">seen_uris</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">seen_uris</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+                <span class="n">properties</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_extract_property_info</span><span class="p">(</span><span class="n">prop</span><span class="p">,</span> <span class="n">uri</span><span class="p">,</span> <span class="s1">&#39;DatatypeProperty&#39;</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+            <span class="k">pass</span>
+        
+        <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">properties</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">])</span></div>
+
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_property_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prop</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">prop_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract information about a property.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            prop: RDFLib property node</span>
+<span class="sd">            uri: Property URI</span>
+<span class="sd">            prop_type: Type of property (Property, ObjectProperty, DatatypeProperty)</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Dict with property information</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_local_name</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+        
+        <span class="c1"># Get label</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">prop</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">label</span><span class="p">):</span>
+            <span class="n">lbl_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">lbl</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">lbl</span><span class="p">,</span> <span class="s1">&#39;language&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">lbl</span><span class="o">.</span><span class="n">language</span> <span class="ow">in</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="s1">&#39;en&#39;</span><span class="p">]:</span>
+                <span class="n">label</span> <span class="o">=</span> <span class="n">lbl_str</span>
+                <span class="k">break</span>
+            <span class="k">if</span> <span class="n">label</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">label</span> <span class="o">=</span> <span class="n">lbl_str</span>
+        
+        <span class="c1"># Get comment</span>
+        <span class="n">comment</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">cmt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">prop</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">comment</span><span class="p">):</span>
+            <span class="n">cmt_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">cmt</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">cmt</span><span class="p">,</span> <span class="s1">&#39;language&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">cmt</span><span class="o">.</span><span class="n">language</span> <span class="ow">in</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="s1">&#39;en&#39;</span><span class="p">]:</span>
+                <span class="n">comment</span> <span class="o">=</span> <span class="n">cmt_str</span>
+                <span class="k">break</span>
+            <span class="k">if</span> <span class="n">comment</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">comment</span> <span class="o">=</span> <span class="n">cmt_str</span>
+        
+        <span class="c1"># Get domain</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">dom</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">prop</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">domain</span><span class="p">):</span>
+            <span class="n">dom_uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">dom</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">dom_uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;_:&#39;</span><span class="p">):</span>
+                <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_local_name</span><span class="p">(</span><span class="n">dom_uri</span><span class="p">)</span>
+                <span class="k">break</span>
+        
+        <span class="c1"># Get range</span>
+        <span class="n">range_val</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">rng</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">prop</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">range</span><span class="p">):</span>
+            <span class="n">rng_uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">rng_uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;_:&#39;</span><span class="p">):</span>
+                <span class="n">range_val</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_local_name</span><span class="p">(</span><span class="n">rng_uri</span><span class="p">)</span>
+                <span class="k">break</span>
+        
+        <span class="c1"># Determine if it&#39;s a datatype property or object property</span>
+        <span class="c1"># XSD datatypes and common literal types indicate a DatatypeProperty</span>
+        <span class="n">xsd_types</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span> <span class="s1">&#39;int&#39;</span><span class="p">,</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;double&#39;</span><span class="p">,</span> <span class="s1">&#39;decimal&#39;</span><span class="p">,</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span> <span class="s1">&#39;bool&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;date&#39;</span><span class="p">,</span> <span class="s1">&#39;dateTime&#39;</span><span class="p">,</span> <span class="s1">&#39;time&#39;</span><span class="p">,</span> <span class="s1">&#39;duration&#39;</span><span class="p">,</span> <span class="s1">&#39;gYear&#39;</span><span class="p">,</span> <span class="s1">&#39;gMonth&#39;</span><span class="p">,</span> <span class="s1">&#39;gDay&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;hexBinary&#39;</span><span class="p">,</span> <span class="s1">&#39;base64Binary&#39;</span><span class="p">,</span> <span class="s1">&#39;anyURI&#39;</span><span class="p">,</span> <span class="s1">&#39;QName&#39;</span><span class="p">,</span> <span class="s1">&#39;NOTATION&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;normalizedString&#39;</span><span class="p">,</span> <span class="s1">&#39;token&#39;</span><span class="p">,</span> <span class="s1">&#39;language&#39;</span><span class="p">,</span> <span class="s1">&#39;NMTOKEN&#39;</span><span class="p">,</span> <span class="s1">&#39;Name&#39;</span><span class="p">,</span> <span class="s1">&#39;NCName&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;nonPositiveInteger&#39;</span><span class="p">,</span> <span class="s1">&#39;negativeInteger&#39;</span><span class="p">,</span> <span class="s1">&#39;long&#39;</span><span class="p">,</span> <span class="s1">&#39;short&#39;</span><span class="p">,</span> <span class="s1">&#39;byte&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;nonNegativeInteger&#39;</span><span class="p">,</span> <span class="s1">&#39;unsignedLong&#39;</span><span class="p">,</span> <span class="s1">&#39;unsignedInt&#39;</span><span class="p">,</span> <span class="s1">&#39;unsignedShort&#39;</span><span class="p">,</span> <span class="s1">&#39;unsignedByte&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;positiveInteger&#39;</span><span class="p">,</span> <span class="s1">&#39;Literal&#39;</span><span class="p">,</span> <span class="s1">&#39;langString&#39;</span>
+        <span class="p">}</span>
+        
+        <span class="n">is_datatype_property</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="n">range_val</span><span class="p">:</span>
+            <span class="c1"># Check for XSD namespace indicators</span>
+            <span class="k">if</span> <span class="n">range_val</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;xsd:&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;XMLSchema&#39;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">range_val</span><span class="p">):</span>
+                <span class="n">is_datatype_property</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="c1"># Check for common XSD type names</span>
+            <span class="k">elif</span> <span class="n">range_val</span> <span class="ow">in</span> <span class="n">xsd_types</span><span class="p">:</span>
+                <span class="n">is_datatype_property</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="c1"># Check for RDFS Literal</span>
+            <span class="k">elif</span> <span class="n">range_val</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;Literal&#39;</span><span class="p">,</span> <span class="s1">&#39;langString&#39;</span><span class="p">]</span> <span class="ow">or</span> <span class="s1">&#39;Literal&#39;</span> <span class="ow">in</span> <span class="n">range_val</span><span class="p">:</span>
+                <span class="n">is_datatype_property</span> <span class="o">=</span> <span class="kc">True</span>
+        
+        <span class="c1"># Determine final type</span>
+        <span class="k">if</span> <span class="n">prop_type</span> <span class="o">==</span> <span class="s1">&#39;Property&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">is_datatype_property</span><span class="p">:</span>
+                <span class="n">prop_type</span> <span class="o">=</span> <span class="s1">&#39;DatatypeProperty&#39;</span>
+            <span class="k">elif</span> <span class="n">domain</span> <span class="ow">and</span> <span class="n">range_val</span><span class="p">:</span>
+                <span class="c1"># Has both domain and range, and range is not a datatype -&gt; ObjectProperty</span>
+                <span class="n">prop_type</span> <span class="o">=</span> <span class="s1">&#39;ObjectProperty&#39;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Default to DatatypeProperty if unclear</span>
+                <span class="n">prop_type</span> <span class="o">=</span> <span class="s1">&#39;DatatypeProperty&#39;</span>
+        
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;uri&#39;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span>
+            <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+            <span class="s1">&#39;label&#39;</span><span class="p">:</span> <span class="n">label</span> <span class="ow">or</span> <span class="n">name</span><span class="p">,</span>
+            <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="n">comment</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="n">prop_type</span><span class="p">,</span>
+            <span class="s1">&#39;domain&#39;</span><span class="p">:</span> <span class="n">domain</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;range&#39;</span><span class="p">:</span> <span class="n">range_val</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span>
+        <span class="p">}</span>
+    
+<div class="viewcode-block" id="RDFSParser.get_ontology_info">
+<a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.rdfs.RDFSParser.RDFSParser.get_ontology_info">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_ontology_info</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get basic vocabulary information.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Dict with &#39;uri&#39;, &#39;label&#39;, &#39;comment&#39;, &#39;namespace&#39;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Try to find ontology declaration (some RDFS files have this)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">OWL</span>
+            <span class="k">for</span> <span class="n">onto</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">Ontology</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_ontology_info</span><span class="p">(</span><span class="n">onto</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+            <span class="k">pass</span>
+        
+        <span class="c1"># Try to find a named graph or use base URI</span>
+        <span class="n">base_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_base_uri</span><span class="p">()</span>
+        
+        <span class="c1"># Look for a resource that might be the vocabulary itself</span>
+        <span class="c1"># (some vocabularies declare themselves)</span>
+        <span class="k">for</span> <span class="n">subj</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">():</span>
+            <span class="n">uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">subj</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">uri</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">uri</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">):</span>
+                <span class="c1"># This might be the vocabulary URI</span>
+                <span class="n">label</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">subj</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">label</span><span class="p">):</span>
+                    <span class="n">label</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">lbl</span><span class="p">)</span>
+                    <span class="k">break</span>
+                
+                <span class="n">comment</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="k">for</span> <span class="n">cmt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">subj</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">comment</span><span class="p">):</span>
+                    <span class="n">comment</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">cmt</span><span class="p">)</span>
+                    <span class="k">break</span>
+                
+                <span class="k">if</span> <span class="n">label</span> <span class="ow">or</span> <span class="n">comment</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="p">{</span>
+                        <span class="s1">&#39;uri&#39;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span>
+                        <span class="s1">&#39;label&#39;</span><span class="p">:</span> <span class="n">label</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_local_name</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;Vocabulary&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;comment&#39;</span><span class="p">:</span> <span class="n">comment</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;namespace&#39;</span><span class="p">:</span> <span class="n">uri</span>
+                    <span class="p">}</span>
+        
+        <span class="c1"># Default fallback</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;uri&#39;</span><span class="p">:</span> <span class="n">base_uri</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;#/&#39;</span><span class="p">),</span>
+            <span class="s1">&#39;label&#39;</span><span class="p">:</span> <span class="s1">&#39;Imported Vocabulary&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;comment&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;namespace&#39;</span><span class="p">:</span> <span class="n">base_uri</span>
+        <span class="p">}</span></div>
+
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_ontology_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">onto</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract ontology information from an OWL ontology declaration.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            onto: RDFLib ontology node</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Dict with ontology information</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">onto</span><span class="p">)</span>
+        
+        <span class="c1"># Get label</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">onto</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">label</span><span class="p">):</span>
+            <span class="n">label</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">lbl</span><span class="p">)</span>
+            <span class="k">break</span>
+        
+        <span class="c1"># Get comment</span>
+        <span class="n">comment</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">cmt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">onto</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">comment</span><span class="p">):</span>
+            <span class="n">comment</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">cmt</span><span class="p">)</span>
+            <span class="k">break</span>
+        
+        <span class="c1"># Determine namespace</span>
+        <span class="n">namespace</span> <span class="o">=</span> <span class="n">uri</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">namespace</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">namespace</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">):</span>
+            <span class="n">namespace</span> <span class="o">=</span> <span class="n">namespace</span> <span class="o">+</span> <span class="s1">&#39;#&#39;</span>
+        
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;uri&#39;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span>
+            <span class="s1">&#39;label&#39;</span><span class="p">:</span> <span class="n">label</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_local_name</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;Ontology&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;comment&#39;</span><span class="p">:</span> <span class="n">comment</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;namespace&#39;</span><span class="p">:</span> <span class="n">namespace</span>
+        <span class="p">}</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>api.routers.v1 &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for api.routers.v1</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">External REST API Routes (v1)</span>
+
+<span class="sd">Stateless API endpoints for external integrations.</span>
+<span class="sd">All endpoints accept authentication via headers or request body.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Header</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Any</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span><span class="p">,</span> <span class="n">NotFoundError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">APP_VERSION</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.project.payload</span><span class="w"> </span><span class="kn">import</span> <span class="n">resolve_project_slice</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">api</span><span class="w"> </span><span class="kn">import</span> <span class="n">service</span>
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">APIRouter</span><span class="p">()</span>
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Pydantic Models for Request/Response</span>
+<span class="c1"># ===========================================</span>
+
+<div class="viewcode-block" id="CredentialsModel">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.CredentialsModel">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CredentialsModel</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Base model with optional Databricks credentials.&quot;&quot;&quot;</span>
+    <span class="n">databricks_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="kc">None</span><span class="p">,</span> 
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Databricks workspace URL (e.g., https://my-workspace.cloud.databricks.com)&quot;</span><span class="p">,</span>
+        <span class="n">examples</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;https://my-workspace.cloud.databricks.com&quot;</span><span class="p">]</span>
+    <span class="p">)</span>
+    <span class="n">databricks_token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="kc">None</span><span class="p">,</span> 
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Personal Access Token or OAuth token for authentication&quot;</span>
+    <span class="p">)</span>
+    
+    <span class="n">model_config</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;json_schema_extra&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;examples&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;databricks_host&quot;</span><span class="p">:</span> <span class="s2">&quot;https://my-workspace.cloud.databricks.com&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;databricks_token&quot;</span><span class="p">:</span> <span class="s2">&quot;dapi...&quot;</span>
+                <span class="p">}</span>
+            <span class="p">]</span>
+        <span class="p">}</span>
+    <span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="UCLocationModel">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.UCLocationModel">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">UCLocationModel</span><span class="p">(</span><span class="n">CredentialsModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Unity Catalog location model for accessing project files.&quot;&quot;&quot;</span>
+    <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Unity Catalog name&quot;</span><span class="p">,</span> <span class="n">examples</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;main&quot;</span><span class="p">])</span>
+    <span class="n">schema_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="o">...</span><span class="p">,</span> 
+        <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;schema&quot;</span><span class="p">,</span> 
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Schema name within the catalog&quot;</span><span class="p">,</span>
+        <span class="n">examples</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ontobricks&quot;</span><span class="p">]</span>
+    <span class="p">)</span>
+    <span class="n">volume</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Volume name for file storage&quot;</span><span class="p">,</span> <span class="n">examples</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;projects&quot;</span><span class="p">])</span>
+    
+    <span class="n">model_config</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;populate_by_name&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;json_schema_extra&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;examples&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;catalog&quot;</span><span class="p">:</span> <span class="s2">&quot;main&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;schema&quot;</span><span class="p">:</span> <span class="s2">&quot;ontobricks&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;volume&quot;</span><span class="p">:</span> <span class="s2">&quot;projects&quot;</span>
+                <span class="p">}</span>
+            <span class="p">]</span>
+        <span class="p">}</span>
+    <span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="ProjectPathModel">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.ProjectPathModel">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ProjectPathModel</span><span class="p">(</span><span class="n">CredentialsModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Model with Unity Catalog project file path.&quot;&quot;&quot;</span>
+    <span class="n">project_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="o">...</span><span class="p">,</span> 
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Full path to the project JSON file in Unity Catalog volume&quot;</span><span class="p">,</span>
+        <span class="n">examples</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;/Volumes/main/ontobricks/projects/my_project.json&quot;</span><span class="p">]</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="QueryModel">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.QueryModel">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">QueryModel</span><span class="p">(</span><span class="n">ProjectPathModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;SPARQL query execution request model.&quot;&quot;&quot;</span>
+    <span class="n">query</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="o">...</span><span class="p">,</span> 
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;SPARQL query to execute&quot;</span><span class="p">,</span>
+        <span class="n">examples</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10&quot;</span><span class="p">]</span>
+    <span class="p">)</span>
+    <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="mi">100</span><span class="p">,</span> 
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Maximum number of results to return&quot;</span><span class="p">,</span>
+        <span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">le</span><span class="o">=</span><span class="mi">10000</span>
+    <span class="p">)</span>
+    <span class="n">engine</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="s2">&quot;local&quot;</span><span class="p">,</span> 
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Query execution engine: &#39;local&#39; (RDFLib) or &#39;spark&#39; (Databricks SQL)&quot;</span><span class="p">,</span>
+        <span class="n">examples</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;local&quot;</span><span class="p">,</span> <span class="s2">&quot;spark&quot;</span><span class="p">]</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ValidateQueryModel">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.ValidateQueryModel">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ValidateQueryModel</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;SPARQL query validation request model.&quot;&quot;&quot;</span>
+    <span class="n">query</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="o">...</span><span class="p">,</span> 
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;SPARQL query to validate&quot;</span><span class="p">,</span>
+        <span class="n">examples</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;SELECT ?s ?p ?o WHERE { ?s ?p ?o }&quot;</span><span class="p">]</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="SuccessResponse">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.SuccessResponse">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SuccessResponse</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Standard API success response.&quot;&quot;&quot;</span>
+    <span class="n">success</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Indicates if the request was successful&quot;</span><span class="p">)</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Response payload&quot;</span><span class="p">)</span>
+    <span class="n">message</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Optional message&quot;</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Helper Functions</span>
+<span class="c1"># ===========================================</span>
+
+<div class="viewcode-block" id="get_credentials">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.get_credentials">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_credentials</span><span class="p">(</span>
+    <span class="n">request_data</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">CredentialsModel</span><span class="p">],</span>
+    <span class="n">x_databricks_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">x_databricks_token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract Databricks credentials from headers or request body.&quot;&quot;&quot;</span>
+    <span class="n">host</span> <span class="o">=</span> <span class="n">x_databricks_host</span>
+    <span class="n">token</span> <span class="o">=</span> <span class="n">x_databricks_token</span>
+    
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">and</span> <span class="n">request_data</span><span class="p">:</span>
+        <span class="n">host</span> <span class="o">=</span> <span class="n">request_data</span><span class="o">.</span><span class="n">databricks_host</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">token</span> <span class="ow">and</span> <span class="n">request_data</span><span class="p">:</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">request_data</span><span class="o">.</span><span class="n">databricks_token</span>
+    
+    <span class="k">return</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Health Check</span>
+<span class="c1"># ===========================================</span>
+
+<div class="viewcode-block" id="api_health">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.api_health">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/health&quot;</span><span class="p">,</span> <span class="n">summary</span><span class="o">=</span><span class="s2">&quot;API Health Check&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Health&quot;</span><span class="p">])</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">api_health</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Check the health status of the API v1 endpoints.</span>
+<span class="sd">    </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        - **status**: Health status (healthy/unhealthy)</span>
+<span class="sd">        - **version**: API version</span>
+<span class="sd">        - **service**: Service name</span>
+<span class="sd">        - **framework**: Web framework used</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;healthy&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="n">APP_VERSION</span><span class="p">,</span>
+        <span class="s2">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;OntoBricks API&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;framework&quot;</span><span class="p">:</span> <span class="s2">&quot;FastAPI&quot;</span>
+    <span class="p">}</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Project Endpoints</span>
+<span class="c1"># ===========================================</span>
+
+<div class="viewcode-block" id="list_projects">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.list_projects">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/projects/list&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">SuccessResponse</span><span class="p">,</span> <span class="n">summary</span><span class="o">=</span><span class="s2">&quot;List Projects&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_projects</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">UCLocationModel</span><span class="p">,</span>
+    <span class="n">x_databricks_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Host&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Databricks workspace URL&quot;</span><span class="p">),</span>
+    <span class="n">x_databricks_token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Token&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Authentication token&quot;</span><span class="p">)</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    List all OntoBricks projects in a Unity Catalog volume.</span>
+<span class="sd">    </span>
+<span class="sd">    Returns a list of `.json` project files found in the specified volume location.</span>
+<span class="sd">    </span>
+<span class="sd">    **Authentication** can be provided via:</span>
+<span class="sd">    - HTTP Headers: `X-Databricks-Host`, `X-Databricks-Token`</span>
+<span class="sd">    - Request body: `databricks_host`, `databricks_token`</span>
+<span class="sd">    </span>
+<span class="sd">    **Returns:**</span>
+<span class="sd">    - **projects**: List of project file paths</span>
+<span class="sd">    - **count**: Number of projects found</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_credentials</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">x_databricks_host</span><span class="p">,</span> <span class="n">x_databricks_token</span><span class="p">)</span>
+
+    <span class="n">projects</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">list_projects_from_uc</span><span class="p">(</span>
+        <span class="n">data</span><span class="o">.</span><span class="n">catalog</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">schema_name</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">volume</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">SuccessResponse</span><span class="p">(</span>
+        <span class="n">data</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;projects&quot;</span><span class="p">:</span> <span class="n">projects</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">projects</span><span class="p">)},</span>
+        <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">projects</span><span class="p">)</span><span class="si">}</span><span class="s2"> projects&quot;</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_project_info">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.get_project_info">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/project/info&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">SuccessResponse</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_project_info</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">ProjectPathModel</span><span class="p">,</span>
+    <span class="n">x_databricks_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Host&quot;</span><span class="p">),</span>
+    <span class="n">x_databricks_token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Token&quot;</span><span class="p">)</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get project information and statistics.&quot;&quot;&quot;</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_credentials</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">x_databricks_host</span><span class="p">,</span> <span class="n">x_databricks_token</span><span class="p">)</span>
+
+    <span class="n">project_data</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">load_project_from_uc</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">project_path</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
+    <span class="n">info</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">get_project_info</span><span class="p">(</span><span class="n">project_data</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">SuccessResponse</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">info</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_ontology">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.get_ontology">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/project/ontology&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">SuccessResponse</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_ontology</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">ProjectPathModel</span><span class="p">,</span>
+    <span class="n">x_databricks_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Host&quot;</span><span class="p">),</span>
+    <span class="n">x_databricks_token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Token&quot;</span><span class="p">)</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get ontology details (classes and properties).&quot;&quot;&quot;</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_credentials</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">x_databricks_host</span><span class="p">,</span> <span class="n">x_databricks_token</span><span class="p">)</span>
+
+    <span class="n">project_data</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">load_project_from_uc</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">project_path</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
+    <span class="n">ontology_info</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">get_ontology_info</span><span class="p">(</span><span class="n">project_data</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">SuccessResponse</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">ontology_info</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_ontology_classes">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.get_ontology_classes">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/project/ontology/classes&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">SuccessResponse</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_ontology_classes</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">ProjectPathModel</span><span class="p">,</span>
+    <span class="n">x_databricks_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Host&quot;</span><span class="p">),</span>
+    <span class="n">x_databricks_token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Token&quot;</span><span class="p">)</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get list of ontology classes with their URIs.&quot;&quot;&quot;</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_credentials</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">x_databricks_host</span><span class="p">,</span> <span class="n">x_databricks_token</span><span class="p">)</span>
+
+    <span class="n">project_data</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">load_project_from_uc</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">project_path</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
+    <span class="n">classes</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">get_ontology_classes</span><span class="p">(</span><span class="n">project_data</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">SuccessResponse</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;classes&quot;</span><span class="p">:</span> <span class="n">classes</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">classes</span><span class="p">)})</span></div>
+
+
+
+<div class="viewcode-block" id="get_ontology_properties">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.get_ontology_properties">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/project/ontology/properties&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">SuccessResponse</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_ontology_properties</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">ProjectPathModel</span><span class="p">,</span>
+    <span class="n">x_databricks_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Host&quot;</span><span class="p">),</span>
+    <span class="n">x_databricks_token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Token&quot;</span><span class="p">)</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get list of ontology properties (relationships) with their URIs.&quot;&quot;&quot;</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_credentials</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">x_databricks_host</span><span class="p">,</span> <span class="n">x_databricks_token</span><span class="p">)</span>
+
+    <span class="n">project_data</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">load_project_from_uc</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">project_path</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
+    <span class="n">properties</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">get_ontology_properties</span><span class="p">(</span><span class="n">project_data</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">SuccessResponse</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="n">properties</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">properties</span><span class="p">)})</span></div>
+
+
+
+<div class="viewcode-block" id="get_mappings">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.get_mappings">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/project/mappings&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">SuccessResponse</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_mappings</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">ProjectPathModel</span><span class="p">,</span>
+    <span class="n">x_databricks_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Host&quot;</span><span class="p">),</span>
+    <span class="n">x_databricks_token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Token&quot;</span><span class="p">)</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get mapping details (entity and relationship mappings).&quot;&quot;&quot;</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_credentials</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">x_databricks_host</span><span class="p">,</span> <span class="n">x_databricks_token</span><span class="p">)</span>
+
+    <span class="n">project_data</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">load_project_from_uc</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">project_path</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
+    <span class="n">mapping_info</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">get_mapping_info</span><span class="p">(</span><span class="n">project_data</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">SuccessResponse</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">mapping_info</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_r2rml">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.get_r2rml">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/project/r2rml&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">SuccessResponse</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_r2rml</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">ProjectPathModel</span><span class="p">,</span>
+    <span class="n">x_databricks_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Host&quot;</span><span class="p">),</span>
+    <span class="n">x_databricks_token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Token&quot;</span><span class="p">)</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get the R2RML mapping content from a project.&quot;&quot;&quot;</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_credentials</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">x_databricks_host</span><span class="p">,</span> <span class="n">x_databricks_token</span><span class="p">)</span>
+
+    <span class="n">project_data</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">load_project_from_uc</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">project_path</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
+    <span class="n">sl</span> <span class="o">=</span> <span class="n">resolve_project_slice</span><span class="p">(</span><span class="n">project_data</span><span class="p">)</span>
+    <span class="n">r2rml_content</span> <span class="o">=</span> <span class="n">sl</span><span class="p">[</span><span class="s2">&quot;assignment&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;r2rml_output&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">r2rml_content</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">NotFoundError</span><span class="p">(</span><span class="s2">&quot;No R2RML mapping found in project. Generate R2RML first.&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">SuccessResponse</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;r2rml&quot;</span><span class="p">:</span> <span class="n">r2rml_content</span><span class="p">,</span> <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;turtle&quot;</span><span class="p">})</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Query Endpoints</span>
+<span class="c1"># ===========================================</span>
+
+<div class="viewcode-block" id="execute_query">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.execute_query">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/query&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">SuccessResponse</span><span class="p">,</span> <span class="n">summary</span><span class="o">=</span><span class="s2">&quot;Execute SPARQL Query&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">execute_query</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">QueryModel</span><span class="p">,</span>
+    <span class="n">x_databricks_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Host&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Databricks workspace URL&quot;</span><span class="p">),</span>
+    <span class="n">x_databricks_token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Token&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Authentication token&quot;</span><span class="p">)</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Execute a SPARQL query against a project&#39;s mapped data.</span>
+
+<span class="sd">    The query is translated to SQL using R2RML mappings and executed against</span>
+<span class="sd">    Databricks.</span>
+
+<span class="sd">    Execution engines:</span>
+
+<span class="sd">    - **local** — RDFLib for local SPARQL processing (default).</span>
+<span class="sd">    - **spark** — Spark SQL on Databricks.</span>
+
+<span class="sd">    Response fields include **results** (rows), **columns**, **count**, and</span>
+<span class="sd">    **engine**.</span>
+
+<span class="sd">    Example SPARQL (prefixes and graph pattern)::</span>
+
+<span class="sd">        PREFIX ex: &lt;http://example.org/&gt;</span>
+<span class="sd">        SELECT ?person ?name</span>
+<span class="sd">        WHERE {</span>
+<span class="sd">            ?person a ex:Person .</span>
+<span class="sd">            ?person ex:name ?name .</span>
+<span class="sd">        }</span>
+<span class="sd">        LIMIT 10</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">is_valid</span><span class="p">,</span> <span class="n">error_msg</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">validate_sparql_query</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid query: </span><span class="si">{</span><span class="n">error_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_credentials</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">x_databricks_host</span><span class="p">,</span> <span class="n">x_databricks_token</span><span class="p">)</span>
+
+    <span class="n">project_data</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">load_project_from_uc</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">project_path</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">execute_sparql_query</span><span class="p">(</span><span class="n">project_data</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">limit</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">engine</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">SuccessResponse</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;results&quot;</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;results&#39;</span><span class="p">,</span> <span class="p">[]),</span>
+        <span class="s2">&quot;columns&quot;</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;columns&#39;</span><span class="p">,</span> <span class="p">[]),</span>
+        <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;count&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="s2">&quot;engine&quot;</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;engine&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">engine</span><span class="p">),</span>
+    <span class="p">})</span></div>
+
+
+
+<div class="viewcode-block" id="validate_query">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.validate_query">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/query/validate&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">SuccessResponse</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">validate_query</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">ValidateQueryModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate a SPARQL query syntax.&quot;&quot;&quot;</span>
+    <span class="n">is_valid</span><span class="p">,</span> <span class="n">error_msg</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">validate_sparql_query</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">SuccessResponse</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;valid&quot;</span><span class="p">:</span> <span class="n">is_valid</span><span class="p">,</span>
+        <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="n">error_msg</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="p">})</span></div>
+
+
+
+<div class="viewcode-block" id="get_sample_queries">
+<a class="viewcode-back" href="../../../api/api_external.html#api.routers.v1.get_sample_queries">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/query/samples&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">SuccessResponse</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_sample_queries</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">ProjectPathModel</span><span class="p">,</span>
+    <span class="n">x_databricks_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Host&quot;</span><span class="p">),</span>
+    <span class="n">x_databricks_token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;X-Databricks-Token&quot;</span><span class="p">)</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get sample SPARQL queries for a project.&quot;&quot;&quot;</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_credentials</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">x_databricks_host</span><span class="p">,</span> <span class="n">x_databricks_token</span><span class="p">)</span>
+
+    <span class="n">project_data</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">load_project_from_uc</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">project_path</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
+    <span class="n">samples</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">generate_sample_queries</span><span class="p">(</span><span class="n">project_data</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">SuccessResponse</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;queries&quot;</span><span class="p">:</span> <span class="n">samples</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">samples</span><span class="p">)})</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

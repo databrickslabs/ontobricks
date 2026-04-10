@@ -1,0 +1,1501 @@
+visit_id,enrollment_id,visit_date,visit_type,status,notes
+VIS000001,ENR00061,2021-02-19,unscheduled,completed,Visit notes for week_8
+VIS000002,ENR00410,2024-06-14,end_of_study,scheduled,
+VIS000003,ENR00180,2024-02-22,week_8,completed,Visit notes for week_12
+VIS000004,ENR00131,2025-06-07,baseline,partial,
+VIS000005,ENR00282,2022-10-26,screening,completed,Visit notes for month_6
+VIS000006,ENR00203,2025-01-23,screening,missed,
+VIS000007,ENR00427,2022-11-24,unscheduled,scheduled,Visit notes for week_4
+VIS000008,ENR00247,2021-11-15,unscheduled,partial,
+VIS000009,ENR00417,2023-04-28,screening,partial,Visit notes for month_6
+VIS000010,ENR00285,2024-01-03,screening,missed,Visit notes for month_6
+VIS000011,ENR00410,2025-12-24,month_6,completed,Visit notes for week_12
+VIS000012,ENR00431,2021-03-05,month_6,scheduled,Visit notes for week_4
+VIS000013,ENR00293,2024-05-25,end_of_study,missed,Visit notes for week_12
+VIS000014,ENR00362,2025-10-23,month_6,completed,
+VIS000015,ENR00045,2023-10-15,week_8,partial,
+VIS000016,ENR00487,2022-09-12,week_8,partial,
+VIS000017,ENR00192,2025-05-27,screening,missed,Visit notes for unscheduled
+VIS000018,ENR00260,2021-02-21,unscheduled,missed,
+VIS000019,ENR00473,2023-09-18,follow_up,partial,Visit notes for week_4
+VIS000020,ENR00394,2025-11-21,baseline,missed,
+VIS000021,ENR00019,2023-07-30,end_of_study,completed,
+VIS000022,ENR00478,2021-04-01,baseline,partial,
+VIS000023,ENR00024,2021-07-31,follow_up,partial,
+VIS000024,ENR00389,2022-10-02,week_8,partial,
+VIS000025,ENR00147,2022-07-21,follow_up,partial,Visit notes for baseline
+VIS000026,ENR00140,2021-11-02,week_4,partial,
+VIS000027,ENR00491,2024-06-29,follow_up,completed,
+VIS000028,ENR00180,2024-01-31,month_6,partial,
+VIS000029,ENR00361,2025-07-05,week_12,missed,
+VIS000030,ENR00160,2024-06-09,month_6,scheduled,
+VIS000031,ENR00015,2023-08-23,screening,completed,
+VIS000032,ENR00045,2023-05-24,end_of_study,missed,Visit notes for unscheduled
+VIS000033,ENR00316,2022-12-30,week_12,partial,Visit notes for follow_up
+VIS000034,ENR00041,2025-03-28,unscheduled,missed,
+VIS000035,ENR00411,2024-12-01,unscheduled,completed,
+VIS000036,ENR00351,2024-08-12,unscheduled,scheduled,
+VIS000037,ENR00115,2021-10-22,week_12,partial,
+VIS000038,ENR00359,2024-09-24,month_6,partial,
+VIS000039,ENR00016,2021-05-14,unscheduled,completed,
+VIS000040,ENR00237,2025-09-29,week_4,partial,Visit notes for week_4
+VIS000041,ENR00261,2021-07-30,end_of_study,completed,
+VIS000042,ENR00333,2021-05-26,week_12,scheduled,
+VIS000043,ENR00212,2022-05-04,week_8,missed,Visit notes for end_of_study
+VIS000044,ENR00034,2022-11-29,week_8,scheduled,Visit notes for end_of_study
+VIS000045,ENR00291,2025-06-01,month_6,missed,
+VIS000046,ENR00343,2021-06-09,unscheduled,completed,Visit notes for unscheduled
+VIS000047,ENR00167,2024-02-11,baseline,scheduled,
+VIS000048,ENR00490,2023-04-12,baseline,completed,Visit notes for end_of_study
+VIS000049,ENR00168,2023-10-10,screening,completed,
+VIS000050,ENR00072,2025-12-23,screening,missed,Visit notes for unscheduled
+VIS000051,ENR00273,2022-08-20,end_of_study,scheduled,
+VIS000052,ENR00349,2025-12-02,month_6,partial,Visit notes for week_12
+VIS000053,ENR00471,2023-06-10,month_6,completed,Visit notes for follow_up
+VIS000054,ENR00207,2025-10-02,week_4,partial,
+VIS000055,ENR00462,2024-01-30,screening,completed,Visit notes for month_6
+VIS000056,ENR00057,2025-10-30,week_12,completed,
+VIS000057,ENR00360,2024-04-23,end_of_study,partial,Visit notes for end_of_study
+VIS000058,ENR00196,2023-06-11,follow_up,missed,Visit notes for unscheduled
+VIS000059,ENR00072,2022-01-21,follow_up,scheduled,Visit notes for month_6
+VIS000060,ENR00431,2023-05-05,week_4,partial,Visit notes for week_4
+VIS000061,ENR00069,2021-01-24,baseline,completed,
+VIS000062,ENR00454,2023-09-24,end_of_study,missed,
+VIS000063,ENR00329,2025-07-09,end_of_study,scheduled,Visit notes for end_of_study
+VIS000064,ENR00320,2022-01-04,unscheduled,scheduled,Visit notes for unscheduled
+VIS000065,ENR00197,2022-12-29,week_8,missed,
+VIS000066,ENR00004,2024-03-29,unscheduled,missed,Visit notes for week_12
+VIS000067,ENR00211,2024-01-24,month_6,completed,Visit notes for unscheduled
+VIS000068,ENR00361,2023-01-25,baseline,scheduled,Visit notes for baseline
+VIS000069,ENR00073,2025-02-04,follow_up,partial,
+VIS000070,ENR00041,2023-12-08,baseline,missed,
+VIS000071,ENR00380,2024-09-21,baseline,partial,Visit notes for month_6
+VIS000072,ENR00274,2025-05-14,screening,scheduled,
+VIS000073,ENR00464,2023-08-19,month_6,scheduled,
+VIS000074,ENR00409,2022-08-27,week_12,missed,
+VIS000075,ENR00473,2024-05-08,week_12,partial,
+VIS000076,ENR00243,2024-03-30,week_4,completed,Visit notes for week_12
+VIS000077,ENR00415,2025-02-19,screening,partial,
+VIS000078,ENR00065,2023-11-02,baseline,partial,
+VIS000079,ENR00316,2022-07-30,week_12,partial,
+VIS000080,ENR00058,2024-05-21,week_4,missed,Visit notes for month_6
+VIS000081,ENR00414,2021-12-26,week_12,missed,
+VIS000082,ENR00410,2023-12-17,screening,partial,Visit notes for week_4
+VIS000083,ENR00305,2025-08-10,week_4,scheduled,Visit notes for end_of_study
+VIS000084,ENR00395,2023-02-24,week_8,scheduled,Visit notes for week_4
+VIS000085,ENR00108,2024-03-29,month_6,completed,Visit notes for baseline
+VIS000086,ENR00027,2021-12-10,unscheduled,scheduled,
+VIS000087,ENR00244,2025-03-09,follow_up,missed,
+VIS000088,ENR00362,2023-03-10,unscheduled,partial,
+VIS000089,ENR00446,2023-06-10,screening,partial,Visit notes for unscheduled
+VIS000090,ENR00196,2024-10-21,month_6,completed,
+VIS000091,ENR00273,2024-07-29,month_6,scheduled,Visit notes for week_12
+VIS000092,ENR00172,2022-07-08,week_12,completed,
+VIS000093,ENR00300,2023-03-13,unscheduled,missed,Visit notes for week_8
+VIS000094,ENR00267,2022-11-23,week_4,partial,Visit notes for screening
+VIS000095,ENR00426,2021-05-20,screening,scheduled,
+VIS000096,ENR00054,2024-11-04,unscheduled,partial,
+VIS000097,ENR00146,2022-05-31,week_8,completed,
+VIS000098,ENR00048,2021-04-27,week_8,completed,Visit notes for baseline
+VIS000099,ENR00045,2025-10-20,week_4,scheduled,Visit notes for week_4
+VIS000100,ENR00459,2021-08-16,week_4,partial,
+VIS000101,ENR00339,2021-06-05,unscheduled,partial,Visit notes for month_6
+VIS000102,ENR00132,2021-11-28,baseline,partial,Visit notes for end_of_study
+VIS000103,ENR00199,2022-11-13,screening,partial,Visit notes for week_12
+VIS000104,ENR00092,2023-06-22,baseline,scheduled,Visit notes for week_8
+VIS000105,ENR00313,2023-03-16,week_4,scheduled,
+VIS000106,ENR00277,2025-04-24,end_of_study,missed,Visit notes for baseline
+VIS000107,ENR00468,2023-06-24,week_12,completed,
+VIS000108,ENR00037,2024-03-16,week_12,scheduled,
+VIS000109,ENR00255,2021-11-01,screening,completed,Visit notes for week_12
+VIS000110,ENR00078,2024-12-04,month_6,scheduled,Visit notes for follow_up
+VIS000111,ENR00363,2025-04-28,unscheduled,scheduled,
+VIS000112,ENR00433,2025-01-30,baseline,missed,
+VIS000113,ENR00489,2024-11-12,unscheduled,completed,Visit notes for month_6
+VIS000114,ENR00171,2024-10-28,week_12,scheduled,
+VIS000115,ENR00491,2024-08-18,baseline,partial,Visit notes for month_6
+VIS000116,ENR00042,2025-09-19,unscheduled,partial,Visit notes for week_4
+VIS000117,ENR00284,2021-03-22,end_of_study,missed,
+VIS000118,ENR00200,2021-08-07,month_6,scheduled,
+VIS000119,ENR00324,2023-06-16,week_8,missed,
+VIS000120,ENR00013,2025-01-14,week_8,scheduled,
+VIS000121,ENR00406,2024-01-13,week_12,scheduled,Visit notes for unscheduled
+VIS000122,ENR00495,2021-02-03,screening,partial,
+VIS000123,ENR00404,2025-01-16,screening,scheduled,
+VIS000124,ENR00414,2024-09-01,follow_up,scheduled,Visit notes for follow_up
+VIS000125,ENR00077,2025-02-26,week_8,completed,
+VIS000126,ENR00073,2023-09-29,screening,scheduled,Visit notes for screening
+VIS000127,ENR00125,2024-12-07,week_4,completed,
+VIS000128,ENR00026,2022-09-22,baseline,scheduled,Visit notes for baseline
+VIS000129,ENR00419,2025-08-02,baseline,completed,
+VIS000130,ENR00410,2024-06-14,week_8,completed,Visit notes for end_of_study
+VIS000131,ENR00173,2025-07-20,end_of_study,partial,
+VIS000132,ENR00351,2024-03-25,follow_up,missed,
+VIS000133,ENR00494,2025-06-13,week_8,completed,Visit notes for month_6
+VIS000134,ENR00033,2021-09-05,week_12,missed,Visit notes for week_4
+VIS000135,ENR00357,2023-01-28,follow_up,missed,
+VIS000136,ENR00474,2024-04-06,screening,missed,
+VIS000137,ENR00434,2024-07-18,end_of_study,missed,
+VIS000138,ENR00250,2021-06-15,screening,completed,
+VIS000139,ENR00046,2024-12-18,week_12,scheduled,Visit notes for unscheduled
+VIS000140,ENR00355,2021-09-17,week_8,missed,Visit notes for follow_up
+VIS000141,ENR00231,2023-04-24,week_8,missed,Visit notes for screening
+VIS000142,ENR00306,2022-01-04,unscheduled,completed,Visit notes for week_12
+VIS000143,ENR00179,2023-05-08,screening,missed,
+VIS000144,ENR00272,2021-07-15,month_6,missed,
+VIS000145,ENR00321,2024-09-12,week_8,partial,
+VIS000146,ENR00058,2025-06-20,week_4,scheduled,
+VIS000147,ENR00082,2024-10-04,screening,completed,Visit notes for week_12
+VIS000148,ENR00108,2023-06-10,week_12,partial,Visit notes for unscheduled
+VIS000149,ENR00023,2021-08-02,screening,missed,
+VIS000150,ENR00015,2023-09-21,follow_up,completed,
+VIS000151,ENR00121,2025-01-17,unscheduled,partial,
+VIS000152,ENR00383,2024-10-18,month_6,missed,Visit notes for month_6
+VIS000153,ENR00117,2021-07-20,week_8,scheduled,Visit notes for end_of_study
+VIS000154,ENR00457,2022-03-28,baseline,scheduled,Visit notes for screening
+VIS000155,ENR00456,2023-06-12,week_4,missed,Visit notes for unscheduled
+VIS000156,ENR00092,2023-03-05,month_6,missed,
+VIS000157,ENR00100,2024-07-18,month_6,partial,
+VIS000158,ENR00066,2021-03-07,screening,partial,
+VIS000159,ENR00437,2023-08-12,unscheduled,scheduled,
+VIS000160,ENR00176,2022-03-27,week_12,missed,Visit notes for week_4
+VIS000161,ENR00296,2024-02-07,week_8,completed,
+VIS000162,ENR00268,2023-09-29,week_8,scheduled,Visit notes for week_12
+VIS000163,ENR00008,2025-02-04,end_of_study,missed,
+VIS000164,ENR00223,2024-04-01,week_8,missed,Visit notes for screening
+VIS000165,ENR00214,2021-04-01,screening,scheduled,Visit notes for follow_up
+VIS000166,ENR00018,2023-05-22,follow_up,scheduled,
+VIS000167,ENR00409,2024-11-27,baseline,scheduled,
+VIS000168,ENR00043,2024-02-18,screening,scheduled,Visit notes for week_4
+VIS000169,ENR00184,2022-08-29,week_8,completed,
+VIS000170,ENR00343,2022-09-17,week_4,scheduled,Visit notes for screening
+VIS000171,ENR00500,2023-07-21,unscheduled,missed,Visit notes for end_of_study
+VIS000172,ENR00095,2025-06-06,month_6,scheduled,Visit notes for screening
+VIS000173,ENR00441,2024-07-08,baseline,scheduled,Visit notes for month_6
+VIS000174,ENR00272,2021-03-08,week_12,scheduled,Visit notes for follow_up
+VIS000175,ENR00295,2025-06-16,week_8,completed,Visit notes for month_6
+VIS000176,ENR00377,2021-04-23,follow_up,partial,Visit notes for baseline
+VIS000177,ENR00197,2023-01-19,unscheduled,completed,
+VIS000178,ENR00090,2024-08-20,follow_up,completed,Visit notes for week_8
+VIS000179,ENR00071,2022-11-17,week_8,completed,Visit notes for week_8
+VIS000180,ENR00386,2025-03-06,week_8,partial,
+VIS000181,ENR00137,2023-10-29,end_of_study,partial,
+VIS000182,ENR00191,2022-12-09,unscheduled,scheduled,Visit notes for baseline
+VIS000183,ENR00241,2024-12-24,follow_up,partial,
+VIS000184,ENR00189,2025-06-27,baseline,missed,Visit notes for unscheduled
+VIS000185,ENR00045,2021-06-14,end_of_study,missed,
+VIS000186,ENR00490,2021-06-07,baseline,missed,
+VIS000187,ENR00357,2021-10-31,unscheduled,missed,Visit notes for follow_up
+VIS000188,ENR00488,2024-07-08,screening,partial,
+VIS000189,ENR00350,2024-01-14,week_4,scheduled,
+VIS000190,ENR00228,2025-02-19,screening,partial,
+VIS000191,ENR00012,2025-11-21,week_8,partial,
+VIS000192,ENR00176,2024-09-04,month_6,scheduled,Visit notes for follow_up
+VIS000193,ENR00432,2024-01-29,unscheduled,scheduled,
+VIS000194,ENR00068,2025-06-05,week_12,missed,Visit notes for week_8
+VIS000195,ENR00248,2023-02-01,week_12,completed,
+VIS000196,ENR00146,2023-07-23,week_4,missed,Visit notes for week_12
+VIS000197,ENR00094,2021-12-26,week_4,missed,
+VIS000198,ENR00022,2022-10-11,week_4,scheduled,
+VIS000199,ENR00095,2022-02-25,follow_up,completed,Visit notes for month_6
+VIS000200,ENR00076,2023-02-03,unscheduled,missed,Visit notes for baseline
+VIS000201,ENR00472,2021-02-21,end_of_study,scheduled,Visit notes for unscheduled
+VIS000202,ENR00476,2022-10-18,week_4,completed,Visit notes for follow_up
+VIS000203,ENR00500,2023-11-06,month_6,partial,
+VIS000204,ENR00149,2025-03-25,week_4,scheduled,
+VIS000205,ENR00058,2025-02-07,unscheduled,completed,
+VIS000206,ENR00283,2021-08-28,week_12,completed,
+VIS000207,ENR00431,2022-03-28,unscheduled,partial,
+VIS000208,ENR00029,2024-05-30,week_8,missed,Visit notes for week_12
+VIS000209,ENR00101,2021-02-16,baseline,scheduled,Visit notes for baseline
+VIS000210,ENR00500,2023-11-15,end_of_study,missed,
+VIS000211,ENR00309,2024-05-24,follow_up,completed,Visit notes for month_6
+VIS000212,ENR00204,2021-10-30,end_of_study,partial,
+VIS000213,ENR00007,2022-08-06,month_6,partial,
+VIS000214,ENR00229,2025-11-26,follow_up,completed,
+VIS000215,ENR00455,2023-06-29,end_of_study,scheduled,
+VIS000216,ENR00413,2025-01-30,end_of_study,scheduled,
+VIS000217,ENR00301,2024-05-09,baseline,missed,
+VIS000218,ENR00244,2025-11-12,follow_up,partial,
+VIS000219,ENR00492,2024-04-24,end_of_study,completed,
+VIS000220,ENR00328,2022-07-14,end_of_study,missed,Visit notes for week_4
+VIS000221,ENR00103,2022-01-16,end_of_study,partial,Visit notes for screening
+VIS000222,ENR00422,2025-08-20,week_12,partial,
+VIS000223,ENR00379,2023-08-08,week_8,completed,Visit notes for week_4
+VIS000224,ENR00135,2022-09-07,unscheduled,completed,Visit notes for week_12
+VIS000225,ENR00214,2022-01-03,unscheduled,missed,
+VIS000226,ENR00392,2022-07-22,unscheduled,completed,Visit notes for month_6
+VIS000227,ENR00298,2023-09-12,end_of_study,partial,Visit notes for unscheduled
+VIS000228,ENR00499,2024-11-22,baseline,partial,Visit notes for screening
+VIS000229,ENR00433,2022-06-16,week_4,completed,
+VIS000230,ENR00237,2025-12-04,week_4,partial,
+VIS000231,ENR00140,2023-01-10,end_of_study,partial,
+VIS000232,ENR00150,2023-12-21,baseline,missed,Visit notes for week_4
+VIS000233,ENR00392,2021-07-13,week_4,partial,Visit notes for week_12
+VIS000234,ENR00139,2024-11-04,month_6,completed,Visit notes for month_6
+VIS000235,ENR00422,2021-10-22,screening,missed,Visit notes for month_6
+VIS000236,ENR00399,2023-09-21,end_of_study,partial,Visit notes for week_4
+VIS000237,ENR00053,2022-03-23,week_4,missed,Visit notes for follow_up
+VIS000238,ENR00315,2024-11-13,follow_up,completed,
+VIS000239,ENR00470,2021-06-06,baseline,missed,Visit notes for unscheduled
+VIS000240,ENR00179,2022-10-01,month_6,missed,Visit notes for follow_up
+VIS000241,ENR00391,2022-12-02,week_4,partial,
+VIS000242,ENR00418,2021-08-31,week_8,missed,Visit notes for week_4
+VIS000243,ENR00353,2022-04-10,week_12,missed,
+VIS000244,ENR00041,2023-05-21,baseline,completed,
+VIS000245,ENR00248,2025-04-01,end_of_study,completed,
+VIS000246,ENR00017,2025-06-13,follow_up,completed,
+VIS000247,ENR00466,2022-06-03,screening,completed,
+VIS000248,ENR00006,2025-03-26,baseline,completed,Visit notes for week_8
+VIS000249,ENR00301,2022-02-14,week_4,partial,
+VIS000250,ENR00075,2025-09-29,week_12,partial,
+VIS000251,ENR00438,2023-10-23,week_8,completed,
+VIS000252,ENR00297,2025-04-13,screening,missed,Visit notes for week_12
+VIS000253,ENR00088,2025-03-25,follow_up,completed,Visit notes for baseline
+VIS000254,ENR00474,2022-03-15,follow_up,scheduled,
+VIS000255,ENR00302,2022-01-15,unscheduled,completed,
+VIS000256,ENR00182,2023-02-17,end_of_study,missed,Visit notes for end_of_study
+VIS000257,ENR00058,2025-04-09,month_6,completed,
+VIS000258,ENR00267,2021-10-06,unscheduled,partial,Visit notes for follow_up
+VIS000259,ENR00370,2021-03-25,baseline,partial,
+VIS000260,ENR00198,2022-08-04,unscheduled,partial,Visit notes for unscheduled
+VIS000261,ENR00116,2024-02-09,end_of_study,partial,Visit notes for end_of_study
+VIS000262,ENR00097,2025-10-21,baseline,scheduled,Visit notes for month_6
+VIS000263,ENR00092,2021-01-27,unscheduled,completed,
+VIS000264,ENR00268,2024-09-10,baseline,completed,
+VIS000265,ENR00206,2024-11-24,baseline,missed,
+VIS000266,ENR00500,2022-02-12,month_6,missed,Visit notes for end_of_study
+VIS000267,ENR00063,2022-04-22,end_of_study,scheduled,
+VIS000268,ENR00366,2025-04-18,week_12,scheduled,
+VIS000269,ENR00342,2024-05-20,end_of_study,scheduled,Visit notes for week_4
+VIS000270,ENR00394,2023-07-21,baseline,completed,
+VIS000271,ENR00255,2022-04-18,week_4,completed,
+VIS000272,ENR00028,2025-08-28,baseline,scheduled,Visit notes for week_4
+VIS000273,ENR00196,2024-05-23,month_6,missed,
+VIS000274,ENR00320,2021-07-17,baseline,scheduled,Visit notes for week_8
+VIS000275,ENR00151,2024-09-17,unscheduled,scheduled,Visit notes for follow_up
+VIS000276,ENR00176,2025-07-16,follow_up,completed,Visit notes for screening
+VIS000277,ENR00221,2025-12-08,baseline,scheduled,
+VIS000278,ENR00437,2023-02-10,unscheduled,scheduled,
+VIS000279,ENR00091,2024-02-15,week_12,missed,
+VIS000280,ENR00069,2022-10-02,end_of_study,scheduled,Visit notes for unscheduled
+VIS000281,ENR00338,2024-02-09,follow_up,scheduled,
+VIS000282,ENR00438,2021-11-17,follow_up,completed,
+VIS000283,ENR00254,2024-04-25,end_of_study,partial,Visit notes for week_12
+VIS000284,ENR00165,2021-05-06,screening,completed,
+VIS000285,ENR00188,2022-12-16,screening,partial,
+VIS000286,ENR00220,2022-12-08,month_6,scheduled,
+VIS000287,ENR00339,2022-05-16,week_8,missed,Visit notes for baseline
+VIS000288,ENR00467,2024-11-10,baseline,partial,
+VIS000289,ENR00087,2021-02-10,follow_up,partial,
+VIS000290,ENR00337,2025-11-04,end_of_study,scheduled,
+VIS000291,ENR00357,2023-08-20,screening,partial,
+VIS000292,ENR00200,2022-10-23,baseline,scheduled,
+VIS000293,ENR00346,2022-02-26,month_6,scheduled,Visit notes for month_6
+VIS000294,ENR00086,2024-06-13,week_12,partial,Visit notes for week_8
+VIS000295,ENR00255,2024-07-25,baseline,missed,
+VIS000296,ENR00025,2022-09-01,end_of_study,missed,Visit notes for baseline
+VIS000297,ENR00368,2025-09-25,baseline,partial,
+VIS000298,ENR00291,2025-06-29,follow_up,scheduled,
+VIS000299,ENR00178,2025-06-18,baseline,partial,Visit notes for week_12
+VIS000300,ENR00222,2024-09-20,follow_up,partial,
+VIS000301,ENR00206,2022-05-30,follow_up,scheduled,Visit notes for follow_up
+VIS000302,ENR00093,2025-12-10,screening,missed,Visit notes for week_8
+VIS000303,ENR00339,2025-08-15,unscheduled,partial,Visit notes for follow_up
+VIS000304,ENR00415,2024-06-12,end_of_study,completed,Visit notes for month_6
+VIS000305,ENR00237,2021-10-30,week_8,missed,Visit notes for week_12
+VIS000306,ENR00433,2023-06-11,end_of_study,partial,Visit notes for baseline
+VIS000307,ENR00325,2022-02-21,end_of_study,partial,Visit notes for week_4
+VIS000308,ENR00132,2024-11-07,week_8,scheduled,
+VIS000309,ENR00077,2022-01-29,screening,missed,Visit notes for week_12
+VIS000310,ENR00238,2023-09-22,follow_up,scheduled,
+VIS000311,ENR00464,2021-03-17,week_8,missed,
+VIS000312,ENR00015,2022-06-14,week_12,missed,Visit notes for screening
+VIS000313,ENR00494,2025-01-19,unscheduled,completed,
+VIS000314,ENR00460,2021-06-21,month_6,partial,Visit notes for end_of_study
+VIS000315,ENR00460,2023-01-15,baseline,scheduled,Visit notes for week_4
+VIS000316,ENR00121,2021-08-18,follow_up,completed,Visit notes for follow_up
+VIS000317,ENR00129,2023-10-14,baseline,missed,Visit notes for month_6
+VIS000318,ENR00169,2025-09-01,end_of_study,missed,Visit notes for week_8
+VIS000319,ENR00074,2021-08-07,week_4,missed,Visit notes for unscheduled
+VIS000320,ENR00210,2022-06-05,screening,scheduled,Visit notes for baseline
+VIS000321,ENR00163,2024-01-23,end_of_study,scheduled,Visit notes for week_12
+VIS000322,ENR00451,2025-05-26,week_4,partial,
+VIS000323,ENR00189,2025-08-10,week_12,completed,Visit notes for screening
+VIS000324,ENR00431,2025-02-23,screening,missed,
+VIS000325,ENR00197,2022-09-26,month_6,completed,Visit notes for week_8
+VIS000326,ENR00440,2023-06-26,end_of_study,completed,Visit notes for end_of_study
+VIS000327,ENR00475,2022-06-08,week_12,completed,Visit notes for week_8
+VIS000328,ENR00153,2022-03-07,week_4,scheduled,Visit notes for end_of_study
+VIS000329,ENR00405,2021-03-11,week_12,completed,Visit notes for unscheduled
+VIS000330,ENR00242,2025-02-18,end_of_study,partial,Visit notes for baseline
+VIS000331,ENR00423,2021-11-25,week_12,completed,
+VIS000332,ENR00309,2025-02-02,follow_up,partial,
+VIS000333,ENR00015,2025-04-10,screening,missed,Visit notes for week_4
+VIS000334,ENR00002,2023-04-01,week_8,partial,
+VIS000335,ENR00043,2021-08-15,week_4,missed,Visit notes for week_4
+VIS000336,ENR00434,2024-05-01,end_of_study,partial,
+VIS000337,ENR00448,2025-02-14,week_4,partial,
+VIS000338,ENR00304,2025-08-21,month_6,partial,
+VIS000339,ENR00213,2023-01-23,week_4,scheduled,Visit notes for week_8
+VIS000340,ENR00011,2021-02-17,follow_up,missed,Visit notes for unscheduled
+VIS000341,ENR00102,2022-06-21,week_4,completed,
+VIS000342,ENR00220,2024-05-14,week_12,missed,
+VIS000343,ENR00189,2021-12-15,baseline,completed,Visit notes for end_of_study
+VIS000344,ENR00396,2023-07-19,unscheduled,completed,
+VIS000345,ENR00105,2022-01-26,week_12,partial,Visit notes for end_of_study
+VIS000346,ENR00067,2023-06-03,week_8,missed,Visit notes for week_12
+VIS000347,ENR00373,2024-10-18,week_8,scheduled,
+VIS000348,ENR00406,2021-10-26,screening,partial,Visit notes for week_8
+VIS000349,ENR00317,2023-07-13,week_8,partial,Visit notes for unscheduled
+VIS000350,ENR00044,2021-01-22,unscheduled,missed,Visit notes for end_of_study
+VIS000351,ENR00352,2022-03-11,end_of_study,scheduled,Visit notes for week_12
+VIS000352,ENR00038,2021-07-15,follow_up,completed,
+VIS000353,ENR00477,2022-04-26,unscheduled,partial,Visit notes for screening
+VIS000354,ENR00003,2022-06-04,follow_up,scheduled,
+VIS000355,ENR00203,2024-10-06,month_6,missed,Visit notes for follow_up
+VIS000356,ENR00022,2024-04-03,week_4,partial,
+VIS000357,ENR00253,2022-11-26,unscheduled,missed,
+VIS000358,ENR00364,2023-12-23,end_of_study,missed,
+VIS000359,ENR00161,2021-04-01,week_4,scheduled,Visit notes for week_12
+VIS000360,ENR00383,2023-01-09,end_of_study,partial,Visit notes for week_12
+VIS000361,ENR00314,2025-08-26,week_12,partial,
+VIS000362,ENR00085,2022-10-09,unscheduled,missed,Visit notes for unscheduled
+VIS000363,ENR00028,2022-01-22,week_4,completed,
+VIS000364,ENR00019,2023-08-22,week_12,missed,Visit notes for end_of_study
+VIS000365,ENR00060,2023-10-11,screening,scheduled,
+VIS000366,ENR00364,2024-02-23,unscheduled,scheduled,
+VIS000367,ENR00434,2025-01-14,week_4,completed,
+VIS000368,ENR00105,2025-11-14,week_12,missed,Visit notes for follow_up
+VIS000369,ENR00422,2022-07-13,week_8,completed,Visit notes for week_4
+VIS000370,ENR00214,2021-06-07,week_8,scheduled,Visit notes for month_6
+VIS000371,ENR00014,2022-08-06,baseline,scheduled,
+VIS000372,ENR00476,2021-08-06,month_6,missed,
+VIS000373,ENR00236,2025-08-29,unscheduled,scheduled,Visit notes for week_12
+VIS000374,ENR00305,2024-09-09,screening,partial,Visit notes for unscheduled
+VIS000375,ENR00167,2025-02-07,week_4,missed,Visit notes for week_12
+VIS000376,ENR00166,2025-06-23,screening,completed,Visit notes for end_of_study
+VIS000377,ENR00048,2023-03-28,week_12,missed,
+VIS000378,ENR00395,2025-11-08,end_of_study,completed,
+VIS000379,ENR00107,2021-11-30,end_of_study,scheduled,
+VIS000380,ENR00386,2024-09-01,week_4,completed,
+VIS000381,ENR00411,2023-06-05,week_12,missed,
+VIS000382,ENR00050,2025-09-01,month_6,missed,
+VIS000383,ENR00454,2023-03-06,unscheduled,partial,Visit notes for end_of_study
+VIS000384,ENR00047,2025-03-30,end_of_study,partial,Visit notes for end_of_study
+VIS000385,ENR00323,2023-05-23,baseline,completed,Visit notes for unscheduled
+VIS000386,ENR00347,2022-04-05,week_4,scheduled,Visit notes for follow_up
+VIS000387,ENR00043,2022-08-19,unscheduled,scheduled,
+VIS000388,ENR00411,2023-09-06,week_12,missed,Visit notes for week_12
+VIS000389,ENR00431,2022-05-25,follow_up,scheduled,
+VIS000390,ENR00025,2024-02-03,baseline,completed,Visit notes for follow_up
+VIS000391,ENR00218,2023-04-26,baseline,scheduled,Visit notes for week_12
+VIS000392,ENR00182,2022-06-06,baseline,completed,
+VIS000393,ENR00339,2023-08-06,week_4,missed,Visit notes for screening
+VIS000394,ENR00043,2023-05-03,week_12,partial,Visit notes for unscheduled
+VIS000395,ENR00388,2024-10-04,unscheduled,partial,
+VIS000396,ENR00471,2025-11-20,week_4,missed,
+VIS000397,ENR00383,2024-05-22,week_12,completed,
+VIS000398,ENR00010,2021-01-12,end_of_study,completed,
+VIS000399,ENR00336,2023-09-05,unscheduled,scheduled,Visit notes for unscheduled
+VIS000400,ENR00156,2024-06-20,month_6,scheduled,Visit notes for baseline
+VIS000401,ENR00065,2021-10-04,screening,missed,
+VIS000402,ENR00009,2024-11-26,week_8,completed,
+VIS000403,ENR00333,2021-10-25,week_8,scheduled,Visit notes for follow_up
+VIS000404,ENR00098,2021-06-26,week_12,scheduled,
+VIS000405,ENR00217,2021-02-14,baseline,missed,Visit notes for unscheduled
+VIS000406,ENR00494,2023-09-21,unscheduled,completed,Visit notes for week_8
+VIS000407,ENR00104,2022-08-27,end_of_study,completed,
+VIS000408,ENR00053,2024-07-15,end_of_study,scheduled,Visit notes for follow_up
+VIS000409,ENR00149,2021-03-17,unscheduled,scheduled,
+VIS000410,ENR00303,2025-01-24,unscheduled,missed,Visit notes for follow_up
+VIS000411,ENR00010,2023-05-15,month_6,completed,
+VIS000412,ENR00332,2023-05-05,unscheduled,completed,
+VIS000413,ENR00481,2024-08-16,month_6,scheduled,Visit notes for screening
+VIS000414,ENR00083,2022-08-13,week_8,scheduled,
+VIS000415,ENR00119,2023-11-06,week_8,partial,Visit notes for unscheduled
+VIS000416,ENR00068,2025-12-14,week_12,scheduled,Visit notes for month_6
+VIS000417,ENR00408,2023-08-26,week_4,missed,
+VIS000418,ENR00384,2021-06-26,unscheduled,missed,
+VIS000419,ENR00081,2024-05-25,unscheduled,completed,Visit notes for unscheduled
+VIS000420,ENR00156,2022-04-26,week_8,completed,Visit notes for month_6
+VIS000421,ENR00452,2022-06-19,month_6,missed,
+VIS000422,ENR00441,2023-10-29,screening,completed,
+VIS000423,ENR00059,2024-06-18,week_8,completed,Visit notes for unscheduled
+VIS000424,ENR00133,2022-11-28,month_6,completed,Visit notes for follow_up
+VIS000425,ENR00137,2021-11-06,follow_up,completed,Visit notes for unscheduled
+VIS000426,ENR00410,2023-07-26,baseline,completed,Visit notes for baseline
+VIS000427,ENR00422,2024-02-26,screening,completed,
+VIS000428,ENR00061,2025-11-19,week_8,partial,
+VIS000429,ENR00150,2024-12-21,unscheduled,scheduled,Visit notes for baseline
+VIS000430,ENR00079,2024-08-18,month_6,partial,Visit notes for baseline
+VIS000431,ENR00435,2022-02-18,unscheduled,scheduled,Visit notes for screening
+VIS000432,ENR00126,2025-09-06,unscheduled,partial,
+VIS000433,ENR00088,2021-06-24,week_12,partial,Visit notes for end_of_study
+VIS000434,ENR00185,2024-07-13,week_8,missed,Visit notes for follow_up
+VIS000435,ENR00216,2025-06-01,week_8,missed,Visit notes for end_of_study
+VIS000436,ENR00471,2023-04-19,unscheduled,partial,Visit notes for unscheduled
+VIS000437,ENR00075,2025-04-27,screening,completed,
+VIS000438,ENR00162,2023-04-03,week_4,scheduled,
+VIS000439,ENR00389,2021-03-17,week_4,completed,Visit notes for follow_up
+VIS000440,ENR00499,2022-08-29,end_of_study,scheduled,Visit notes for follow_up
+VIS000441,ENR00448,2022-09-16,month_6,partial,
+VIS000442,ENR00144,2023-12-17,week_4,scheduled,
+VIS000443,ENR00106,2025-12-23,follow_up,scheduled,Visit notes for end_of_study
+VIS000444,ENR00398,2022-02-09,week_12,completed,
+VIS000445,ENR00172,2023-03-10,week_4,partial,
+VIS000446,ENR00262,2024-02-05,week_12,partial,Visit notes for week_4
+VIS000447,ENR00012,2021-02-27,follow_up,partial,
+VIS000448,ENR00397,2022-09-15,end_of_study,completed,Visit notes for month_6
+VIS000449,ENR00133,2024-07-08,follow_up,partial,
+VIS000450,ENR00388,2024-08-26,baseline,scheduled,
+VIS000451,ENR00378,2021-01-11,unscheduled,partial,Visit notes for follow_up
+VIS000452,ENR00433,2024-05-04,week_8,partial,
+VIS000453,ENR00342,2025-05-27,week_4,scheduled,Visit notes for week_8
+VIS000454,ENR00054,2022-11-03,follow_up,missed,Visit notes for month_6
+VIS000455,ENR00233,2021-07-20,week_4,scheduled,Visit notes for baseline
+VIS000456,ENR00048,2021-05-08,end_of_study,missed,
+VIS000457,ENR00229,2021-06-09,month_6,scheduled,Visit notes for follow_up
+VIS000458,ENR00399,2023-03-20,week_12,scheduled,Visit notes for unscheduled
+VIS000459,ENR00353,2023-09-30,end_of_study,missed,
+VIS000460,ENR00066,2023-09-20,unscheduled,missed,Visit notes for follow_up
+VIS000461,ENR00442,2023-12-20,baseline,missed,
+VIS000462,ENR00017,2025-03-09,week_4,partial,Visit notes for baseline
+VIS000463,ENR00309,2025-10-12,end_of_study,completed,
+VIS000464,ENR00293,2022-08-17,screening,missed,
+VIS000465,ENR00157,2023-02-06,week_12,partial,
+VIS000466,ENR00406,2021-10-20,week_4,scheduled,
+VIS000467,ENR00458,2022-09-17,week_12,missed,
+VIS000468,ENR00379,2023-09-29,screening,completed,Visit notes for baseline
+VIS000469,ENR00446,2021-04-02,end_of_study,scheduled,Visit notes for unscheduled
+VIS000470,ENR00461,2022-11-23,end_of_study,scheduled,Visit notes for week_4
+VIS000471,ENR00391,2021-10-11,follow_up,scheduled,Visit notes for unscheduled
+VIS000472,ENR00077,2025-11-10,month_6,completed,Visit notes for end_of_study
+VIS000473,ENR00199,2022-04-22,end_of_study,partial,Visit notes for unscheduled
+VIS000474,ENR00377,2022-07-23,baseline,missed,Visit notes for week_12
+VIS000475,ENR00288,2024-08-14,baseline,completed,
+VIS000476,ENR00317,2024-01-15,screening,missed,Visit notes for follow_up
+VIS000477,ENR00460,2021-02-08,baseline,missed,Visit notes for week_12
+VIS000478,ENR00403,2022-02-26,week_8,scheduled,
+VIS000479,ENR00274,2024-05-27,month_6,scheduled,Visit notes for unscheduled
+VIS000480,ENR00442,2021-02-17,month_6,scheduled,
+VIS000481,ENR00013,2025-10-27,follow_up,partial,
+VIS000482,ENR00047,2021-08-23,baseline,missed,
+VIS000483,ENR00094,2022-06-08,baseline,missed,
+VIS000484,ENR00209,2024-10-21,week_4,completed,Visit notes for month_6
+VIS000485,ENR00093,2021-02-25,screening,partial,
+VIS000486,ENR00164,2021-10-19,end_of_study,partial,
+VIS000487,ENR00483,2025-08-23,baseline,completed,
+VIS000488,ENR00386,2024-05-07,week_8,scheduled,Visit notes for follow_up
+VIS000489,ENR00198,2021-08-24,week_12,completed,
+VIS000490,ENR00284,2023-04-14,baseline,scheduled,
+VIS000491,ENR00325,2022-04-24,screening,partial,Visit notes for baseline
+VIS000492,ENR00127,2025-04-12,follow_up,missed,
+VIS000493,ENR00209,2023-07-03,baseline,missed,Visit notes for week_4
+VIS000494,ENR00192,2024-01-12,week_4,missed,Visit notes for end_of_study
+VIS000495,ENR00493,2024-02-11,unscheduled,completed,
+VIS000496,ENR00238,2025-08-26,week_12,missed,
+VIS000497,ENR00478,2023-09-15,week_12,partial,Visit notes for end_of_study
+VIS000498,ENR00180,2025-09-22,week_8,partial,
+VIS000499,ENR00379,2023-12-30,baseline,partial,
+VIS000500,ENR00358,2021-09-09,week_4,partial,Visit notes for week_8
+VIS000501,ENR00313,2023-10-31,month_6,partial,Visit notes for unscheduled
+VIS000502,ENR00140,2022-05-19,month_6,partial,
+VIS000503,ENR00492,2024-05-12,month_6,completed,Visit notes for week_4
+VIS000504,ENR00331,2021-01-05,unscheduled,completed,Visit notes for week_4
+VIS000505,ENR00212,2024-02-13,unscheduled,scheduled,Visit notes for baseline
+VIS000506,ENR00276,2021-03-05,unscheduled,completed,
+VIS000507,ENR00417,2023-02-10,month_6,scheduled,
+VIS000508,ENR00394,2025-07-21,screening,completed,
+VIS000509,ENR00480,2022-01-31,unscheduled,completed,
+VIS000510,ENR00011,2025-04-03,week_12,partial,
+VIS000511,ENR00418,2024-06-10,week_12,missed,
+VIS000512,ENR00253,2023-01-14,screening,partial,
+VIS000513,ENR00361,2024-12-18,week_8,completed,
+VIS000514,ENR00421,2024-07-31,end_of_study,completed,Visit notes for follow_up
+VIS000515,ENR00253,2021-12-16,follow_up,missed,Visit notes for week_4
+VIS000516,ENR00034,2024-04-19,week_4,completed,
+VIS000517,ENR00478,2024-03-13,week_8,partial,
+VIS000518,ENR00348,2021-02-17,follow_up,partial,Visit notes for unscheduled
+VIS000519,ENR00002,2023-05-25,screening,partial,
+VIS000520,ENR00209,2022-07-16,baseline,scheduled,
+VIS000521,ENR00265,2025-04-04,screening,missed,
+VIS000522,ENR00471,2023-05-11,follow_up,scheduled,
+VIS000523,ENR00201,2022-02-03,month_6,completed,Visit notes for screening
+VIS000524,ENR00378,2022-04-08,end_of_study,completed,Visit notes for week_8
+VIS000525,ENR00085,2022-11-06,week_12,completed,Visit notes for baseline
+VIS000526,ENR00015,2023-09-10,end_of_study,completed,Visit notes for month_6
+VIS000527,ENR00431,2022-05-28,week_8,completed,
+VIS000528,ENR00491,2022-11-29,screening,partial,Visit notes for week_8
+VIS000529,ENR00484,2021-05-30,unscheduled,completed,Visit notes for baseline
+VIS000530,ENR00044,2021-05-05,screening,scheduled,
+VIS000531,ENR00435,2024-11-21,baseline,missed,
+VIS000532,ENR00411,2023-06-25,screening,partial,Visit notes for end_of_study
+VIS000533,ENR00034,2021-07-28,screening,completed,
+VIS000534,ENR00196,2023-04-03,baseline,scheduled,
+VIS000535,ENR00307,2025-06-01,screening,scheduled,
+VIS000536,ENR00408,2023-05-27,baseline,partial,Visit notes for screening
+VIS000537,ENR00233,2023-11-26,month_6,missed,
+VIS000538,ENR00007,2024-05-03,baseline,missed,Visit notes for week_4
+VIS000539,ENR00327,2023-11-09,week_12,partial,
+VIS000540,ENR00372,2024-06-25,unscheduled,missed,
+VIS000541,ENR00409,2021-04-01,screening,missed,
+VIS000542,ENR00224,2023-11-17,month_6,partial,Visit notes for follow_up
+VIS000543,ENR00398,2021-10-26,week_4,scheduled,
+VIS000544,ENR00176,2022-08-20,month_6,completed,Visit notes for week_4
+VIS000545,ENR00030,2022-05-02,follow_up,completed,
+VIS000546,ENR00101,2022-02-15,week_8,completed,
+VIS000547,ENR00342,2023-09-02,unscheduled,partial,Visit notes for month_6
+VIS000548,ENR00316,2022-09-06,end_of_study,partial,
+VIS000549,ENR00233,2025-11-30,screening,scheduled,
+VIS000550,ENR00002,2024-08-01,week_8,missed,
+VIS000551,ENR00110,2022-05-05,unscheduled,partial,Visit notes for end_of_study
+VIS000552,ENR00106,2023-03-31,week_4,completed,
+VIS000553,ENR00038,2023-01-03,screening,completed,
+VIS000554,ENR00226,2022-02-03,month_6,completed,Visit notes for week_8
+VIS000555,ENR00102,2022-08-05,week_4,missed,Visit notes for week_4
+VIS000556,ENR00174,2025-10-02,follow_up,missed,
+VIS000557,ENR00012,2021-12-27,week_12,completed,
+VIS000558,ENR00347,2021-10-09,end_of_study,completed,
+VIS000559,ENR00108,2022-09-17,unscheduled,missed,
+VIS000560,ENR00191,2024-09-15,week_4,scheduled,Visit notes for baseline
+VIS000561,ENR00061,2021-10-23,week_4,missed,
+VIS000562,ENR00194,2024-11-23,month_6,partial,Visit notes for week_8
+VIS000563,ENR00472,2021-04-05,week_8,partial,Visit notes for month_6
+VIS000564,ENR00127,2021-04-20,week_12,missed,Visit notes for unscheduled
+VIS000565,ENR00108,2025-01-29,baseline,scheduled,Visit notes for baseline
+VIS000566,ENR00086,2023-11-08,end_of_study,partial,
+VIS000567,ENR00238,2022-01-02,month_6,partial,Visit notes for unscheduled
+VIS000568,ENR00367,2023-10-11,unscheduled,partial,Visit notes for screening
+VIS000569,ENR00107,2022-03-26,week_8,scheduled,Visit notes for end_of_study
+VIS000570,ENR00112,2022-09-19,end_of_study,scheduled,Visit notes for month_6
+VIS000571,ENR00131,2024-02-02,baseline,missed,Visit notes for week_12
+VIS000572,ENR00228,2023-11-29,month_6,missed,Visit notes for unscheduled
+VIS000573,ENR00263,2024-06-26,month_6,scheduled,
+VIS000574,ENR00222,2023-04-18,month_6,scheduled,
+VIS000575,ENR00196,2021-02-20,week_4,scheduled,
+VIS000576,ENR00331,2021-06-05,month_6,completed,
+VIS000577,ENR00257,2023-11-17,follow_up,completed,Visit notes for week_8
+VIS000578,ENR00051,2021-08-31,baseline,partial,
+VIS000579,ENR00103,2022-11-15,week_8,partial,
+VIS000580,ENR00382,2025-07-29,week_12,missed,Visit notes for week_4
+VIS000581,ENR00438,2025-03-21,follow_up,partial,
+VIS000582,ENR00154,2022-08-01,month_6,scheduled,Visit notes for screening
+VIS000583,ENR00242,2024-09-01,follow_up,missed,Visit notes for week_8
+VIS000584,ENR00117,2025-01-21,week_8,scheduled,
+VIS000585,ENR00301,2025-05-29,follow_up,scheduled,Visit notes for unscheduled
+VIS000586,ENR00175,2025-06-10,baseline,partial,Visit notes for end_of_study
+VIS000587,ENR00395,2024-11-30,end_of_study,missed,
+VIS000588,ENR00437,2024-02-18,screening,partial,
+VIS000589,ENR00448,2021-09-20,week_12,completed,
+VIS000590,ENR00338,2025-09-05,month_6,partial,
+VIS000591,ENR00218,2024-11-05,end_of_study,partial,
+VIS000592,ENR00012,2024-03-08,screening,missed,
+VIS000593,ENR00488,2022-11-08,end_of_study,scheduled,
+VIS000594,ENR00201,2021-05-11,follow_up,scheduled,
+VIS000595,ENR00056,2022-11-05,unscheduled,partial,
+VIS000596,ENR00054,2024-10-14,follow_up,missed,
+VIS000597,ENR00353,2024-05-20,unscheduled,completed,
+VIS000598,ENR00036,2023-03-02,week_12,missed,
+VIS000599,ENR00338,2023-12-10,baseline,scheduled,
+VIS000600,ENR00266,2021-01-23,week_4,partial,Visit notes for end_of_study
+VIS000601,ENR00201,2021-11-18,baseline,missed,Visit notes for unscheduled
+VIS000602,ENR00381,2021-05-21,end_of_study,missed,
+VIS000603,ENR00106,2022-09-27,end_of_study,scheduled,
+VIS000604,ENR00295,2022-09-28,week_8,scheduled,
+VIS000605,ENR00004,2021-10-20,unscheduled,completed,Visit notes for week_8
+VIS000606,ENR00270,2022-11-05,unscheduled,scheduled,
+VIS000607,ENR00021,2025-02-18,baseline,partial,Visit notes for unscheduled
+VIS000608,ENR00178,2024-12-05,week_12,scheduled,Visit notes for week_4
+VIS000609,ENR00213,2022-05-26,week_4,scheduled,
+VIS000610,ENR00467,2024-09-11,week_4,completed,
+VIS000611,ENR00485,2021-03-31,week_8,missed,
+VIS000612,ENR00322,2024-01-07,week_12,completed,Visit notes for week_8
+VIS000613,ENR00466,2023-10-08,end_of_study,completed,Visit notes for baseline
+VIS000614,ENR00387,2021-08-04,follow_up,partial,
+VIS000615,ENR00085,2022-06-02,week_8,completed,
+VIS000616,ENR00038,2024-08-01,unscheduled,scheduled,
+VIS000617,ENR00205,2025-10-19,week_8,scheduled,
+VIS000618,ENR00129,2021-08-23,week_4,partial,Visit notes for unscheduled
+VIS000619,ENR00249,2023-08-03,baseline,completed,Visit notes for week_8
+VIS000620,ENR00366,2023-06-16,week_4,scheduled,Visit notes for week_4
+VIS000621,ENR00088,2025-09-14,screening,completed,
+VIS000622,ENR00064,2023-12-31,end_of_study,missed,
+VIS000623,ENR00391,2021-01-23,week_12,missed,
+VIS000624,ENR00092,2022-03-20,screening,missed,
+VIS000625,ENR00025,2025-09-10,follow_up,completed,
+VIS000626,ENR00158,2023-06-29,screening,completed,
+VIS000627,ENR00194,2025-04-21,week_8,missed,
+VIS000628,ENR00123,2022-02-14,baseline,completed,
+VIS000629,ENR00008,2022-11-22,week_8,completed,
+VIS000630,ENR00452,2021-07-17,week_4,missed,
+VIS000631,ENR00263,2021-08-09,month_6,partial,Visit notes for week_8
+VIS000632,ENR00320,2022-03-01,follow_up,scheduled,Visit notes for baseline
+VIS000633,ENR00119,2022-03-14,baseline,partial,
+VIS000634,ENR00008,2023-04-04,month_6,completed,
+VIS000635,ENR00235,2022-03-27,baseline,partial,Visit notes for month_6
+VIS000636,ENR00023,2021-05-18,week_8,scheduled,
+VIS000637,ENR00307,2023-10-21,baseline,missed,
+VIS000638,ENR00049,2024-05-13,month_6,scheduled,Visit notes for week_4
+VIS000639,ENR00171,2021-12-26,month_6,scheduled,
+VIS000640,ENR00010,2024-05-31,unscheduled,scheduled,Visit notes for week_8
+VIS000641,ENR00258,2024-04-18,screening,missed,
+VIS000642,ENR00389,2021-09-12,week_12,missed,Visit notes for week_8
+VIS000643,ENR00318,2021-06-12,screening,missed,
+VIS000644,ENR00152,2022-02-18,week_4,scheduled,
+VIS000645,ENR00020,2022-05-03,unscheduled,partial,
+VIS000646,ENR00163,2024-08-11,screening,scheduled,Visit notes for week_12
+VIS000647,ENR00385,2021-02-18,week_8,partial,
+VIS000648,ENR00106,2024-01-10,screening,missed,Visit notes for week_8
+VIS000649,ENR00312,2025-11-23,end_of_study,partial,
+VIS000650,ENR00323,2021-01-13,baseline,scheduled,
+VIS000651,ENR00099,2021-04-17,week_4,missed,
+VIS000652,ENR00089,2024-04-28,follow_up,missed,
+VIS000653,ENR00041,2023-05-23,unscheduled,partial,
+VIS000654,ENR00102,2022-05-17,end_of_study,missed,Visit notes for week_12
+VIS000655,ENR00147,2024-03-26,unscheduled,missed,
+VIS000656,ENR00401,2023-09-13,baseline,partial,
+VIS000657,ENR00086,2023-08-23,unscheduled,scheduled,Visit notes for end_of_study
+VIS000658,ENR00390,2021-11-16,unscheduled,completed,Visit notes for end_of_study
+VIS000659,ENR00438,2021-06-20,week_12,missed,Visit notes for week_4
+VIS000660,ENR00132,2023-02-19,unscheduled,partial,
+VIS000661,ENR00193,2024-02-26,unscheduled,completed,
+VIS000662,ENR00367,2023-08-20,week_8,missed,Visit notes for screening
+VIS000663,ENR00007,2025-10-31,follow_up,partial,
+VIS000664,ENR00474,2023-05-02,end_of_study,partial,
+VIS000665,ENR00158,2024-08-05,baseline,scheduled,Visit notes for baseline
+VIS000666,ENR00198,2024-03-04,week_4,missed,Visit notes for week_12
+VIS000667,ENR00395,2025-03-20,month_6,scheduled,Visit notes for month_6
+VIS000668,ENR00357,2021-04-29,end_of_study,scheduled,Visit notes for week_8
+VIS000669,ENR00245,2021-03-12,month_6,completed,Visit notes for week_4
+VIS000670,ENR00134,2024-05-24,unscheduled,missed,
+VIS000671,ENR00309,2024-03-30,week_4,completed,
+VIS000672,ENR00048,2024-08-12,end_of_study,scheduled,Visit notes for baseline
+VIS000673,ENR00266,2022-01-22,end_of_study,missed,Visit notes for week_12
+VIS000674,ENR00355,2022-09-11,follow_up,scheduled,Visit notes for end_of_study
+VIS000675,ENR00386,2025-11-30,baseline,completed,Visit notes for month_6
+VIS000676,ENR00417,2021-10-20,week_12,missed,Visit notes for end_of_study
+VIS000677,ENR00358,2022-09-23,screening,missed,Visit notes for screening
+VIS000678,ENR00050,2021-05-24,end_of_study,scheduled,Visit notes for end_of_study
+VIS000679,ENR00088,2021-12-28,month_6,missed,Visit notes for week_8
+VIS000680,ENR00250,2022-01-08,follow_up,completed,
+VIS000681,ENR00417,2022-03-12,week_4,missed,
+VIS000682,ENR00094,2025-07-16,week_8,partial,Visit notes for end_of_study
+VIS000683,ENR00226,2024-07-07,baseline,missed,
+VIS000684,ENR00044,2023-02-13,baseline,partial,
+VIS000685,ENR00016,2024-04-14,week_8,scheduled,
+VIS000686,ENR00390,2021-07-26,screening,completed,
+VIS000687,ENR00490,2021-01-15,screening,completed,
+VIS000688,ENR00406,2021-01-15,end_of_study,partial,Visit notes for unscheduled
+VIS000689,ENR00388,2022-11-22,end_of_study,partial,
+VIS000690,ENR00456,2022-12-04,month_6,missed,Visit notes for end_of_study
+VIS000691,ENR00194,2024-06-04,screening,partial,Visit notes for baseline
+VIS000692,ENR00002,2023-07-25,end_of_study,missed,
+VIS000693,ENR00063,2025-11-15,follow_up,partial,Visit notes for week_8
+VIS000694,ENR00189,2023-07-15,unscheduled,scheduled,Visit notes for screening
+VIS000695,ENR00327,2025-07-23,month_6,completed,Visit notes for screening
+VIS000696,ENR00497,2025-07-12,month_6,scheduled,
+VIS000697,ENR00249,2023-03-31,baseline,partial,
+VIS000698,ENR00477,2023-09-03,baseline,scheduled,
+VIS000699,ENR00100,2024-12-29,week_4,completed,
+VIS000700,ENR00408,2021-06-28,week_12,scheduled,
+VIS000701,ENR00229,2021-08-25,unscheduled,missed,
+VIS000702,ENR00088,2025-03-23,baseline,completed,
+VIS000703,ENR00367,2021-03-01,week_4,partial,Visit notes for week_12
+VIS000704,ENR00113,2025-01-12,week_12,scheduled,Visit notes for baseline
+VIS000705,ENR00341,2021-10-06,follow_up,scheduled,
+VIS000706,ENR00355,2022-11-13,week_8,completed,Visit notes for end_of_study
+VIS000707,ENR00467,2025-01-09,end_of_study,scheduled,Visit notes for week_8
+VIS000708,ENR00133,2021-08-25,week_12,completed,
+VIS000709,ENR00175,2025-02-25,week_8,completed,Visit notes for week_4
+VIS000710,ENR00437,2022-10-04,end_of_study,completed,
+VIS000711,ENR00303,2024-01-02,week_8,scheduled,Visit notes for month_6
+VIS000712,ENR00395,2023-01-18,week_4,missed,
+VIS000713,ENR00005,2024-01-08,unscheduled,partial,
+VIS000714,ENR00483,2022-08-31,week_8,scheduled,Visit notes for week_4
+VIS000715,ENR00308,2022-08-04,week_4,completed,Visit notes for week_12
+VIS000716,ENR00258,2024-11-11,baseline,partial,Visit notes for unscheduled
+VIS000717,ENR00324,2025-08-25,week_8,scheduled,
+VIS000718,ENR00495,2023-02-11,screening,partial,
+VIS000719,ENR00367,2022-03-08,week_8,completed,Visit notes for week_4
+VIS000720,ENR00439,2023-09-26,end_of_study,partial,Visit notes for week_4
+VIS000721,ENR00012,2024-01-28,end_of_study,partial,
+VIS000722,ENR00243,2022-12-15,end_of_study,scheduled,
+VIS000723,ENR00373,2022-08-03,week_12,missed,Visit notes for follow_up
+VIS000724,ENR00202,2021-07-19,week_4,partial,Visit notes for screening
+VIS000725,ENR00436,2024-12-24,week_12,scheduled,Visit notes for week_4
+VIS000726,ENR00227,2024-11-26,unscheduled,partial,Visit notes for week_8
+VIS000727,ENR00112,2025-07-06,week_8,completed,
+VIS000728,ENR00439,2024-03-24,baseline,missed,
+VIS000729,ENR00219,2024-10-23,week_4,completed,
+VIS000730,ENR00499,2023-08-29,week_4,completed,
+VIS000731,ENR00264,2024-08-24,month_6,scheduled,Visit notes for end_of_study
+VIS000732,ENR00126,2021-03-11,baseline,missed,
+VIS000733,ENR00155,2024-11-09,week_4,scheduled,Visit notes for baseline
+VIS000734,ENR00399,2023-08-08,end_of_study,partial,Visit notes for unscheduled
+VIS000735,ENR00189,2021-01-24,baseline,completed,
+VIS000736,ENR00251,2024-08-06,follow_up,missed,
+VIS000737,ENR00294,2024-03-18,unscheduled,partial,Visit notes for baseline
+VIS000738,ENR00407,2024-04-29,week_4,scheduled,
+VIS000739,ENR00331,2024-12-10,end_of_study,partial,Visit notes for baseline
+VIS000740,ENR00167,2021-05-11,follow_up,missed,
+VIS000741,ENR00359,2021-02-10,end_of_study,scheduled,
+VIS000742,ENR00429,2024-04-12,follow_up,completed,Visit notes for week_8
+VIS000743,ENR00495,2024-09-10,baseline,missed,Visit notes for week_4
+VIS000744,ENR00003,2024-02-11,unscheduled,partial,
+VIS000745,ENR00066,2024-03-23,week_8,missed,
+VIS000746,ENR00132,2025-10-10,screening,completed,Visit notes for follow_up
+VIS000747,ENR00153,2023-01-15,follow_up,missed,
+VIS000748,ENR00484,2024-09-09,screening,missed,
+VIS000749,ENR00485,2023-11-30,week_12,scheduled,
+VIS000750,ENR00252,2024-11-24,month_6,partial,Visit notes for follow_up
+VIS000751,ENR00108,2024-11-09,baseline,completed,
+VIS000752,ENR00097,2021-10-18,week_12,missed,Visit notes for follow_up
+VIS000753,ENR00111,2024-04-26,month_6,partial,
+VIS000754,ENR00319,2023-05-15,baseline,partial,
+VIS000755,ENR00333,2021-12-01,end_of_study,scheduled,
+VIS000756,ENR00131,2024-10-17,end_of_study,missed,Visit notes for baseline
+VIS000757,ENR00323,2025-02-09,week_12,missed,Visit notes for follow_up
+VIS000758,ENR00310,2021-12-02,end_of_study,missed,
+VIS000759,ENR00404,2023-06-08,end_of_study,completed,Visit notes for week_8
+VIS000760,ENR00040,2022-07-08,baseline,completed,Visit notes for end_of_study
+VIS000761,ENR00034,2022-11-06,baseline,partial,Visit notes for week_12
+VIS000762,ENR00075,2025-11-15,week_8,partial,
+VIS000763,ENR00194,2022-04-01,end_of_study,completed,Visit notes for baseline
+VIS000764,ENR00090,2023-12-15,week_12,scheduled,
+VIS000765,ENR00179,2024-12-05,week_12,partial,Visit notes for screening
+VIS000766,ENR00088,2022-10-14,end_of_study,missed,
+VIS000767,ENR00380,2024-10-20,follow_up,scheduled,
+VIS000768,ENR00066,2022-06-15,screening,missed,Visit notes for week_4
+VIS000769,ENR00194,2024-03-08,week_12,completed,Visit notes for month_6
+VIS000770,ENR00363,2025-05-12,week_8,scheduled,Visit notes for week_4
+VIS000771,ENR00225,2022-12-26,unscheduled,partial,
+VIS000772,ENR00220,2023-12-03,week_8,partial,Visit notes for baseline
+VIS000773,ENR00486,2022-09-18,end_of_study,partial,Visit notes for baseline
+VIS000774,ENR00040,2025-02-03,week_8,completed,
+VIS000775,ENR00030,2021-06-23,week_12,scheduled,Visit notes for screening
+VIS000776,ENR00493,2023-05-19,follow_up,missed,
+VIS000777,ENR00264,2024-11-04,follow_up,completed,
+VIS000778,ENR00316,2022-01-25,screening,scheduled,Visit notes for month_6
+VIS000779,ENR00126,2025-02-22,follow_up,completed,Visit notes for week_4
+VIS000780,ENR00346,2025-12-12,follow_up,missed,
+VIS000781,ENR00188,2025-09-16,week_4,partial,Visit notes for end_of_study
+VIS000782,ENR00254,2023-02-16,week_4,partial,Visit notes for month_6
+VIS000783,ENR00468,2024-10-22,week_8,completed,
+VIS000784,ENR00248,2022-08-25,week_12,missed,
+VIS000785,ENR00324,2024-03-10,end_of_study,missed,Visit notes for follow_up
+VIS000786,ENR00423,2021-03-14,unscheduled,scheduled,
+VIS000787,ENR00004,2024-06-14,unscheduled,partial,
+VIS000788,ENR00055,2021-01-11,month_6,missed,
+VIS000789,ENR00005,2021-07-27,end_of_study,scheduled,
+VIS000790,ENR00271,2023-11-20,week_4,scheduled,
+VIS000791,ENR00250,2021-01-15,week_4,partial,
+VIS000792,ENR00203,2023-02-06,week_12,partial,
+VIS000793,ENR00094,2024-01-04,week_12,completed,Visit notes for unscheduled
+VIS000794,ENR00083,2021-10-14,month_6,scheduled,
+VIS000795,ENR00453,2025-11-18,week_8,completed,
+VIS000796,ENR00021,2021-10-01,end_of_study,scheduled,Visit notes for screening
+VIS000797,ENR00083,2024-09-26,week_8,scheduled,Visit notes for week_12
+VIS000798,ENR00061,2023-05-13,unscheduled,scheduled,Visit notes for week_4
+VIS000799,ENR00167,2025-03-19,end_of_study,scheduled,
+VIS000800,ENR00491,2021-08-09,screening,missed,
+VIS000801,ENR00257,2021-01-28,week_8,completed,Visit notes for month_6
+VIS000802,ENR00220,2024-05-07,screening,scheduled,
+VIS000803,ENR00145,2023-09-23,baseline,scheduled,
+VIS000804,ENR00079,2025-02-02,follow_up,missed,
+VIS000805,ENR00393,2021-08-24,week_12,missed,Visit notes for end_of_study
+VIS000806,ENR00102,2023-08-29,baseline,missed,
+VIS000807,ENR00438,2024-04-25,week_4,missed,
+VIS000808,ENR00206,2021-03-20,week_12,missed,Visit notes for end_of_study
+VIS000809,ENR00010,2024-06-16,week_8,completed,Visit notes for end_of_study
+VIS000810,ENR00209,2023-12-12,week_12,missed,
+VIS000811,ENR00219,2023-09-09,screening,scheduled,Visit notes for week_12
+VIS000812,ENR00057,2022-07-06,month_6,partial,Visit notes for end_of_study
+VIS000813,ENR00127,2022-10-18,screening,missed,
+VIS000814,ENR00027,2024-09-14,month_6,missed,
+VIS000815,ENR00144,2024-05-27,baseline,scheduled,
+VIS000816,ENR00486,2023-10-04,month_6,partial,
+VIS000817,ENR00050,2024-10-02,screening,missed,
+VIS000818,ENR00380,2025-07-17,month_6,partial,
+VIS000819,ENR00142,2022-03-07,end_of_study,completed,Visit notes for week_4
+VIS000820,ENR00323,2025-03-01,baseline,completed,Visit notes for week_8
+VIS000821,ENR00099,2024-12-14,unscheduled,completed,
+VIS000822,ENR00280,2024-06-21,month_6,partial,Visit notes for week_8
+VIS000823,ENR00274,2025-01-16,week_4,completed,
+VIS000824,ENR00215,2024-02-02,week_12,partial,Visit notes for unscheduled
+VIS000825,ENR00323,2025-01-09,baseline,scheduled,
+VIS000826,ENR00215,2023-12-09,follow_up,completed,
+VIS000827,ENR00141,2024-11-27,week_4,partial,
+VIS000828,ENR00290,2021-05-05,week_8,scheduled,
+VIS000829,ENR00273,2025-11-18,follow_up,completed,
+VIS000830,ENR00385,2023-11-10,end_of_study,scheduled,
+VIS000831,ENR00140,2022-02-28,week_4,completed,
+VIS000832,ENR00112,2024-04-27,screening,scheduled,Visit notes for follow_up
+VIS000833,ENR00133,2022-09-14,week_8,partial,Visit notes for follow_up
+VIS000834,ENR00061,2021-12-17,week_8,completed,Visit notes for week_12
+VIS000835,ENR00021,2024-08-02,week_4,partial,Visit notes for week_12
+VIS000836,ENR00448,2025-06-08,screening,missed,Visit notes for week_8
+VIS000837,ENR00274,2021-08-26,screening,partial,Visit notes for month_6
+VIS000838,ENR00167,2021-06-20,follow_up,partial,Visit notes for end_of_study
+VIS000839,ENR00460,2024-06-06,week_12,partial,Visit notes for screening
+VIS000840,ENR00422,2022-12-30,week_8,partial,
+VIS000841,ENR00498,2021-02-02,follow_up,completed,Visit notes for end_of_study
+VIS000842,ENR00485,2024-09-01,week_12,missed,Visit notes for week_8
+VIS000843,ENR00167,2022-07-05,week_8,scheduled,
+VIS000844,ENR00119,2025-02-03,end_of_study,partial,
+VIS000845,ENR00246,2021-07-11,unscheduled,missed,
+VIS000846,ENR00418,2025-11-02,week_4,missed,Visit notes for week_4
+VIS000847,ENR00332,2022-08-01,screening,partial,
+VIS000848,ENR00091,2025-08-02,end_of_study,missed,
+VIS000849,ENR00037,2023-05-24,week_8,scheduled,Visit notes for end_of_study
+VIS000850,ENR00052,2025-01-23,follow_up,missed,Visit notes for screening
+VIS000851,ENR00309,2021-07-24,end_of_study,scheduled,
+VIS000852,ENR00424,2021-01-28,screening,missed,
+VIS000853,ENR00043,2022-07-03,week_4,completed,Visit notes for screening
+VIS000854,ENR00491,2025-06-10,baseline,partial,Visit notes for baseline
+VIS000855,ENR00104,2021-10-13,unscheduled,scheduled,Visit notes for week_12
+VIS000856,ENR00170,2023-09-08,week_4,missed,
+VIS000857,ENR00355,2022-07-02,follow_up,completed,
+VIS000858,ENR00023,2021-07-30,follow_up,partial,
+VIS000859,ENR00454,2025-09-10,end_of_study,missed,
+VIS000860,ENR00115,2021-02-19,week_8,scheduled,
+VIS000861,ENR00181,2024-09-04,week_12,missed,Visit notes for end_of_study
+VIS000862,ENR00352,2025-12-16,baseline,scheduled,
+VIS000863,ENR00057,2022-04-05,baseline,partial,
+VIS000864,ENR00316,2022-11-15,baseline,partial,Visit notes for baseline
+VIS000865,ENR00459,2021-03-30,week_4,missed,
+VIS000866,ENR00172,2024-05-13,week_4,scheduled,
+VIS000867,ENR00342,2024-11-08,week_12,partial,
+VIS000868,ENR00054,2022-07-10,unscheduled,partial,Visit notes for baseline
+VIS000869,ENR00404,2021-01-05,week_4,missed,
+VIS000870,ENR00200,2023-07-04,unscheduled,completed,
+VIS000871,ENR00219,2025-01-28,week_12,missed,
+VIS000872,ENR00066,2022-01-08,end_of_study,partial,
+VIS000873,ENR00218,2023-09-13,end_of_study,partial,
+VIS000874,ENR00484,2024-09-01,week_8,scheduled,
+VIS000875,ENR00255,2024-01-09,follow_up,scheduled,Visit notes for week_8
+VIS000876,ENR00197,2021-06-21,end_of_study,missed,Visit notes for week_8
+VIS000877,ENR00186,2021-01-06,week_8,completed,
+VIS000878,ENR00243,2021-10-01,baseline,completed,Visit notes for month_6
+VIS000879,ENR00435,2025-10-06,week_4,partial,
+VIS000880,ENR00428,2025-10-14,follow_up,scheduled,
+VIS000881,ENR00424,2022-04-05,screening,missed,
+VIS000882,ENR00357,2024-12-12,week_4,scheduled,Visit notes for end_of_study
+VIS000883,ENR00191,2021-04-21,baseline,completed,
+VIS000884,ENR00305,2025-11-18,week_4,completed,
+VIS000885,ENR00073,2021-06-11,week_8,completed,
+VIS000886,ENR00426,2025-07-25,end_of_study,missed,Visit notes for unscheduled
+VIS000887,ENR00381,2021-10-14,follow_up,partial,
+VIS000888,ENR00370,2022-11-22,unscheduled,completed,
+VIS000889,ENR00080,2021-05-03,screening,missed,Visit notes for screening
+VIS000890,ENR00203,2025-09-02,end_of_study,scheduled,Visit notes for week_12
+VIS000891,ENR00471,2024-03-17,follow_up,partial,Visit notes for end_of_study
+VIS000892,ENR00477,2021-11-18,week_12,completed,Visit notes for week_4
+VIS000893,ENR00381,2022-03-10,end_of_study,completed,
+VIS000894,ENR00095,2025-08-12,follow_up,completed,Visit notes for unscheduled
+VIS000895,ENR00245,2022-10-04,end_of_study,scheduled,
+VIS000896,ENR00412,2023-01-31,end_of_study,missed,
+VIS000897,ENR00054,2021-06-09,month_6,partial,
+VIS000898,ENR00145,2021-11-30,follow_up,completed,
+VIS000899,ENR00306,2021-01-23,week_12,missed,Visit notes for screening
+VIS000900,ENR00124,2022-07-06,baseline,completed,Visit notes for unscheduled
+VIS000901,ENR00024,2021-04-09,month_6,completed,Visit notes for screening
+VIS000902,ENR00183,2025-03-20,week_12,scheduled,Visit notes for month_6
+VIS000903,ENR00385,2023-03-12,month_6,missed,Visit notes for baseline
+VIS000904,ENR00170,2023-04-15,follow_up,completed,Visit notes for week_4
+VIS000905,ENR00013,2024-04-17,end_of_study,scheduled,Visit notes for screening
+VIS000906,ENR00149,2021-11-27,week_4,scheduled,
+VIS000907,ENR00321,2021-07-11,week_8,missed,Visit notes for week_4
+VIS000908,ENR00394,2025-01-11,week_4,partial,
+VIS000909,ENR00068,2022-11-26,week_12,partial,Visit notes for end_of_study
+VIS000910,ENR00021,2025-12-30,end_of_study,missed,
+VIS000911,ENR00313,2024-05-27,baseline,missed,Visit notes for unscheduled
+VIS000912,ENR00050,2025-07-07,screening,missed,Visit notes for week_12
+VIS000913,ENR00281,2025-11-12,baseline,scheduled,
+VIS000914,ENR00161,2021-12-14,week_12,missed,
+VIS000915,ENR00296,2023-01-15,month_6,completed,
+VIS000916,ENR00364,2025-04-30,unscheduled,partial,Visit notes for week_12
+VIS000917,ENR00391,2025-12-01,unscheduled,missed,Visit notes for unscheduled
+VIS000918,ENR00021,2023-01-15,week_12,scheduled,
+VIS000919,ENR00318,2024-10-25,week_4,scheduled,
+VIS000920,ENR00433,2024-07-03,month_6,partial,
+VIS000921,ENR00212,2023-11-03,unscheduled,partial,Visit notes for screening
+VIS000922,ENR00318,2024-08-11,screening,missed,Visit notes for follow_up
+VIS000923,ENR00005,2021-11-13,baseline,partial,
+VIS000924,ENR00292,2023-03-29,baseline,missed,
+VIS000925,ENR00237,2024-10-02,baseline,partial,
+VIS000926,ENR00329,2024-01-01,unscheduled,completed,
+VIS000927,ENR00375,2021-08-10,end_of_study,scheduled,
+VIS000928,ENR00169,2021-05-13,month_6,partial,Visit notes for unscheduled
+VIS000929,ENR00109,2024-12-09,unscheduled,completed,
+VIS000930,ENR00020,2024-01-22,week_4,scheduled,
+VIS000931,ENR00110,2022-10-18,screening,scheduled,
+VIS000932,ENR00414,2023-01-11,end_of_study,scheduled,
+VIS000933,ENR00109,2025-11-13,screening,scheduled,
+VIS000934,ENR00326,2021-12-27,baseline,missed,
+VIS000935,ENR00208,2021-06-17,week_12,scheduled,Visit notes for follow_up
+VIS000936,ENR00110,2024-10-03,week_12,missed,Visit notes for baseline
+VIS000937,ENR00459,2023-05-28,month_6,partial,
+VIS000938,ENR00179,2023-05-09,unscheduled,scheduled,Visit notes for week_4
+VIS000939,ENR00495,2024-11-27,end_of_study,partial,Visit notes for end_of_study
+VIS000940,ENR00422,2021-01-21,follow_up,missed,
+VIS000941,ENR00342,2024-03-30,week_4,partial,Visit notes for month_6
+VIS000942,ENR00008,2021-11-05,unscheduled,missed,
+VIS000943,ENR00163,2021-08-21,end_of_study,partial,Visit notes for screening
+VIS000944,ENR00231,2025-09-01,week_4,scheduled,Visit notes for baseline
+VIS000945,ENR00019,2022-03-24,week_8,scheduled,Visit notes for week_4
+VIS000946,ENR00308,2023-02-13,week_8,partial,
+VIS000947,ENR00098,2024-10-23,screening,partial,Visit notes for screening
+VIS000948,ENR00155,2022-09-21,follow_up,completed,Visit notes for unscheduled
+VIS000949,ENR00212,2023-04-21,month_6,partial,Visit notes for end_of_study
+VIS000950,ENR00268,2025-04-16,month_6,completed,Visit notes for unscheduled
+VIS000951,ENR00220,2023-02-04,week_4,missed,Visit notes for end_of_study
+VIS000952,ENR00146,2025-09-27,end_of_study,partial,Visit notes for baseline
+VIS000953,ENR00045,2025-07-09,baseline,completed,Visit notes for end_of_study
+VIS000954,ENR00054,2023-10-14,follow_up,completed,Visit notes for follow_up
+VIS000955,ENR00298,2025-07-09,screening,partial,Visit notes for week_8
+VIS000956,ENR00115,2025-05-11,unscheduled,scheduled,
+VIS000957,ENR00439,2023-08-20,baseline,partial,Visit notes for unscheduled
+VIS000958,ENR00212,2025-08-08,end_of_study,completed,Visit notes for week_8
+VIS000959,ENR00260,2022-08-04,week_12,partial,
+VIS000960,ENR00463,2025-06-17,end_of_study,missed,
+VIS000961,ENR00466,2023-04-30,screening,completed,
+VIS000962,ENR00405,2023-02-06,follow_up,partial,
+VIS000963,ENR00492,2024-03-17,end_of_study,missed,Visit notes for end_of_study
+VIS000964,ENR00099,2024-06-16,end_of_study,completed,Visit notes for end_of_study
+VIS000965,ENR00066,2024-07-27,end_of_study,missed,
+VIS000966,ENR00163,2023-11-26,week_4,scheduled,
+VIS000967,ENR00364,2025-06-29,week_4,completed,Visit notes for end_of_study
+VIS000968,ENR00432,2025-04-10,week_12,missed,Visit notes for week_8
+VIS000969,ENR00048,2021-07-11,screening,scheduled,
+VIS000970,ENR00395,2024-04-30,week_4,completed,Visit notes for follow_up
+VIS000971,ENR00472,2021-06-11,end_of_study,completed,Visit notes for week_4
+VIS000972,ENR00233,2024-07-23,month_6,missed,
+VIS000973,ENR00460,2022-03-31,week_12,missed,Visit notes for week_8
+VIS000974,ENR00372,2025-05-17,end_of_study,partial,Visit notes for week_12
+VIS000975,ENR00043,2021-10-22,screening,completed,
+VIS000976,ENR00475,2024-05-05,baseline,completed,
+VIS000977,ENR00135,2022-01-05,baseline,completed,
+VIS000978,ENR00186,2025-09-13,week_8,scheduled,
+VIS000979,ENR00408,2021-02-14,end_of_study,completed,
+VIS000980,ENR00321,2021-06-06,week_8,scheduled,
+VIS000981,ENR00161,2024-07-21,unscheduled,missed,
+VIS000982,ENR00006,2022-01-01,screening,completed,Visit notes for month_6
+VIS000983,ENR00248,2024-06-11,follow_up,completed,
+VIS000984,ENR00380,2022-06-06,baseline,missed,Visit notes for follow_up
+VIS000985,ENR00012,2023-11-27,follow_up,missed,
+VIS000986,ENR00187,2021-08-24,week_8,completed,
+VIS000987,ENR00113,2021-06-20,week_4,partial,
+VIS000988,ENR00103,2021-07-08,month_6,partial,
+VIS000989,ENR00415,2023-10-13,end_of_study,scheduled,Visit notes for week_12
+VIS000990,ENR00089,2022-02-10,week_12,scheduled,
+VIS000991,ENR00407,2025-04-19,week_12,missed,Visit notes for unscheduled
+VIS000992,ENR00222,2025-12-14,unscheduled,scheduled,Visit notes for week_12
+VIS000993,ENR00418,2022-10-15,baseline,scheduled,
+VIS000994,ENR00291,2022-12-24,month_6,completed,
+VIS000995,ENR00456,2021-03-11,follow_up,partial,Visit notes for week_12
+VIS000996,ENR00310,2025-08-21,follow_up,partial,
+VIS000997,ENR00059,2022-01-04,month_6,scheduled,Visit notes for month_6
+VIS000998,ENR00126,2021-05-29,week_8,partial,
+VIS000999,ENR00400,2022-10-06,baseline,completed,
+VIS001000,ENR00006,2025-01-08,month_6,missed,
+VIS001001,ENR00408,2022-10-21,week_8,completed,
+VIS001002,ENR00309,2022-03-11,follow_up,missed,
+VIS001003,ENR00143,2025-01-06,baseline,scheduled,Visit notes for end_of_study
+VIS001004,ENR00163,2025-07-24,month_6,missed,
+VIS001005,ENR00411,2023-10-09,unscheduled,completed,Visit notes for end_of_study
+VIS001006,ENR00062,2021-09-12,unscheduled,missed,Visit notes for end_of_study
+VIS001007,ENR00122,2024-03-26,screening,partial,
+VIS001008,ENR00402,2025-10-20,screening,scheduled,
+VIS001009,ENR00431,2023-04-05,screening,completed,
+VIS001010,ENR00009,2021-05-23,unscheduled,completed,Visit notes for end_of_study
+VIS001011,ENR00371,2022-09-09,week_12,partial,Visit notes for end_of_study
+VIS001012,ENR00041,2024-02-14,month_6,scheduled,Visit notes for end_of_study
+VIS001013,ENR00153,2024-11-27,unscheduled,scheduled,Visit notes for baseline
+VIS001014,ENR00432,2023-02-05,baseline,completed,
+VIS001015,ENR00423,2021-01-22,week_4,completed,Visit notes for end_of_study
+VIS001016,ENR00116,2021-12-15,baseline,missed,Visit notes for month_6
+VIS001017,ENR00418,2024-01-06,screening,completed,
+VIS001018,ENR00402,2021-03-30,baseline,completed,Visit notes for baseline
+VIS001019,ENR00136,2022-11-06,end_of_study,partial,Visit notes for week_4
+VIS001020,ENR00299,2023-08-02,baseline,missed,
+VIS001021,ENR00076,2025-03-23,end_of_study,scheduled,Visit notes for follow_up
+VIS001022,ENR00271,2022-05-08,unscheduled,scheduled,Visit notes for month_6
+VIS001023,ENR00396,2025-02-05,unscheduled,missed,
+VIS001024,ENR00393,2022-08-30,baseline,partial,Visit notes for week_8
+VIS001025,ENR00338,2024-08-18,week_8,completed,
+VIS001026,ENR00254,2021-05-04,week_8,completed,Visit notes for unscheduled
+VIS001027,ENR00420,2023-02-28,week_8,scheduled,
+VIS001028,ENR00107,2025-07-26,follow_up,partial,Visit notes for week_12
+VIS001029,ENR00363,2023-07-19,week_4,completed,Visit notes for week_8
+VIS001030,ENR00470,2023-01-15,end_of_study,scheduled,Visit notes for follow_up
+VIS001031,ENR00104,2025-05-17,end_of_study,missed,
+VIS001032,ENR00217,2021-12-03,week_12,completed,
+VIS001033,ENR00449,2021-08-08,baseline,missed,
+VIS001034,ENR00236,2022-01-19,week_12,completed,
+VIS001035,ENR00272,2023-07-17,month_6,partial,
+VIS001036,ENR00282,2021-06-22,month_6,scheduled,
+VIS001037,ENR00204,2023-10-26,end_of_study,partial,
+VIS001038,ENR00140,2023-01-28,baseline,completed,Visit notes for end_of_study
+VIS001039,ENR00100,2022-08-26,week_8,scheduled,
+VIS001040,ENR00142,2023-12-21,unscheduled,scheduled,
+VIS001041,ENR00026,2024-08-16,week_8,completed,
+VIS001042,ENR00028,2021-03-15,week_12,missed,
+VIS001043,ENR00052,2022-07-19,week_8,scheduled,
+VIS001044,ENR00052,2022-03-27,week_12,scheduled,
+VIS001045,ENR00403,2022-02-21,month_6,partial,Visit notes for week_12
+VIS001046,ENR00376,2021-01-07,baseline,missed,Visit notes for unscheduled
+VIS001047,ENR00379,2022-09-18,week_8,missed,
+VIS001048,ENR00036,2021-12-08,week_4,partial,Visit notes for week_4
+VIS001049,ENR00493,2021-01-27,unscheduled,scheduled,
+VIS001050,ENR00091,2022-06-25,baseline,missed,Visit notes for screening
+VIS001051,ENR00305,2022-12-23,unscheduled,completed,
+VIS001052,ENR00127,2023-08-26,baseline,completed,Visit notes for week_12
+VIS001053,ENR00428,2022-04-13,follow_up,missed,Visit notes for baseline
+VIS001054,ENR00052,2022-09-16,month_6,scheduled,
+VIS001055,ENR00180,2024-01-23,week_12,scheduled,
+VIS001056,ENR00235,2021-01-28,month_6,partial,Visit notes for follow_up
+VIS001057,ENR00397,2024-09-21,unscheduled,completed,
+VIS001058,ENR00266,2025-01-31,screening,missed,Visit notes for week_8
+VIS001059,ENR00338,2021-10-18,month_6,scheduled,
+VIS001060,ENR00296,2025-02-26,end_of_study,partial,
+VIS001061,ENR00046,2022-02-01,end_of_study,completed,Visit notes for follow_up
+VIS001062,ENR00461,2023-07-10,follow_up,missed,
+VIS001063,ENR00348,2022-12-16,month_6,scheduled,Visit notes for week_12
+VIS001064,ENR00159,2022-01-26,screening,partial,Visit notes for baseline
+VIS001065,ENR00222,2025-06-17,unscheduled,partial,
+VIS001066,ENR00497,2021-01-18,unscheduled,missed,
+VIS001067,ENR00077,2023-12-08,week_12,missed,
+VIS001068,ENR00148,2021-05-13,week_12,completed,
+VIS001069,ENR00112,2022-08-03,baseline,completed,
+VIS001070,ENR00003,2023-06-01,month_6,completed,
+VIS001071,ENR00071,2022-12-19,week_12,missed,Visit notes for week_12
+VIS001072,ENR00074,2025-02-10,week_8,scheduled,Visit notes for baseline
+VIS001073,ENR00149,2022-03-25,screening,scheduled,Visit notes for week_8
+VIS001074,ENR00416,2024-10-21,end_of_study,scheduled,
+VIS001075,ENR00463,2021-07-20,week_12,partial,Visit notes for week_4
+VIS001076,ENR00289,2023-06-12,month_6,missed,Visit notes for week_8
+VIS001077,ENR00129,2021-10-05,end_of_study,missed,
+VIS001078,ENR00044,2022-09-01,unscheduled,missed,
+VIS001079,ENR00449,2025-09-04,end_of_study,completed,
+VIS001080,ENR00227,2024-11-22,month_6,partial,
+VIS001081,ENR00219,2023-08-14,end_of_study,scheduled,
+VIS001082,ENR00468,2024-02-19,screening,scheduled,
+VIS001083,ENR00072,2024-06-13,week_12,missed,Visit notes for month_6
+VIS001084,ENR00066,2024-06-25,follow_up,partial,
+VIS001085,ENR00433,2023-03-16,week_4,scheduled,Visit notes for unscheduled
+VIS001086,ENR00414,2025-04-12,follow_up,scheduled,Visit notes for baseline
+VIS001087,ENR00029,2022-07-08,baseline,partial,Visit notes for week_12
+VIS001088,ENR00290,2023-09-14,month_6,completed,
+VIS001089,ENR00300,2024-10-13,follow_up,completed,Visit notes for follow_up
+VIS001090,ENR00074,2024-02-26,unscheduled,missed,
+VIS001091,ENR00346,2024-08-03,week_4,partial,Visit notes for screening
+VIS001092,ENR00413,2023-09-21,week_8,completed,
+VIS001093,ENR00079,2024-05-21,baseline,completed,
+VIS001094,ENR00054,2023-08-29,screening,scheduled,
+VIS001095,ENR00475,2021-09-07,week_12,scheduled,
+VIS001096,ENR00095,2025-08-07,week_8,partial,Visit notes for unscheduled
+VIS001097,ENR00440,2024-09-09,baseline,scheduled,
+VIS001098,ENR00012,2022-01-14,week_4,missed,
+VIS001099,ENR00380,2024-12-03,follow_up,missed,
+VIS001100,ENR00149,2022-08-16,baseline,scheduled,
+VIS001101,ENR00141,2023-03-13,end_of_study,completed,
+VIS001102,ENR00417,2023-05-21,week_4,completed,
+VIS001103,ENR00062,2024-03-01,end_of_study,completed,Visit notes for screening
+VIS001104,ENR00331,2024-08-25,unscheduled,completed,Visit notes for month_6
+VIS001105,ENR00493,2021-10-13,unscheduled,scheduled,
+VIS001106,ENR00082,2023-01-03,follow_up,missed,
+VIS001107,ENR00362,2023-12-12,end_of_study,completed,
+VIS001108,ENR00078,2022-12-22,month_6,scheduled,Visit notes for week_4
+VIS001109,ENR00143,2025-05-27,week_12,scheduled,
+VIS001110,ENR00430,2024-08-14,unscheduled,scheduled,Visit notes for week_4
+VIS001111,ENR00295,2024-12-22,follow_up,partial,
+VIS001112,ENR00166,2024-04-20,month_6,scheduled,
+VIS001113,ENR00016,2025-10-11,week_4,missed,
+VIS001114,ENR00055,2023-10-20,unscheduled,partial,Visit notes for week_8
+VIS001115,ENR00054,2025-12-09,week_4,scheduled,Visit notes for end_of_study
+VIS001116,ENR00473,2021-05-12,screening,partial,
+VIS001117,ENR00434,2025-03-16,baseline,scheduled,Visit notes for screening
+VIS001118,ENR00473,2021-12-23,month_6,completed,Visit notes for end_of_study
+VIS001119,ENR00069,2024-07-29,follow_up,missed,
+VIS001120,ENR00252,2023-06-16,week_12,missed,
+VIS001121,ENR00083,2023-06-08,follow_up,missed,
+VIS001122,ENR00013,2024-07-12,baseline,missed,
+VIS001123,ENR00072,2021-01-11,month_6,scheduled,Visit notes for baseline
+VIS001124,ENR00175,2022-01-15,follow_up,scheduled,
+VIS001125,ENR00107,2024-03-14,unscheduled,partial,
+VIS001126,ENR00461,2024-02-19,week_4,completed,
+VIS001127,ENR00321,2023-02-10,baseline,completed,
+VIS001128,ENR00265,2022-09-03,baseline,completed,
+VIS001129,ENR00027,2024-05-16,follow_up,partial,
+VIS001130,ENR00421,2022-08-17,week_12,scheduled,Visit notes for baseline
+VIS001131,ENR00447,2025-11-20,week_4,partial,
+VIS001132,ENR00295,2022-05-10,follow_up,partial,
+VIS001133,ENR00030,2024-01-24,baseline,scheduled,Visit notes for week_12
+VIS001134,ENR00335,2021-03-03,screening,partial,
+VIS001135,ENR00103,2022-11-17,screening,missed,
+VIS001136,ENR00419,2025-02-11,month_6,completed,
+VIS001137,ENR00038,2025-07-08,screening,partial,Visit notes for end_of_study
+VIS001138,ENR00307,2025-02-23,baseline,scheduled,Visit notes for week_12
+VIS001139,ENR00371,2021-03-27,baseline,completed,
+VIS001140,ENR00116,2024-08-24,month_6,scheduled,
+VIS001141,ENR00401,2025-10-07,week_8,completed,Visit notes for screening
+VIS001142,ENR00397,2025-05-21,week_8,scheduled,Visit notes for screening
+VIS001143,ENR00283,2023-09-15,screening,scheduled,Visit notes for week_4
+VIS001144,ENR00221,2024-12-07,end_of_study,missed,
+VIS001145,ENR00061,2024-06-14,month_6,partial,
+VIS001146,ENR00224,2021-04-29,week_8,missed,
+VIS001147,ENR00006,2022-04-11,end_of_study,completed,Visit notes for screening
+VIS001148,ENR00448,2025-01-14,week_8,completed,
+VIS001149,ENR00065,2023-06-18,week_4,partial,
+VIS001150,ENR00180,2024-05-18,week_8,partial,
+VIS001151,ENR00204,2023-09-08,baseline,completed,
+VIS001152,ENR00481,2024-01-19,week_8,scheduled,Visit notes for month_6
+VIS001153,ENR00460,2025-10-25,week_8,scheduled,Visit notes for month_6
+VIS001154,ENR00400,2024-02-04,week_12,missed,Visit notes for week_12
+VIS001155,ENR00164,2024-11-30,follow_up,completed,
+VIS001156,ENR00462,2023-04-22,unscheduled,partial,
+VIS001157,ENR00467,2021-10-08,follow_up,missed,
+VIS001158,ENR00284,2022-03-08,baseline,partial,Visit notes for week_4
+VIS001159,ENR00019,2022-04-27,unscheduled,scheduled,Visit notes for screening
+VIS001160,ENR00256,2025-09-09,screening,partial,
+VIS001161,ENR00197,2022-09-08,baseline,completed,
+VIS001162,ENR00313,2023-02-26,unscheduled,completed,Visit notes for end_of_study
+VIS001163,ENR00228,2021-04-01,week_8,missed,
+VIS001164,ENR00338,2023-06-02,follow_up,completed,Visit notes for screening
+VIS001165,ENR00278,2025-04-12,month_6,completed,Visit notes for month_6
+VIS001166,ENR00473,2025-08-24,week_12,missed,Visit notes for month_6
+VIS001167,ENR00372,2025-08-26,end_of_study,scheduled,Visit notes for screening
+VIS001168,ENR00414,2021-08-12,follow_up,scheduled,Visit notes for week_12
+VIS001169,ENR00440,2024-01-01,unscheduled,scheduled,Visit notes for follow_up
+VIS001170,ENR00134,2021-11-29,end_of_study,scheduled,Visit notes for week_8
+VIS001171,ENR00068,2021-02-01,week_12,partial,
+VIS001172,ENR00128,2025-04-29,follow_up,partial,
+VIS001173,ENR00203,2021-03-21,week_12,partial,
+VIS001174,ENR00129,2025-05-22,screening,completed,
+VIS001175,ENR00339,2022-10-20,week_12,missed,
+VIS001176,ENR00009,2023-06-20,screening,scheduled,
+VIS001177,ENR00184,2023-09-11,follow_up,missed,
+VIS001178,ENR00297,2021-06-12,week_12,partial,Visit notes for unscheduled
+VIS001179,ENR00093,2022-06-13,week_12,partial,Visit notes for week_4
+VIS001180,ENR00117,2024-07-14,week_4,missed,Visit notes for screening
+VIS001181,ENR00120,2021-08-23,screening,missed,Visit notes for unscheduled
+VIS001182,ENR00297,2022-10-12,screening,missed,
+VIS001183,ENR00366,2022-06-15,week_12,completed,Visit notes for month_6
+VIS001184,ENR00277,2025-01-11,screening,missed,
+VIS001185,ENR00040,2023-11-05,unscheduled,completed,Visit notes for week_8
+VIS001186,ENR00105,2022-10-30,month_6,scheduled,
+VIS001187,ENR00219,2025-11-29,week_12,missed,
+VIS001188,ENR00311,2025-06-03,month_6,partial,Visit notes for month_6
+VIS001189,ENR00241,2022-08-26,screening,missed,
+VIS001190,ENR00149,2021-11-04,screening,completed,Visit notes for month_6
+VIS001191,ENR00262,2025-01-05,follow_up,partial,Visit notes for end_of_study
+VIS001192,ENR00426,2024-04-08,screening,missed,
+VIS001193,ENR00333,2021-06-10,baseline,missed,Visit notes for follow_up
+VIS001194,ENR00376,2023-05-07,follow_up,completed,Visit notes for follow_up
+VIS001195,ENR00409,2021-04-16,unscheduled,scheduled,
+VIS001196,ENR00100,2025-09-09,week_12,missed,
+VIS001197,ENR00410,2025-04-22,month_6,missed,
+VIS001198,ENR00384,2021-08-25,week_8,scheduled,Visit notes for end_of_study
+VIS001199,ENR00186,2021-06-13,month_6,completed,Visit notes for unscheduled
+VIS001200,ENR00310,2022-04-17,unscheduled,scheduled,
+VIS001201,ENR00424,2025-08-21,week_4,missed,Visit notes for end_of_study
+VIS001202,ENR00346,2024-04-12,week_4,partial,Visit notes for month_6
+VIS001203,ENR00161,2021-08-30,baseline,scheduled,
+VIS001204,ENR00076,2024-03-25,unscheduled,missed,Visit notes for unscheduled
+VIS001205,ENR00008,2021-12-08,baseline,scheduled,
+VIS001206,ENR00284,2024-12-27,unscheduled,completed,
+VIS001207,ENR00018,2025-09-04,end_of_study,completed,Visit notes for baseline
+VIS001208,ENR00068,2023-11-21,follow_up,scheduled,Visit notes for month_6
+VIS001209,ENR00066,2023-04-04,follow_up,missed,Visit notes for baseline
+VIS001210,ENR00173,2025-08-17,month_6,completed,Visit notes for screening
+VIS001211,ENR00038,2025-02-21,month_6,scheduled,Visit notes for unscheduled
+VIS001212,ENR00380,2025-09-06,end_of_study,partial,Visit notes for week_4
+VIS001213,ENR00376,2022-01-11,follow_up,completed,
+VIS001214,ENR00004,2024-04-30,month_6,scheduled,
+VIS001215,ENR00225,2021-12-28,follow_up,partial,Visit notes for baseline
+VIS001216,ENR00119,2022-09-01,unscheduled,partial,
+VIS001217,ENR00266,2023-12-12,follow_up,scheduled,
+VIS001218,ENR00197,2022-10-15,week_4,missed,
+VIS001219,ENR00484,2025-02-13,week_8,scheduled,Visit notes for month_6
+VIS001220,ENR00051,2022-12-13,week_12,missed,
+VIS001221,ENR00141,2023-09-24,unscheduled,missed,Visit notes for week_12
+VIS001222,ENR00481,2022-06-16,baseline,missed,Visit notes for week_4
+VIS001223,ENR00050,2022-02-28,follow_up,missed,
+VIS001224,ENR00463,2021-03-23,follow_up,missed,
+VIS001225,ENR00427,2025-08-12,screening,partial,
+VIS001226,ENR00483,2024-03-15,end_of_study,scheduled,Visit notes for unscheduled
+VIS001227,ENR00152,2021-08-13,baseline,scheduled,Visit notes for unscheduled
+VIS001228,ENR00135,2021-06-27,week_4,partial,Visit notes for baseline
+VIS001229,ENR00496,2022-12-26,baseline,missed,Visit notes for month_6
+VIS001230,ENR00081,2023-11-05,month_6,partial,
+VIS001231,ENR00377,2023-11-17,baseline,partial,Visit notes for screening
+VIS001232,ENR00222,2021-07-25,follow_up,partial,
+VIS001233,ENR00286,2024-09-15,screening,completed,
+VIS001234,ENR00301,2023-02-10,week_8,missed,
+VIS001235,ENR00078,2023-09-20,week_4,scheduled,
+VIS001236,ENR00102,2024-07-24,baseline,missed,
+VIS001237,ENR00035,2023-10-02,follow_up,missed,Visit notes for screening
+VIS001238,ENR00215,2024-11-09,week_12,scheduled,Visit notes for week_8
+VIS001239,ENR00327,2022-12-16,unscheduled,missed,Visit notes for week_8
+VIS001240,ENR00449,2022-08-22,unscheduled,scheduled,Visit notes for end_of_study
+VIS001241,ENR00307,2023-01-02,follow_up,scheduled,
+VIS001242,ENR00113,2021-08-19,week_12,scheduled,Visit notes for month_6
+VIS001243,ENR00127,2024-09-18,end_of_study,completed,
+VIS001244,ENR00490,2022-10-16,baseline,partial,Visit notes for week_4
+VIS001245,ENR00397,2025-12-12,unscheduled,scheduled,Visit notes for week_8
+VIS001246,ENR00015,2022-08-19,week_12,missed,Visit notes for end_of_study
+VIS001247,ENR00032,2024-02-26,month_6,partial,Visit notes for end_of_study
+VIS001248,ENR00201,2025-07-15,unscheduled,scheduled,
+VIS001249,ENR00468,2021-04-22,week_12,scheduled,Visit notes for month_6
+VIS001250,ENR00326,2025-08-04,screening,partial,
+VIS001251,ENR00114,2024-03-18,week_4,missed,Visit notes for baseline
+VIS001252,ENR00486,2024-06-10,month_6,missed,Visit notes for screening
+VIS001253,ENR00487,2025-01-19,screening,scheduled,
+VIS001254,ENR00361,2022-11-14,month_6,completed,Visit notes for follow_up
+VIS001255,ENR00108,2023-01-12,follow_up,missed,Visit notes for follow_up
+VIS001256,ENR00203,2025-10-27,week_8,partial,Visit notes for month_6
+VIS001257,ENR00170,2023-04-27,week_8,missed,Visit notes for screening
+VIS001258,ENR00433,2021-02-11,follow_up,completed,Visit notes for unscheduled
+VIS001259,ENR00022,2021-11-18,week_12,partial,
+VIS001260,ENR00324,2025-05-01,week_8,completed,
+VIS001261,ENR00064,2025-07-24,end_of_study,scheduled,
+VIS001262,ENR00380,2025-12-01,week_12,completed,
+VIS001263,ENR00259,2025-01-18,end_of_study,completed,
+VIS001264,ENR00426,2024-01-15,week_4,completed,Visit notes for end_of_study
+VIS001265,ENR00100,2025-08-30,week_12,partial,
+VIS001266,ENR00381,2021-02-17,week_12,partial,
+VIS001267,ENR00052,2022-06-26,unscheduled,scheduled,
+VIS001268,ENR00048,2022-04-01,end_of_study,partial,
+VIS001269,ENR00465,2024-12-10,follow_up,missed,
+VIS001270,ENR00255,2025-01-30,end_of_study,partial,Visit notes for baseline
+VIS001271,ENR00232,2022-04-04,screening,scheduled,Visit notes for unscheduled
+VIS001272,ENR00190,2023-09-04,baseline,partial,
+VIS001273,ENR00415,2024-07-14,baseline,completed,Visit notes for week_8
+VIS001274,ENR00443,2023-10-01,week_8,completed,
+VIS001275,ENR00316,2025-09-13,unscheduled,missed,
+VIS001276,ENR00253,2022-06-01,end_of_study,partial,Visit notes for week_4
+VIS001277,ENR00019,2022-10-21,end_of_study,completed,
+VIS001278,ENR00108,2025-03-27,follow_up,scheduled,Visit notes for month_6
+VIS001279,ENR00492,2024-08-28,week_8,partial,
+VIS001280,ENR00248,2023-11-20,follow_up,completed,Visit notes for end_of_study
+VIS001281,ENR00359,2021-06-08,end_of_study,missed,Visit notes for week_4
+VIS001282,ENR00267,2025-03-13,baseline,missed,
+VIS001283,ENR00446,2021-08-21,screening,scheduled,
+VIS001284,ENR00321,2025-07-03,follow_up,scheduled,
+VIS001285,ENR00448,2024-01-26,end_of_study,scheduled,
+VIS001286,ENR00061,2023-06-11,week_12,partial,Visit notes for month_6
+VIS001287,ENR00289,2024-08-24,week_4,missed,
+VIS001288,ENR00351,2022-02-23,month_6,partial,
+VIS001289,ENR00108,2022-11-08,week_4,missed,Visit notes for unscheduled
+VIS001290,ENR00006,2022-10-13,end_of_study,missed,
+VIS001291,ENR00035,2021-01-12,week_12,missed,
+VIS001292,ENR00049,2024-01-07,unscheduled,partial,
+VIS001293,ENR00320,2023-08-18,week_4,completed,
+VIS001294,ENR00287,2025-12-15,week_8,partial,Visit notes for week_8
+VIS001295,ENR00141,2022-08-06,end_of_study,partial,
+VIS001296,ENR00393,2023-04-06,week_12,missed,
+VIS001297,ENR00079,2021-07-30,week_8,partial,
+VIS001298,ENR00289,2021-07-29,week_4,scheduled,
+VIS001299,ENR00396,2025-10-14,week_12,scheduled,
+VIS001300,ENR00002,2025-05-24,week_8,missed,
+VIS001301,ENR00412,2024-06-13,week_4,missed,
+VIS001302,ENR00448,2021-01-01,month_6,completed,Visit notes for screening
+VIS001303,ENR00071,2023-11-14,unscheduled,scheduled,Visit notes for month_6
+VIS001304,ENR00155,2023-10-22,baseline,missed,Visit notes for end_of_study
+VIS001305,ENR00397,2023-03-01,unscheduled,partial,
+VIS001306,ENR00268,2022-10-12,follow_up,completed,Visit notes for week_8
+VIS001307,ENR00490,2021-12-07,week_12,missed,Visit notes for follow_up
+VIS001308,ENR00227,2023-10-01,week_12,completed,Visit notes for end_of_study
+VIS001309,ENR00334,2022-12-15,week_4,completed,Visit notes for unscheduled
+VIS001310,ENR00395,2024-10-04,month_6,scheduled,
+VIS001311,ENR00287,2025-11-30,week_8,scheduled,
+VIS001312,ENR00478,2025-03-12,screening,missed,
+VIS001313,ENR00270,2022-02-04,screening,partial,
+VIS001314,ENR00467,2023-01-26,week_12,completed,Visit notes for screening
+VIS001315,ENR00332,2022-07-18,unscheduled,scheduled,
+VIS001316,ENR00357,2024-12-13,week_12,partial,Visit notes for screening
+VIS001317,ENR00442,2025-01-10,unscheduled,scheduled,
+VIS001318,ENR00243,2025-03-16,follow_up,completed,
+VIS001319,ENR00015,2024-06-09,week_4,missed,Visit notes for week_4
+VIS001320,ENR00043,2023-05-10,baseline,completed,
+VIS001321,ENR00364,2021-05-08,month_6,completed,Visit notes for week_12
+VIS001322,ENR00437,2022-02-02,screening,partial,Visit notes for month_6
+VIS001323,ENR00460,2024-12-23,week_4,partial,Visit notes for end_of_study
+VIS001324,ENR00214,2025-09-12,screening,completed,
+VIS001325,ENR00390,2023-10-25,week_4,partial,
+VIS001326,ENR00228,2021-04-02,week_12,missed,Visit notes for end_of_study
+VIS001327,ENR00089,2024-07-25,screening,partial,
+VIS001328,ENR00180,2021-08-30,month_6,scheduled,Visit notes for baseline
+VIS001329,ENR00290,2023-08-07,baseline,completed,Visit notes for week_4
+VIS001330,ENR00374,2021-06-26,week_4,partial,Visit notes for screening
+VIS001331,ENR00393,2021-12-13,screening,missed,Visit notes for unscheduled
+VIS001332,ENR00042,2025-12-02,week_8,partial,Visit notes for week_8
+VIS001333,ENR00383,2025-03-28,week_4,partial,
+VIS001334,ENR00362,2022-08-11,week_4,partial,
+VIS001335,ENR00162,2023-04-28,week_8,missed,
+VIS001336,ENR00103,2021-12-29,week_12,partial,Visit notes for week_12
+VIS001337,ENR00048,2023-10-01,month_6,partial,
+VIS001338,ENR00329,2023-12-08,unscheduled,missed,
+VIS001339,ENR00428,2024-04-13,end_of_study,missed,Visit notes for week_8
+VIS001340,ENR00360,2023-06-08,month_6,partial,
+VIS001341,ENR00359,2023-10-29,follow_up,partial,
+VIS001342,ENR00396,2022-03-08,week_12,missed,
+VIS001343,ENR00017,2021-08-25,follow_up,missed,
+VIS001344,ENR00240,2024-04-16,month_6,partial,Visit notes for screening
+VIS001345,ENR00166,2024-12-07,baseline,partial,Visit notes for screening
+VIS001346,ENR00082,2023-05-14,unscheduled,partial,
+VIS001347,ENR00463,2021-07-25,week_4,partial,
+VIS001348,ENR00240,2024-01-25,week_4,completed,
+VIS001349,ENR00316,2023-07-24,end_of_study,scheduled,
+VIS001350,ENR00125,2022-06-02,month_6,partial,
+VIS001351,ENR00206,2022-09-07,screening,missed,Visit notes for follow_up
+VIS001352,ENR00056,2023-05-13,end_of_study,partial,Visit notes for end_of_study
+VIS001353,ENR00304,2021-02-28,week_4,missed,Visit notes for follow_up
+VIS001354,ENR00102,2024-03-09,week_4,missed,Visit notes for screening
+VIS001355,ENR00497,2021-07-05,week_12,missed,Visit notes for unscheduled
+VIS001356,ENR00203,2021-12-05,unscheduled,completed,Visit notes for week_8
+VIS001357,ENR00453,2021-12-19,week_12,partial,
+VIS001358,ENR00121,2025-10-23,week_8,scheduled,
+VIS001359,ENR00126,2021-11-12,follow_up,partial,
+VIS001360,ENR00082,2022-12-07,baseline,scheduled,Visit notes for end_of_study
+VIS001361,ENR00358,2022-03-12,unscheduled,scheduled,Visit notes for week_8
+VIS001362,ENR00391,2021-07-16,end_of_study,missed,
+VIS001363,ENR00479,2021-10-01,end_of_study,partial,Visit notes for end_of_study
+VIS001364,ENR00306,2023-03-18,follow_up,completed,
+VIS001365,ENR00343,2025-02-25,screening,missed,Visit notes for week_4
+VIS001366,ENR00394,2022-04-27,month_6,partial,
+VIS001367,ENR00422,2021-01-04,end_of_study,completed,Visit notes for week_4
+VIS001368,ENR00256,2022-01-20,screening,missed,
+VIS001369,ENR00048,2022-11-27,end_of_study,missed,
+VIS001370,ENR00146,2022-09-30,end_of_study,scheduled,
+VIS001371,ENR00491,2023-05-14,week_4,missed,
+VIS001372,ENR00265,2025-09-05,baseline,scheduled,Visit notes for month_6
+VIS001373,ENR00352,2025-02-09,baseline,scheduled,Visit notes for screening
+VIS001374,ENR00083,2022-10-16,week_4,scheduled,Visit notes for screening
+VIS001375,ENR00249,2024-09-01,end_of_study,scheduled,Visit notes for week_12
+VIS001376,ENR00218,2022-06-14,baseline,scheduled,Visit notes for unscheduled
+VIS001377,ENR00365,2022-11-18,follow_up,partial,
+VIS001378,ENR00092,2023-05-19,follow_up,scheduled,Visit notes for baseline
+VIS001379,ENR00077,2021-01-15,month_6,partial,
+VIS001380,ENR00417,2024-06-12,unscheduled,scheduled,
+VIS001381,ENR00145,2021-03-23,baseline,scheduled,
+VIS001382,ENR00026,2025-12-27,month_6,partial,
+VIS001383,ENR00346,2022-08-30,screening,partial,
+VIS001384,ENR00183,2023-05-05,screening,scheduled,
+VIS001385,ENR00326,2021-03-14,baseline,partial,Visit notes for follow_up
+VIS001386,ENR00379,2023-03-23,week_8,missed,
+VIS001387,ENR00049,2021-09-16,week_4,scheduled,
+VIS001388,ENR00141,2022-12-09,unscheduled,missed,Visit notes for follow_up
+VIS001389,ENR00292,2023-07-28,screening,completed,
+VIS001390,ENR00020,2021-10-28,baseline,scheduled,Visit notes for baseline
+VIS001391,ENR00173,2024-07-28,week_12,scheduled,
+VIS001392,ENR00095,2025-03-10,week_12,completed,Visit notes for end_of_study
+VIS001393,ENR00495,2021-08-27,week_8,partial,Visit notes for follow_up
+VIS001394,ENR00277,2025-10-16,week_8,completed,
+VIS001395,ENR00243,2022-03-17,end_of_study,partial,Visit notes for week_4
+VIS001396,ENR00142,2023-10-25,screening,scheduled,Visit notes for week_12
+VIS001397,ENR00140,2021-01-11,end_of_study,missed,
+VIS001398,ENR00213,2024-09-07,week_4,partial,
+VIS001399,ENR00307,2025-06-07,month_6,completed,
+VIS001400,ENR00010,2024-12-23,month_6,missed,
+VIS001401,ENR00148,2025-01-31,unscheduled,scheduled,Visit notes for month_6
+VIS001402,ENR00278,2023-03-08,unscheduled,completed,
+VIS001403,ENR00164,2022-12-11,unscheduled,missed,
+VIS001404,ENR00381,2023-10-19,week_8,missed,Visit notes for week_12
+VIS001405,ENR00207,2021-03-08,baseline,scheduled,Visit notes for month_6
+VIS001406,ENR00043,2022-03-02,follow_up,partial,
+VIS001407,ENR00385,2022-10-08,unscheduled,scheduled,
+VIS001408,ENR00320,2024-04-12,week_4,partial,Visit notes for end_of_study
+VIS001409,ENR00392,2021-02-17,week_12,scheduled,Visit notes for end_of_study
+VIS001410,ENR00472,2024-01-06,week_4,scheduled,Visit notes for baseline
+VIS001411,ENR00050,2023-03-22,week_8,missed,Visit notes for week_12
+VIS001412,ENR00092,2025-11-07,week_4,scheduled,Visit notes for month_6
+VIS001413,ENR00385,2022-03-22,end_of_study,partial,
+VIS001414,ENR00186,2024-07-14,baseline,partial,Visit notes for follow_up
+VIS001415,ENR00201,2022-04-07,end_of_study,scheduled,Visit notes for week_12
+VIS001416,ENR00423,2023-07-10,week_4,missed,
+VIS001417,ENR00002,2023-12-27,month_6,scheduled,Visit notes for baseline
+VIS001418,ENR00197,2024-04-03,end_of_study,scheduled,
+VIS001419,ENR00326,2021-03-01,week_8,missed,Visit notes for follow_up
+VIS001420,ENR00042,2024-05-12,end_of_study,completed,
+VIS001421,ENR00128,2021-12-07,unscheduled,completed,Visit notes for screening
+VIS001422,ENR00381,2024-05-16,end_of_study,missed,Visit notes for week_4
+VIS001423,ENR00235,2023-01-26,week_8,missed,
+VIS001424,ENR00365,2022-02-14,month_6,missed,
+VIS001425,ENR00458,2021-03-05,week_8,scheduled,
+VIS001426,ENR00351,2024-05-20,unscheduled,missed,Visit notes for unscheduled
+VIS001427,ENR00257,2024-08-06,baseline,partial,Visit notes for week_4
+VIS001428,ENR00126,2023-08-05,baseline,completed,Visit notes for end_of_study
+VIS001429,ENR00444,2023-12-01,unscheduled,scheduled,
+VIS001430,ENR00214,2022-06-17,follow_up,completed,Visit notes for follow_up
+VIS001431,ENR00366,2021-02-18,unscheduled,scheduled,Visit notes for screening
+VIS001432,ENR00150,2025-07-21,end_of_study,completed,
+VIS001433,ENR00367,2023-11-14,unscheduled,scheduled,Visit notes for baseline
+VIS001434,ENR00075,2025-10-01,week_12,completed,Visit notes for month_6
+VIS001435,ENR00212,2024-09-06,month_6,missed,Visit notes for unscheduled
+VIS001436,ENR00108,2022-06-26,baseline,partial,Visit notes for baseline
+VIS001437,ENR00235,2024-12-23,unscheduled,missed,Visit notes for month_6
+VIS001438,ENR00152,2024-11-12,unscheduled,partial,Visit notes for week_12
+VIS001439,ENR00291,2022-07-18,screening,missed,
+VIS001440,ENR00148,2021-02-23,week_8,partial,Visit notes for week_12
+VIS001441,ENR00158,2025-01-06,week_4,partial,
+VIS001442,ENR00226,2024-10-10,week_12,missed,Visit notes for week_4
+VIS001443,ENR00076,2024-05-29,week_12,scheduled,
+VIS001444,ENR00117,2021-02-27,week_8,partial,
+VIS001445,ENR00007,2022-06-16,month_6,scheduled,
+VIS001446,ENR00461,2021-12-15,month_6,missed,Visit notes for follow_up
+VIS001447,ENR00161,2023-12-08,month_6,scheduled,Visit notes for unscheduled
+VIS001448,ENR00332,2021-12-13,follow_up,scheduled,
+VIS001449,ENR00460,2023-02-17,screening,completed,
+VIS001450,ENR00159,2022-02-27,week_8,missed,
+VIS001451,ENR00399,2025-02-01,baseline,missed,
+VIS001452,ENR00236,2024-03-12,screening,missed,Visit notes for month_6
+VIS001453,ENR00341,2021-03-09,end_of_study,completed,Visit notes for follow_up
+VIS001454,ENR00035,2022-07-10,follow_up,completed,Visit notes for screening
+VIS001455,ENR00229,2024-03-06,follow_up,missed,
+VIS001456,ENR00409,2025-02-23,week_4,missed,
+VIS001457,ENR00368,2023-07-24,week_4,completed,Visit notes for week_12
+VIS001458,ENR00283,2022-07-23,baseline,missed,Visit notes for baseline
+VIS001459,ENR00464,2021-09-29,follow_up,partial,
+VIS001460,ENR00117,2022-05-15,unscheduled,scheduled,
+VIS001461,ENR00452,2025-05-20,screening,partial,Visit notes for baseline
+VIS001462,ENR00101,2023-09-07,baseline,scheduled,
+VIS001463,ENR00102,2021-07-24,follow_up,missed,Visit notes for week_12
+VIS001464,ENR00292,2021-01-20,end_of_study,completed,Visit notes for unscheduled
+VIS001465,ENR00399,2024-08-09,week_8,scheduled,Visit notes for week_12
+VIS001466,ENR00387,2023-04-14,week_12,scheduled,Visit notes for month_6
+VIS001467,ENR00260,2023-09-17,follow_up,partial,Visit notes for week_12
+VIS001468,ENR00136,2025-11-12,follow_up,missed,
+VIS001469,ENR00348,2024-02-24,follow_up,partial,Visit notes for baseline
+VIS001470,ENR00388,2022-01-09,unscheduled,completed,
+VIS001471,ENR00499,2023-11-10,unscheduled,scheduled,
+VIS001472,ENR00034,2025-04-07,end_of_study,partial,
+VIS001473,ENR00442,2023-06-27,month_6,missed,
+VIS001474,ENR00056,2025-04-12,week_8,missed,
+VIS001475,ENR00157,2022-10-18,follow_up,scheduled,
+VIS001476,ENR00154,2024-06-02,week_8,missed,
+VIS001477,ENR00099,2025-04-19,end_of_study,missed,Visit notes for week_4
+VIS001478,ENR00167,2023-11-24,unscheduled,scheduled,Visit notes for week_12
+VIS001479,ENR00118,2022-06-23,unscheduled,partial,
+VIS001480,ENR00157,2022-11-15,month_6,partial,
+VIS001481,ENR00218,2024-02-28,end_of_study,scheduled,
+VIS001482,ENR00482,2023-04-08,screening,scheduled,
+VIS001483,ENR00413,2021-10-14,unscheduled,partial,
+VIS001484,ENR00361,2022-02-19,week_8,partial,
+VIS001485,ENR00192,2021-02-18,month_6,scheduled,Visit notes for month_6
+VIS001486,ENR00286,2024-02-21,week_8,missed,Visit notes for unscheduled
+VIS001487,ENR00439,2022-07-16,baseline,completed,
+VIS001488,ENR00167,2025-01-20,unscheduled,scheduled,Visit notes for screening
+VIS001489,ENR00400,2024-09-12,end_of_study,scheduled,
+VIS001490,ENR00311,2024-04-15,end_of_study,completed,
+VIS001491,ENR00328,2022-12-03,week_12,partial,
+VIS001492,ENR00146,2021-08-16,unscheduled,missed,Visit notes for baseline
+VIS001493,ENR00167,2025-05-07,end_of_study,missed,Visit notes for week_12
+VIS001494,ENR00294,2022-02-14,follow_up,completed,
+VIS001495,ENR00168,2024-03-18,follow_up,partial,Visit notes for week_12
+VIS001496,ENR00354,2021-02-14,week_4,completed,Visit notes for month_6
+VIS001497,ENR00491,2025-10-14,month_6,scheduled,Visit notes for week_8
+VIS001498,ENR00095,2022-10-20,unscheduled,missed,
+VIS001499,ENR00171,2022-02-12,week_12,partial,Visit notes for screening
+VIS001500,ENR00072,2021-09-02,end_of_study,scheduled,

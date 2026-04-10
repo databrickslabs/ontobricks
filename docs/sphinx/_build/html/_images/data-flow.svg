@@ -1,0 +1,261 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 820" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <linearGradient id="ontGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#9B59B6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8E44AD;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="mapGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#3498DB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2980B9;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="queryGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#27AE60;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1E8449;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="sessionGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#009688;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00796B;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="tsGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8E44AD;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6C3483;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="dqGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1ABC9C;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#16A085;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="reasonGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#E74C3C;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#C0392B;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="2" dy="2" stdDeviation="2" flood-opacity="0.15"/>
+    </filter>
+    <marker id="arrowPurple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#9B59B6"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3498DB"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#27AE60"/>
+    </marker>
+    <marker id="arrowTeal" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#009688"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#7f8c8d"/>
+    </marker>
+    <marker id="arrowDq" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#16A085"/>
+    </marker>
+    <marker id="arrowReason" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#C0392B"/>
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="900" height="820" fill="#f8f9fa"/>
+  
+  <!-- Title -->
+  <text x="450" y="30" text-anchor="middle" font-size="20" font-weight="bold" fill="#2c3e50">Data Flow Architecture</text>
+  
+  <!-- Session Storage (Center) -->
+  <g filter="url(#shadow)">
+    <rect x="345" y="280" width="210" height="100" rx="8" fill="url(#sessionGrad)"/>
+    <text x="450" y="305" text-anchor="middle" font-size="13" font-weight="bold" fill="white">FastAPI Session</text>
+    <rect x="355" y="315" width="190" height="55" rx="4" fill="white" fill-opacity="0.15"/>
+    <text x="450" y="332" text-anchor="middle" font-size="9" fill="white">ontology_config</text>
+    <text x="450" y="345" text-anchor="middle" font-size="9" fill="white">mapping_config</text>
+    <text x="450" y="358" text-anchor="middle" font-size="9" fill="white">r2rml_output</text>
+  </g>
+  
+  <!-- Flow 1: Ontology Design -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="55" width="220" height="180" rx="8" fill="url(#ontGrad)"/>
+    <text x="160" y="80" text-anchor="middle" font-size="14" font-weight="bold" fill="white">1. Ontology Design</text>
+    
+    <rect x="65" y="95" width="190" height="30" rx="4" fill="white" fill-opacity="0.2"/>
+    <text x="160" y="115" text-anchor="middle" font-size="10" fill="white">User defines classes/props</text>
+    
+    <path d="M160 125 L160 135" stroke="white" stroke-width="1.5"/>
+    <polygon points="155,132 165,132 160,140" fill="white"/>
+    
+    <rect x="65" y="140" width="190" height="30" rx="4" fill="white" fill-opacity="0.2"/>
+    <text x="160" y="160" text-anchor="middle" font-size="10" fill="white">POST /ontology/save</text>
+    
+    <path d="M160 170 L160 180" stroke="white" stroke-width="1.5"/>
+    <polygon points="155,177 165,177 160,185" fill="white"/>
+    
+    <rect x="65" y="185" width="190" height="40" rx="4" fill="white" fill-opacity="0.2"/>
+    <text x="160" y="203" text-anchor="middle" font-size="10" fill="white">OntologyGenerator</text>
+    <text x="160" y="218" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.8)">-> OWL/Turtle output</text>
+  </g>
+  
+  <!-- Arrow Ontology to Session -->
+  <path d="M270 235 L270 305 L340 305" stroke="#9B59B6" stroke-width="2" fill="none" marker-end="url(#arrowPurple)"/>
+  <text x="285" y="270" font-size="9" fill="#9B59B6">ontology_config</text>
+  
+  <!-- Flow 2: Data Mapping -->
+  <g filter="url(#shadow)">
+    <rect x="630" y="55" width="220" height="180" rx="8" fill="url(#mapGrad)"/>
+    <text x="740" y="80" text-anchor="middle" font-size="14" font-weight="bold" fill="white">2. Data Mapping</text>
+    
+    <rect x="645" y="95" width="190" height="30" rx="4" fill="white" fill-opacity="0.2"/>
+    <text x="740" y="115" text-anchor="middle" font-size="10" fill="white">Map classes to tables</text>
+    
+    <path d="M740 125 L740 135" stroke="white" stroke-width="1.5"/>
+    <polygon points="735,132 745,132 740,140" fill="white"/>
+    
+    <rect x="645" y="140" width="190" height="30" rx="4" fill="white" fill-opacity="0.2"/>
+    <text x="740" y="160" text-anchor="middle" font-size="10" fill="white">POST /mapping/save</text>
+    
+    <path d="M740 170 L740 180" stroke="white" stroke-width="1.5"/>
+    <polygon points="735,177 745,177 740,185" fill="white"/>
+    
+    <rect x="645" y="185" width="190" height="40" rx="4" fill="white" fill-opacity="0.2"/>
+    <text x="740" y="203" text-anchor="middle" font-size="10" fill="white">R2RMLGenerator</text>
+    <text x="740" y="218" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.8)">-> R2RML output</text>
+  </g>
+  
+  <!-- Arrow Mapping to Session -->
+  <path d="M630 235 L630 305 L560 305" stroke="#3498DB" stroke-width="2" fill="none" marker-end="url(#arrowBlue)"/>
+  <text x="580" y="270" font-size="9" fill="#3498DB">mapping_config</text>
+  
+  <!-- Arrow Session to Mapping (read ontology) -->
+  <path d="M560 340 L630 340 L630 95" stroke="#009688" stroke-width="2" fill="none" stroke-dasharray="5,3" marker-end="url(#arrowTeal)"/>
+  <text x="645" y="220" font-size="8" fill="#009688">read ontology</text>
+  
+  <!-- Flow 3: Triple Store Sync (below flows 4–5) -->
+  <g filter="url(#shadow)">
+    <rect x="300" y="452" width="300" height="110" rx="8" fill="url(#queryGrad)"/>
+    <text x="450" y="477" text-anchor="middle" font-size="14" font-weight="bold" fill="white">3. Triple Store Sync</text>
+    
+    <rect x="315" y="487" width="270" height="30" rx="4" fill="white" fill-opacity="0.2"/>
+    <text x="450" y="507" text-anchor="middle" font-size="10" fill="white">SPARQL -> SQL / Cypher generation</text>
+    
+    <path d="M450 517 L450 527" stroke="white" stroke-width="1.5"/>
+    <polygon points="445,524 455,524 450,532" fill="white"/>
+    
+    <rect x="315" y="532" width="270" height="22" rx="4" fill="white" fill-opacity="0.2"/>
+    <text x="450" y="547" text-anchor="middle" font-size="9" fill="white">TaskManager async execution</text>
+  </g>
+  
+  <!-- Arrow Session to Sync -->
+  <path d="M450 380 L450 447" stroke="#009688" stroke-width="2" fill="none" stroke-dasharray="5,3" marker-end="url(#arrowTeal)"/>
+  <text x="465" y="412" font-size="8" fill="#009688">read R2RML</text>
+  
+  <!-- Flow 4: Data Quality (SHACL) — right column, aligned with External APIs -->
+  <g filter="url(#shadow)">
+    <rect x="650" y="280" width="200" height="80" rx="8" fill="url(#dqGrad)"/>
+    <text x="750" y="303" text-anchor="middle" font-size="13" font-weight="bold" fill="white">4. Data Quality</text>
+    <text x="750" y="322" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.95)">SHACL shapes → SQL / in-memory</text>
+    <text x="750" y="338" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Violations + pass rate</text>
+  </g>
+  
+  <!-- Flow 5: Reasoning — below Data Quality -->
+  <g filter="url(#shadow)">
+    <rect x="650" y="368" width="200" height="80" rx="8" fill="url(#reasonGrad)"/>
+    <text x="750" y="391" text-anchor="middle" font-size="13" font-weight="bold" fill="white">5. Reasoning</text>
+    <text x="750" y="410" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.95)">OWL 2 RL + SWRL inference</text>
+    <text x="750" y="426" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Inferred triples → store</text>
+  </g>
+  
+  <!-- Triple Store Backends -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="580" width="800" height="120" rx="8" fill="url(#tsGrad)"/>
+    <text x="450" y="605" text-anchor="middle" font-size="13" font-weight="bold" fill="white">TRIPLE STORE BACKENDS (Factory pattern)</text>
+    
+    <!-- Delta -->
+    <rect x="70" y="615" width="350" height="70" rx="4" fill="white" fill-opacity="0.15"/>
+    <text x="245" y="635" text-anchor="middle" font-size="11" font-weight="600" fill="white">Delta</text>
+    <text x="245" y="650" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">SQL Warehouse (Spark SQL)</text>
+    <text x="245" y="665" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">Databricks SQL Connector</text>
+    <text x="245" y="678" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">UC-governed Delta table</text>
+    
+    <!-- LadybugDB -->
+    <rect x="440" y="615" width="390" height="70" rx="4" fill="white" fill-opacity="0.15"/>
+    <text x="635" y="635" text-anchor="middle" font-size="11" font-weight="600" fill="white">LadybugDB</text>
+    <text x="635" y="650" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Embedded graph (Cypher)</text>
+    <text x="635" y="665" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">Local /tmp disk + tar.gz sync to UC Volume</text>
+    <text x="635" y="678" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">Graph schema from ontology (node + rel tables)</text>
+  </g>
+  
+  <!-- Arrow Sync to Backends -->
+  <path d="M450 562 L450 575" stroke="#27AE60" stroke-width="2" fill="none" marker-end="url(#arrowGreen)"/>
+  <text x="465" y="570" font-size="8" fill="#27AE60">write triples</text>
+  
+  <!-- Backends → Data Quality (validate): gap between Sync (x≤600) and APIs (x≥650) -->
+  <path d="M 622 580 L 622 360 L 650 360" stroke="#16A085" stroke-width="1.5" fill="none" stroke-dasharray="5,3"/>
+  <text x="612" y="490" font-size="8" fill="#16A085" text-anchor="end">validate</text>
+  
+  <!-- Backends → Reasoning (infer) -->
+  <path d="M 638 580 L 638 368 L 650 368" stroke="#C0392B" stroke-width="1.5" fill="none" stroke-dasharray="5,3"/>
+  <text x="628" y="504" font-size="8" fill="#C0392B" text-anchor="end">infer</text>
+  
+  <!-- Reasoning → Backends (materialize): jog past External APIs -->
+  <path d="M 750 448 L 865 448 L 865 580" stroke="#C0392B" stroke-width="2" fill="none" marker-end="url(#arrowReason)"/>
+  <text x="858" y="518" font-size="8" fill="#C0392B" text-anchor="end">materialize</text>
+  
+  <!-- Unity Catalog Storage -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="452" width="200" height="110" rx="8" fill="#E67E22"/>
+    <text x="150" y="482" text-anchor="middle" font-size="13" font-weight="bold" fill="white">Unity Catalog</text>
+    <text x="150" y="500" text-anchor="middle" font-size="11" fill="rgba(255,255,255,0.9)">Volumes</text>
+    
+    <rect x="65" y="512" width="80" height="28" rx="4" fill="white" fill-opacity="0.2"/>
+    <text x="105" y="530" text-anchor="middle" font-size="9" fill="white">*.json files</text>
+    
+    <rect x="155" y="512" width="80" height="28" rx="4" fill="white" fill-opacity="0.2"/>
+    <text x="195" y="530" text-anchor="middle" font-size="9" fill="white">*.ttl files</text>
+    
+    <text x="150" y="557" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">.global_config.json</text>
+  </g>
+  
+  <!-- Arrows to/from UC -->
+  <path d="M160 145 L50 145 L50 452" stroke="#9B59B6" stroke-width="1.5" fill="none" stroke-dasharray="5,3"/>
+  <text x="35" y="280" font-size="8" fill="#9B59B6" transform="rotate(-90, 35, 280)">Save OWL</text>
+  
+  <path d="M250 502 L300 502" stroke="#27AE60" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arrowGreen)"/>
+  <text x="275" y="494" font-size="8" fill="#27AE60">Load</text>
+  
+  <!-- API Flow (right side) -->
+  <g filter="url(#shadow)">
+    <rect x="650" y="452" width="200" height="110" rx="8" fill="#34495E"/>
+    <text x="750" y="482" text-anchor="middle" font-size="13" font-weight="bold" fill="white">External APIs</text>
+    
+    <rect x="665" y="497" width="170" height="22" rx="4" fill="white" fill-opacity="0.15"/>
+    <text x="750" y="512" text-anchor="middle" font-size="9" fill="white">REST /api/v1/digitaltwin</text>
+    
+    <rect x="665" y="524" width="170" height="22" rx="4" fill="white" fill-opacity="0.15"/>
+    <text x="750" y="539" text-anchor="middle" font-size="9" fill="white">GraphQL /graphql/{project}</text>
+    
+    <rect x="665" y="550" width="170" height="8" rx="2" fill="white" fill-opacity="0.1"/>
+  </g>
+  
+  <!-- Arrow APIs to Backends -->
+  <path d="M750 562 L750 575" stroke="#7f8c8d" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arrowGray)"/>
+  <text x="765" y="570" font-size="8" fill="#7f8c8d">query</text>
+  
+  <!-- Legend -->
+  <rect x="50" y="715" width="800" height="95" rx="6" fill="white" stroke="#dee2e6" stroke-width="1" filter="url(#shadow)"/>
+  <text x="450" y="735" text-anchor="middle" font-size="11" font-weight="600" fill="#2c3e50">Legend</text>
+  
+  <line x1="80" y1="750" x2="115" y2="750" stroke="#9B59B6" stroke-width="2"/>
+  <text x="125" y="753" font-size="9" fill="#495057">Ontology flow</text>
+  
+  <line x1="230" y1="750" x2="265" y2="750" stroke="#3498DB" stroke-width="2"/>
+  <text x="275" y="753" font-size="9" fill="#495057">Mapping flow</text>
+  
+  <line x1="380" y1="750" x2="415" y2="750" stroke="#27AE60" stroke-width="2"/>
+  <text x="425" y="753" font-size="9" fill="#495057">Sync / Query flow</text>
+  
+  <line x1="545" y1="750" x2="580" y2="750" stroke="#7f8c8d" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="590" y="753" font-size="9" fill="#495057">API / read flow</text>
+  
+  <line x1="80" y1="772" x2="115" y2="772" stroke="#1ABC9C" stroke-width="2"/>
+  <text x="125" y="775" font-size="9" fill="#495057">Quality flow</text>
+  
+  <line x1="230" y1="772" x2="265" y2="772" stroke="#E74C3C" stroke-width="2"/>
+  <text x="275" y="775" font-size="9" fill="#495057">Reasoning flow</text>
+</svg>

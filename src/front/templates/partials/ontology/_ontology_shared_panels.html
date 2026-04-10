@@ -1,0 +1,52 @@
+<!-- Shared Entity and Relationship Edit Panels -->
+<!-- Split panel approach - divides canvas into main content + detail panel -->
+<!-- CSS: /static/ontology/css/ontology-shared-panels.css -->
+<!-- JS: /static/ontology/js/ontology-shared-panels.js -->
+
+<!-- Metadata Attribute Picker Modal -->
+<div class="modal fade" id="metadataAttributePickerModal" tabindex="-1" aria-labelledby="metadataAttributePickerLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title" id="metadataAttributePickerLabel">
+                    <i class="bi bi-database me-1"></i>Add Attributes from Metadata
+                </h6>
+                <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-2">
+                <!-- Step 1: Table Selection -->
+                <div id="metaAttrStep1">
+                    <label class="form-label small fw-semibold mb-1">Select a table</label>
+                    <div id="metaAttrTableList" class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
+                        <div class="text-muted small p-2">Loading...</div>
+                    </div>
+                </div>
+                <!-- Step 2: Column Selection -->
+                <div id="metaAttrStep2" style="display: none;">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="metaAttrBackToTables()">
+                            <i class="bi bi-arrow-left"></i>
+                        </button>
+                        <span class="small fw-semibold" id="metaAttrSelectedTable"></span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label small fw-semibold mb-0">Select columns to add as attributes</label>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input" type="checkbox" id="metaAttrSelectAll" onchange="metaAttrToggleAll(this.checked)">
+                            <label class="form-check-label small" for="metaAttrSelectAll">All</label>
+                        </div>
+                    </div>
+                    <div id="metaAttrColumnList" class="list-group list-group-flush" style="max-height: 280px; overflow-y: auto;">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-1" id="metaAttrFooter" style="display: none;">
+                <span class="small text-muted me-auto" id="metaAttrSelectionCount">0 selected</span>
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="metaAttrApplySelection()">
+                    <i class="bi bi-plus-circle me-1"></i>Add Selected
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

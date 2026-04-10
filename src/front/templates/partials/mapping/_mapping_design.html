@@ -1,0 +1,110 @@
+<!-- Visual Mapping Designer - D3.js Force-Directed Graph with Mapping Panel -->
+<!-- CSS: /static/mapping/css/mapping-design.css -->
+<!-- JS: /static/mapping/js/mapping-design.js -->
+<div class="content-section h-100 d-flex flex-column">
+    <div class="section-header flex-shrink-0 d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-pencil-square me-2"></i>Visual Mapping Designer</h4>
+            <p class="text-muted mb-0 small">Click on an entity or relationship to configure its data mapping.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <!-- Legend -->
+            <div class="mapping-design-legend me-2">
+                <div class="legend-item">
+                    <div class="legend-color legend-mapped"></div>
+                    <span>Mapped</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color legend-unmapped"></div>
+                    <span>Not Mapped</span>
+                </div>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" id="mappingMapZoomIn" title="Zoom In">
+                <i class="bi bi-zoom-in"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="mappingMapZoomOut" title="Zoom Out">
+                <i class="bi bi-zoom-out"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="mappingMapResetView" title="Reset View">
+                <i class="bi bi-arrows-fullscreen"></i>
+            </button>
+            <div class="vr mx-1"></div>
+            <button class="btn btn-sm btn-outline-secondary" id="mappingMapResetLayout" title="Reset Layout">
+                <i class="bi bi-shuffle"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="mappingMapRefresh" title="Refresh Designer" onclick="refreshMappingDesign()">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Canvas Container with Sliding Right Panel -->
+    <div class="mapping-designer-container" id="mappingDesignerContainer">
+        <!-- D3.js Designer Canvas -->
+        <div class="card border-0 shadow-sm" id="mappingMapCard">
+            <div class="card-body p-0" style="flex: 1; min-height: 0; position: relative;">
+                <div id="mapping-map-container" style="width: 100%; height: 100%; background: #fafafa;">
+                    <!-- Loading Overlay -->
+                    <div id="mappingDesignerLoading" class="designer-loading-overlay">
+                        <div class="ob-loading-spinner">
+                            <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
+                                <g class="ob-ring">
+                                    <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
+                                        <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
+                                        <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
+                                        <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
+                                        <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
+                                    </g>
+                                    <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
+                                    <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
+                                    <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
+                                    <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
+                                </g>
+                                <g transform="translate(40,40)">
+                                    <g class="ob-center">
+                                        <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
+                                        <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
+                                        <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
+                                    </g>
+                                </g>
+                            </svg>
+                            <span class="ob-spinner-label">Loading mapping design...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Sliding Panel for Mapping -->
+        <div class="mapping-right-panel" id="mappingRightPanel">
+            <div class="panel-header">
+                <h6 id="panelTitle"><i class="bi bi-box"></i> <span id="panelItemName">Select Item</span></h6>
+            </div>
+            <div class="panel-body" id="panelBody">
+                <!-- Panel content will be loaded dynamically -->
+            </div>
+            <div class="panel-footer" id="panelFooter">
+                <div class="d-flex flex-column justify-content-between h-100">
+                    <div class="d-flex flex-column gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm panel-action-btn" id="resetPanelBtn" title="Remove mapping">
+                            <i class="bi bi-arrow-counterclockwise"></i> Unmap
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm panel-action-btn" id="autoMapPanelBtn" title="Generate SQL, execute, and auto-map columns">
+                            <span class="spinner-border spinner-border-sm d-none me-1" role="status"></span>
+                            <i class="bi bi-lightning-charge"></i> Auto-Map
+                        </button>
+                    </div>
+                    <div class="d-flex flex-column gap-2">
+                        <button type="button" class="btn btn-secondary btn-sm panel-action-btn" id="cancelPanelBtn">Cancel</button>
+                        <button type="button" class="btn btn-dark btn-sm panel-action-btn" id="savePanelBtn" disabled>
+                            <i class="bi bi-check-circle"></i> Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- D3.js Library -->
+<script src="https://d3js.org/d3.v7.min.js"></script>

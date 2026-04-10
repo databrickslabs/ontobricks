@@ -1,0 +1,16 @@
+ticket_type_id,ticket_name,category,unit_price_eur,valid_zones,is_contactless,max_transfers
+TT01,Ticket t+,single_ride,2.15,1-2,False,0
+TT02,Carnet 10 t+,multi_ride,16.9,1-2,True,-1
+TT03,Navigo Mois,monthly_pass,86.4,all,True,-1
+TT04,Navigo Annuel,annual_pass,950.4,all,True,-1
+TT05,Navigo Semaine,weekly_pass,30.75,all,True,-1
+TT06,Navigo Jour,day_pass,8.65,all,True,-1
+TT07,Ticket Jeunes WE,youth_weekend,4.6,all,True,-1
+TT08,Paris Visite 1j,tourist_1day,13.95,1-3,True,-1
+TT09,Paris Visite 2j,tourist_2day,22.65,1-3,True,-1
+TT10,Paris Visite 5j,tourist_5day,43.3,1-5,True,-1
+TT11,Navigo Easy,rechargeable,2.0,variable,True,-1
+TT12,Imagine R,student_annual,380.0,all,True,-1
+TT13,Améthyste,senior_reduced,24.0,all,True,-1
+TT14,Solidarité Transport,social_reduced,21.25,all,True,-1
+TT15,Ticket Aéroport,airport_single,11.45,1-5,True,-1

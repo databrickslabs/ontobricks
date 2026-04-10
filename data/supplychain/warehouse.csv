@@ -1,0 +1,11 @@
+warehouse_id,warehouse_name,city,country,capacity_sqm,warehouse_type
+WH001,Chicago Distribution Center 1,Chicago,USA,24799,fulfillment_center
+WH002,Felixstowe Distribution Center 2,Felixstowe,UK,36667,distribution_center
+WH003,Mumbai Distribution Center 3,Mumbai,India,29993,regional_dc
+WH004,Hong Kong Distribution Center 4,Hong Kong,China,42670,cold_storage
+WH005,Busan Distribution Center 5,Busan,South Korea,6437,transit_hub
+WH006,Antwerp Distribution Center 6,Antwerp,Belgium,5530,regional_dc
+WH007,Moscow Distribution Center 7,Moscow,Russia,8214,regional_dc
+WH008,Barcelona Distribution Center 8,Barcelona,Spain,23756,fulfillment_center
+WH009,Toronto Distribution Center 9,Toronto,Canada,28089,fulfillment_center
+WH010,São Paulo Distribution Center 10,São Paulo,Brazil,17460,regional_dc

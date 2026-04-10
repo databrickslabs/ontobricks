@@ -1,0 +1,21 @@
+trial_id,trial_name,phase,status,start_date,end_date,sponsor,therapeutic_area,target_enrollment
+TRL0001,Neurology Study 1,Phase 1,recruiting,2020-02-05,2023-01-20,MedResearch Corp,Neurology,200
+TRL0002,Infectious Disease Study 2,Phase 3,suspended,2021-01-28,2023-01-18,PharmaCorp Research,Infectious Disease,500
+TRL0003,Metabolic Study 3,Phase 3,recruiting,2022-07-29,2024-01-20,Clinical Partners LLC,Oncology,100
+TRL0004,Respiratory Study 4,Phase 4,recruiting,2022-04-10,2025-03-25,Clinical Partners LLC,Oncology,200
+TRL0005,Respiratory Study 5,Phase 3,terminated,2020-06-18,2023-06-03,Life Sciences Institute,Cardiovascular,1000
+TRL0006,Metabolic Study 6,Phase 4,completed,2020-03-28,2021-09-19,PharmaCorp Research,Cardiovascular,300
+TRL0007,Neurology Study 7,Phase 3,recruiting,2023-01-17,2024-01-12,BioMed Solutions,Hematology,200
+TRL0008,Cardiovascular Study 8,Phase 3,active,2024-03-20,2027-03-05,MedResearch Corp,Metabolic,1000
+TRL0009,Psychiatry Study 9,Phase 3,suspended,2024-09-05,2027-08-21,Life Sciences Institute,Neurology,100
+TRL0010,Oncology Study 10,Phase 1,suspended,2022-10-22,2024-10-11,BioMed Solutions,Cardiovascular,300
+TRL0011,Infectious Disease Study 11,Phase 1,completed,2023-05-24,2026-05-08,Life Sciences Institute,Rheumatology,500
+TRL0012,Psychiatry Study 12,Phase 4,suspended,2021-04-12,2023-04-02,BioMed Solutions,Hematology,500
+TRL0013,Metabolic Study 13,Phase 1,recruiting,2020-06-24,2022-06-14,Nova Therapeutics,Neurology,500
+TRL0014,Respiratory Study 14,Phase 3,completed,2023-12-28,2025-06-20,PharmaCorp Research,Cardiovascular,100
+TRL0015,Infectious Disease Study 15,Phase 3,recruiting,2021-09-23,2024-09-07,BioMed Solutions,Cardiovascular,200
+TRL0016,Psychiatry Study 16,Phase 4,recruiting,2022-06-01,2025-05-16,PharmaCorp Research,Cardiovascular,300
+TRL0017,Hematology Study 17,Phase 3,suspended,2023-02-09,2024-02-04,PharmaCorp Research,Immunology,500
+TRL0018,Psychiatry Study 18,Phase 2,terminated,2022-03-05,2023-02-28,MedResearch Corp,Neurology,500
+TRL0019,Immunology Study 19,Phase 3,completed,2020-12-13,2022-06-06,Global Pharma Inc,Neurology,100
+TRL0020,Immunology Study 20,Phase 4,completed,2020-12-08,2023-11-23,Global Pharma Inc,Cardiovascular,300

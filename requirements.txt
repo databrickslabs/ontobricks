@@ -1,0 +1,4 @@
+# OntoBricks — Databricks Apps deployment
+# uv handles all project dependencies from pyproject.toml
+# See: https://docs.databricks.com/aws/en/generative-ai/mcp/custom-mcp
+uv

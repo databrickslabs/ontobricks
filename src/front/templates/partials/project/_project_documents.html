@@ -1,0 +1,75 @@
+<!-- Project Documents Section -->
+<!-- JS: /static/project/js/project-documents.js -->
+
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-file-earmark-text me-2"></i>Document Management</h4>
+        <p class="text-muted mb-0 small">Upload and manage project documents stored in the Unity Catalog volume</p>
+    </div>
+</div>
+
+<!-- Volume Location Banner -->
+<div class="alert alert-light border mb-4" id="docLocationBanner">
+    <div class="d-flex align-items-center">
+        <i class="bi bi-database me-2 text-primary"></i>
+        <span class="small">
+            <strong>Volume:</strong>
+            <span id="docVolumePath" class="text-muted">Not configured</span>
+        </span>
+    </div>
+</div>
+
+<!-- Upload Card -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-cloud-upload"></i> Upload Documents</span>
+    </div>
+    <div class="card-body">
+        <p class="text-muted mb-3">
+            Upload files to the project volume's documents directory.
+            The project must be saved to Unity Catalog first.
+        </p>
+
+        <!-- Drop Zone -->
+        <div id="docDropZone" class="doc-drop-zone">
+            <i class="bi bi-cloud-arrow-up fs-1 text-muted"></i>
+            <p class="mb-1 fw-semibold">Drag &amp; drop files here</p>
+            <p class="text-muted small mb-2">or</p>
+            <label class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-folder2-open"></i> Browse Files
+                <input type="file" id="docFileInput" multiple class="d-none">
+            </label>
+        </div>
+
+        <!-- Upload queue -->
+        <div id="docUploadQueue" class="mt-3 d-none">
+            <h6 class="mb-2"><i class="bi bi-list-check"></i> Upload Queue</h6>
+            <div id="docQueueList"></div>
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-primary btn-sm" id="docUploadBtn" disabled>
+                    <i class="bi bi-cloud-upload"></i> Upload All
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" id="docClearQueueBtn">
+                    <i class="bi bi-x-lg"></i> Clear
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Uploaded Files Card -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-file-earmark-text"></i> Uploaded Documents</span>
+        <button class="btn btn-sm btn-outline-secondary" id="docRefreshBtn" title="Refresh file list">
+            <i class="bi bi-arrow-clockwise"></i>
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="docFileList">
+            <div class="text-muted small fst-italic">
+                <i class="bi bi-info-circle"></i> Save the project to Unity Catalog to enable document management.
+            </div>
+        </div>
+    </div>
+</div>

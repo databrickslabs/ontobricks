@@ -1,0 +1,1501 @@
+event_id,shipment_id,event_datetime,event_type,location,description
+EVT000001,SHP000409,2025-12-21 06:15:00,departure,"Los Angeles, USA",Exception at Los Angeles
+EVT000002,SHP000196,2024-02-03 23:42:00,delay,"Sydney, Australia",Delivery at Sydney
+EVT000003,SHP000373,2025-04-16 11:41:00,arrival,"Chicago, USA",Departure at Chicago
+EVT000004,SHP000403,2025-08-21 03:34:00,exception,"Los Angeles, USA",Customs Clearance at Los Angeles
+EVT000005,SHP000308,2025-04-24 01:12:00,departure,"Toronto, Canada",Arrival at Toronto
+EVT000006,SHP000565,2025-02-26 16:27:00,departure,"Hamburg, Germany",Customs Clearance at Hamburg
+EVT000007,SHP000025,2025-03-01 18:42:00,departure,"Tokyo, Japan",Arrival at Tokyo
+EVT000008,SHP000577,2025-04-03 18:50:00,delay,"Los Angeles, USA",Departure at Los Angeles
+EVT000009,SHP000155,2024-10-10 14:15:00,delay,"Valencia, Spain",Exception at Valencia
+EVT000010,SHP000134,2024-10-09 19:59:00,delay,"Barcelona, Spain",Delivery at Barcelona
+EVT000011,SHP000544,2023-03-14 21:06:00,delay,"São Paulo, Brazil",Pickup at São Paulo
+EVT000012,SHP000088,2023-01-18 01:21:00,delay,"Shanghai, China",Pickup at Shanghai
+EVT000013,SHP000321,2024-02-20 23:09:00,departure,"Hong Kong, China",Arrival at Hong Kong
+EVT000014,SHP000068,2024-10-08 18:57:00,delay,"Hong Kong, China",Customs Clearance at Hong Kong
+EVT000015,SHP000487,2023-12-25 09:19:00,pickup,"Houston, USA",Delay at Houston
+EVT000016,SHP000576,2023-11-08 05:26:00,pickup,"Hamburg, Germany",Delivery at Hamburg
+EVT000017,SHP000420,2025-08-19 22:17:00,exception,"Hamburg, Germany",Delay at Hamburg
+EVT000018,SHP000256,2023-10-28 14:06:00,delay,"Dubai, UAE",Pickup at Dubai
+EVT000019,SHP000139,2025-08-26 12:30:00,departure,"Felixstowe, UK",Delay at Felixstowe
+EVT000020,SHP000021,2025-01-12 14:37:00,delivery,"Sydney, Australia",Departure at Sydney
+EVT000021,SHP000459,2025-10-04 21:36:00,arrival,"Shanghai, China",Arrival at Shanghai
+EVT000022,SHP000088,2023-05-22 05:08:00,delivery,"Hong Kong, China",Arrival at Hong Kong
+EVT000023,SHP000404,2023-08-16 21:12:00,exception,"Los Angeles, USA",Arrival at Los Angeles
+EVT000024,SHP000300,2024-12-27 19:51:00,customs_clearance,"Singapore, Singapore",Pickup at Singapore
+EVT000025,SHP000428,2025-01-17 08:12:00,delivery,"Hamburg, Germany",Arrival at Hamburg
+EVT000026,SHP000533,2025-09-29 10:57:00,departure,"Shanghai, China",Pickup at Shanghai
+EVT000027,SHP000245,2024-06-22 14:27:00,arrival,"Busan, South Korea",Pickup at Busan
+EVT000028,SHP000280,2025-07-27 21:05:00,arrival,"Moscow, Russia",Delivery at Moscow
+EVT000029,SHP000033,2023-01-22 23:36:00,pickup,"Los Angeles, USA",Arrival at Los Angeles
+EVT000030,SHP000390,2025-08-20 12:24:00,pickup,"Tokyo, Japan",Exception at Tokyo
+EVT000031,SHP000277,2024-11-18 11:51:00,delivery,"Felixstowe, UK",Delay at Felixstowe
+EVT000032,SHP000435,2024-12-01 04:22:00,exception,"Valencia, Spain",Arrival at Valencia
+EVT000033,SHP000566,2025-09-28 09:17:00,pickup,"Tokyo, Japan",Customs Clearance at Tokyo
+EVT000034,SHP000087,2024-10-14 16:57:00,pickup,"Moscow, Russia",Pickup at Moscow
+EVT000035,SHP000132,2024-05-12 02:11:00,arrival,"Dubai, UAE",Pickup at Dubai
+EVT000036,SHP000158,2024-04-30 02:55:00,pickup,"Sydney, Australia",Pickup at Sydney
+EVT000037,SHP000014,2023-05-25 04:37:00,exception,"Houston, USA",Delay at Houston
+EVT000038,SHP000472,2024-11-08 21:06:00,delivery,"São Paulo, Brazil",Pickup at São Paulo
+EVT000039,SHP000058,2024-02-13 23:59:00,pickup,"Los Angeles, USA",Departure at Los Angeles
+EVT000040,SHP000094,2023-01-08 13:50:00,exception,"Singapore, Singapore",Departure at Singapore
+EVT000041,SHP000216,2023-06-12 12:20:00,exception,"Rotterdam, Netherlands",Delivery at Rotterdam
+EVT000042,SHP000198,2024-02-09 22:31:00,delivery,"Barcelona, Spain",Exception at Barcelona
+EVT000043,SHP000191,2024-08-12 23:43:00,delivery,"Barcelona, Spain",Delay at Barcelona
+EVT000044,SHP000063,2024-01-14 16:00:00,pickup,"Chicago, USA",Departure at Chicago
+EVT000045,SHP000203,2023-10-22 17:36:00,departure,"Antwerp, Belgium",Exception at Antwerp
+EVT000046,SHP000127,2024-01-21 05:54:00,arrival,"Singapore, Singapore",Delay at Singapore
+EVT000047,SHP000234,2025-03-19 20:53:00,delivery,"Hamburg, Germany",Arrival at Hamburg
+EVT000048,SHP000423,2024-08-07 06:27:00,arrival,"Osaka, Japan",Delay at Osaka
+EVT000049,SHP000354,2025-12-22 00:41:00,exception,"Mumbai, India",Arrival at Mumbai
+EVT000050,SHP000289,2023-05-13 01:04:00,customs_clearance,"Hamburg, Germany",Arrival at Hamburg
+EVT000051,SHP000062,2025-05-30 02:43:00,delay,"Toronto, Canada",Exception at Toronto
+EVT000052,SHP000457,2023-06-30 10:37:00,delay,"Shanghai, China",Arrival at Shanghai
+EVT000053,SHP000068,2024-06-21 23:53:00,arrival,"Sydney, Australia",Customs Clearance at Sydney
+EVT000054,SHP000367,2025-01-28 15:19:00,delay,"Barcelona, Spain",Customs Clearance at Barcelona
+EVT000055,SHP000321,2024-01-25 07:37:00,departure,"Mumbai, India",Pickup at Mumbai
+EVT000056,SHP000362,2025-08-10 14:20:00,delay,"Valencia, Spain",Delay at Valencia
+EVT000057,SHP000413,2025-08-09 14:09:00,departure,"Chicago, USA",Exception at Chicago
+EVT000058,SHP000395,2023-02-20 04:50:00,arrival,"Valencia, Spain",Customs Clearance at Valencia
+EVT000059,SHP000153,2025-01-18 00:27:00,delay,"Felixstowe, UK",Delay at Felixstowe
+EVT000060,SHP000177,2024-01-12 06:06:00,pickup,"Los Angeles, USA",Customs Clearance at Los Angeles
+EVT000061,SHP000484,2024-07-08 10:12:00,pickup,"Los Angeles, USA",Customs Clearance at Los Angeles
+EVT000062,SHP000402,2024-09-13 17:17:00,departure,"Hamburg, Germany",Departure at Hamburg
+EVT000063,SHP000499,2025-10-19 13:27:00,delay,"Toronto, Canada",Departure at Toronto
+EVT000064,SHP000500,2023-05-03 11:06:00,pickup,"Moscow, Russia",Arrival at Moscow
+EVT000065,SHP000489,2024-08-15 04:15:00,delivery,"Toronto, Canada",Customs Clearance at Toronto
+EVT000066,SHP000222,2025-10-01 00:19:00,exception,"Valencia, Spain",Departure at Valencia
+EVT000067,SHP000347,2024-09-28 21:39:00,customs_clearance,"São Paulo, Brazil",Delivery at São Paulo
+EVT000068,SHP000125,2023-09-23 16:18:00,arrival,"Toronto, Canada",Exception at Toronto
+EVT000069,SHP000383,2025-01-26 18:30:00,pickup,"Los Angeles, USA",Pickup at Los Angeles
+EVT000070,SHP000458,2025-05-04 07:13:00,arrival,"Hong Kong, China",Exception at Hong Kong
+EVT000071,SHP000240,2025-09-02 08:35:00,arrival,"Houston, USA",Delivery at Houston
+EVT000072,SHP000340,2023-09-18 10:50:00,exception,"Tokyo, Japan",Delivery at Tokyo
+EVT000073,SHP000235,2024-04-30 07:31:00,delivery,"Sydney, Australia",Customs Clearance at Sydney
+EVT000074,SHP000020,2025-11-12 03:24:00,delay,"Houston, USA",Departure at Houston
+EVT000075,SHP000330,2025-12-19 15:29:00,delivery,"Singapore, Singapore",Exception at Singapore
+EVT000076,SHP000273,2025-07-09 12:49:00,departure,"Singapore, Singapore",Delay at Singapore
+EVT000077,SHP000283,2025-01-15 01:30:00,departure,"Los Angeles, USA",Departure at Los Angeles
+EVT000078,SHP000004,2024-12-30 19:30:00,delivery,"Houston, USA",Departure at Houston
+EVT000079,SHP000280,2025-09-19 10:38:00,delivery,"Houston, USA",Departure at Houston
+EVT000080,SHP000193,2023-09-04 09:46:00,pickup,"Toronto, Canada",Exception at Toronto
+EVT000081,SHP000200,2025-10-29 09:15:00,delay,"Osaka, Japan",Customs Clearance at Osaka
+EVT000082,SHP000434,2024-09-02 08:13:00,departure,"Shanghai, China",Arrival at Shanghai
+EVT000083,SHP000026,2025-05-13 02:23:00,customs_clearance,"Shanghai, China",Delay at Shanghai
+EVT000084,SHP000152,2025-02-21 17:10:00,delivery,"Chicago, USA",Customs Clearance at Chicago
+EVT000085,SHP000322,2024-07-14 14:17:00,departure,"Dubai, UAE",Exception at Dubai
+EVT000086,SHP000465,2023-11-30 18:08:00,arrival,"Busan, South Korea",Pickup at Busan
+EVT000087,SHP000127,2024-10-30 17:30:00,arrival,"Rotterdam, Netherlands",Departure at Rotterdam
+EVT000088,SHP000323,2023-02-22 20:27:00,exception,"Felixstowe, UK",Arrival at Felixstowe
+EVT000089,SHP000406,2024-10-30 19:53:00,delay,"Hamburg, Germany",Pickup at Hamburg
+EVT000090,SHP000290,2023-03-22 16:03:00,exception,"Houston, USA",Exception at Houston
+EVT000091,SHP000136,2023-05-11 02:08:00,departure,"Barcelona, Spain",Pickup at Barcelona
+EVT000092,SHP000536,2024-04-26 02:48:00,arrival,"Hamburg, Germany",Arrival at Hamburg
+EVT000093,SHP000347,2025-04-25 10:48:00,pickup,"Singapore, Singapore",Customs Clearance at Singapore
+EVT000094,SHP000411,2023-05-08 16:26:00,exception,"Mumbai, India",Delay at Mumbai
+EVT000095,SHP000406,2023-07-03 06:28:00,departure,"Los Angeles, USA",Pickup at Los Angeles
+EVT000096,SHP000268,2024-05-05 01:41:00,exception,"Mumbai, India",Delivery at Mumbai
+EVT000097,SHP000025,2024-04-06 15:02:00,pickup,"Rotterdam, Netherlands",Departure at Rotterdam
+EVT000098,SHP000239,2023-10-09 16:20:00,arrival,"Los Angeles, USA",Customs Clearance at Los Angeles
+EVT000099,SHP000406,2025-11-10 09:31:00,pickup,"Shanghai, China",Exception at Shanghai
+EVT000100,SHP000425,2023-05-20 01:12:00,delivery,"Mumbai, India",Pickup at Mumbai
+EVT000101,SHP000214,2025-10-03 00:22:00,exception,"Mumbai, India",Pickup at Mumbai
+EVT000102,SHP000596,2025-11-08 05:25:00,departure,"Hong Kong, China",Departure at Hong Kong
+EVT000103,SHP000550,2024-07-30 08:35:00,arrival,"Shanghai, China",Delivery at Shanghai
+EVT000104,SHP000398,2024-02-17 19:16:00,arrival,"Hamburg, Germany",Departure at Hamburg
+EVT000105,SHP000335,2025-03-15 03:41:00,arrival,"Antwerp, Belgium",Customs Clearance at Antwerp
+EVT000106,SHP000030,2025-11-14 12:13:00,departure,"Chicago, USA",Pickup at Chicago
+EVT000107,SHP000043,2023-08-07 23:59:00,delay,"Felixstowe, UK",Departure at Felixstowe
+EVT000108,SHP000205,2024-09-03 22:43:00,departure,"Sydney, Australia",Delivery at Sydney
+EVT000109,SHP000311,2025-08-07 01:41:00,exception,"Hong Kong, China",Departure at Hong Kong
+EVT000110,SHP000581,2024-03-20 16:01:00,arrival,"Antwerp, Belgium",Pickup at Antwerp
+EVT000111,SHP000222,2024-11-14 06:31:00,exception,"Hamburg, Germany",Customs Clearance at Hamburg
+EVT000112,SHP000336,2025-03-11 19:48:00,departure,"Chicago, USA",Customs Clearance at Chicago
+EVT000113,SHP000492,2024-08-07 21:54:00,departure,"Mumbai, India",Pickup at Mumbai
+EVT000114,SHP000110,2023-03-05 19:03:00,delay,"Shanghai, China",Pickup at Shanghai
+EVT000115,SHP000281,2024-09-13 14:24:00,exception,"Shanghai, China",Delivery at Shanghai
+EVT000116,SHP000164,2023-04-20 11:13:00,exception,"Dubai, UAE",Departure at Dubai
+EVT000117,SHP000434,2023-06-05 08:26:00,exception,"Hong Kong, China",Pickup at Hong Kong
+EVT000118,SHP000305,2023-09-03 09:09:00,arrival,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT000119,SHP000210,2023-03-04 15:11:00,pickup,"Dubai, UAE",Pickup at Dubai
+EVT000120,SHP000089,2025-07-21 18:44:00,delivery,"Mumbai, India",Arrival at Mumbai
+EVT000121,SHP000277,2025-09-09 02:46:00,exception,"Shanghai, China",Departure at Shanghai
+EVT000122,SHP000221,2025-03-25 21:24:00,pickup,"Singapore, Singapore",Pickup at Singapore
+EVT000123,SHP000510,2025-08-11 13:11:00,pickup,"Valencia, Spain",Delivery at Valencia
+EVT000124,SHP000046,2023-05-10 08:45:00,arrival,"Moscow, Russia",Exception at Moscow
+EVT000125,SHP000491,2024-07-01 00:42:00,arrival,"Tokyo, Japan",Delay at Tokyo
+EVT000126,SHP000193,2025-07-06 00:41:00,pickup,"Mumbai, India",Delay at Mumbai
+EVT000127,SHP000577,2025-09-27 07:45:00,delay,"Valencia, Spain",Exception at Valencia
+EVT000128,SHP000049,2025-01-15 02:38:00,arrival,"Busan, South Korea",Customs Clearance at Busan
+EVT000129,SHP000484,2023-12-02 11:42:00,arrival,"Mumbai, India",Exception at Mumbai
+EVT000130,SHP000565,2023-10-26 10:47:00,exception,"Mumbai, India",Arrival at Mumbai
+EVT000131,SHP000417,2025-04-02 11:29:00,arrival,"Hamburg, Germany",Delay at Hamburg
+EVT000132,SHP000300,2025-10-09 21:34:00,customs_clearance,"Los Angeles, USA",Arrival at Los Angeles
+EVT000133,SHP000443,2024-06-02 04:21:00,arrival,"Singapore, Singapore",Exception at Singapore
+EVT000134,SHP000478,2023-12-03 01:21:00,delivery,"Chicago, USA",Delay at Chicago
+EVT000135,SHP000149,2024-11-30 17:40:00,delay,"Toronto, Canada",Exception at Toronto
+EVT000136,SHP000164,2023-10-13 06:52:00,exception,"Sydney, Australia",Customs Clearance at Sydney
+EVT000137,SHP000084,2023-08-18 16:34:00,pickup,"Valencia, Spain",Delivery at Valencia
+EVT000138,SHP000107,2023-01-09 08:59:00,delivery,"Sydney, Australia",Exception at Sydney
+EVT000139,SHP000169,2024-11-16 15:07:00,arrival,"Mumbai, India",Exception at Mumbai
+EVT000140,SHP000383,2025-03-19 16:42:00,delay,"Mumbai, India",Customs Clearance at Mumbai
+EVT000141,SHP000225,2024-12-20 23:26:00,exception,"Sydney, Australia",Delay at Sydney
+EVT000142,SHP000109,2025-07-18 04:53:00,exception,"Mumbai, India",Delay at Mumbai
+EVT000143,SHP000193,2025-10-30 03:31:00,departure,"Shanghai, China",Pickup at Shanghai
+EVT000144,SHP000314,2025-04-11 09:52:00,departure,"Mumbai, India",Delivery at Mumbai
+EVT000145,SHP000099,2023-02-18 00:01:00,arrival,"Tokyo, Japan",Pickup at Tokyo
+EVT000146,SHP000213,2023-05-27 02:16:00,customs_clearance,"Hamburg, Germany",Pickup at Hamburg
+EVT000147,SHP000433,2025-04-05 00:44:00,delivery,"Hong Kong, China",Arrival at Hong Kong
+EVT000148,SHP000352,2025-02-06 06:19:00,customs_clearance,"Felixstowe, UK",Delivery at Felixstowe
+EVT000149,SHP000490,2023-03-27 21:31:00,pickup,"São Paulo, Brazil",Customs Clearance at São Paulo
+EVT000150,SHP000328,2023-03-05 08:44:00,customs_clearance,"Hong Kong, China",Delay at Hong Kong
+EVT000151,SHP000393,2023-07-20 13:44:00,delivery,"Mumbai, India",Delivery at Mumbai
+EVT000152,SHP000360,2025-10-01 00:24:00,pickup,"Moscow, Russia",Customs Clearance at Moscow
+EVT000153,SHP000089,2024-05-31 17:05:00,pickup,"Barcelona, Spain",Departure at Barcelona
+EVT000154,SHP000097,2025-02-16 23:21:00,departure,"Chicago, USA",Delivery at Chicago
+EVT000155,SHP000481,2024-10-23 09:35:00,delay,"Rotterdam, Netherlands",Exception at Rotterdam
+EVT000156,SHP000463,2025-04-20 03:00:00,exception,"Tokyo, Japan",Departure at Tokyo
+EVT000157,SHP000029,2025-06-29 02:32:00,departure,"Osaka, Japan",Customs Clearance at Osaka
+EVT000158,SHP000282,2025-03-05 17:41:00,exception,"Sydney, Australia",Pickup at Sydney
+EVT000159,SHP000260,2023-08-29 22:33:00,customs_clearance,"Sydney, Australia",Departure at Sydney
+EVT000160,SHP000463,2023-11-30 01:18:00,delivery,"Busan, South Korea",Arrival at Busan
+EVT000161,SHP000437,2023-11-14 02:12:00,customs_clearance,"Dubai, UAE",Customs Clearance at Dubai
+EVT000162,SHP000256,2025-03-04 23:51:00,exception,"Shanghai, China",Departure at Shanghai
+EVT000163,SHP000386,2024-09-11 05:14:00,arrival,"Rotterdam, Netherlands",Delay at Rotterdam
+EVT000164,SHP000598,2024-04-13 22:28:00,delay,"Barcelona, Spain",Exception at Barcelona
+EVT000165,SHP000119,2023-12-03 04:08:00,exception,"Dubai, UAE",Delivery at Dubai
+EVT000166,SHP000577,2025-06-16 15:23:00,delay,"Shanghai, China",Exception at Shanghai
+EVT000167,SHP000441,2025-12-11 22:23:00,exception,"Shanghai, China",Delivery at Shanghai
+EVT000168,SHP000109,2025-08-28 01:17:00,customs_clearance,"Valencia, Spain",Delivery at Valencia
+EVT000169,SHP000433,2023-05-14 02:16:00,exception,"Singapore, Singapore",Arrival at Singapore
+EVT000170,SHP000487,2025-11-04 07:58:00,departure,"Felixstowe, UK",Pickup at Felixstowe
+EVT000171,SHP000025,2023-06-26 18:11:00,exception,"Hamburg, Germany",Departure at Hamburg
+EVT000172,SHP000457,2025-02-03 17:16:00,customs_clearance,"Moscow, Russia",Pickup at Moscow
+EVT000173,SHP000190,2025-04-26 03:35:00,pickup,"Sydney, Australia",Departure at Sydney
+EVT000174,SHP000208,2024-09-07 04:47:00,exception,"Los Angeles, USA",Customs Clearance at Los Angeles
+EVT000175,SHP000012,2023-05-03 16:50:00,pickup,"Hong Kong, China",Pickup at Hong Kong
+EVT000176,SHP000538,2024-06-28 18:33:00,pickup,"Moscow, Russia",Arrival at Moscow
+EVT000177,SHP000141,2024-05-14 15:51:00,departure,"Houston, USA",Departure at Houston
+EVT000178,SHP000487,2025-09-07 06:06:00,departure,"Barcelona, Spain",Customs Clearance at Barcelona
+EVT000179,SHP000567,2023-05-26 04:42:00,departure,"São Paulo, Brazil",Delay at São Paulo
+EVT000180,SHP000523,2023-05-20 15:32:00,pickup,"Los Angeles, USA",Delivery at Los Angeles
+EVT000181,SHP000169,2025-04-26 20:23:00,departure,"Mumbai, India",Delay at Mumbai
+EVT000182,SHP000269,2023-05-03 13:02:00,delay,"Valencia, Spain",Arrival at Valencia
+EVT000183,SHP000405,2024-01-30 21:46:00,arrival,"Shanghai, China",Customs Clearance at Shanghai
+EVT000184,SHP000461,2024-04-05 23:58:00,departure,"Toronto, Canada",Customs Clearance at Toronto
+EVT000185,SHP000522,2023-11-19 07:38:00,delivery,"Valencia, Spain",Arrival at Valencia
+EVT000186,SHP000510,2025-06-05 19:01:00,customs_clearance,"Singapore, Singapore",Pickup at Singapore
+EVT000187,SHP000576,2023-10-26 20:02:00,arrival,"Singapore, Singapore",Arrival at Singapore
+EVT000188,SHP000403,2025-08-09 20:51:00,arrival,"Antwerp, Belgium",Arrival at Antwerp
+EVT000189,SHP000549,2024-10-31 09:54:00,customs_clearance,"Toronto, Canada",Delivery at Toronto
+EVT000190,SHP000500,2023-10-09 15:21:00,pickup,"Felixstowe, UK",Exception at Felixstowe
+EVT000191,SHP000502,2025-12-27 16:39:00,exception,"Houston, USA",Pickup at Houston
+EVT000192,SHP000258,2024-07-03 08:55:00,arrival,"São Paulo, Brazil",Delivery at São Paulo
+EVT000193,SHP000526,2024-10-03 10:58:00,departure,"Mumbai, India",Delivery at Mumbai
+EVT000194,SHP000196,2024-09-19 06:52:00,arrival,"Hong Kong, China",Delivery at Hong Kong
+EVT000195,SHP000422,2024-06-24 19:27:00,exception,"Antwerp, Belgium",Exception at Antwerp
+EVT000196,SHP000193,2023-10-13 22:18:00,departure,"Toronto, Canada",Exception at Toronto
+EVT000197,SHP000371,2024-10-19 06:51:00,customs_clearance,"Mumbai, India",Delivery at Mumbai
+EVT000198,SHP000533,2023-08-29 23:46:00,arrival,"Hamburg, Germany",Exception at Hamburg
+EVT000199,SHP000253,2024-11-21 05:56:00,exception,"Tokyo, Japan",Delay at Tokyo
+EVT000200,SHP000509,2024-05-18 12:30:00,exception,"Hong Kong, China",Arrival at Hong Kong
+EVT000201,SHP000582,2024-11-30 04:16:00,delivery,"Chicago, USA",Pickup at Chicago
+EVT000202,SHP000259,2025-02-10 17:25:00,pickup,"Dubai, UAE",Pickup at Dubai
+EVT000203,SHP000194,2025-10-10 14:59:00,delivery,"Antwerp, Belgium",Delivery at Antwerp
+EVT000204,SHP000284,2025-05-11 06:17:00,pickup,"Osaka, Japan",Customs Clearance at Osaka
+EVT000205,SHP000502,2023-08-10 15:27:00,customs_clearance,"Toronto, Canada",Arrival at Toronto
+EVT000206,SHP000123,2024-01-06 03:23:00,delay,"Los Angeles, USA",Delay at Los Angeles
+EVT000207,SHP000056,2023-05-24 08:06:00,delivery,"Rotterdam, Netherlands",Delivery at Rotterdam
+EVT000208,SHP000275,2023-07-16 23:43:00,customs_clearance,"Los Angeles, USA",Departure at Los Angeles
+EVT000209,SHP000041,2023-05-03 00:07:00,arrival,"Moscow, Russia",Delivery at Moscow
+EVT000210,SHP000284,2025-05-30 07:14:00,departure,"Busan, South Korea",Delivery at Busan
+EVT000211,SHP000585,2024-12-25 07:09:00,pickup,"Antwerp, Belgium",Delivery at Antwerp
+EVT000212,SHP000599,2024-03-26 05:51:00,delay,"Houston, USA",Customs Clearance at Houston
+EVT000213,SHP000209,2023-02-05 05:05:00,delivery,"Mumbai, India",Exception at Mumbai
+EVT000214,SHP000277,2023-09-13 03:15:00,delay,"Barcelona, Spain",Customs Clearance at Barcelona
+EVT000215,SHP000227,2025-07-30 19:10:00,departure,"Mumbai, India",Departure at Mumbai
+EVT000216,SHP000287,2023-01-07 07:42:00,arrival,"Dubai, UAE",Customs Clearance at Dubai
+EVT000217,SHP000594,2025-03-02 14:13:00,departure,"Toronto, Canada",Pickup at Toronto
+EVT000218,SHP000084,2025-06-28 14:09:00,exception,"Valencia, Spain",Customs Clearance at Valencia
+EVT000219,SHP000390,2024-07-10 06:56:00,exception,"Shanghai, China",Customs Clearance at Shanghai
+EVT000220,SHP000448,2024-12-02 10:01:00,customs_clearance,"Osaka, Japan",Delivery at Osaka
+EVT000221,SHP000398,2024-02-25 11:09:00,exception,"Chicago, USA",Pickup at Chicago
+EVT000222,SHP000387,2025-04-07 06:13:00,arrival,"Hamburg, Germany",Arrival at Hamburg
+EVT000223,SHP000415,2024-05-24 22:18:00,departure,"Antwerp, Belgium",Customs Clearance at Antwerp
+EVT000224,SHP000481,2024-05-14 20:44:00,pickup,"Shanghai, China",Customs Clearance at Shanghai
+EVT000225,SHP000023,2024-12-07 11:24:00,pickup,"Felixstowe, UK",Customs Clearance at Felixstowe
+EVT000226,SHP000447,2025-05-18 02:27:00,arrival,"Chicago, USA",Arrival at Chicago
+EVT000227,SHP000235,2025-01-20 08:30:00,departure,"Antwerp, Belgium",Departure at Antwerp
+EVT000228,SHP000225,2025-11-25 19:33:00,delay,"Sydney, Australia",Departure at Sydney
+EVT000229,SHP000038,2025-01-16 01:48:00,departure,"Felixstowe, UK",Pickup at Felixstowe
+EVT000230,SHP000163,2023-04-13 08:05:00,delivery,"Singapore, Singapore",Arrival at Singapore
+EVT000231,SHP000464,2024-08-23 04:54:00,customs_clearance,"Los Angeles, USA",Arrival at Los Angeles
+EVT000232,SHP000191,2025-04-18 09:10:00,delivery,"Mumbai, India",Pickup at Mumbai
+EVT000233,SHP000238,2023-04-17 18:41:00,delay,"Singapore, Singapore",Delay at Singapore
+EVT000234,SHP000181,2025-08-21 13:57:00,departure,"Busan, South Korea",Departure at Busan
+EVT000235,SHP000018,2023-06-07 02:49:00,pickup,"Tokyo, Japan",Arrival at Tokyo
+EVT000236,SHP000184,2023-09-12 14:35:00,delay,"Mumbai, India",Arrival at Mumbai
+EVT000237,SHP000184,2025-12-28 05:15:00,delay,"Los Angeles, USA",Pickup at Los Angeles
+EVT000238,SHP000334,2024-07-11 16:52:00,pickup,"Hamburg, Germany",Delivery at Hamburg
+EVT000239,SHP000517,2025-03-17 04:10:00,pickup,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT000240,SHP000160,2024-05-10 19:53:00,arrival,"Los Angeles, USA",Delivery at Los Angeles
+EVT000241,SHP000286,2024-05-18 14:11:00,exception,"Chicago, USA",Pickup at Chicago
+EVT000242,SHP000255,2023-03-28 02:24:00,departure,"Hamburg, Germany",Pickup at Hamburg
+EVT000243,SHP000295,2025-12-19 15:43:00,delay,"Chicago, USA",Customs Clearance at Chicago
+EVT000244,SHP000564,2025-04-07 16:29:00,exception,"Mumbai, India",Delivery at Mumbai
+EVT000245,SHP000363,2025-04-09 08:33:00,customs_clearance,"Toronto, Canada",Departure at Toronto
+EVT000246,SHP000516,2023-09-16 01:13:00,pickup,"Barcelona, Spain",Delivery at Barcelona
+EVT000247,SHP000377,2023-08-25 19:57:00,customs_clearance,"Busan, South Korea",Customs Clearance at Busan
+EVT000248,SHP000385,2025-02-04 00:20:00,customs_clearance,"Busan, South Korea",Departure at Busan
+EVT000249,SHP000017,2025-06-10 20:48:00,departure,"Tokyo, Japan",Customs Clearance at Tokyo
+EVT000250,SHP000144,2024-09-10 12:15:00,departure,"São Paulo, Brazil",Pickup at São Paulo
+EVT000251,SHP000233,2024-06-01 15:25:00,customs_clearance,"Chicago, USA",Exception at Chicago
+EVT000252,SHP000477,2024-02-24 14:08:00,customs_clearance,"Hong Kong, China",Pickup at Hong Kong
+EVT000253,SHP000252,2023-07-27 09:23:00,pickup,"Los Angeles, USA",Arrival at Los Angeles
+EVT000254,SHP000477,2025-06-06 02:38:00,arrival,"Felixstowe, UK",Arrival at Felixstowe
+EVT000255,SHP000525,2025-09-04 01:59:00,delay,"Mumbai, India",Delay at Mumbai
+EVT000256,SHP000491,2024-12-22 10:12:00,arrival,"Singapore, Singapore",Delivery at Singapore
+EVT000257,SHP000170,2023-07-27 04:47:00,exception,"Shanghai, China",Delivery at Shanghai
+EVT000258,SHP000277,2023-02-20 16:13:00,exception,"Rotterdam, Netherlands",Delivery at Rotterdam
+EVT000259,SHP000381,2025-07-07 12:21:00,delay,"Shanghai, China",Delivery at Shanghai
+EVT000260,SHP000472,2024-10-30 09:23:00,pickup,"Hong Kong, China",Delay at Hong Kong
+EVT000261,SHP000530,2023-09-10 14:48:00,customs_clearance,"Sydney, Australia",Customs Clearance at Sydney
+EVT000262,SHP000527,2025-11-02 02:09:00,delay,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT000263,SHP000339,2025-06-19 23:46:00,exception,"Moscow, Russia",Arrival at Moscow
+EVT000264,SHP000148,2024-02-07 02:39:00,customs_clearance,"Los Angeles, USA",Arrival at Los Angeles
+EVT000265,SHP000404,2023-03-27 01:19:00,pickup,"Mumbai, India",Departure at Mumbai
+EVT000266,SHP000200,2024-02-01 13:51:00,delay,"Valencia, Spain",Departure at Valencia
+EVT000267,SHP000438,2024-06-06 06:00:00,pickup,"Mumbai, India",Departure at Mumbai
+EVT000268,SHP000039,2025-09-15 02:14:00,customs_clearance,"Antwerp, Belgium",Departure at Antwerp
+EVT000269,SHP000506,2023-06-13 21:29:00,delay,"Dubai, UAE",Arrival at Dubai
+EVT000270,SHP000382,2024-06-12 18:35:00,delivery,"Barcelona, Spain",Delay at Barcelona
+EVT000271,SHP000339,2024-10-30 16:09:00,exception,"São Paulo, Brazil",Exception at São Paulo
+EVT000272,SHP000533,2024-07-25 19:49:00,departure,"Moscow, Russia",Departure at Moscow
+EVT000273,SHP000023,2025-09-16 08:21:00,delivery,"Valencia, Spain",Arrival at Valencia
+EVT000274,SHP000511,2023-04-16 18:19:00,delay,"Felixstowe, UK",Delay at Felixstowe
+EVT000275,SHP000264,2023-10-31 17:14:00,delay,"Dubai, UAE",Delay at Dubai
+EVT000276,SHP000225,2025-08-08 04:59:00,pickup,"Mumbai, India",Exception at Mumbai
+EVT000277,SHP000556,2025-01-13 13:47:00,customs_clearance,"Osaka, Japan",Customs Clearance at Osaka
+EVT000278,SHP000581,2024-09-04 02:15:00,departure,"Houston, USA",Delivery at Houston
+EVT000279,SHP000493,2023-05-16 10:59:00,pickup,"Moscow, Russia",Customs Clearance at Moscow
+EVT000280,SHP000416,2023-11-12 13:30:00,pickup,"Valencia, Spain",Arrival at Valencia
+EVT000281,SHP000380,2024-09-22 07:31:00,customs_clearance,"Dubai, UAE",Customs Clearance at Dubai
+EVT000282,SHP000220,2025-05-30 07:18:00,departure,"Felixstowe, UK",Delivery at Felixstowe
+EVT000283,SHP000169,2023-11-23 19:20:00,delivery,"Houston, USA",Customs Clearance at Houston
+EVT000284,SHP000085,2023-06-18 02:50:00,exception,"Dubai, UAE",Pickup at Dubai
+EVT000285,SHP000154,2025-05-27 15:57:00,pickup,"Mumbai, India",Delay at Mumbai
+EVT000286,SHP000156,2023-01-05 15:11:00,pickup,"Rotterdam, Netherlands",Departure at Rotterdam
+EVT000287,SHP000299,2025-01-01 21:36:00,pickup,"Hong Kong, China",Pickup at Hong Kong
+EVT000288,SHP000170,2024-11-07 03:02:00,delivery,"Busan, South Korea",Pickup at Busan
+EVT000289,SHP000041,2023-01-01 06:50:00,departure,"Toronto, Canada",Customs Clearance at Toronto
+EVT000290,SHP000503,2024-07-01 18:18:00,delivery,"Dubai, UAE",Delay at Dubai
+EVT000291,SHP000539,2024-08-05 04:04:00,customs_clearance,"Singapore, Singapore",Delivery at Singapore
+EVT000292,SHP000267,2025-11-20 03:31:00,delivery,"Hamburg, Germany",Departure at Hamburg
+EVT000293,SHP000291,2025-03-16 10:42:00,departure,"Rotterdam, Netherlands",Exception at Rotterdam
+EVT000294,SHP000485,2025-01-04 16:19:00,arrival,"Chicago, USA",Exception at Chicago
+EVT000295,SHP000411,2024-04-26 09:42:00,arrival,"Valencia, Spain",Departure at Valencia
+EVT000296,SHP000247,2023-11-01 22:09:00,pickup,"Chicago, USA",Pickup at Chicago
+EVT000297,SHP000061,2023-08-30 04:06:00,customs_clearance,"Sydney, Australia",Departure at Sydney
+EVT000298,SHP000153,2024-08-01 10:44:00,arrival,"Singapore, Singapore",Delivery at Singapore
+EVT000299,SHP000245,2025-06-10 13:07:00,exception,"Barcelona, Spain",Exception at Barcelona
+EVT000300,SHP000566,2024-09-11 22:13:00,customs_clearance,"Sydney, Australia",Exception at Sydney
+EVT000301,SHP000035,2023-11-17 12:12:00,arrival,"Hong Kong, China",Pickup at Hong Kong
+EVT000302,SHP000051,2024-05-31 12:11:00,delay,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT000303,SHP000475,2025-03-25 22:55:00,arrival,"Moscow, Russia",Customs Clearance at Moscow
+EVT000304,SHP000137,2025-05-14 21:20:00,delay,"Houston, USA",Delivery at Houston
+EVT000305,SHP000189,2023-12-03 08:26:00,pickup,"Shanghai, China",Customs Clearance at Shanghai
+EVT000306,SHP000343,2023-03-28 04:15:00,delivery,"Los Angeles, USA",Delivery at Los Angeles
+EVT000307,SHP000508,2024-02-19 23:11:00,customs_clearance,"Antwerp, Belgium",Pickup at Antwerp
+EVT000308,SHP000010,2025-01-08 22:21:00,delay,"São Paulo, Brazil",Delivery at São Paulo
+EVT000309,SHP000382,2023-01-06 03:30:00,delay,"Houston, USA",Delay at Houston
+EVT000310,SHP000514,2024-03-08 04:21:00,exception,"Tokyo, Japan",Exception at Tokyo
+EVT000311,SHP000518,2025-12-23 12:56:00,delivery,"Antwerp, Belgium",Delivery at Antwerp
+EVT000312,SHP000202,2023-03-22 14:46:00,delivery,"Valencia, Spain",Delivery at Valencia
+EVT000313,SHP000298,2025-07-23 01:18:00,arrival,"Mumbai, India",Pickup at Mumbai
+EVT000314,SHP000418,2023-05-09 15:53:00,customs_clearance,"Sydney, Australia",Customs Clearance at Sydney
+EVT000315,SHP000586,2024-10-07 18:14:00,customs_clearance,"Mumbai, India",Arrival at Mumbai
+EVT000316,SHP000308,2023-03-21 07:42:00,delivery,"São Paulo, Brazil",Arrival at São Paulo
+EVT000317,SHP000405,2023-01-09 16:14:00,pickup,"Antwerp, Belgium",Departure at Antwerp
+EVT000318,SHP000461,2025-03-24 00:27:00,pickup,"Mumbai, India",Pickup at Mumbai
+EVT000319,SHP000281,2025-05-03 00:32:00,delay,"Mumbai, India",Exception at Mumbai
+EVT000320,SHP000314,2023-04-15 15:37:00,departure,"Toronto, Canada",Delivery at Toronto
+EVT000321,SHP000566,2023-08-26 07:59:00,customs_clearance,"Busan, South Korea",Delivery at Busan
+EVT000322,SHP000337,2024-02-15 00:43:00,customs_clearance,"Hamburg, Germany",Pickup at Hamburg
+EVT000323,SHP000337,2024-05-17 15:01:00,pickup,"São Paulo, Brazil",Departure at São Paulo
+EVT000324,SHP000265,2024-08-21 21:16:00,customs_clearance,"Hamburg, Germany",Departure at Hamburg
+EVT000325,SHP000437,2023-12-02 11:06:00,delay,"Tokyo, Japan",Arrival at Tokyo
+EVT000326,SHP000317,2023-05-21 02:09:00,delay,"Mumbai, India",Pickup at Mumbai
+EVT000327,SHP000004,2023-05-16 08:11:00,pickup,"Mumbai, India",Delay at Mumbai
+EVT000328,SHP000463,2023-09-06 16:49:00,delay,"Houston, USA",Delay at Houston
+EVT000329,SHP000548,2025-11-12 03:30:00,exception,"Chicago, USA",Delivery at Chicago
+EVT000330,SHP000285,2024-12-30 02:22:00,departure,"Singapore, Singapore",Customs Clearance at Singapore
+EVT000331,SHP000194,2024-05-27 23:01:00,delivery,"Mumbai, India",Delay at Mumbai
+EVT000332,SHP000089,2023-11-29 04:21:00,departure,"Singapore, Singapore",Delivery at Singapore
+EVT000333,SHP000548,2025-09-07 20:22:00,pickup,"Tokyo, Japan",Arrival at Tokyo
+EVT000334,SHP000399,2023-08-01 16:49:00,delay,"Valencia, Spain",Customs Clearance at Valencia
+EVT000335,SHP000218,2024-01-25 19:40:00,customs_clearance,"Hamburg, Germany",Delay at Hamburg
+EVT000336,SHP000069,2025-10-09 17:49:00,customs_clearance,"Mumbai, India",Customs Clearance at Mumbai
+EVT000337,SHP000330,2025-01-25 06:57:00,pickup,"São Paulo, Brazil",Pickup at São Paulo
+EVT000338,SHP000464,2023-01-08 18:22:00,pickup,"Tokyo, Japan",Exception at Tokyo
+EVT000339,SHP000382,2024-11-24 13:47:00,delay,"São Paulo, Brazil",Pickup at São Paulo
+EVT000340,SHP000323,2023-06-24 04:53:00,pickup,"Chicago, USA",Delivery at Chicago
+EVT000341,SHP000534,2023-08-27 18:08:00,customs_clearance,"Mumbai, India",Customs Clearance at Mumbai
+EVT000342,SHP000567,2024-11-28 03:39:00,delay,"Mumbai, India",Pickup at Mumbai
+EVT000343,SHP000325,2024-10-01 17:52:00,customs_clearance,"Mumbai, India",Arrival at Mumbai
+EVT000344,SHP000040,2023-04-23 09:42:00,departure,"Dubai, UAE",Exception at Dubai
+EVT000345,SHP000265,2023-11-10 08:21:00,delay,"Felixstowe, UK",Customs Clearance at Felixstowe
+EVT000346,SHP000077,2025-01-15 02:31:00,arrival,"Osaka, Japan",Exception at Osaka
+EVT000347,SHP000308,2023-02-16 00:18:00,arrival,"Valencia, Spain",Departure at Valencia
+EVT000348,SHP000096,2025-12-11 19:38:00,delay,"Los Angeles, USA",Pickup at Los Angeles
+EVT000349,SHP000372,2023-07-14 08:49:00,arrival,"Dubai, UAE",Arrival at Dubai
+EVT000350,SHP000127,2024-03-10 18:51:00,pickup,"Hamburg, Germany",Departure at Hamburg
+EVT000351,SHP000051,2024-09-29 17:48:00,delivery,"Antwerp, Belgium",Delay at Antwerp
+EVT000352,SHP000082,2024-08-31 17:42:00,arrival,"Mumbai, India",Pickup at Mumbai
+EVT000353,SHP000414,2024-09-30 13:05:00,exception,"Rotterdam, Netherlands",Arrival at Rotterdam
+EVT000354,SHP000276,2023-10-08 02:06:00,delivery,"Rotterdam, Netherlands",Pickup at Rotterdam
+EVT000355,SHP000110,2023-03-29 15:51:00,arrival,"Barcelona, Spain",Customs Clearance at Barcelona
+EVT000356,SHP000555,2024-06-25 05:37:00,delivery,"Dubai, UAE",Delay at Dubai
+EVT000357,SHP000254,2024-11-15 05:11:00,exception,"Singapore, Singapore",Delivery at Singapore
+EVT000358,SHP000107,2023-02-04 15:13:00,exception,"São Paulo, Brazil",Exception at São Paulo
+EVT000359,SHP000130,2025-11-09 07:26:00,pickup,"Hamburg, Germany",Exception at Hamburg
+EVT000360,SHP000536,2024-01-20 15:35:00,departure,"Antwerp, Belgium",Pickup at Antwerp
+EVT000361,SHP000441,2025-03-06 06:52:00,delivery,"Tokyo, Japan",Arrival at Tokyo
+EVT000362,SHP000353,2025-04-08 18:26:00,delivery,"Los Angeles, USA",Arrival at Los Angeles
+EVT000363,SHP000276,2023-09-13 22:26:00,arrival,"Mumbai, India",Exception at Mumbai
+EVT000364,SHP000510,2023-08-23 12:37:00,departure,"Shanghai, China",Exception at Shanghai
+EVT000365,SHP000260,2024-01-13 20:37:00,pickup,"Los Angeles, USA",Exception at Los Angeles
+EVT000366,SHP000255,2023-03-24 07:15:00,exception,"Los Angeles, USA",Pickup at Los Angeles
+EVT000367,SHP000074,2025-03-19 04:13:00,arrival,"Moscow, Russia",Pickup at Moscow
+EVT000368,SHP000589,2024-03-06 22:07:00,delay,"Shanghai, China",Exception at Shanghai
+EVT000369,SHP000015,2023-08-08 10:13:00,customs_clearance,"Valencia, Spain",Departure at Valencia
+EVT000370,SHP000151,2023-09-10 11:20:00,customs_clearance,"São Paulo, Brazil",Customs Clearance at São Paulo
+EVT000371,SHP000532,2024-07-17 14:42:00,departure,"Moscow, Russia",Delay at Moscow
+EVT000372,SHP000150,2025-03-08 11:12:00,delay,"Tokyo, Japan",Exception at Tokyo
+EVT000373,SHP000249,2025-09-28 08:27:00,pickup,"Barcelona, Spain",Arrival at Barcelona
+EVT000374,SHP000004,2025-08-07 05:03:00,delay,"Valencia, Spain",Delay at Valencia
+EVT000375,SHP000062,2025-12-09 09:13:00,customs_clearance,"Chicago, USA",Pickup at Chicago
+EVT000376,SHP000295,2024-08-03 08:11:00,customs_clearance,"Los Angeles, USA",Delay at Los Angeles
+EVT000377,SHP000015,2025-12-20 02:37:00,customs_clearance,"Barcelona, Spain",Arrival at Barcelona
+EVT000378,SHP000311,2024-04-04 14:12:00,exception,"São Paulo, Brazil",Delay at São Paulo
+EVT000379,SHP000283,2025-03-10 08:10:00,customs_clearance,"Barcelona, Spain",Departure at Barcelona
+EVT000380,SHP000449,2023-02-05 07:41:00,customs_clearance,"Los Angeles, USA",Customs Clearance at Los Angeles
+EVT000381,SHP000225,2025-11-09 20:59:00,departure,"Mumbai, India",Pickup at Mumbai
+EVT000382,SHP000275,2025-12-05 08:44:00,pickup,"Hong Kong, China",Arrival at Hong Kong
+EVT000383,SHP000529,2025-04-06 00:04:00,delivery,"Busan, South Korea",Pickup at Busan
+EVT000384,SHP000248,2024-05-31 07:48:00,exception,"Busan, South Korea",Delivery at Busan
+EVT000385,SHP000589,2024-01-10 20:31:00,delivery,"Osaka, Japan",Pickup at Osaka
+EVT000386,SHP000153,2024-11-01 22:49:00,delivery,"Shanghai, China",Customs Clearance at Shanghai
+EVT000387,SHP000582,2023-01-03 15:12:00,departure,"Houston, USA",Pickup at Houston
+EVT000388,SHP000314,2024-05-29 22:51:00,arrival,"Valencia, Spain",Delivery at Valencia
+EVT000389,SHP000205,2025-04-03 21:53:00,delivery,"São Paulo, Brazil",Delivery at São Paulo
+EVT000390,SHP000578,2023-07-16 12:30:00,delivery,"Hong Kong, China",Departure at Hong Kong
+EVT000391,SHP000251,2023-04-04 10:22:00,customs_clearance,"Houston, USA",Delay at Houston
+EVT000392,SHP000247,2024-11-13 15:14:00,customs_clearance,"Mumbai, India",Delivery at Mumbai
+EVT000393,SHP000017,2023-07-31 18:57:00,departure,"Singapore, Singapore",Departure at Singapore
+EVT000394,SHP000421,2024-02-24 14:26:00,delivery,"Rotterdam, Netherlands",Exception at Rotterdam
+EVT000395,SHP000075,2025-06-22 22:08:00,departure,"Dubai, UAE",Exception at Dubai
+EVT000396,SHP000220,2025-01-29 03:02:00,arrival,"Tokyo, Japan",Pickup at Tokyo
+EVT000397,SHP000419,2024-07-28 20:37:00,customs_clearance,"Dubai, UAE",Departure at Dubai
+EVT000398,SHP000096,2024-04-29 19:07:00,pickup,"Houston, USA",Delay at Houston
+EVT000399,SHP000257,2024-05-08 01:30:00,exception,"Toronto, Canada",Arrival at Toronto
+EVT000400,SHP000555,2023-01-14 15:52:00,departure,"Hamburg, Germany",Delay at Hamburg
+EVT000401,SHP000422,2023-07-24 02:32:00,delivery,"Houston, USA",Departure at Houston
+EVT000402,SHP000590,2023-01-01 13:44:00,arrival,"Antwerp, Belgium",Arrival at Antwerp
+EVT000403,SHP000464,2023-12-03 00:47:00,pickup,"Mumbai, India",Exception at Mumbai
+EVT000404,SHP000586,2024-07-17 06:11:00,delay,"Shanghai, China",Departure at Shanghai
+EVT000405,SHP000240,2024-01-03 06:52:00,departure,"Rotterdam, Netherlands",Departure at Rotterdam
+EVT000406,SHP000136,2025-08-01 01:42:00,customs_clearance,"Busan, South Korea",Departure at Busan
+EVT000407,SHP000138,2023-08-30 23:58:00,exception,"Rotterdam, Netherlands",Departure at Rotterdam
+EVT000408,SHP000376,2024-09-05 21:27:00,departure,"São Paulo, Brazil",Exception at São Paulo
+EVT000409,SHP000065,2025-08-28 12:00:00,departure,"Hamburg, Germany",Arrival at Hamburg
+EVT000410,SHP000036,2023-12-25 21:53:00,customs_clearance,"Mumbai, India",Pickup at Mumbai
+EVT000411,SHP000087,2024-03-09 02:09:00,customs_clearance,"Hamburg, Germany",Pickup at Hamburg
+EVT000412,SHP000446,2023-12-07 08:45:00,delivery,"Mumbai, India",Exception at Mumbai
+EVT000413,SHP000569,2025-12-23 18:57:00,delivery,"Moscow, Russia",Arrival at Moscow
+EVT000414,SHP000464,2025-12-27 21:36:00,departure,"Hamburg, Germany",Customs Clearance at Hamburg
+EVT000415,SHP000436,2025-06-30 08:20:00,arrival,"Hamburg, Germany",Delivery at Hamburg
+EVT000416,SHP000220,2024-02-06 12:18:00,customs_clearance,"Shanghai, China",Delay at Shanghai
+EVT000417,SHP000549,2023-07-06 18:07:00,delay,"Chicago, USA",Exception at Chicago
+EVT000418,SHP000130,2024-04-15 23:44:00,delivery,"Rotterdam, Netherlands",Delay at Rotterdam
+EVT000419,SHP000116,2025-09-08 12:58:00,exception,"Mumbai, India",Delivery at Mumbai
+EVT000420,SHP000139,2025-11-26 05:34:00,departure,"Rotterdam, Netherlands",Delay at Rotterdam
+EVT000421,SHP000130,2023-04-14 16:54:00,delivery,"Mumbai, India",Delivery at Mumbai
+EVT000422,SHP000076,2023-06-21 10:33:00,delivery,"Mumbai, India",Pickup at Mumbai
+EVT000423,SHP000266,2024-11-11 17:08:00,delay,"Antwerp, Belgium",Departure at Antwerp
+EVT000424,SHP000046,2025-10-01 06:08:00,delay,"Valencia, Spain",Delay at Valencia
+EVT000425,SHP000226,2023-07-03 16:09:00,delivery,"São Paulo, Brazil",Customs Clearance at São Paulo
+EVT000426,SHP000074,2023-06-14 23:48:00,arrival,"Valencia, Spain",Customs Clearance at Valencia
+EVT000427,SHP000169,2024-07-19 10:01:00,pickup,"Moscow, Russia",Delay at Moscow
+EVT000428,SHP000012,2023-02-19 23:01:00,pickup,"Shanghai, China",Arrival at Shanghai
+EVT000429,SHP000169,2023-06-16 02:44:00,departure,"São Paulo, Brazil",Customs Clearance at São Paulo
+EVT000430,SHP000101,2025-01-30 01:50:00,exception,"Chicago, USA",Exception at Chicago
+EVT000431,SHP000027,2024-12-24 10:24:00,exception,"Los Angeles, USA",Pickup at Los Angeles
+EVT000432,SHP000517,2024-08-16 09:16:00,departure,"São Paulo, Brazil",Pickup at São Paulo
+EVT000433,SHP000559,2025-09-03 09:31:00,delivery,"Los Angeles, USA",Delay at Los Angeles
+EVT000434,SHP000079,2023-12-26 09:32:00,delivery,"Los Angeles, USA",Delay at Los Angeles
+EVT000435,SHP000044,2025-02-16 15:02:00,delivery,"Houston, USA",Customs Clearance at Houston
+EVT000436,SHP000479,2023-04-01 19:03:00,pickup,"Shanghai, China",Exception at Shanghai
+EVT000437,SHP000268,2025-02-12 11:40:00,arrival,"Mumbai, India",Pickup at Mumbai
+EVT000438,SHP000371,2024-07-17 16:09:00,customs_clearance,"Osaka, Japan",Customs Clearance at Osaka
+EVT000439,SHP000577,2024-04-27 13:09:00,delay,"Dubai, UAE",Arrival at Dubai
+EVT000440,SHP000524,2024-10-20 11:42:00,pickup,"Mumbai, India",Arrival at Mumbai
+EVT000441,SHP000318,2025-02-07 23:02:00,delivery,"Hamburg, Germany",Exception at Hamburg
+EVT000442,SHP000041,2025-08-20 01:26:00,departure,"São Paulo, Brazil",Departure at São Paulo
+EVT000443,SHP000421,2025-07-31 19:22:00,delay,"Toronto, Canada",Pickup at Toronto
+EVT000444,SHP000539,2023-09-15 02:03:00,arrival,"Hamburg, Germany",Delay at Hamburg
+EVT000445,SHP000049,2025-03-13 08:53:00,delivery,"Dubai, UAE",Pickup at Dubai
+EVT000446,SHP000570,2023-01-11 08:40:00,exception,"Osaka, Japan",Arrival at Osaka
+EVT000447,SHP000182,2025-08-28 15:56:00,departure,"Mumbai, India",Delivery at Mumbai
+EVT000448,SHP000199,2024-01-20 16:41:00,pickup,"Felixstowe, UK",Customs Clearance at Felixstowe
+EVT000449,SHP000275,2023-11-14 21:04:00,departure,"Mumbai, India",Exception at Mumbai
+EVT000450,SHP000410,2024-08-27 23:10:00,delivery,"Toronto, Canada",Delivery at Toronto
+EVT000451,SHP000315,2024-09-01 05:01:00,departure,"Valencia, Spain",Customs Clearance at Valencia
+EVT000452,SHP000134,2025-12-18 13:13:00,pickup,"Hong Kong, China",Arrival at Hong Kong
+EVT000453,SHP000258,2025-08-04 01:52:00,customs_clearance,"Singapore, Singapore",Arrival at Singapore
+EVT000454,SHP000400,2024-12-27 11:48:00,arrival,"Hamburg, Germany",Delay at Hamburg
+EVT000455,SHP000044,2025-04-05 07:46:00,exception,"Hamburg, Germany",Arrival at Hamburg
+EVT000456,SHP000349,2024-01-18 09:12:00,delay,"Mumbai, India",Exception at Mumbai
+EVT000457,SHP000024,2023-06-23 15:24:00,arrival,"Moscow, Russia",Customs Clearance at Moscow
+EVT000458,SHP000287,2025-11-16 18:52:00,delivery,"Busan, South Korea",Delivery at Busan
+EVT000459,SHP000024,2023-08-12 11:15:00,delivery,"Mumbai, India",Exception at Mumbai
+EVT000460,SHP000513,2024-01-01 08:21:00,exception,"Osaka, Japan",Departure at Osaka
+EVT000461,SHP000477,2023-05-07 21:44:00,arrival,"Toronto, Canada",Pickup at Toronto
+EVT000462,SHP000297,2023-04-28 09:15:00,departure,"Moscow, Russia",Departure at Moscow
+EVT000463,SHP000214,2024-02-02 16:16:00,delivery,"Hong Kong, China",Arrival at Hong Kong
+EVT000464,SHP000126,2024-03-30 04:51:00,pickup,"Felixstowe, UK",Pickup at Felixstowe
+EVT000465,SHP000097,2025-07-20 16:29:00,exception,"Toronto, Canada",Delay at Toronto
+EVT000466,SHP000127,2023-04-09 19:12:00,departure,"Mumbai, India",Delivery at Mumbai
+EVT000467,SHP000094,2024-02-10 15:13:00,departure,"São Paulo, Brazil",Customs Clearance at São Paulo
+EVT000468,SHP000331,2023-03-22 13:54:00,pickup,"Mumbai, India",Exception at Mumbai
+EVT000469,SHP000079,2025-10-31 15:48:00,arrival,"Singapore, Singapore",Customs Clearance at Singapore
+EVT000470,SHP000098,2025-10-22 13:49:00,delivery,"Chicago, USA",Exception at Chicago
+EVT000471,SHP000538,2023-01-22 05:13:00,delay,"Shanghai, China",Pickup at Shanghai
+EVT000472,SHP000031,2023-08-07 10:49:00,customs_clearance,"Sydney, Australia",Pickup at Sydney
+EVT000473,SHP000563,2025-12-08 00:15:00,exception,"Los Angeles, USA",Customs Clearance at Los Angeles
+EVT000474,SHP000342,2025-10-15 08:46:00,arrival,"Barcelona, Spain",Delay at Barcelona
+EVT000475,SHP000123,2023-01-07 19:43:00,departure,"Valencia, Spain",Customs Clearance at Valencia
+EVT000476,SHP000377,2024-12-09 04:56:00,pickup,"Toronto, Canada",Pickup at Toronto
+EVT000477,SHP000319,2023-05-26 03:55:00,delivery,"Toronto, Canada",Exception at Toronto
+EVT000478,SHP000589,2023-08-11 17:18:00,departure,"Busan, South Korea",Departure at Busan
+EVT000479,SHP000407,2025-09-04 10:53:00,pickup,"Osaka, Japan",Delivery at Osaka
+EVT000480,SHP000143,2024-02-03 05:52:00,exception,"Valencia, Spain",Departure at Valencia
+EVT000481,SHP000221,2025-11-01 04:04:00,departure,"Toronto, Canada",Customs Clearance at Toronto
+EVT000482,SHP000282,2024-11-22 13:04:00,pickup,"Houston, USA",Arrival at Houston
+EVT000483,SHP000038,2023-09-24 16:34:00,customs_clearance,"Busan, South Korea",Exception at Busan
+EVT000484,SHP000044,2023-02-13 10:15:00,customs_clearance,"Hong Kong, China",Customs Clearance at Hong Kong
+EVT000485,SHP000439,2023-04-05 16:44:00,pickup,"Valencia, Spain",Pickup at Valencia
+EVT000486,SHP000132,2023-02-06 01:12:00,delay,"Valencia, Spain",Pickup at Valencia
+EVT000487,SHP000533,2025-01-09 12:25:00,delivery,"Tokyo, Japan",Pickup at Tokyo
+EVT000488,SHP000028,2023-11-12 21:29:00,pickup,"Felixstowe, UK",Arrival at Felixstowe
+EVT000489,SHP000218,2023-12-26 06:16:00,arrival,"Dubai, UAE",Arrival at Dubai
+EVT000490,SHP000054,2025-11-08 17:11:00,customs_clearance,"Valencia, Spain",Delivery at Valencia
+EVT000491,SHP000112,2025-09-20 13:48:00,delivery,"Barcelona, Spain",Exception at Barcelona
+EVT000492,SHP000147,2024-03-07 16:53:00,arrival,"Toronto, Canada",Arrival at Toronto
+EVT000493,SHP000042,2024-05-10 09:57:00,delivery,"Dubai, UAE",Pickup at Dubai
+EVT000494,SHP000541,2024-02-02 10:19:00,departure,"Chicago, USA",Customs Clearance at Chicago
+EVT000495,SHP000564,2023-10-07 13:02:00,departure,"Osaka, Japan",Departure at Osaka
+EVT000496,SHP000384,2023-09-12 01:06:00,exception,"Toronto, Canada",Arrival at Toronto
+EVT000497,SHP000463,2023-04-08 16:23:00,delivery,"Shanghai, China",Delivery at Shanghai
+EVT000498,SHP000067,2024-08-08 18:11:00,pickup,"Busan, South Korea",Exception at Busan
+EVT000499,SHP000464,2023-12-06 12:48:00,delivery,"Antwerp, Belgium",Exception at Antwerp
+EVT000500,SHP000587,2025-05-11 19:36:00,delay,"Toronto, Canada",Customs Clearance at Toronto
+EVT000501,SHP000304,2025-07-23 02:56:00,delivery,"Mumbai, India",Arrival at Mumbai
+EVT000502,SHP000149,2025-01-19 18:24:00,exception,"Mumbai, India",Delivery at Mumbai
+EVT000503,SHP000255,2024-11-07 18:06:00,arrival,"Los Angeles, USA",Pickup at Los Angeles
+EVT000504,SHP000513,2024-02-03 05:56:00,departure,"Busan, South Korea",Pickup at Busan
+EVT000505,SHP000190,2024-08-25 04:49:00,customs_clearance,"Mumbai, India",Customs Clearance at Mumbai
+EVT000506,SHP000578,2023-04-23 13:39:00,exception,"Mumbai, India",Pickup at Mumbai
+EVT000507,SHP000572,2023-11-14 12:40:00,pickup,"Barcelona, Spain",Customs Clearance at Barcelona
+EVT000508,SHP000428,2025-06-24 05:47:00,departure,"Shanghai, China",Arrival at Shanghai
+EVT000509,SHP000576,2025-11-30 19:14:00,arrival,"Mumbai, India",Exception at Mumbai
+EVT000510,SHP000371,2024-05-14 16:08:00,exception,"São Paulo, Brazil",Delivery at São Paulo
+EVT000511,SHP000018,2023-01-07 11:26:00,exception,"Busan, South Korea",Pickup at Busan
+EVT000512,SHP000146,2025-06-08 10:01:00,delivery,"Sydney, Australia",Delay at Sydney
+EVT000513,SHP000151,2025-01-04 17:43:00,departure,"Felixstowe, UK",Customs Clearance at Felixstowe
+EVT000514,SHP000273,2025-02-22 18:24:00,arrival,"Singapore, Singapore",Customs Clearance at Singapore
+EVT000515,SHP000075,2023-01-31 17:30:00,delay,"Tokyo, Japan",Customs Clearance at Tokyo
+EVT000516,SHP000101,2023-10-26 06:51:00,delivery,"Moscow, Russia",Arrival at Moscow
+EVT000517,SHP000586,2023-09-04 08:53:00,departure,"Houston, USA",Delay at Houston
+EVT000518,SHP000274,2023-11-02 07:37:00,delay,"Felixstowe, UK",Delay at Felixstowe
+EVT000519,SHP000319,2024-07-10 20:57:00,pickup,"Osaka, Japan",Delay at Osaka
+EVT000520,SHP000031,2025-09-06 07:00:00,pickup,"Hamburg, Germany",Exception at Hamburg
+EVT000521,SHP000527,2025-03-11 12:04:00,pickup,"Valencia, Spain",Pickup at Valencia
+EVT000522,SHP000397,2024-02-18 02:05:00,exception,"Osaka, Japan",Departure at Osaka
+EVT000523,SHP000343,2023-04-09 02:24:00,delivery,"Shanghai, China",Pickup at Shanghai
+EVT000524,SHP000286,2024-08-23 20:38:00,pickup,"Singapore, Singapore",Delay at Singapore
+EVT000525,SHP000330,2025-07-17 13:49:00,departure,"Rotterdam, Netherlands",Delay at Rotterdam
+EVT000526,SHP000535,2025-06-26 20:26:00,exception,"Tokyo, Japan",Departure at Tokyo
+EVT000527,SHP000052,2024-03-27 20:17:00,arrival,"Hong Kong, China",Pickup at Hong Kong
+EVT000528,SHP000508,2025-06-25 19:18:00,customs_clearance,"Chicago, USA",Departure at Chicago
+EVT000529,SHP000060,2023-10-14 23:25:00,delay,"Chicago, USA",Delay at Chicago
+EVT000530,SHP000422,2023-09-24 19:08:00,arrival,"Moscow, Russia",Pickup at Moscow
+EVT000531,SHP000569,2025-10-04 23:40:00,delay,"Singapore, Singapore",Customs Clearance at Singapore
+EVT000532,SHP000394,2023-11-26 18:44:00,delivery,"Rotterdam, Netherlands",Pickup at Rotterdam
+EVT000533,SHP000270,2025-03-24 16:43:00,delivery,"Shanghai, China",Arrival at Shanghai
+EVT000534,SHP000069,2024-02-11 06:29:00,departure,"Tokyo, Japan",Pickup at Tokyo
+EVT000535,SHP000136,2025-01-02 22:59:00,departure,"Houston, USA",Departure at Houston
+EVT000536,SHP000354,2023-08-11 14:34:00,pickup,"Felixstowe, UK",Customs Clearance at Felixstowe
+EVT000537,SHP000011,2023-12-03 21:06:00,pickup,"Tokyo, Japan",Delivery at Tokyo
+EVT000538,SHP000168,2025-02-16 03:14:00,delay,"Shanghai, China",Customs Clearance at Shanghai
+EVT000539,SHP000244,2024-10-12 04:29:00,customs_clearance,"Osaka, Japan",Delivery at Osaka
+EVT000540,SHP000588,2025-02-09 03:12:00,departure,"Hong Kong, China",Customs Clearance at Hong Kong
+EVT000541,SHP000077,2024-08-30 09:16:00,delivery,"Moscow, Russia",Pickup at Moscow
+EVT000542,SHP000173,2024-10-23 01:09:00,delay,"Sydney, Australia",Customs Clearance at Sydney
+EVT000543,SHP000302,2023-03-30 03:27:00,arrival,"Osaka, Japan",Arrival at Osaka
+EVT000544,SHP000055,2025-07-14 06:43:00,arrival,"Mumbai, India",Delay at Mumbai
+EVT000545,SHP000105,2025-08-21 17:06:00,departure,"Felixstowe, UK",Customs Clearance at Felixstowe
+EVT000546,SHP000512,2025-11-17 05:58:00,departure,"Moscow, Russia",Pickup at Moscow
+EVT000547,SHP000015,2023-07-08 15:57:00,delay,"Hamburg, Germany",Delivery at Hamburg
+EVT000548,SHP000550,2023-07-29 20:12:00,arrival,"Hamburg, Germany",Delivery at Hamburg
+EVT000549,SHP000430,2024-11-27 23:53:00,customs_clearance,"Hamburg, Germany",Delay at Hamburg
+EVT000550,SHP000449,2025-05-22 07:55:00,delay,"Mumbai, India",Delivery at Mumbai
+EVT000551,SHP000249,2025-11-21 05:34:00,exception,"Dubai, UAE",Arrival at Dubai
+EVT000552,SHP000419,2024-11-24 07:36:00,delay,"Shanghai, China",Customs Clearance at Shanghai
+EVT000553,SHP000024,2025-05-27 12:43:00,pickup,"Barcelona, Spain",Customs Clearance at Barcelona
+EVT000554,SHP000490,2025-04-04 15:15:00,customs_clearance,"Rotterdam, Netherlands",Delivery at Rotterdam
+EVT000555,SHP000151,2025-01-17 00:24:00,delivery,"Shanghai, China",Departure at Shanghai
+EVT000556,SHP000087,2023-12-17 05:14:00,exception,"Moscow, Russia",Arrival at Moscow
+EVT000557,SHP000336,2023-11-23 02:25:00,exception,"Moscow, Russia",Delay at Moscow
+EVT000558,SHP000375,2024-11-17 17:28:00,pickup,"Shanghai, China",Exception at Shanghai
+EVT000559,SHP000272,2023-11-04 23:04:00,delivery,"Felixstowe, UK",Exception at Felixstowe
+EVT000560,SHP000179,2023-10-12 10:36:00,customs_clearance,"Singapore, Singapore",Customs Clearance at Singapore
+EVT000561,SHP000041,2025-12-30 21:17:00,departure,"Mumbai, India",Customs Clearance at Mumbai
+EVT000562,SHP000555,2023-02-03 05:08:00,pickup,"Busan, South Korea",Delay at Busan
+EVT000563,SHP000339,2024-04-15 21:53:00,delivery,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT000564,SHP000257,2024-08-20 20:08:00,arrival,"Osaka, Japan",Delivery at Osaka
+EVT000565,SHP000346,2025-11-14 17:40:00,pickup,"Toronto, Canada",Exception at Toronto
+EVT000566,SHP000087,2024-12-11 14:40:00,delivery,"Busan, South Korea",Delivery at Busan
+EVT000567,SHP000469,2025-06-22 02:22:00,departure,"Rotterdam, Netherlands",Departure at Rotterdam
+EVT000568,SHP000558,2025-07-05 12:30:00,departure,"Felixstowe, UK",Delivery at Felixstowe
+EVT000569,SHP000192,2025-07-14 08:24:00,delay,"Shanghai, China",Pickup at Shanghai
+EVT000570,SHP000066,2025-08-02 15:39:00,delivery,"São Paulo, Brazil",Customs Clearance at São Paulo
+EVT000571,SHP000394,2023-11-04 19:36:00,customs_clearance,"Mumbai, India",Delivery at Mumbai
+EVT000572,SHP000510,2023-09-23 10:33:00,delivery,"Los Angeles, USA",Departure at Los Angeles
+EVT000573,SHP000506,2025-12-25 10:43:00,delivery,"Rotterdam, Netherlands",Pickup at Rotterdam
+EVT000574,SHP000409,2024-01-17 21:40:00,delay,"São Paulo, Brazil",Departure at São Paulo
+EVT000575,SHP000378,2024-07-05 00:42:00,delay,"Rotterdam, Netherlands",Arrival at Rotterdam
+EVT000576,SHP000400,2024-11-10 21:29:00,delivery,"Felixstowe, UK",Pickup at Felixstowe
+EVT000577,SHP000032,2023-09-13 05:17:00,delivery,"Moscow, Russia",Departure at Moscow
+EVT000578,SHP000351,2024-07-03 08:11:00,delivery,"Hong Kong, China",Customs Clearance at Hong Kong
+EVT000579,SHP000472,2025-03-18 06:08:00,arrival,"Sydney, Australia",Delay at Sydney
+EVT000580,SHP000302,2024-05-20 20:08:00,exception,"Hamburg, Germany",Delivery at Hamburg
+EVT000581,SHP000590,2025-03-12 07:55:00,departure,"Antwerp, Belgium",Delivery at Antwerp
+EVT000582,SHP000587,2024-11-27 12:10:00,arrival,"Dubai, UAE",Pickup at Dubai
+EVT000583,SHP000336,2025-12-27 10:46:00,customs_clearance,"Hamburg, Germany",Departure at Hamburg
+EVT000584,SHP000352,2023-12-10 18:10:00,customs_clearance,"Felixstowe, UK",Delivery at Felixstowe
+EVT000585,SHP000227,2024-12-04 16:38:00,delay,"Mumbai, India",Exception at Mumbai
+EVT000586,SHP000379,2024-04-02 16:06:00,delivery,"Dubai, UAE",Exception at Dubai
+EVT000587,SHP000401,2025-01-19 00:41:00,customs_clearance,"Hong Kong, China",Delivery at Hong Kong
+EVT000588,SHP000270,2024-10-26 00:39:00,arrival,"Felixstowe, UK",Delay at Felixstowe
+EVT000589,SHP000500,2024-08-11 08:14:00,pickup,"Moscow, Russia",Departure at Moscow
+EVT000590,SHP000314,2023-09-03 21:57:00,delivery,"São Paulo, Brazil",Delay at São Paulo
+EVT000591,SHP000591,2023-08-20 15:38:00,customs_clearance,"Singapore, Singapore",Departure at Singapore
+EVT000592,SHP000049,2025-12-04 22:21:00,delivery,"Tokyo, Japan",Departure at Tokyo
+EVT000593,SHP000276,2023-06-26 11:13:00,customs_clearance,"Rotterdam, Netherlands",Arrival at Rotterdam
+EVT000594,SHP000091,2024-08-24 14:06:00,arrival,"Houston, USA",Delay at Houston
+EVT000595,SHP000336,2023-08-08 06:46:00,departure,"Tokyo, Japan",Arrival at Tokyo
+EVT000596,SHP000220,2025-09-01 23:54:00,delivery,"Valencia, Spain",Pickup at Valencia
+EVT000597,SHP000244,2025-07-05 10:02:00,pickup,"Valencia, Spain",Delivery at Valencia
+EVT000598,SHP000273,2023-08-12 09:49:00,delay,"Los Angeles, USA",Pickup at Los Angeles
+EVT000599,SHP000037,2023-12-30 14:24:00,delivery,"Hong Kong, China",Delivery at Hong Kong
+EVT000600,SHP000125,2025-12-08 15:35:00,pickup,"Sydney, Australia",Delivery at Sydney
+EVT000601,SHP000135,2023-01-14 08:23:00,departure,"Barcelona, Spain",Departure at Barcelona
+EVT000602,SHP000527,2024-12-14 12:10:00,departure,"Osaka, Japan",Arrival at Osaka
+EVT000603,SHP000571,2025-05-02 01:20:00,delay,"Valencia, Spain",Delay at Valencia
+EVT000604,SHP000598,2025-04-30 14:34:00,customs_clearance,"Osaka, Japan",Arrival at Osaka
+EVT000605,SHP000306,2023-10-11 15:45:00,arrival,"Hamburg, Germany",Delivery at Hamburg
+EVT000606,SHP000346,2024-07-26 17:40:00,arrival,"Moscow, Russia",Exception at Moscow
+EVT000607,SHP000433,2024-10-11 22:53:00,delivery,"Hong Kong, China",Arrival at Hong Kong
+EVT000608,SHP000183,2023-09-21 09:39:00,pickup,"Osaka, Japan",Pickup at Osaka
+EVT000609,SHP000439,2023-02-22 04:59:00,delay,"Houston, USA",Pickup at Houston
+EVT000610,SHP000041,2023-11-16 09:23:00,exception,"Rotterdam, Netherlands",Departure at Rotterdam
+EVT000611,SHP000238,2024-04-29 04:41:00,delay,"Singapore, Singapore",Delay at Singapore
+EVT000612,SHP000119,2024-10-11 02:13:00,pickup,"Houston, USA",Arrival at Houston
+EVT000613,SHP000349,2023-03-11 16:13:00,exception,"Barcelona, Spain",Exception at Barcelona
+EVT000614,SHP000436,2024-01-09 21:06:00,arrival,"Mumbai, India",Arrival at Mumbai
+EVT000615,SHP000292,2025-12-10 19:24:00,customs_clearance,"Osaka, Japan",Delivery at Osaka
+EVT000616,SHP000503,2025-10-20 22:59:00,departure,"Los Angeles, USA",Customs Clearance at Los Angeles
+EVT000617,SHP000460,2025-06-22 23:18:00,exception,"São Paulo, Brazil",Customs Clearance at São Paulo
+EVT000618,SHP000154,2023-09-23 11:54:00,delivery,"Shanghai, China",Exception at Shanghai
+EVT000619,SHP000172,2024-08-12 06:04:00,delivery,"Hong Kong, China",Departure at Hong Kong
+EVT000620,SHP000178,2023-08-05 23:08:00,departure,"Mumbai, India",Delay at Mumbai
+EVT000621,SHP000065,2024-02-14 19:09:00,delay,"Los Angeles, USA",Exception at Los Angeles
+EVT000622,SHP000008,2024-09-16 19:05:00,pickup,"São Paulo, Brazil",Customs Clearance at São Paulo
+EVT000623,SHP000009,2025-11-30 07:26:00,arrival,"Singapore, Singapore",Customs Clearance at Singapore
+EVT000624,SHP000164,2025-08-06 11:01:00,delivery,"Tokyo, Japan",Departure at Tokyo
+EVT000625,SHP000483,2025-11-28 22:05:00,exception,"Felixstowe, UK",Customs Clearance at Felixstowe
+EVT000626,SHP000182,2024-12-17 15:29:00,arrival,"Hamburg, Germany",Arrival at Hamburg
+EVT000627,SHP000372,2024-06-28 15:08:00,customs_clearance,"Mumbai, India",Departure at Mumbai
+EVT000628,SHP000585,2024-10-28 04:39:00,pickup,"Rotterdam, Netherlands",Delivery at Rotterdam
+EVT000629,SHP000465,2024-05-08 23:06:00,customs_clearance,"Felixstowe, UK",Pickup at Felixstowe
+EVT000630,SHP000563,2025-06-19 03:41:00,customs_clearance,"Hamburg, Germany",Departure at Hamburg
+EVT000631,SHP000065,2024-03-16 06:28:00,delay,"Chicago, USA",Exception at Chicago
+EVT000632,SHP000223,2024-01-17 00:20:00,departure,"Sydney, Australia",Departure at Sydney
+EVT000633,SHP000159,2024-03-14 23:26:00,departure,"Sydney, Australia",Pickup at Sydney
+EVT000634,SHP000438,2023-06-04 20:19:00,departure,"Houston, USA",Delivery at Houston
+EVT000635,SHP000564,2024-04-29 05:20:00,exception,"Los Angeles, USA",Arrival at Los Angeles
+EVT000636,SHP000251,2024-02-21 10:35:00,arrival,"Sydney, Australia",Arrival at Sydney
+EVT000637,SHP000428,2025-09-28 23:41:00,customs_clearance,"Dubai, UAE",Exception at Dubai
+EVT000638,SHP000505,2023-11-27 12:18:00,departure,"Mumbai, India",Pickup at Mumbai
+EVT000639,SHP000585,2024-06-18 08:36:00,delay,"Houston, USA",Delay at Houston
+EVT000640,SHP000511,2023-08-27 05:57:00,customs_clearance,"Toronto, Canada",Delivery at Toronto
+EVT000641,SHP000597,2023-01-06 05:36:00,departure,"Chicago, USA",Customs Clearance at Chicago
+EVT000642,SHP000072,2023-04-24 10:15:00,exception,"Hamburg, Germany",Delivery at Hamburg
+EVT000643,SHP000480,2025-10-16 23:07:00,departure,"Osaka, Japan",Customs Clearance at Osaka
+EVT000644,SHP000335,2025-11-28 07:08:00,departure,"Los Angeles, USA",Pickup at Los Angeles
+EVT000645,SHP000101,2025-01-16 12:46:00,delay,"Los Angeles, USA",Exception at Los Angeles
+EVT000646,SHP000056,2024-01-21 05:02:00,pickup,"Mumbai, India",Arrival at Mumbai
+EVT000647,SHP000568,2025-08-11 16:32:00,delivery,"Barcelona, Spain",Delay at Barcelona
+EVT000648,SHP000583,2024-12-16 21:13:00,exception,"Chicago, USA",Exception at Chicago
+EVT000649,SHP000382,2025-11-19 11:11:00,departure,"Moscow, Russia",Exception at Moscow
+EVT000650,SHP000548,2023-05-05 01:12:00,pickup,"Felixstowe, UK",Arrival at Felixstowe
+EVT000651,SHP000310,2025-03-05 20:05:00,delay,"Mumbai, India",Delivery at Mumbai
+EVT000652,SHP000588,2023-08-13 14:04:00,arrival,"Houston, USA",Delay at Houston
+EVT000653,SHP000167,2023-07-11 00:49:00,departure,"Tokyo, Japan",Exception at Tokyo
+EVT000654,SHP000592,2024-12-14 21:01:00,pickup,"Hamburg, Germany",Arrival at Hamburg
+EVT000655,SHP000204,2024-07-21 20:55:00,exception,"Barcelona, Spain",Delivery at Barcelona
+EVT000656,SHP000198,2024-02-07 00:36:00,customs_clearance,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT000657,SHP000085,2025-10-20 02:38:00,pickup,"Tokyo, Japan",Departure at Tokyo
+EVT000658,SHP000408,2023-11-06 23:09:00,pickup,"Rotterdam, Netherlands",Departure at Rotterdam
+EVT000659,SHP000162,2025-07-31 13:29:00,delay,"Dubai, UAE",Exception at Dubai
+EVT000660,SHP000143,2023-08-24 19:49:00,exception,"Rotterdam, Netherlands",Exception at Rotterdam
+EVT000661,SHP000092,2023-08-19 12:25:00,pickup,"Dubai, UAE",Departure at Dubai
+EVT000662,SHP000186,2023-09-05 19:46:00,pickup,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT000663,SHP000140,2025-12-19 14:59:00,departure,"Houston, USA",Departure at Houston
+EVT000664,SHP000220,2024-08-24 18:12:00,customs_clearance,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT000665,SHP000346,2023-01-28 21:11:00,customs_clearance,"Tokyo, Japan",Exception at Tokyo
+EVT000666,SHP000309,2023-08-01 04:48:00,delay,"Osaka, Japan",Arrival at Osaka
+EVT000667,SHP000181,2023-07-04 09:01:00,delay,"Dubai, UAE",Delivery at Dubai
+EVT000668,SHP000405,2025-12-10 04:59:00,arrival,"São Paulo, Brazil",Delay at São Paulo
+EVT000669,SHP000009,2024-10-30 04:09:00,delivery,"Sydney, Australia",Arrival at Sydney
+EVT000670,SHP000385,2023-02-05 18:12:00,exception,"Los Angeles, USA",Delay at Los Angeles
+EVT000671,SHP000376,2025-02-18 02:51:00,exception,"Hong Kong, China",Exception at Hong Kong
+EVT000672,SHP000002,2024-12-08 04:49:00,exception,"Tokyo, Japan",Delivery at Tokyo
+EVT000673,SHP000509,2023-07-19 07:29:00,pickup,"Shanghai, China",Departure at Shanghai
+EVT000674,SHP000283,2025-05-18 11:35:00,arrival,"Tokyo, Japan",Delivery at Tokyo
+EVT000675,SHP000376,2024-09-20 04:13:00,delay,"Felixstowe, UK",Pickup at Felixstowe
+EVT000676,SHP000266,2023-11-16 00:09:00,customs_clearance,"Singapore, Singapore",Pickup at Singapore
+EVT000677,SHP000433,2025-01-11 19:10:00,customs_clearance,"Dubai, UAE",Departure at Dubai
+EVT000678,SHP000571,2024-07-23 01:10:00,delivery,"Barcelona, Spain",Delivery at Barcelona
+EVT000679,SHP000063,2023-06-24 13:27:00,delay,"Chicago, USA",Delivery at Chicago
+EVT000680,SHP000023,2024-04-12 04:08:00,delay,"Valencia, Spain",Arrival at Valencia
+EVT000681,SHP000544,2023-08-08 10:20:00,arrival,"São Paulo, Brazil",Delay at São Paulo
+EVT000682,SHP000163,2023-01-16 07:44:00,exception,"Moscow, Russia",Delay at Moscow
+EVT000683,SHP000293,2024-05-26 01:07:00,pickup,"Rotterdam, Netherlands",Delivery at Rotterdam
+EVT000684,SHP000372,2025-10-13 18:58:00,delay,"Felixstowe, UK",Exception at Felixstowe
+EVT000685,SHP000463,2025-05-16 09:39:00,pickup,"Hong Kong, China",Arrival at Hong Kong
+EVT000686,SHP000454,2024-12-13 11:18:00,customs_clearance,"Sydney, Australia",Delay at Sydney
+EVT000687,SHP000177,2024-05-29 15:53:00,pickup,"Mumbai, India",Departure at Mumbai
+EVT000688,SHP000258,2025-06-08 00:07:00,pickup,"Chicago, USA",Delivery at Chicago
+EVT000689,SHP000061,2025-11-19 03:02:00,departure,"Dubai, UAE",Pickup at Dubai
+EVT000690,SHP000423,2024-04-15 03:28:00,customs_clearance,"Mumbai, India",Arrival at Mumbai
+EVT000691,SHP000093,2023-11-28 13:33:00,pickup,"Barcelona, Spain",Delivery at Barcelona
+EVT000692,SHP000014,2023-07-19 23:42:00,arrival,"Osaka, Japan",Customs Clearance at Osaka
+EVT000693,SHP000110,2023-03-04 23:06:00,arrival,"Los Angeles, USA",Exception at Los Angeles
+EVT000694,SHP000063,2023-06-22 06:32:00,pickup,"Chicago, USA",Customs Clearance at Chicago
+EVT000695,SHP000464,2024-05-19 01:29:00,exception,"Dubai, UAE",Departure at Dubai
+EVT000696,SHP000341,2023-04-08 09:23:00,delivery,"Singapore, Singapore",Arrival at Singapore
+EVT000697,SHP000504,2024-02-13 12:11:00,pickup,"Busan, South Korea",Exception at Busan
+EVT000698,SHP000202,2023-02-05 18:27:00,departure,"Shanghai, China",Arrival at Shanghai
+EVT000699,SHP000545,2024-12-28 14:27:00,exception,"Osaka, Japan",Customs Clearance at Osaka
+EVT000700,SHP000260,2023-03-02 06:07:00,delivery,"Barcelona, Spain",Pickup at Barcelona
+EVT000701,SHP000342,2024-02-15 19:25:00,departure,"Tokyo, Japan",Delay at Tokyo
+EVT000702,SHP000451,2025-06-14 12:27:00,delay,"Antwerp, Belgium",Departure at Antwerp
+EVT000703,SHP000081,2023-05-12 16:15:00,delay,"Hong Kong, China",Departure at Hong Kong
+EVT000704,SHP000487,2023-03-07 01:17:00,customs_clearance,"Shanghai, China",Customs Clearance at Shanghai
+EVT000705,SHP000436,2024-09-28 10:40:00,delivery,"Dubai, UAE",Pickup at Dubai
+EVT000706,SHP000070,2023-04-14 14:37:00,customs_clearance,"Dubai, UAE",Exception at Dubai
+EVT000707,SHP000479,2024-05-31 01:01:00,exception,"Dubai, UAE",Exception at Dubai
+EVT000708,SHP000269,2024-04-28 17:49:00,delivery,"Sydney, Australia",Pickup at Sydney
+EVT000709,SHP000577,2024-07-06 18:00:00,arrival,"São Paulo, Brazil",Departure at São Paulo
+EVT000710,SHP000068,2023-12-19 01:16:00,delivery,"Houston, USA",Delivery at Houston
+EVT000711,SHP000514,2024-09-01 20:53:00,delivery,"Rotterdam, Netherlands",Delay at Rotterdam
+EVT000712,SHP000509,2025-12-19 15:40:00,departure,"Felixstowe, UK",Exception at Felixstowe
+EVT000713,SHP000067,2025-08-06 18:28:00,exception,"Tokyo, Japan",Pickup at Tokyo
+EVT000714,SHP000425,2024-08-22 03:26:00,customs_clearance,"Felixstowe, UK",Pickup at Felixstowe
+EVT000715,SHP000153,2025-09-20 09:03:00,customs_clearance,"Tokyo, Japan",Customs Clearance at Tokyo
+EVT000716,SHP000585,2024-05-23 07:53:00,departure,"Antwerp, Belgium",Delay at Antwerp
+EVT000717,SHP000331,2024-01-10 06:47:00,exception,"Valencia, Spain",Delivery at Valencia
+EVT000718,SHP000297,2023-08-22 19:28:00,delay,"Sydney, Australia",Pickup at Sydney
+EVT000719,SHP000069,2023-12-05 13:54:00,exception,"Antwerp, Belgium",Departure at Antwerp
+EVT000720,SHP000027,2025-08-14 01:32:00,customs_clearance,"Tokyo, Japan",Delay at Tokyo
+EVT000721,SHP000554,2023-08-05 02:26:00,pickup,"Hamburg, Germany",Delay at Hamburg
+EVT000722,SHP000163,2023-02-26 20:51:00,exception,"Moscow, Russia",Exception at Moscow
+EVT000723,SHP000266,2023-06-21 07:23:00,exception,"Dubai, UAE",Exception at Dubai
+EVT000724,SHP000586,2025-10-30 18:28:00,departure,"Osaka, Japan",Pickup at Osaka
+EVT000725,SHP000086,2023-02-15 23:53:00,delivery,"Chicago, USA",Delivery at Chicago
+EVT000726,SHP000297,2025-11-06 00:52:00,delay,"Moscow, Russia",Delay at Moscow
+EVT000727,SHP000073,2025-03-28 08:19:00,delivery,"Mumbai, India",Departure at Mumbai
+EVT000728,SHP000165,2025-07-13 11:33:00,delivery,"Dubai, UAE",Exception at Dubai
+EVT000729,SHP000239,2025-06-20 16:23:00,customs_clearance,"Sydney, Australia",Pickup at Sydney
+EVT000730,SHP000553,2023-05-07 00:16:00,delivery,"Hamburg, Germany",Pickup at Hamburg
+EVT000731,SHP000429,2024-10-17 15:42:00,pickup,"Barcelona, Spain",Delay at Barcelona
+EVT000732,SHP000185,2025-02-17 18:05:00,arrival,"Tokyo, Japan",Delivery at Tokyo
+EVT000733,SHP000413,2023-06-22 05:32:00,customs_clearance,"Singapore, Singapore",Exception at Singapore
+EVT000734,SHP000277,2025-05-17 17:57:00,delivery,"Hamburg, Germany",Departure at Hamburg
+EVT000735,SHP000475,2025-09-04 21:40:00,pickup,"Felixstowe, UK",Arrival at Felixstowe
+EVT000736,SHP000045,2024-12-27 07:45:00,pickup,"Sydney, Australia",Arrival at Sydney
+EVT000737,SHP000091,2025-05-17 03:22:00,customs_clearance,"Sydney, Australia",Pickup at Sydney
+EVT000738,SHP000507,2024-05-23 05:31:00,arrival,"Mumbai, India",Exception at Mumbai
+EVT000739,SHP000567,2024-04-04 10:46:00,customs_clearance,"Mumbai, India",Arrival at Mumbai
+EVT000740,SHP000110,2025-03-26 05:18:00,exception,"Chicago, USA",Pickup at Chicago
+EVT000741,SHP000432,2024-08-02 19:24:00,customs_clearance,"São Paulo, Brazil",Delivery at São Paulo
+EVT000742,SHP000255,2025-05-29 00:17:00,customs_clearance,"Antwerp, Belgium",Delivery at Antwerp
+EVT000743,SHP000320,2023-05-13 14:00:00,departure,"Los Angeles, USA",Delivery at Los Angeles
+EVT000744,SHP000347,2025-03-01 04:10:00,arrival,"Dubai, UAE",Delivery at Dubai
+EVT000745,SHP000249,2025-04-12 08:34:00,delivery,"São Paulo, Brazil",Departure at São Paulo
+EVT000746,SHP000001,2024-03-30 08:34:00,customs_clearance,"Osaka, Japan",Delivery at Osaka
+EVT000747,SHP000514,2023-03-26 13:08:00,arrival,"Mumbai, India",Customs Clearance at Mumbai
+EVT000748,SHP000492,2025-12-15 14:38:00,delivery,"Los Angeles, USA",Pickup at Los Angeles
+EVT000749,SHP000436,2023-05-10 02:19:00,pickup,"Shanghai, China",Departure at Shanghai
+EVT000750,SHP000116,2024-05-23 11:42:00,delay,"Sydney, Australia",Delivery at Sydney
+EVT000751,SHP000168,2025-04-14 03:14:00,departure,"Tokyo, Japan",Customs Clearance at Tokyo
+EVT000752,SHP000418,2024-11-30 05:15:00,pickup,"Shanghai, China",Arrival at Shanghai
+EVT000753,SHP000329,2025-11-12 03:25:00,arrival,"Mumbai, India",Delay at Mumbai
+EVT000754,SHP000023,2025-01-07 08:48:00,arrival,"Hamburg, Germany",Customs Clearance at Hamburg
+EVT000755,SHP000149,2023-09-13 19:06:00,customs_clearance,"Antwerp, Belgium",Arrival at Antwerp
+EVT000756,SHP000033,2024-08-15 08:01:00,delay,"Tokyo, Japan",Delivery at Tokyo
+EVT000757,SHP000427,2023-05-10 15:48:00,exception,"Felixstowe, UK",Customs Clearance at Felixstowe
+EVT000758,SHP000067,2023-09-17 22:16:00,delivery,"Osaka, Japan",Delivery at Osaka
+EVT000759,SHP000587,2023-03-27 17:34:00,exception,"Mumbai, India",Pickup at Mumbai
+EVT000760,SHP000411,2023-10-25 03:17:00,pickup,"Chicago, USA",Customs Clearance at Chicago
+EVT000761,SHP000278,2025-11-24 03:50:00,departure,"Valencia, Spain",Delay at Valencia
+EVT000762,SHP000335,2024-01-14 12:40:00,customs_clearance,"Toronto, Canada",Arrival at Toronto
+EVT000763,SHP000560,2024-05-24 22:37:00,customs_clearance,"Valencia, Spain",Exception at Valencia
+EVT000764,SHP000563,2024-09-30 16:24:00,delivery,"Chicago, USA",Arrival at Chicago
+EVT000765,SHP000093,2024-11-27 18:16:00,arrival,"Houston, USA",Delay at Houston
+EVT000766,SHP000051,2023-09-12 19:08:00,exception,"Dubai, UAE",Delivery at Dubai
+EVT000767,SHP000185,2025-09-05 11:15:00,exception,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT000768,SHP000046,2023-08-21 02:30:00,pickup,"Hong Kong, China",Customs Clearance at Hong Kong
+EVT000769,SHP000064,2025-03-19 06:26:00,arrival,"Mumbai, India",Departure at Mumbai
+EVT000770,SHP000421,2023-09-15 03:32:00,delivery,"São Paulo, Brazil",Arrival at São Paulo
+EVT000771,SHP000336,2023-04-25 12:31:00,pickup,"Hong Kong, China",Pickup at Hong Kong
+EVT000772,SHP000026,2024-09-08 04:19:00,delivery,"Toronto, Canada",Delivery at Toronto
+EVT000773,SHP000257,2023-04-07 09:58:00,customs_clearance,"Hamburg, Germany",Customs Clearance at Hamburg
+EVT000774,SHP000281,2025-06-09 13:31:00,customs_clearance,"Mumbai, India",Pickup at Mumbai
+EVT000775,SHP000335,2024-06-20 05:00:00,delay,"Valencia, Spain",Delay at Valencia
+EVT000776,SHP000319,2025-05-17 11:31:00,delay,"Houston, USA",Customs Clearance at Houston
+EVT000777,SHP000349,2023-03-01 18:28:00,delay,"Mumbai, India",Arrival at Mumbai
+EVT000778,SHP000327,2024-01-29 16:51:00,delivery,"Mumbai, India",Pickup at Mumbai
+EVT000779,SHP000436,2024-05-11 11:16:00,delay,"Los Angeles, USA",Customs Clearance at Los Angeles
+EVT000780,SHP000391,2024-01-13 13:21:00,exception,"Los Angeles, USA",Arrival at Los Angeles
+EVT000781,SHP000056,2025-03-23 20:21:00,delivery,"Dubai, UAE",Delivery at Dubai
+EVT000782,SHP000356,2023-04-20 00:44:00,exception,"Mumbai, India",Customs Clearance at Mumbai
+EVT000783,SHP000165,2023-08-31 05:09:00,arrival,"Hamburg, Germany",Departure at Hamburg
+EVT000784,SHP000463,2025-09-06 22:42:00,customs_clearance,"Valencia, Spain",Arrival at Valencia
+EVT000785,SHP000411,2024-10-09 19:04:00,customs_clearance,"Los Angeles, USA",Pickup at Los Angeles
+EVT000786,SHP000107,2023-12-29 08:45:00,pickup,"Singapore, Singapore",Pickup at Singapore
+EVT000787,SHP000382,2024-05-29 17:51:00,delivery,"Osaka, Japan",Exception at Osaka
+EVT000788,SHP000398,2023-01-13 17:00:00,pickup,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT000789,SHP000529,2025-09-12 22:31:00,delivery,"Felixstowe, UK",Departure at Felixstowe
+EVT000790,SHP000201,2023-12-21 18:38:00,arrival,"Singapore, Singapore",Customs Clearance at Singapore
+EVT000791,SHP000014,2025-07-02 04:45:00,customs_clearance,"Antwerp, Belgium",Delay at Antwerp
+EVT000792,SHP000270,2025-05-20 02:09:00,exception,"Hamburg, Germany",Pickup at Hamburg
+EVT000793,SHP000169,2024-02-22 16:16:00,departure,"Rotterdam, Netherlands",Exception at Rotterdam
+EVT000794,SHP000491,2024-04-11 13:22:00,exception,"Houston, USA",Delivery at Houston
+EVT000795,SHP000396,2023-04-09 14:35:00,arrival,"Mumbai, India",Delay at Mumbai
+EVT000796,SHP000173,2024-06-26 16:11:00,arrival,"Hong Kong, China",Departure at Hong Kong
+EVT000797,SHP000127,2024-04-21 16:20:00,arrival,"Moscow, Russia",Arrival at Moscow
+EVT000798,SHP000275,2023-03-06 21:27:00,arrival,"Rotterdam, Netherlands",Arrival at Rotterdam
+EVT000799,SHP000377,2025-08-14 10:47:00,departure,"Busan, South Korea",Delay at Busan
+EVT000800,SHP000202,2023-08-17 04:12:00,departure,"Singapore, Singapore",Exception at Singapore
+EVT000801,SHP000459,2025-10-03 21:39:00,exception,"Busan, South Korea",Delay at Busan
+EVT000802,SHP000087,2025-06-16 12:48:00,departure,"Chicago, USA",Departure at Chicago
+EVT000803,SHP000301,2023-12-07 15:10:00,pickup,"São Paulo, Brazil",Departure at São Paulo
+EVT000804,SHP000569,2025-02-16 21:10:00,delay,"Mumbai, India",Pickup at Mumbai
+EVT000805,SHP000487,2023-01-26 20:34:00,pickup,"Hong Kong, China",Delay at Hong Kong
+EVT000806,SHP000069,2025-03-03 07:52:00,pickup,"Toronto, Canada",Arrival at Toronto
+EVT000807,SHP000337,2024-02-03 01:24:00,delivery,"São Paulo, Brazil",Delay at São Paulo
+EVT000808,SHP000236,2025-10-27 04:17:00,delivery,"Houston, USA",Departure at Houston
+EVT000809,SHP000339,2024-09-17 00:02:00,delay,"Mumbai, India",Delay at Mumbai
+EVT000810,SHP000107,2023-05-22 22:55:00,customs_clearance,"Osaka, Japan",Customs Clearance at Osaka
+EVT000811,SHP000486,2024-08-09 16:57:00,pickup,"Osaka, Japan",Delay at Osaka
+EVT000812,SHP000436,2023-12-19 08:16:00,arrival,"Hong Kong, China",Exception at Hong Kong
+EVT000813,SHP000369,2024-06-20 13:03:00,delay,"Antwerp, Belgium",Delivery at Antwerp
+EVT000814,SHP000216,2025-01-10 22:04:00,customs_clearance,"Mumbai, India",Delivery at Mumbai
+EVT000815,SHP000223,2023-08-08 00:41:00,exception,"Chicago, USA",Exception at Chicago
+EVT000816,SHP000329,2023-09-10 04:34:00,customs_clearance,"Mumbai, India",Delivery at Mumbai
+EVT000817,SHP000525,2024-06-07 17:47:00,customs_clearance,"Moscow, Russia",Delay at Moscow
+EVT000818,SHP000582,2025-05-21 18:33:00,delivery,"Sydney, Australia",Delay at Sydney
+EVT000819,SHP000159,2023-05-05 09:20:00,customs_clearance,"Toronto, Canada",Delivery at Toronto
+EVT000820,SHP000137,2023-08-03 08:53:00,customs_clearance,"Barcelona, Spain",Exception at Barcelona
+EVT000821,SHP000141,2025-02-10 07:02:00,delay,"Antwerp, Belgium",Pickup at Antwerp
+EVT000822,SHP000554,2024-06-01 05:17:00,departure,"Felixstowe, UK",Departure at Felixstowe
+EVT000823,SHP000571,2024-04-08 18:28:00,departure,"São Paulo, Brazil",Delivery at São Paulo
+EVT000824,SHP000242,2023-07-31 04:07:00,exception,"Mumbai, India",Exception at Mumbai
+EVT000825,SHP000563,2023-03-03 12:58:00,delay,"Barcelona, Spain",Departure at Barcelona
+EVT000826,SHP000581,2023-12-20 16:55:00,delivery,"Tokyo, Japan",Pickup at Tokyo
+EVT000827,SHP000592,2024-03-10 05:09:00,pickup,"Mumbai, India",Pickup at Mumbai
+EVT000828,SHP000120,2024-01-15 07:11:00,pickup,"Shanghai, China",Pickup at Shanghai
+EVT000829,SHP000065,2025-03-01 14:27:00,customs_clearance,"Osaka, Japan",Pickup at Osaka
+EVT000830,SHP000047,2025-11-06 20:38:00,exception,"Shanghai, China",Delay at Shanghai
+EVT000831,SHP000572,2025-09-11 22:24:00,pickup,"Moscow, Russia",Pickup at Moscow
+EVT000832,SHP000561,2024-08-28 06:23:00,customs_clearance,"Singapore, Singapore",Delay at Singapore
+EVT000833,SHP000096,2023-05-07 23:15:00,delivery,"Busan, South Korea",Arrival at Busan
+EVT000834,SHP000327,2024-05-14 20:05:00,delivery,"São Paulo, Brazil",Delivery at São Paulo
+EVT000835,SHP000049,2024-07-19 13:50:00,delay,"Barcelona, Spain",Delay at Barcelona
+EVT000836,SHP000564,2023-10-11 06:20:00,arrival,"São Paulo, Brazil",Customs Clearance at São Paulo
+EVT000837,SHP000324,2023-07-20 01:00:00,departure,"Moscow, Russia",Exception at Moscow
+EVT000838,SHP000018,2025-04-07 05:00:00,arrival,"Chicago, USA",Delay at Chicago
+EVT000839,SHP000286,2025-02-15 14:53:00,pickup,"Houston, USA",Arrival at Houston
+EVT000840,SHP000021,2025-06-11 13:57:00,exception,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT000841,SHP000433,2023-07-08 02:00:00,exception,"Antwerp, Belgium",Customs Clearance at Antwerp
+EVT000842,SHP000380,2023-06-27 22:05:00,exception,"Busan, South Korea",Delay at Busan
+EVT000843,SHP000231,2023-01-04 14:34:00,arrival,"Busan, South Korea",Pickup at Busan
+EVT000844,SHP000409,2024-07-04 19:30:00,pickup,"Toronto, Canada",Delivery at Toronto
+EVT000845,SHP000016,2024-02-03 13:26:00,delivery,"Hong Kong, China",Departure at Hong Kong
+EVT000846,SHP000302,2023-10-16 12:34:00,exception,"Mumbai, India",Delivery at Mumbai
+EVT000847,SHP000579,2025-04-09 05:24:00,delivery,"Toronto, Canada",Customs Clearance at Toronto
+EVT000848,SHP000016,2024-04-24 17:27:00,delivery,"Osaka, Japan",Delivery at Osaka
+EVT000849,SHP000533,2023-08-31 15:33:00,exception,"São Paulo, Brazil",Exception at São Paulo
+EVT000850,SHP000497,2023-05-29 11:01:00,arrival,"Toronto, Canada",Delay at Toronto
+EVT000851,SHP000440,2025-01-13 14:54:00,pickup,"Hamburg, Germany",Delivery at Hamburg
+EVT000852,SHP000466,2023-02-17 22:38:00,departure,"Felixstowe, UK",Departure at Felixstowe
+EVT000853,SHP000023,2023-09-29 13:56:00,exception,"Singapore, Singapore",Delay at Singapore
+EVT000854,SHP000368,2025-12-05 18:35:00,delay,"Chicago, USA",Delay at Chicago
+EVT000855,SHP000192,2023-01-31 09:05:00,delivery,"Felixstowe, UK",Delay at Felixstowe
+EVT000856,SHP000006,2025-01-24 04:04:00,delay,"Sydney, Australia",Customs Clearance at Sydney
+EVT000857,SHP000370,2025-11-11 10:07:00,customs_clearance,"Houston, USA",Customs Clearance at Houston
+EVT000858,SHP000468,2023-07-04 21:47:00,departure,"Busan, South Korea",Customs Clearance at Busan
+EVT000859,SHP000304,2024-01-14 02:06:00,delivery,"Felixstowe, UK",Exception at Felixstowe
+EVT000860,SHP000565,2024-07-28 02:38:00,exception,"Los Angeles, USA",Delivery at Los Angeles
+EVT000861,SHP000413,2025-06-11 08:11:00,departure,"Los Angeles, USA",Departure at Los Angeles
+EVT000862,SHP000489,2025-11-15 18:04:00,customs_clearance,"Houston, USA",Pickup at Houston
+EVT000863,SHP000271,2024-06-29 04:06:00,delay,"Hong Kong, China",Delivery at Hong Kong
+EVT000864,SHP000355,2024-08-24 11:31:00,delay,"Moscow, Russia",Delay at Moscow
+EVT000865,SHP000047,2025-06-10 16:08:00,pickup,"Houston, USA",Delay at Houston
+EVT000866,SHP000592,2023-09-16 11:31:00,delay,"Los Angeles, USA",Pickup at Los Angeles
+EVT000867,SHP000589,2023-04-12 02:40:00,customs_clearance,"Shanghai, China",Departure at Shanghai
+EVT000868,SHP000351,2024-07-17 01:29:00,departure,"Valencia, Spain",Departure at Valencia
+EVT000869,SHP000140,2025-08-20 05:32:00,departure,"Antwerp, Belgium",Delivery at Antwerp
+EVT000870,SHP000336,2023-01-11 01:05:00,customs_clearance,"Antwerp, Belgium",Delivery at Antwerp
+EVT000871,SHP000530,2023-11-26 22:16:00,exception,"Hamburg, Germany",Customs Clearance at Hamburg
+EVT000872,SHP000247,2023-10-07 13:04:00,customs_clearance,"Singapore, Singapore",Delivery at Singapore
+EVT000873,SHP000383,2025-09-13 02:03:00,delay,"Shanghai, China",Arrival at Shanghai
+EVT000874,SHP000576,2023-05-01 02:07:00,delivery,"São Paulo, Brazil",Arrival at São Paulo
+EVT000875,SHP000002,2023-12-31 14:56:00,delay,"Toronto, Canada",Pickup at Toronto
+EVT000876,SHP000089,2024-01-16 13:05:00,exception,"Houston, USA",Pickup at Houston
+EVT000877,SHP000372,2025-06-21 01:52:00,delivery,"Mumbai, India",Departure at Mumbai
+EVT000878,SHP000205,2023-03-09 14:04:00,delay,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT000879,SHP000322,2023-01-31 00:30:00,arrival,"Moscow, Russia",Exception at Moscow
+EVT000880,SHP000089,2024-10-01 17:45:00,arrival,"Osaka, Japan",Exception at Osaka
+EVT000881,SHP000301,2023-10-16 18:33:00,customs_clearance,"Mumbai, India",Customs Clearance at Mumbai
+EVT000882,SHP000569,2024-03-12 13:22:00,departure,"Sydney, Australia",Delivery at Sydney
+EVT000883,SHP000264,2025-08-25 03:26:00,delay,"Antwerp, Belgium",Exception at Antwerp
+EVT000884,SHP000091,2025-11-20 04:30:00,departure,"Toronto, Canada",Delay at Toronto
+EVT000885,SHP000319,2023-06-19 06:57:00,delay,"Mumbai, India",Exception at Mumbai
+EVT000886,SHP000073,2024-06-12 10:02:00,departure,"Rotterdam, Netherlands",Arrival at Rotterdam
+EVT000887,SHP000575,2025-04-05 07:43:00,departure,"Moscow, Russia",Pickup at Moscow
+EVT000888,SHP000480,2024-03-12 23:23:00,customs_clearance,"Busan, South Korea",Arrival at Busan
+EVT000889,SHP000537,2024-11-21 04:26:00,delivery,"Mumbai, India",Pickup at Mumbai
+EVT000890,SHP000416,2025-06-10 01:47:00,customs_clearance,"Antwerp, Belgium",Customs Clearance at Antwerp
+EVT000891,SHP000199,2024-03-24 22:16:00,arrival,"Sydney, Australia",Delivery at Sydney
+EVT000892,SHP000516,2024-09-13 05:20:00,delay,"Tokyo, Japan",Departure at Tokyo
+EVT000893,SHP000392,2024-09-02 12:58:00,departure,"São Paulo, Brazil",Delivery at São Paulo
+EVT000894,SHP000049,2024-11-15 01:28:00,delay,"Houston, USA",Customs Clearance at Houston
+EVT000895,SHP000284,2025-03-16 11:28:00,delivery,"Rotterdam, Netherlands",Arrival at Rotterdam
+EVT000896,SHP000361,2025-01-15 12:10:00,departure,"Singapore, Singapore",Delivery at Singapore
+EVT000897,SHP000188,2023-03-11 17:59:00,arrival,"Shanghai, China",Delay at Shanghai
+EVT000898,SHP000333,2023-03-29 15:40:00,exception,"Dubai, UAE",Arrival at Dubai
+EVT000899,SHP000029,2023-07-28 07:06:00,pickup,"Moscow, Russia",Pickup at Moscow
+EVT000900,SHP000474,2025-03-05 03:38:00,exception,"Osaka, Japan",Pickup at Osaka
+EVT000901,SHP000146,2024-08-27 22:28:00,exception,"Houston, USA",Customs Clearance at Houston
+EVT000902,SHP000056,2023-12-29 05:40:00,pickup,"Moscow, Russia",Customs Clearance at Moscow
+EVT000903,SHP000380,2024-10-07 08:44:00,pickup,"Mumbai, India",Exception at Mumbai
+EVT000904,SHP000182,2023-06-19 21:08:00,departure,"Shanghai, China",Customs Clearance at Shanghai
+EVT000905,SHP000322,2025-01-01 01:00:00,departure,"Sydney, Australia",Delay at Sydney
+EVT000906,SHP000428,2023-06-11 10:07:00,arrival,"Rotterdam, Netherlands",Departure at Rotterdam
+EVT000907,SHP000188,2024-06-15 14:40:00,delivery,"Hong Kong, China",Arrival at Hong Kong
+EVT000908,SHP000033,2024-08-01 01:53:00,customs_clearance,"Chicago, USA",Pickup at Chicago
+EVT000909,SHP000454,2023-09-22 14:38:00,delivery,"Tokyo, Japan",Pickup at Tokyo
+EVT000910,SHP000363,2025-01-19 20:01:00,departure,"Sydney, Australia",Exception at Sydney
+EVT000911,SHP000068,2023-01-20 12:18:00,exception,"Rotterdam, Netherlands",Delivery at Rotterdam
+EVT000912,SHP000222,2023-01-25 06:44:00,delivery,"Busan, South Korea",Pickup at Busan
+EVT000913,SHP000004,2024-12-14 04:02:00,departure,"Antwerp, Belgium",Customs Clearance at Antwerp
+EVT000914,SHP000047,2024-08-05 02:04:00,delivery,"Osaka, Japan",Arrival at Osaka
+EVT000915,SHP000097,2024-11-20 19:39:00,departure,"Mumbai, India",Delivery at Mumbai
+EVT000916,SHP000368,2024-05-13 11:43:00,delivery,"Hong Kong, China",Arrival at Hong Kong
+EVT000917,SHP000151,2025-01-10 12:04:00,pickup,"Rotterdam, Netherlands",Pickup at Rotterdam
+EVT000918,SHP000418,2023-01-27 20:01:00,customs_clearance,"Barcelona, Spain",Delivery at Barcelona
+EVT000919,SHP000439,2023-05-01 02:34:00,customs_clearance,"Mumbai, India",Exception at Mumbai
+EVT000920,SHP000450,2024-06-22 01:49:00,exception,"Barcelona, Spain",Departure at Barcelona
+EVT000921,SHP000491,2024-06-30 22:43:00,departure,"Osaka, Japan",Exception at Osaka
+EVT000922,SHP000224,2024-02-01 18:54:00,arrival,"Moscow, Russia",Arrival at Moscow
+EVT000923,SHP000595,2024-04-05 00:00:00,customs_clearance,"Hong Kong, China",Customs Clearance at Hong Kong
+EVT000924,SHP000470,2023-11-18 10:20:00,pickup,"Felixstowe, UK",Departure at Felixstowe
+EVT000925,SHP000165,2024-12-13 00:04:00,customs_clearance,"São Paulo, Brazil",Departure at São Paulo
+EVT000926,SHP000389,2024-06-06 04:57:00,customs_clearance,"Houston, USA",Departure at Houston
+EVT000927,SHP000293,2025-07-29 17:16:00,departure,"Dubai, UAE",Delivery at Dubai
+EVT000928,SHP000063,2024-01-18 21:36:00,exception,"São Paulo, Brazil",Delay at São Paulo
+EVT000929,SHP000154,2024-03-29 09:21:00,delay,"Mumbai, India",Pickup at Mumbai
+EVT000930,SHP000072,2023-03-07 18:02:00,exception,"Shanghai, China",Customs Clearance at Shanghai
+EVT000931,SHP000048,2024-05-15 00:40:00,delay,"Hong Kong, China",Delivery at Hong Kong
+EVT000932,SHP000570,2025-11-11 08:15:00,pickup,"Valencia, Spain",Departure at Valencia
+EVT000933,SHP000120,2025-02-25 12:28:00,departure,"Singapore, Singapore",Delay at Singapore
+EVT000934,SHP000140,2023-01-14 09:57:00,exception,"Toronto, Canada",Arrival at Toronto
+EVT000935,SHP000468,2025-07-12 10:54:00,delivery,"Houston, USA",Delay at Houston
+EVT000936,SHP000191,2023-12-17 18:47:00,delivery,"Singapore, Singapore",Delay at Singapore
+EVT000937,SHP000434,2023-12-10 12:02:00,departure,"Busan, South Korea",Delay at Busan
+EVT000938,SHP000247,2024-01-02 00:56:00,exception,"Valencia, Spain",Departure at Valencia
+EVT000939,SHP000469,2024-12-25 16:11:00,pickup,"Hong Kong, China",Arrival at Hong Kong
+EVT000940,SHP000474,2023-02-20 22:38:00,departure,"Chicago, USA",Pickup at Chicago
+EVT000941,SHP000456,2023-07-06 11:53:00,departure,"Dubai, UAE",Departure at Dubai
+EVT000942,SHP000564,2024-01-06 06:27:00,exception,"Shanghai, China",Departure at Shanghai
+EVT000943,SHP000102,2023-12-17 02:22:00,delivery,"São Paulo, Brazil",Delay at São Paulo
+EVT000944,SHP000128,2025-09-28 23:00:00,exception,"Osaka, Japan",Arrival at Osaka
+EVT000945,SHP000580,2025-06-07 03:49:00,pickup,"Dubai, UAE",Delivery at Dubai
+EVT000946,SHP000448,2025-01-30 10:35:00,delivery,"Tokyo, Japan",Pickup at Tokyo
+EVT000947,SHP000321,2025-08-07 22:30:00,departure,"Sydney, Australia",Exception at Sydney
+EVT000948,SHP000097,2025-11-24 01:45:00,pickup,"Felixstowe, UK",Delay at Felixstowe
+EVT000949,SHP000348,2025-09-07 17:48:00,delay,"Mumbai, India",Exception at Mumbai
+EVT000950,SHP000222,2025-02-07 19:09:00,delivery,"Singapore, Singapore",Delivery at Singapore
+EVT000951,SHP000492,2025-11-08 08:21:00,arrival,"Hamburg, Germany",Delay at Hamburg
+EVT000952,SHP000055,2023-07-16 16:08:00,departure,"Moscow, Russia",Exception at Moscow
+EVT000953,SHP000489,2023-01-03 01:11:00,delivery,"Hamburg, Germany",Departure at Hamburg
+EVT000954,SHP000302,2023-09-19 20:59:00,delay,"Mumbai, India",Departure at Mumbai
+EVT000955,SHP000139,2023-11-15 01:16:00,pickup,"Moscow, Russia",Arrival at Moscow
+EVT000956,SHP000286,2024-07-24 20:13:00,exception,"Barcelona, Spain",Departure at Barcelona
+EVT000957,SHP000538,2023-05-16 13:23:00,delivery,"Dubai, UAE",Delivery at Dubai
+EVT000958,SHP000201,2023-09-17 23:40:00,exception,"Shanghai, China",Pickup at Shanghai
+EVT000959,SHP000131,2024-03-01 01:17:00,exception,"Rotterdam, Netherlands",Exception at Rotterdam
+EVT000960,SHP000153,2023-09-26 04:45:00,customs_clearance,"Mumbai, India",Customs Clearance at Mumbai
+EVT000961,SHP000368,2023-07-31 07:23:00,exception,"Los Angeles, USA",Departure at Los Angeles
+EVT000962,SHP000043,2025-10-27 02:26:00,arrival,"Los Angeles, USA",Pickup at Los Angeles
+EVT000963,SHP000417,2025-03-21 06:00:00,exception,"Antwerp, Belgium",Delay at Antwerp
+EVT000964,SHP000059,2024-04-17 14:29:00,customs_clearance,"Hong Kong, China",Arrival at Hong Kong
+EVT000965,SHP000408,2023-07-16 19:34:00,departure,"Sydney, Australia",Departure at Sydney
+EVT000966,SHP000073,2023-02-16 20:10:00,delivery,"Moscow, Russia",Pickup at Moscow
+EVT000967,SHP000426,2023-06-01 15:19:00,customs_clearance,"Moscow, Russia",Delay at Moscow
+EVT000968,SHP000042,2025-12-23 06:07:00,delay,"Hamburg, Germany",Pickup at Hamburg
+EVT000969,SHP000270,2024-07-19 02:39:00,customs_clearance,"Mumbai, India",Customs Clearance at Mumbai
+EVT000970,SHP000167,2023-06-16 06:07:00,customs_clearance,"Los Angeles, USA",Customs Clearance at Los Angeles
+EVT000971,SHP000015,2023-04-25 11:25:00,delivery,"Osaka, Japan",Arrival at Osaka
+EVT000972,SHP000428,2025-08-01 01:24:00,departure,"Felixstowe, UK",Exception at Felixstowe
+EVT000973,SHP000404,2023-06-22 18:32:00,delay,"Los Angeles, USA",Customs Clearance at Los Angeles
+EVT000974,SHP000371,2023-05-04 09:37:00,arrival,"Hong Kong, China",Delay at Hong Kong
+EVT000975,SHP000261,2023-03-16 14:27:00,customs_clearance,"Busan, South Korea",Departure at Busan
+EVT000976,SHP000314,2024-01-22 22:14:00,delivery,"Toronto, Canada",Customs Clearance at Toronto
+EVT000977,SHP000353,2024-09-11 20:38:00,customs_clearance,"Shanghai, China",Departure at Shanghai
+EVT000978,SHP000465,2023-09-23 05:24:00,departure,"Tokyo, Japan",Customs Clearance at Tokyo
+EVT000979,SHP000121,2024-08-28 04:16:00,departure,"Singapore, Singapore",Delay at Singapore
+EVT000980,SHP000421,2023-10-09 23:21:00,exception,"Moscow, Russia",Delivery at Moscow
+EVT000981,SHP000329,2023-11-06 03:43:00,delivery,"Antwerp, Belgium",Delay at Antwerp
+EVT000982,SHP000526,2023-03-22 17:47:00,customs_clearance,"São Paulo, Brazil",Delivery at São Paulo
+EVT000983,SHP000101,2025-04-14 04:40:00,departure,"Toronto, Canada",Exception at Toronto
+EVT000984,SHP000319,2025-02-17 08:14:00,departure,"Singapore, Singapore",Delivery at Singapore
+EVT000985,SHP000347,2023-10-02 23:18:00,customs_clearance,"Mumbai, India",Departure at Mumbai
+EVT000986,SHP000375,2023-04-28 11:34:00,departure,"Moscow, Russia",Departure at Moscow
+EVT000987,SHP000252,2024-02-19 01:51:00,exception,"Antwerp, Belgium",Departure at Antwerp
+EVT000988,SHP000080,2025-01-19 21:33:00,customs_clearance,"Singapore, Singapore",Customs Clearance at Singapore
+EVT000989,SHP000029,2024-06-30 11:55:00,customs_clearance,"Hong Kong, China",Delay at Hong Kong
+EVT000990,SHP000400,2024-07-04 15:21:00,delay,"Sydney, Australia",Customs Clearance at Sydney
+EVT000991,SHP000412,2024-07-03 23:49:00,exception,"Sydney, Australia",Arrival at Sydney
+EVT000992,SHP000205,2024-05-06 13:23:00,delivery,"Hong Kong, China",Customs Clearance at Hong Kong
+EVT000993,SHP000278,2025-03-02 23:38:00,delay,"Felixstowe, UK",Delivery at Felixstowe
+EVT000994,SHP000392,2025-06-01 06:57:00,arrival,"Singapore, Singapore",Departure at Singapore
+EVT000995,SHP000081,2024-12-03 09:23:00,pickup,"Hamburg, Germany",Delivery at Hamburg
+EVT000996,SHP000009,2024-11-11 19:58:00,arrival,"Sydney, Australia",Delivery at Sydney
+EVT000997,SHP000090,2024-01-15 12:38:00,departure,"Houston, USA",Arrival at Houston
+EVT000998,SHP000381,2025-02-19 12:19:00,delay,"Sydney, Australia",Customs Clearance at Sydney
+EVT000999,SHP000187,2024-05-05 00:29:00,delay,"Dubai, UAE",Arrival at Dubai
+EVT001000,SHP000140,2025-01-23 22:37:00,pickup,"Mumbai, India",Arrival at Mumbai
+EVT001001,SHP000186,2023-09-08 09:03:00,exception,"Felixstowe, UK",Arrival at Felixstowe
+EVT001002,SHP000558,2024-02-05 07:50:00,departure,"Sydney, Australia",Customs Clearance at Sydney
+EVT001003,SHP000120,2024-10-10 09:13:00,exception,"Busan, South Korea",Delay at Busan
+EVT001004,SHP000058,2025-04-25 07:42:00,delay,"Chicago, USA",Customs Clearance at Chicago
+EVT001005,SHP000232,2023-02-07 00:34:00,exception,"Dubai, UAE",Exception at Dubai
+EVT001006,SHP000125,2025-12-23 11:58:00,departure,"Barcelona, Spain",Departure at Barcelona
+EVT001007,SHP000124,2025-01-24 23:35:00,customs_clearance,"Singapore, Singapore",Pickup at Singapore
+EVT001008,SHP000571,2024-10-13 05:13:00,arrival,"Antwerp, Belgium",Delay at Antwerp
+EVT001009,SHP000287,2025-06-05 16:51:00,customs_clearance,"Hamburg, Germany",Arrival at Hamburg
+EVT001010,SHP000274,2025-10-17 01:07:00,customs_clearance,"Moscow, Russia",Departure at Moscow
+EVT001011,SHP000168,2023-02-21 22:33:00,customs_clearance,"São Paulo, Brazil",Delay at São Paulo
+EVT001012,SHP000350,2024-03-31 14:29:00,customs_clearance,"Los Angeles, USA",Departure at Los Angeles
+EVT001013,SHP000592,2025-03-30 21:20:00,customs_clearance,"Valencia, Spain",Departure at Valencia
+EVT001014,SHP000200,2023-01-07 03:17:00,pickup,"Chicago, USA",Exception at Chicago
+EVT001015,SHP000048,2025-01-01 04:52:00,customs_clearance,"São Paulo, Brazil",Delivery at São Paulo
+EVT001016,SHP000065,2025-01-22 10:41:00,delivery,"Shanghai, China",Exception at Shanghai
+EVT001017,SHP000047,2023-02-21 04:30:00,delay,"Rotterdam, Netherlands",Exception at Rotterdam
+EVT001018,SHP000183,2023-05-15 09:11:00,arrival,"Los Angeles, USA",Customs Clearance at Los Angeles
+EVT001019,SHP000200,2025-05-21 00:38:00,arrival,"Dubai, UAE",Departure at Dubai
+EVT001020,SHP000588,2024-03-21 12:33:00,delay,"Dubai, UAE",Exception at Dubai
+EVT001021,SHP000089,2023-12-03 01:12:00,pickup,"Barcelona, Spain",Departure at Barcelona
+EVT001022,SHP000388,2024-12-09 11:45:00,departure,"Toronto, Canada",Delivery at Toronto
+EVT001023,SHP000401,2023-02-24 19:41:00,departure,"Hamburg, Germany",Delivery at Hamburg
+EVT001024,SHP000497,2024-12-05 04:46:00,arrival,"Mumbai, India",Delivery at Mumbai
+EVT001025,SHP000361,2024-03-12 07:09:00,departure,"Moscow, Russia",Departure at Moscow
+EVT001026,SHP000454,2024-01-25 16:38:00,delivery,"Mumbai, India",Departure at Mumbai
+EVT001027,SHP000002,2025-01-14 15:44:00,exception,"Busan, South Korea",Delay at Busan
+EVT001028,SHP000228,2024-04-06 04:14:00,customs_clearance,"Hong Kong, China",Customs Clearance at Hong Kong
+EVT001029,SHP000090,2024-12-17 01:30:00,customs_clearance,"Osaka, Japan",Pickup at Osaka
+EVT001030,SHP000051,2025-07-29 01:32:00,departure,"Mumbai, India",Customs Clearance at Mumbai
+EVT001031,SHP000510,2025-11-01 05:53:00,delay,"Dubai, UAE",Departure at Dubai
+EVT001032,SHP000391,2023-07-22 00:31:00,pickup,"Rotterdam, Netherlands",Departure at Rotterdam
+EVT001033,SHP000406,2024-12-26 20:54:00,delay,"Dubai, UAE",Delivery at Dubai
+EVT001034,SHP000228,2024-01-10 22:05:00,delay,"Mumbai, India",Customs Clearance at Mumbai
+EVT001035,SHP000446,2025-12-29 08:49:00,customs_clearance,"Antwerp, Belgium",Customs Clearance at Antwerp
+EVT001036,SHP000206,2025-06-25 08:08:00,departure,"Houston, USA",Departure at Houston
+EVT001037,SHP000222,2023-10-18 05:58:00,exception,"Los Angeles, USA",Delivery at Los Angeles
+EVT001038,SHP000018,2023-08-06 19:18:00,arrival,"São Paulo, Brazil",Departure at São Paulo
+EVT001039,SHP000355,2023-11-12 22:52:00,exception,"Mumbai, India",Exception at Mumbai
+EVT001040,SHP000189,2024-12-25 12:03:00,customs_clearance,"Hamburg, Germany",Departure at Hamburg
+EVT001041,SHP000346,2025-01-31 20:03:00,customs_clearance,"Tokyo, Japan",Departure at Tokyo
+EVT001042,SHP000491,2023-05-17 20:07:00,delivery,"Mumbai, India",Pickup at Mumbai
+EVT001043,SHP000279,2025-10-04 08:06:00,delay,"Felixstowe, UK",Departure at Felixstowe
+EVT001044,SHP000007,2024-10-07 07:54:00,delivery,"Barcelona, Spain",Arrival at Barcelona
+EVT001045,SHP000125,2024-10-25 04:00:00,exception,"São Paulo, Brazil",Pickup at São Paulo
+EVT001046,SHP000226,2023-12-24 12:42:00,pickup,"Felixstowe, UK",Delivery at Felixstowe
+EVT001047,SHP000294,2025-03-28 07:36:00,delay,"Moscow, Russia",Exception at Moscow
+EVT001048,SHP000485,2025-01-18 12:04:00,arrival,"Moscow, Russia",Exception at Moscow
+EVT001049,SHP000284,2023-04-03 11:20:00,arrival,"Barcelona, Spain",Delivery at Barcelona
+EVT001050,SHP000075,2023-05-18 11:05:00,customs_clearance,"Hamburg, Germany",Exception at Hamburg
+EVT001051,SHP000275,2023-06-08 18:49:00,exception,"Singapore, Singapore",Arrival at Singapore
+EVT001052,SHP000338,2024-07-10 00:36:00,exception,"Valencia, Spain",Pickup at Valencia
+EVT001053,SHP000591,2024-03-09 18:20:00,customs_clearance,"Felixstowe, UK",Delivery at Felixstowe
+EVT001054,SHP000509,2024-01-14 01:30:00,delay,"Hong Kong, China",Pickup at Hong Kong
+EVT001055,SHP000141,2024-06-03 05:27:00,departure,"Shanghai, China",Exception at Shanghai
+EVT001056,SHP000016,2025-10-13 03:08:00,exception,"Singapore, Singapore",Exception at Singapore
+EVT001057,SHP000092,2024-09-21 02:12:00,delivery,"Los Angeles, USA",Departure at Los Angeles
+EVT001058,SHP000441,2025-04-06 14:34:00,delivery,"Toronto, Canada",Exception at Toronto
+EVT001059,SHP000465,2023-03-16 18:33:00,customs_clearance,"Felixstowe, UK",Departure at Felixstowe
+EVT001060,SHP000076,2025-05-23 15:57:00,customs_clearance,"Hamburg, Germany",Departure at Hamburg
+EVT001061,SHP000082,2024-01-15 04:28:00,exception,"Toronto, Canada",Customs Clearance at Toronto
+EVT001062,SHP000029,2024-11-25 22:36:00,delivery,"Chicago, USA",Delivery at Chicago
+EVT001063,SHP000487,2025-05-10 11:15:00,delay,"São Paulo, Brazil",Exception at São Paulo
+EVT001064,SHP000213,2024-09-24 06:07:00,delivery,"São Paulo, Brazil",Pickup at São Paulo
+EVT001065,SHP000392,2024-09-24 06:01:00,delivery,"Houston, USA",Exception at Houston
+EVT001066,SHP000593,2024-11-16 05:14:00,pickup,"São Paulo, Brazil",Departure at São Paulo
+EVT001067,SHP000047,2023-09-05 18:04:00,arrival,"Hamburg, Germany",Delay at Hamburg
+EVT001068,SHP000025,2025-09-22 12:17:00,arrival,"Hong Kong, China",Delivery at Hong Kong
+EVT001069,SHP000468,2025-09-09 00:45:00,pickup,"Busan, South Korea",Pickup at Busan
+EVT001070,SHP000144,2025-08-08 12:19:00,arrival,"Valencia, Spain",Delivery at Valencia
+EVT001071,SHP000446,2025-04-01 09:36:00,customs_clearance,"Barcelona, Spain",Delivery at Barcelona
+EVT001072,SHP000461,2023-07-02 13:52:00,departure,"Busan, South Korea",Customs Clearance at Busan
+EVT001073,SHP000356,2023-03-11 08:54:00,arrival,"Valencia, Spain",Pickup at Valencia
+EVT001074,SHP000024,2024-05-15 11:20:00,exception,"Valencia, Spain",Departure at Valencia
+EVT001075,SHP000482,2023-03-19 18:47:00,customs_clearance,"Tokyo, Japan",Arrival at Tokyo
+EVT001076,SHP000579,2024-01-17 14:28:00,pickup,"Valencia, Spain",Pickup at Valencia
+EVT001077,SHP000580,2025-01-03 04:36:00,exception,"São Paulo, Brazil",Customs Clearance at São Paulo
+EVT001078,SHP000229,2024-02-26 01:44:00,arrival,"Houston, USA",Delivery at Houston
+EVT001079,SHP000478,2024-01-03 11:22:00,pickup,"Shanghai, China",Departure at Shanghai
+EVT001080,SHP000542,2025-08-05 13:43:00,departure,"Hamburg, Germany",Customs Clearance at Hamburg
+EVT001081,SHP000307,2023-06-10 10:39:00,arrival,"Mumbai, India",Delivery at Mumbai
+EVT001082,SHP000574,2024-11-17 19:25:00,arrival,"Sydney, Australia",Arrival at Sydney
+EVT001083,SHP000424,2025-06-09 07:19:00,arrival,"Moscow, Russia",Delay at Moscow
+EVT001084,SHP000269,2024-03-29 09:45:00,arrival,"Busan, South Korea",Delay at Busan
+EVT001085,SHP000075,2023-09-06 12:36:00,delivery,"Busan, South Korea",Delivery at Busan
+EVT001086,SHP000251,2024-05-11 22:54:00,arrival,"Toronto, Canada",Arrival at Toronto
+EVT001087,SHP000593,2024-08-06 07:36:00,arrival,"Chicago, USA",Customs Clearance at Chicago
+EVT001088,SHP000271,2025-12-12 21:53:00,exception,"Shanghai, China",Exception at Shanghai
+EVT001089,SHP000575,2023-10-27 07:03:00,delivery,"Hamburg, Germany",Arrival at Hamburg
+EVT001090,SHP000513,2023-09-20 19:46:00,customs_clearance,"Valencia, Spain",Exception at Valencia
+EVT001091,SHP000224,2025-12-27 20:49:00,delivery,"Sydney, Australia",Delivery at Sydney
+EVT001092,SHP000277,2024-05-25 05:06:00,pickup,"Dubai, UAE",Delay at Dubai
+EVT001093,SHP000585,2023-09-22 01:44:00,departure,"Chicago, USA",Pickup at Chicago
+EVT001094,SHP000491,2025-09-07 10:19:00,delay,"Rotterdam, Netherlands",Delivery at Rotterdam
+EVT001095,SHP000357,2024-08-10 20:45:00,delay,"Tokyo, Japan",Customs Clearance at Tokyo
+EVT001096,SHP000380,2025-08-25 18:08:00,delay,"Houston, USA",Delay at Houston
+EVT001097,SHP000129,2024-05-15 00:02:00,arrival,"Rotterdam, Netherlands",Arrival at Rotterdam
+EVT001098,SHP000581,2024-09-15 12:59:00,pickup,"Valencia, Spain",Departure at Valencia
+EVT001099,SHP000229,2023-04-22 00:09:00,exception,"Sydney, Australia",Delay at Sydney
+EVT001100,SHP000365,2023-10-07 03:13:00,exception,"Dubai, UAE",Delay at Dubai
+EVT001101,SHP000473,2025-03-16 11:33:00,exception,"Houston, USA",Delivery at Houston
+EVT001102,SHP000402,2024-11-08 18:21:00,exception,"Tokyo, Japan",Exception at Tokyo
+EVT001103,SHP000483,2025-05-31 02:59:00,delivery,"Shanghai, China",Delivery at Shanghai
+EVT001104,SHP000224,2024-06-18 22:23:00,delivery,"Singapore, Singapore",Arrival at Singapore
+EVT001105,SHP000194,2024-11-01 12:24:00,departure,"Antwerp, Belgium",Pickup at Antwerp
+EVT001106,SHP000075,2025-01-29 01:56:00,departure,"Mumbai, India",Arrival at Mumbai
+EVT001107,SHP000188,2025-04-14 05:59:00,exception,"Tokyo, Japan",Exception at Tokyo
+EVT001108,SHP000139,2024-05-24 06:19:00,customs_clearance,"Rotterdam, Netherlands",Arrival at Rotterdam
+EVT001109,SHP000188,2025-04-12 06:41:00,pickup,"Antwerp, Belgium",Pickup at Antwerp
+EVT001110,SHP000309,2025-07-12 22:37:00,customs_clearance,"Mumbai, India",Delivery at Mumbai
+EVT001111,SHP000406,2023-02-27 01:35:00,delay,"Mumbai, India",Exception at Mumbai
+EVT001112,SHP000322,2024-07-28 12:48:00,delivery,"Los Angeles, USA",Pickup at Los Angeles
+EVT001113,SHP000157,2023-07-03 20:42:00,customs_clearance,"São Paulo, Brazil",Customs Clearance at São Paulo
+EVT001114,SHP000293,2025-08-11 08:12:00,pickup,"Singapore, Singapore",Arrival at Singapore
+EVT001115,SHP000213,2023-04-30 04:14:00,delivery,"Houston, USA",Delay at Houston
+EVT001116,SHP000376,2023-12-01 05:52:00,delivery,"Rotterdam, Netherlands",Delivery at Rotterdam
+EVT001117,SHP000288,2025-03-11 10:11:00,customs_clearance,"Valencia, Spain",Delay at Valencia
+EVT001118,SHP000345,2024-02-12 06:08:00,delivery,"Hamburg, Germany",Departure at Hamburg
+EVT001119,SHP000240,2023-10-07 00:08:00,arrival,"Shanghai, China",Customs Clearance at Shanghai
+EVT001120,SHP000588,2024-03-17 06:56:00,pickup,"Dubai, UAE",Departure at Dubai
+EVT001121,SHP000023,2024-02-09 08:26:00,customs_clearance,"Mumbai, India",Customs Clearance at Mumbai
+EVT001122,SHP000070,2025-05-26 14:23:00,delay,"Dubai, UAE",Pickup at Dubai
+EVT001123,SHP000449,2023-10-18 15:39:00,delivery,"Valencia, Spain",Arrival at Valencia
+EVT001124,SHP000323,2023-04-27 05:17:00,exception,"Mumbai, India",Arrival at Mumbai
+EVT001125,SHP000216,2023-06-10 05:58:00,departure,"Rotterdam, Netherlands",Exception at Rotterdam
+EVT001126,SHP000596,2024-06-13 15:10:00,departure,"Mumbai, India",Pickup at Mumbai
+EVT001127,SHP000222,2023-09-27 01:08:00,delivery,"Antwerp, Belgium",Arrival at Antwerp
+EVT001128,SHP000470,2023-02-03 02:29:00,exception,"Singapore, Singapore",Departure at Singapore
+EVT001129,SHP000168,2023-09-29 09:03:00,arrival,"Moscow, Russia",Pickup at Moscow
+EVT001130,SHP000450,2024-06-14 21:56:00,delivery,"Valencia, Spain",Customs Clearance at Valencia
+EVT001131,SHP000105,2025-10-11 10:52:00,arrival,"Barcelona, Spain",Customs Clearance at Barcelona
+EVT001132,SHP000109,2024-01-10 08:03:00,customs_clearance,"Toronto, Canada",Arrival at Toronto
+EVT001133,SHP000555,2025-06-21 04:50:00,exception,"Mumbai, India",Customs Clearance at Mumbai
+EVT001134,SHP000152,2025-11-01 02:11:00,departure,"Houston, USA",Arrival at Houston
+EVT001135,SHP000042,2024-12-03 12:25:00,delay,"Sydney, Australia",Delivery at Sydney
+EVT001136,SHP000289,2025-11-04 23:47:00,departure,"Antwerp, Belgium",Departure at Antwerp
+EVT001137,SHP000498,2024-01-20 14:36:00,delay,"Mumbai, India",Pickup at Mumbai
+EVT001138,SHP000191,2023-09-24 02:05:00,pickup,"Dubai, UAE",Pickup at Dubai
+EVT001139,SHP000544,2025-11-17 01:15:00,exception,"Chicago, USA",Arrival at Chicago
+EVT001140,SHP000567,2023-04-13 21:58:00,pickup,"Valencia, Spain",Customs Clearance at Valencia
+EVT001141,SHP000051,2024-08-19 22:02:00,delay,"Barcelona, Spain",Exception at Barcelona
+EVT001142,SHP000231,2023-11-06 11:06:00,delivery,"Toronto, Canada",Delivery at Toronto
+EVT001143,SHP000258,2023-12-31 19:20:00,exception,"Hong Kong, China",Delay at Hong Kong
+EVT001144,SHP000113,2023-07-28 05:11:00,departure,"Barcelona, Spain",Customs Clearance at Barcelona
+EVT001145,SHP000398,2024-05-26 07:35:00,customs_clearance,"Antwerp, Belgium",Departure at Antwerp
+EVT001146,SHP000168,2025-01-08 09:09:00,departure,"Shanghai, China",Pickup at Shanghai
+EVT001147,SHP000385,2025-02-10 21:20:00,exception,"Hamburg, Germany",Delay at Hamburg
+EVT001148,SHP000267,2025-02-22 06:58:00,departure,"Sydney, Australia",Exception at Sydney
+EVT001149,SHP000002,2024-02-05 06:18:00,arrival,"Mumbai, India",Arrival at Mumbai
+EVT001150,SHP000454,2024-09-16 16:53:00,delivery,"Shanghai, China",Customs Clearance at Shanghai
+EVT001151,SHP000521,2024-11-08 00:17:00,customs_clearance,"Toronto, Canada",Pickup at Toronto
+EVT001152,SHP000171,2025-02-05 19:43:00,customs_clearance,"Shanghai, China",Delay at Shanghai
+EVT001153,SHP000520,2024-12-16 02:39:00,delay,"Moscow, Russia",Delay at Moscow
+EVT001154,SHP000321,2025-07-06 15:16:00,delivery,"Tokyo, Japan",Exception at Tokyo
+EVT001155,SHP000187,2025-05-24 20:42:00,departure,"Felixstowe, UK",Departure at Felixstowe
+EVT001156,SHP000325,2024-04-22 08:11:00,customs_clearance,"Valencia, Spain",Customs Clearance at Valencia
+EVT001157,SHP000486,2023-12-16 05:58:00,arrival,"Houston, USA",Delivery at Houston
+EVT001158,SHP000158,2025-05-06 02:56:00,customs_clearance,"Shanghai, China",Arrival at Shanghai
+EVT001159,SHP000556,2023-10-18 19:08:00,pickup,"Singapore, Singapore",Exception at Singapore
+EVT001160,SHP000378,2023-11-19 04:37:00,arrival,"Sydney, Australia",Pickup at Sydney
+EVT001161,SHP000074,2025-04-20 06:02:00,departure,"Houston, USA",Delivery at Houston
+EVT001162,SHP000326,2025-04-03 07:27:00,departure,"Houston, USA",Customs Clearance at Houston
+EVT001163,SHP000158,2025-04-16 05:52:00,delivery,"São Paulo, Brazil",Exception at São Paulo
+EVT001164,SHP000304,2024-01-04 01:27:00,customs_clearance,"Moscow, Russia",Pickup at Moscow
+EVT001165,SHP000344,2024-06-14 19:32:00,pickup,"Moscow, Russia",Exception at Moscow
+EVT001166,SHP000565,2023-07-18 06:13:00,exception,"Houston, USA",Pickup at Houston
+EVT001167,SHP000229,2023-03-24 01:17:00,delivery,"São Paulo, Brazil",Delivery at São Paulo
+EVT001168,SHP000230,2023-05-12 20:05:00,departure,"Hamburg, Germany",Delay at Hamburg
+EVT001169,SHP000156,2023-12-21 02:23:00,exception,"Dubai, UAE",Arrival at Dubai
+EVT001170,SHP000524,2023-08-19 22:23:00,delivery,"Moscow, Russia",Departure at Moscow
+EVT001171,SHP000446,2025-05-04 17:31:00,customs_clearance,"Mumbai, India",Arrival at Mumbai
+EVT001172,SHP000009,2023-08-13 16:20:00,arrival,"Dubai, UAE",Delivery at Dubai
+EVT001173,SHP000551,2025-03-08 09:19:00,delay,"Rotterdam, Netherlands",Departure at Rotterdam
+EVT001174,SHP000001,2025-03-06 05:36:00,delivery,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT001175,SHP000453,2025-12-10 15:15:00,delay,"São Paulo, Brazil",Arrival at São Paulo
+EVT001176,SHP000534,2025-03-05 20:25:00,arrival,"Houston, USA",Delay at Houston
+EVT001177,SHP000409,2023-09-01 19:27:00,exception,"Busan, South Korea",Departure at Busan
+EVT001178,SHP000223,2024-01-05 03:39:00,departure,"Busan, South Korea",Exception at Busan
+EVT001179,SHP000447,2024-01-02 02:12:00,departure,"Los Angeles, USA",Pickup at Los Angeles
+EVT001180,SHP000313,2023-04-04 09:10:00,delivery,"Singapore, Singapore",Arrival at Singapore
+EVT001181,SHP000545,2023-08-19 09:46:00,customs_clearance,"Tokyo, Japan",Delivery at Tokyo
+EVT001182,SHP000582,2023-07-04 15:55:00,delivery,"Dubai, UAE",Customs Clearance at Dubai
+EVT001183,SHP000158,2024-07-22 18:44:00,delivery,"Valencia, Spain",Pickup at Valencia
+EVT001184,SHP000165,2024-02-12 03:47:00,delivery,"Osaka, Japan",Pickup at Osaka
+EVT001185,SHP000059,2025-06-03 13:26:00,pickup,"Mumbai, India",Exception at Mumbai
+EVT001186,SHP000173,2023-05-08 00:22:00,departure,"Shanghai, China",Exception at Shanghai
+EVT001187,SHP000166,2024-11-20 06:34:00,customs_clearance,"Mumbai, India",Departure at Mumbai
+EVT001188,SHP000099,2024-10-20 20:02:00,arrival,"Shanghai, China",Delay at Shanghai
+EVT001189,SHP000184,2024-05-15 16:57:00,departure,"Antwerp, Belgium",Delivery at Antwerp
+EVT001190,SHP000002,2023-11-28 13:53:00,delay,"Hong Kong, China",Delivery at Hong Kong
+EVT001191,SHP000176,2023-05-08 01:28:00,customs_clearance,"Moscow, Russia",Delivery at Moscow
+EVT001192,SHP000443,2025-07-25 13:59:00,departure,"Hamburg, Germany",Delay at Hamburg
+EVT001193,SHP000233,2024-02-28 16:39:00,customs_clearance,"Hamburg, Germany",Exception at Hamburg
+EVT001194,SHP000209,2025-09-17 13:57:00,exception,"Tokyo, Japan",Pickup at Tokyo
+EVT001195,SHP000518,2023-08-22 20:34:00,delay,"Houston, USA",Delay at Houston
+EVT001196,SHP000413,2025-03-25 14:06:00,departure,"Hamburg, Germany",Customs Clearance at Hamburg
+EVT001197,SHP000566,2023-08-11 00:04:00,departure,"Busan, South Korea",Departure at Busan
+EVT001198,SHP000518,2024-02-16 07:45:00,delivery,"Hamburg, Germany",Departure at Hamburg
+EVT001199,SHP000102,2025-11-06 23:14:00,arrival,"Moscow, Russia",Departure at Moscow
+EVT001200,SHP000473,2023-05-10 16:30:00,arrival,"Toronto, Canada",Exception at Toronto
+EVT001201,SHP000021,2025-09-14 15:24:00,pickup,"Felixstowe, UK",Exception at Felixstowe
+EVT001202,SHP000045,2025-01-28 18:10:00,pickup,"Valencia, Spain",Exception at Valencia
+EVT001203,SHP000552,2023-07-25 20:52:00,arrival,"Osaka, Japan",Departure at Osaka
+EVT001204,SHP000077,2023-09-18 14:38:00,customs_clearance,"Toronto, Canada",Customs Clearance at Toronto
+EVT001205,SHP000120,2025-10-27 22:07:00,arrival,"Chicago, USA",Delivery at Chicago
+EVT001206,SHP000430,2025-12-28 20:15:00,delivery,"Sydney, Australia",Exception at Sydney
+EVT001207,SHP000307,2025-10-15 05:47:00,exception,"Hong Kong, China",Pickup at Hong Kong
+EVT001208,SHP000155,2025-02-10 11:44:00,delay,"Felixstowe, UK",Customs Clearance at Felixstowe
+EVT001209,SHP000547,2023-12-16 19:55:00,arrival,"Felixstowe, UK",Delivery at Felixstowe
+EVT001210,SHP000097,2024-10-24 14:13:00,arrival,"Los Angeles, USA",Delivery at Los Angeles
+EVT001211,SHP000520,2023-11-29 10:20:00,departure,"Sydney, Australia",Delivery at Sydney
+EVT001212,SHP000280,2025-06-10 20:40:00,pickup,"Moscow, Russia",Delay at Moscow
+EVT001213,SHP000456,2023-10-07 18:55:00,delivery,"Busan, South Korea",Pickup at Busan
+EVT001214,SHP000456,2025-08-31 04:48:00,delivery,"Antwerp, Belgium",Customs Clearance at Antwerp
+EVT001215,SHP000434,2024-09-15 02:48:00,customs_clearance,"Sydney, Australia",Delivery at Sydney
+EVT001216,SHP000406,2023-02-14 17:00:00,delivery,"Barcelona, Spain",Delay at Barcelona
+EVT001217,SHP000469,2025-10-16 08:35:00,arrival,"Busan, South Korea",Exception at Busan
+EVT001218,SHP000585,2025-04-10 08:04:00,delivery,"Busan, South Korea",Departure at Busan
+EVT001219,SHP000517,2023-08-19 13:29:00,departure,"Busan, South Korea",Arrival at Busan
+EVT001220,SHP000470,2024-12-04 06:25:00,exception,"Osaka, Japan",Delivery at Osaka
+EVT001221,SHP000550,2023-08-07 12:18:00,delay,"Mumbai, India",Delivery at Mumbai
+EVT001222,SHP000547,2024-06-27 09:20:00,pickup,"Shanghai, China",Delay at Shanghai
+EVT001223,SHP000171,2025-11-20 12:56:00,pickup,"Moscow, Russia",Arrival at Moscow
+EVT001224,SHP000176,2023-03-06 05:25:00,departure,"Dubai, UAE",Customs Clearance at Dubai
+EVT001225,SHP000041,2025-03-30 09:35:00,delivery,"Felixstowe, UK",Pickup at Felixstowe
+EVT001226,SHP000019,2024-01-02 08:34:00,delay,"Mumbai, India",Arrival at Mumbai
+EVT001227,SHP000368,2023-08-02 07:00:00,delivery,"Osaka, Japan",Delivery at Osaka
+EVT001228,SHP000587,2024-01-25 21:51:00,pickup,"Mumbai, India",Arrival at Mumbai
+EVT001229,SHP000495,2024-04-30 19:38:00,exception,"Busan, South Korea",Customs Clearance at Busan
+EVT001230,SHP000269,2024-12-12 13:55:00,departure,"Dubai, UAE",Pickup at Dubai
+EVT001231,SHP000153,2025-01-28 00:03:00,pickup,"Chicago, USA",Departure at Chicago
+EVT001232,SHP000048,2024-12-07 23:24:00,delay,"Moscow, Russia",Exception at Moscow
+EVT001233,SHP000413,2024-12-29 20:13:00,pickup,"Dubai, UAE",Arrival at Dubai
+EVT001234,SHP000397,2023-07-18 17:16:00,delay,"Busan, South Korea",Delivery at Busan
+EVT001235,SHP000197,2024-08-25 13:28:00,delivery,"Chicago, USA",Pickup at Chicago
+EVT001236,SHP000515,2023-02-09 20:07:00,delivery,"Barcelona, Spain",Customs Clearance at Barcelona
+EVT001237,SHP000166,2023-03-13 00:07:00,exception,"Valencia, Spain",Delay at Valencia
+EVT001238,SHP000209,2025-02-01 22:07:00,pickup,"Valencia, Spain",Departure at Valencia
+EVT001239,SHP000278,2024-09-12 08:08:00,delivery,"Busan, South Korea",Delivery at Busan
+EVT001240,SHP000045,2025-09-18 08:42:00,arrival,"Felixstowe, UK",Customs Clearance at Felixstowe
+EVT001241,SHP000573,2025-02-05 05:19:00,pickup,"Felixstowe, UK",Customs Clearance at Felixstowe
+EVT001242,SHP000146,2023-08-28 10:58:00,arrival,"Los Angeles, USA",Delivery at Los Angeles
+EVT001243,SHP000447,2023-10-08 10:59:00,customs_clearance,"Barcelona, Spain",Delay at Barcelona
+EVT001244,SHP000183,2024-01-06 03:38:00,pickup,"Hamburg, Germany",Arrival at Hamburg
+EVT001245,SHP000242,2024-08-26 14:50:00,pickup,"Tokyo, Japan",Arrival at Tokyo
+EVT001246,SHP000511,2025-09-10 12:19:00,delivery,"Busan, South Korea",Arrival at Busan
+EVT001247,SHP000334,2024-04-01 19:27:00,arrival,"Hong Kong, China",Departure at Hong Kong
+EVT001248,SHP000099,2025-12-30 07:20:00,pickup,"Mumbai, India",Customs Clearance at Mumbai
+EVT001249,SHP000084,2024-08-11 10:46:00,arrival,"Los Angeles, USA",Departure at Los Angeles
+EVT001250,SHP000105,2023-04-26 00:47:00,departure,"Hamburg, Germany",Customs Clearance at Hamburg
+EVT001251,SHP000131,2024-01-14 02:59:00,delay,"Moscow, Russia",Pickup at Moscow
+EVT001252,SHP000484,2023-10-21 20:29:00,customs_clearance,"Mumbai, India",Departure at Mumbai
+EVT001253,SHP000436,2024-05-19 19:22:00,delivery,"Antwerp, Belgium",Arrival at Antwerp
+EVT001254,SHP000329,2024-10-27 05:11:00,delivery,"Mumbai, India",Exception at Mumbai
+EVT001255,SHP000313,2024-12-10 04:45:00,delay,"Hamburg, Germany",Arrival at Hamburg
+EVT001256,SHP000104,2023-08-25 16:20:00,customs_clearance,"Felixstowe, UK",Arrival at Felixstowe
+EVT001257,SHP000087,2023-05-17 01:21:00,pickup,"Chicago, USA",Delivery at Chicago
+EVT001258,SHP000049,2024-09-23 19:05:00,arrival,"Hong Kong, China",Customs Clearance at Hong Kong
+EVT001259,SHP000466,2024-07-05 15:14:00,delay,"Busan, South Korea",Arrival at Busan
+EVT001260,SHP000220,2023-10-17 09:28:00,delay,"Hong Kong, China",Delivery at Hong Kong
+EVT001261,SHP000303,2025-08-02 03:22:00,delivery,"Dubai, UAE",Arrival at Dubai
+EVT001262,SHP000585,2024-02-13 08:18:00,delay,"Chicago, USA",Delivery at Chicago
+EVT001263,SHP000209,2024-11-13 07:31:00,delivery,"Rotterdam, Netherlands",Delivery at Rotterdam
+EVT001264,SHP000032,2024-02-04 03:33:00,departure,"Mumbai, India",Customs Clearance at Mumbai
+EVT001265,SHP000086,2024-02-16 07:52:00,exception,"Singapore, Singapore",Delivery at Singapore
+EVT001266,SHP000187,2023-03-18 16:30:00,delivery,"Valencia, Spain",Delivery at Valencia
+EVT001267,SHP000180,2023-05-20 11:50:00,departure,"Mumbai, India",Customs Clearance at Mumbai
+EVT001268,SHP000557,2024-02-07 00:18:00,delay,"Barcelona, Spain",Delivery at Barcelona
+EVT001269,SHP000446,2024-10-09 21:04:00,arrival,"Hamburg, Germany",Departure at Hamburg
+EVT001270,SHP000126,2024-09-18 13:20:00,delay,"Chicago, USA",Exception at Chicago
+EVT001271,SHP000218,2024-04-08 15:51:00,delay,"Houston, USA",Delay at Houston
+EVT001272,SHP000525,2023-07-27 16:36:00,delay,"Rotterdam, Netherlands",Pickup at Rotterdam
+EVT001273,SHP000365,2025-09-06 06:18:00,arrival,"Valencia, Spain",Delay at Valencia
+EVT001274,SHP000391,2023-06-29 23:30:00,customs_clearance,"Barcelona, Spain",Exception at Barcelona
+EVT001275,SHP000388,2025-03-25 18:59:00,pickup,"Hamburg, Germany",Arrival at Hamburg
+EVT001276,SHP000230,2025-03-22 04:37:00,delivery,"Tokyo, Japan",Delivery at Tokyo
+EVT001277,SHP000264,2025-05-30 08:57:00,arrival,"Felixstowe, UK",Pickup at Felixstowe
+EVT001278,SHP000589,2023-03-01 22:02:00,pickup,"Sydney, Australia",Pickup at Sydney
+EVT001279,SHP000546,2024-11-27 15:14:00,delivery,"Toronto, Canada",Pickup at Toronto
+EVT001280,SHP000545,2024-11-28 05:06:00,exception,"Mumbai, India",Pickup at Mumbai
+EVT001281,SHP000554,2025-04-18 21:33:00,arrival,"Toronto, Canada",Arrival at Toronto
+EVT001282,SHP000175,2024-08-26 12:17:00,exception,"São Paulo, Brazil",Delivery at São Paulo
+EVT001283,SHP000530,2025-07-26 18:23:00,customs_clearance,"Busan, South Korea",Departure at Busan
+EVT001284,SHP000575,2025-10-01 10:40:00,exception,"Hong Kong, China",Delivery at Hong Kong
+EVT001285,SHP000357,2023-09-16 16:47:00,pickup,"Osaka, Japan",Delay at Osaka
+EVT001286,SHP000053,2023-10-21 02:28:00,exception,"Hamburg, Germany",Delivery at Hamburg
+EVT001287,SHP000474,2023-06-01 04:19:00,delivery,"Mumbai, India",Delivery at Mumbai
+EVT001288,SHP000193,2025-07-14 02:29:00,pickup,"São Paulo, Brazil",Arrival at São Paulo
+EVT001289,SHP000595,2024-09-04 08:59:00,arrival,"Osaka, Japan",Delay at Osaka
+EVT001290,SHP000102,2024-02-27 13:31:00,delay,"Antwerp, Belgium",Delay at Antwerp
+EVT001291,SHP000164,2025-03-12 16:06:00,pickup,"Osaka, Japan",Departure at Osaka
+EVT001292,SHP000223,2023-03-02 06:33:00,delivery,"São Paulo, Brazil",Arrival at São Paulo
+EVT001293,SHP000445,2023-08-22 02:36:00,departure,"Mumbai, India",Delivery at Mumbai
+EVT001294,SHP000504,2023-06-13 08:58:00,arrival,"Mumbai, India",Delivery at Mumbai
+EVT001295,SHP000012,2023-12-08 03:28:00,customs_clearance,"Shanghai, China",Delivery at Shanghai
+EVT001296,SHP000049,2024-10-08 04:35:00,delay,"Hong Kong, China",Customs Clearance at Hong Kong
+EVT001297,SHP000434,2024-03-01 07:52:00,delay,"Sydney, Australia",Arrival at Sydney
+EVT001298,SHP000092,2024-10-03 23:32:00,delivery,"São Paulo, Brazil",Delay at São Paulo
+EVT001299,SHP000022,2023-01-25 21:20:00,departure,"Chicago, USA",Departure at Chicago
+EVT001300,SHP000405,2023-09-06 03:36:00,departure,"Shanghai, China",Delay at Shanghai
+EVT001301,SHP000599,2023-01-22 07:54:00,delivery,"Singapore, Singapore",Departure at Singapore
+EVT001302,SHP000588,2024-09-21 04:41:00,delay,"Barcelona, Spain",Arrival at Barcelona
+EVT001303,SHP000358,2024-05-13 23:27:00,pickup,"Dubai, UAE",Delivery at Dubai
+EVT001304,SHP000061,2024-11-02 17:51:00,pickup,"Osaka, Japan",Delay at Osaka
+EVT001305,SHP000515,2023-03-29 09:20:00,pickup,"Dubai, UAE",Departure at Dubai
+EVT001306,SHP000307,2025-08-02 06:25:00,pickup,"Tokyo, Japan",Arrival at Tokyo
+EVT001307,SHP000544,2024-02-26 12:48:00,customs_clearance,"Barcelona, Spain",Departure at Barcelona
+EVT001308,SHP000451,2024-03-20 22:22:00,delivery,"Singapore, Singapore",Exception at Singapore
+EVT001309,SHP000411,2024-05-17 06:22:00,departure,"Sydney, Australia",Delay at Sydney
+EVT001310,SHP000062,2024-11-14 17:20:00,delay,"Shanghai, China",Delay at Shanghai
+EVT001311,SHP000441,2025-01-21 20:18:00,customs_clearance,"Singapore, Singapore",Exception at Singapore
+EVT001312,SHP000253,2024-11-15 12:52:00,customs_clearance,"Singapore, Singapore",Departure at Singapore
+EVT001313,SHP000599,2024-01-16 11:22:00,delay,"Barcelona, Spain",Pickup at Barcelona
+EVT001314,SHP000104,2024-08-17 07:25:00,exception,"Felixstowe, UK",Delivery at Felixstowe
+EVT001315,SHP000044,2023-10-02 16:58:00,departure,"Moscow, Russia",Customs Clearance at Moscow
+EVT001316,SHP000498,2025-07-24 00:54:00,departure,"Hamburg, Germany",Delivery at Hamburg
+EVT001317,SHP000432,2025-02-13 13:00:00,arrival,"São Paulo, Brazil",Departure at São Paulo
+EVT001318,SHP000303,2025-12-03 02:24:00,delay,"Hamburg, Germany",Arrival at Hamburg
+EVT001319,SHP000263,2025-04-24 02:02:00,pickup,"Singapore, Singapore",Delivery at Singapore
+EVT001320,SHP000473,2024-02-24 10:34:00,delay,"Houston, USA",Delay at Houston
+EVT001321,SHP000307,2024-06-27 01:23:00,pickup,"Valencia, Spain",Pickup at Valencia
+EVT001322,SHP000194,2023-01-03 04:31:00,departure,"Moscow, Russia",Pickup at Moscow
+EVT001323,SHP000271,2025-09-23 13:13:00,customs_clearance,"Los Angeles, USA",Departure at Los Angeles
+EVT001324,SHP000522,2024-06-23 20:16:00,exception,"Dubai, UAE",Arrival at Dubai
+EVT001325,SHP000465,2025-12-19 18:14:00,delivery,"Dubai, UAE",Arrival at Dubai
+EVT001326,SHP000217,2025-04-23 18:51:00,pickup,"Shanghai, China",Customs Clearance at Shanghai
+EVT001327,SHP000508,2024-06-16 22:48:00,delay,"Felixstowe, UK",Exception at Felixstowe
+EVT001328,SHP000004,2023-12-22 05:32:00,delivery,"Sydney, Australia",Delay at Sydney
+EVT001329,SHP000285,2025-11-08 14:48:00,arrival,"Toronto, Canada",Delay at Toronto
+EVT001330,SHP000328,2023-08-18 22:15:00,delay,"Hong Kong, China",Delay at Hong Kong
+EVT001331,SHP000337,2025-07-18 04:54:00,customs_clearance,"Mumbai, India",Pickup at Mumbai
+EVT001332,SHP000465,2024-02-07 00:41:00,customs_clearance,"Antwerp, Belgium",Delay at Antwerp
+EVT001333,SHP000567,2023-09-03 03:48:00,customs_clearance,"Mumbai, India",Delay at Mumbai
+EVT001334,SHP000278,2024-02-20 09:13:00,delivery,"Rotterdam, Netherlands",Delivery at Rotterdam
+EVT001335,SHP000536,2025-11-04 15:13:00,delivery,"Singapore, Singapore",Customs Clearance at Singapore
+EVT001336,SHP000454,2025-01-05 16:14:00,exception,"São Paulo, Brazil",Departure at São Paulo
+EVT001337,SHP000220,2024-08-04 15:28:00,pickup,"Felixstowe, UK",Delay at Felixstowe
+EVT001338,SHP000258,2024-04-21 22:00:00,delivery,"Dubai, UAE",Pickup at Dubai
+EVT001339,SHP000116,2024-01-31 16:52:00,exception,"Hong Kong, China",Delay at Hong Kong
+EVT001340,SHP000430,2024-01-17 17:08:00,customs_clearance,"Shanghai, China",Departure at Shanghai
+EVT001341,SHP000358,2023-12-08 01:59:00,arrival,"Antwerp, Belgium",Pickup at Antwerp
+EVT001342,SHP000175,2023-06-24 19:02:00,exception,"Mumbai, India",Exception at Mumbai
+EVT001343,SHP000365,2025-08-03 04:00:00,arrival,"Chicago, USA",Delay at Chicago
+EVT001344,SHP000287,2023-02-10 01:45:00,exception,"Singapore, Singapore",Customs Clearance at Singapore
+EVT001345,SHP000279,2024-03-16 05:17:00,arrival,"Dubai, UAE",Delay at Dubai
+EVT001346,SHP000246,2023-06-04 01:39:00,customs_clearance,"Mumbai, India",Exception at Mumbai
+EVT001347,SHP000317,2023-10-23 04:48:00,arrival,"Dubai, UAE",Delivery at Dubai
+EVT001348,SHP000477,2025-08-30 04:47:00,customs_clearance,"Shanghai, China",Arrival at Shanghai
+EVT001349,SHP000589,2024-02-24 05:11:00,arrival,"Valencia, Spain",Pickup at Valencia
+EVT001350,SHP000508,2023-10-23 05:18:00,pickup,"Busan, South Korea",Arrival at Busan
+EVT001351,SHP000220,2025-05-08 03:06:00,delivery,"Hamburg, Germany",Delay at Hamburg
+EVT001352,SHP000053,2024-01-30 09:24:00,delivery,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT001353,SHP000102,2024-03-16 01:30:00,pickup,"Felixstowe, UK",Departure at Felixstowe
+EVT001354,SHP000560,2025-07-07 22:41:00,departure,"Felixstowe, UK",Pickup at Felixstowe
+EVT001355,SHP000156,2023-03-07 19:21:00,delay,"Rotterdam, Netherlands",Delay at Rotterdam
+EVT001356,SHP000243,2025-04-28 23:08:00,pickup,"Felixstowe, UK",Delivery at Felixstowe
+EVT001357,SHP000370,2025-04-18 17:37:00,pickup,"Tokyo, Japan",Pickup at Tokyo
+EVT001358,SHP000348,2025-09-01 19:20:00,pickup,"Chicago, USA",Pickup at Chicago
+EVT001359,SHP000099,2024-05-13 04:21:00,delay,"Barcelona, Spain",Delivery at Barcelona
+EVT001360,SHP000013,2025-08-02 06:39:00,customs_clearance,"Shanghai, China",Pickup at Shanghai
+EVT001361,SHP000195,2025-07-13 05:10:00,pickup,"Rotterdam, Netherlands",Pickup at Rotterdam
+EVT001362,SHP000210,2025-02-18 18:02:00,exception,"Mumbai, India",Delivery at Mumbai
+EVT001363,SHP000484,2025-03-09 15:09:00,departure,"Singapore, Singapore",Pickup at Singapore
+EVT001364,SHP000026,2024-10-09 22:49:00,arrival,"Antwerp, Belgium",Exception at Antwerp
+EVT001365,SHP000418,2025-10-12 03:36:00,departure,"Dubai, UAE",Delivery at Dubai
+EVT001366,SHP000071,2023-01-13 14:16:00,arrival,"Barcelona, Spain",Departure at Barcelona
+EVT001367,SHP000417,2023-10-24 07:48:00,arrival,"Rotterdam, Netherlands",Arrival at Rotterdam
+EVT001368,SHP000135,2025-01-08 04:05:00,exception,"Hamburg, Germany",Customs Clearance at Hamburg
+EVT001369,SHP000016,2024-12-02 05:13:00,delivery,"Los Angeles, USA",Arrival at Los Angeles
+EVT001370,SHP000085,2023-02-04 18:17:00,arrival,"Los Angeles, USA",Exception at Los Angeles
+EVT001371,SHP000457,2024-01-05 12:39:00,pickup,"Barcelona, Spain",Departure at Barcelona
+EVT001372,SHP000188,2024-12-24 10:06:00,departure,"Valencia, Spain",Departure at Valencia
+EVT001373,SHP000482,2023-06-11 20:29:00,delivery,"Valencia, Spain",Delay at Valencia
+EVT001374,SHP000308,2023-02-19 21:08:00,arrival,"Mumbai, India",Arrival at Mumbai
+EVT001375,SHP000368,2024-12-19 03:24:00,pickup,"Sydney, Australia",Departure at Sydney
+EVT001376,SHP000109,2023-08-15 10:59:00,delivery,"Dubai, UAE",Delivery at Dubai
+EVT001377,SHP000094,2025-05-30 17:56:00,customs_clearance,"Hamburg, Germany",Delay at Hamburg
+EVT001378,SHP000293,2025-04-27 08:30:00,delivery,"Toronto, Canada",Customs Clearance at Toronto
+EVT001379,SHP000527,2025-05-12 04:13:00,customs_clearance,"Moscow, Russia",Customs Clearance at Moscow
+EVT001380,SHP000061,2025-10-21 16:17:00,arrival,"Shanghai, China",Customs Clearance at Shanghai
+EVT001381,SHP000266,2025-11-12 23:14:00,customs_clearance,"Shanghai, China",Delay at Shanghai
+EVT001382,SHP000571,2023-08-13 18:02:00,customs_clearance,"Singapore, Singapore",Arrival at Singapore
+EVT001383,SHP000581,2023-06-25 13:19:00,pickup,"Los Angeles, USA",Pickup at Los Angeles
+EVT001384,SHP000414,2025-12-19 06:25:00,delivery,"Sydney, Australia",Exception at Sydney
+EVT001385,SHP000131,2024-10-29 07:17:00,delivery,"Tokyo, Japan",Arrival at Tokyo
+EVT001386,SHP000523,2024-07-07 14:02:00,delivery,"Valencia, Spain",Departure at Valencia
+EVT001387,SHP000121,2025-12-16 13:20:00,arrival,"Mumbai, India",Customs Clearance at Mumbai
+EVT001388,SHP000192,2023-01-20 05:04:00,departure,"Los Angeles, USA",Departure at Los Angeles
+EVT001389,SHP000504,2023-10-31 00:22:00,arrival,"Moscow, Russia",Pickup at Moscow
+EVT001390,SHP000214,2023-01-05 01:01:00,pickup,"Tokyo, Japan",Delivery at Tokyo
+EVT001391,SHP000532,2024-05-24 09:47:00,exception,"Felixstowe, UK",Customs Clearance at Felixstowe
+EVT001392,SHP000465,2023-08-16 19:00:00,pickup,"Mumbai, India",Delivery at Mumbai
+EVT001393,SHP000534,2023-07-04 03:16:00,pickup,"Sydney, Australia",Customs Clearance at Sydney
+EVT001394,SHP000003,2023-07-09 12:36:00,delay,"Shanghai, China",Exception at Shanghai
+EVT001395,SHP000156,2023-10-12 21:31:00,departure,"Mumbai, India",Customs Clearance at Mumbai
+EVT001396,SHP000596,2025-12-25 18:46:00,customs_clearance,"Moscow, Russia",Exception at Moscow
+EVT001397,SHP000046,2023-01-19 17:50:00,exception,"Felixstowe, UK",Arrival at Felixstowe
+EVT001398,SHP000308,2023-06-18 17:27:00,customs_clearance,"Mumbai, India",Arrival at Mumbai
+EVT001399,SHP000398,2023-03-25 01:01:00,delivery,"Mumbai, India",Delay at Mumbai
+EVT001400,SHP000528,2024-03-24 07:27:00,pickup,"Antwerp, Belgium",Pickup at Antwerp
+EVT001401,SHP000251,2023-06-18 03:33:00,pickup,"Chicago, USA",Arrival at Chicago
+EVT001402,SHP000095,2025-01-26 22:16:00,arrival,"Moscow, Russia",Delivery at Moscow
+EVT001403,SHP000145,2024-09-24 04:01:00,departure,"Sydney, Australia",Exception at Sydney
+EVT001404,SHP000267,2023-01-25 02:23:00,departure,"Moscow, Russia",Arrival at Moscow
+EVT001405,SHP000245,2025-04-25 13:01:00,customs_clearance,"Antwerp, Belgium",Arrival at Antwerp
+EVT001406,SHP000385,2024-05-27 09:37:00,exception,"Sydney, Australia",Arrival at Sydney
+EVT001407,SHP000415,2025-06-23 04:45:00,pickup,"Valencia, Spain",Pickup at Valencia
+EVT001408,SHP000060,2023-10-10 08:56:00,exception,"Mumbai, India",Exception at Mumbai
+EVT001409,SHP000017,2023-07-07 22:32:00,departure,"Los Angeles, USA",Departure at Los Angeles
+EVT001410,SHP000228,2025-07-03 19:59:00,delay,"Osaka, Japan",Arrival at Osaka
+EVT001411,SHP000002,2025-03-11 04:02:00,delivery,"Los Angeles, USA",Arrival at Los Angeles
+EVT001412,SHP000513,2025-10-14 08:44:00,arrival,"Singapore, Singapore",Departure at Singapore
+EVT001413,SHP000479,2025-01-04 20:12:00,customs_clearance,"Mumbai, India",Arrival at Mumbai
+EVT001414,SHP000164,2024-12-06 14:01:00,pickup,"Mumbai, India",Arrival at Mumbai
+EVT001415,SHP000090,2023-07-13 17:08:00,delivery,"Hamburg, Germany",Exception at Hamburg
+EVT001416,SHP000340,2023-08-26 21:26:00,pickup,"Dubai, UAE",Exception at Dubai
+EVT001417,SHP000181,2024-11-01 11:36:00,pickup,"São Paulo, Brazil",Arrival at São Paulo
+EVT001418,SHP000408,2023-03-06 01:29:00,delivery,"Dubai, UAE",Departure at Dubai
+EVT001419,SHP000225,2024-06-25 13:26:00,pickup,"Rotterdam, Netherlands",Pickup at Rotterdam
+EVT001420,SHP000088,2024-05-11 16:09:00,customs_clearance,"Los Angeles, USA",Pickup at Los Angeles
+EVT001421,SHP000031,2023-12-26 06:57:00,departure,"Singapore, Singapore",Delivery at Singapore
+EVT001422,SHP000438,2024-12-19 02:08:00,pickup,"Singapore, Singapore",Exception at Singapore
+EVT001423,SHP000271,2025-02-05 00:31:00,exception,"Mumbai, India",Customs Clearance at Mumbai
+EVT001424,SHP000446,2024-04-04 23:58:00,delay,"Houston, USA",Arrival at Houston
+EVT001425,SHP000320,2023-04-05 09:41:00,departure,"Felixstowe, UK",Departure at Felixstowe
+EVT001426,SHP000451,2024-03-24 20:19:00,customs_clearance,"Valencia, Spain",Delay at Valencia
+EVT001427,SHP000026,2023-06-30 10:15:00,pickup,"Dubai, UAE",Arrival at Dubai
+EVT001428,SHP000512,2024-02-24 23:19:00,customs_clearance,"São Paulo, Brazil",Delay at São Paulo
+EVT001429,SHP000153,2024-04-26 11:35:00,customs_clearance,"Antwerp, Belgium",Pickup at Antwerp
+EVT001430,SHP000503,2025-12-31 05:10:00,arrival,"Valencia, Spain",Delay at Valencia
+EVT001431,SHP000104,2023-09-16 14:42:00,departure,"Moscow, Russia",Customs Clearance at Moscow
+EVT001432,SHP000464,2025-11-09 12:54:00,customs_clearance,"Shanghai, China",Exception at Shanghai
+EVT001433,SHP000397,2025-03-30 04:54:00,departure,"Hong Kong, China",Arrival at Hong Kong
+EVT001434,SHP000079,2025-06-24 13:54:00,delivery,"Toronto, Canada",Customs Clearance at Toronto
+EVT001435,SHP000523,2024-08-23 15:29:00,delay,"Antwerp, Belgium",Pickup at Antwerp
+EVT001436,SHP000164,2023-05-04 20:13:00,arrival,"Sydney, Australia",Pickup at Sydney
+EVT001437,SHP000038,2023-08-11 16:19:00,delivery,"Valencia, Spain",Delivery at Valencia
+EVT001438,SHP000495,2023-10-26 04:15:00,arrival,"Busan, South Korea",Delay at Busan
+EVT001439,SHP000279,2024-09-21 01:19:00,exception,"Tokyo, Japan",Customs Clearance at Tokyo
+EVT001440,SHP000388,2023-11-09 03:09:00,pickup,"Mumbai, India",Arrival at Mumbai
+EVT001441,SHP000444,2024-12-30 05:22:00,arrival,"Antwerp, Belgium",Delivery at Antwerp
+EVT001442,SHP000177,2025-03-29 21:44:00,arrival,"Shanghai, China",Delay at Shanghai
+EVT001443,SHP000290,2023-06-30 03:06:00,exception,"São Paulo, Brazil",Exception at São Paulo
+EVT001444,SHP000505,2023-06-14 16:09:00,customs_clearance,"Tokyo, Japan",Departure at Tokyo
+EVT001445,SHP000003,2025-05-28 07:19:00,departure,"Moscow, Russia",Arrival at Moscow
+EVT001446,SHP000295,2025-10-26 05:46:00,pickup,"Osaka, Japan",Delivery at Osaka
+EVT001447,SHP000530,2025-05-09 17:01:00,customs_clearance,"Antwerp, Belgium",Customs Clearance at Antwerp
+EVT001448,SHP000266,2024-12-12 03:52:00,pickup,"Shanghai, China",Pickup at Shanghai
+EVT001449,SHP000187,2023-11-26 11:19:00,departure,"Singapore, Singapore",Exception at Singapore
+EVT001450,SHP000286,2024-01-17 07:55:00,pickup,"Singapore, Singapore",Pickup at Singapore
+EVT001451,SHP000412,2024-09-28 19:47:00,delivery,"Rotterdam, Netherlands",Customs Clearance at Rotterdam
+EVT001452,SHP000005,2025-10-14 04:06:00,exception,"Mumbai, India",Exception at Mumbai
+EVT001453,SHP000518,2023-04-19 01:12:00,departure,"Felixstowe, UK",Pickup at Felixstowe
+EVT001454,SHP000207,2025-07-03 17:52:00,delivery,"Dubai, UAE",Delivery at Dubai
+EVT001455,SHP000051,2023-07-03 08:02:00,pickup,"Singapore, Singapore",Departure at Singapore
+EVT001456,SHP000305,2023-08-28 07:06:00,delay,"Barcelona, Spain",Exception at Barcelona
+EVT001457,SHP000509,2025-08-13 20:35:00,customs_clearance,"Dubai, UAE",Pickup at Dubai
+EVT001458,SHP000108,2025-03-05 04:48:00,arrival,"São Paulo, Brazil",Exception at São Paulo
+EVT001459,SHP000053,2024-06-13 03:37:00,exception,"Osaka, Japan",Arrival at Osaka
+EVT001460,SHP000478,2024-11-04 11:58:00,pickup,"Osaka, Japan",Exception at Osaka
+EVT001461,SHP000124,2024-02-26 14:21:00,departure,"Singapore, Singapore",Arrival at Singapore
+EVT001462,SHP000543,2023-09-02 00:30:00,departure,"Hamburg, Germany",Delivery at Hamburg
+EVT001463,SHP000542,2025-06-27 16:47:00,pickup,"Moscow, Russia",Customs Clearance at Moscow
+EVT001464,SHP000141,2023-04-26 22:14:00,customs_clearance,"Chicago, USA",Pickup at Chicago
+EVT001465,SHP000426,2025-05-23 00:35:00,exception,"Dubai, UAE",Delivery at Dubai
+EVT001466,SHP000114,2025-08-20 04:08:00,departure,"Toronto, Canada",Exception at Toronto
+EVT001467,SHP000394,2025-09-12 15:49:00,pickup,"Antwerp, Belgium",Delivery at Antwerp
+EVT001468,SHP000203,2024-11-24 07:02:00,customs_clearance,"Barcelona, Spain",Customs Clearance at Barcelona
+EVT001469,SHP000574,2023-01-15 05:51:00,arrival,"Dubai, UAE",Delivery at Dubai
+EVT001470,SHP000016,2025-01-20 11:29:00,delay,"Moscow, Russia",Delivery at Moscow
+EVT001471,SHP000033,2023-12-14 20:16:00,exception,"Shanghai, China",Delay at Shanghai
+EVT001472,SHP000301,2023-10-04 06:56:00,customs_clearance,"Tokyo, Japan",Departure at Tokyo
+EVT001473,SHP000167,2025-03-11 18:02:00,delay,"Dubai, UAE",Customs Clearance at Dubai
+EVT001474,SHP000392,2024-12-22 14:16:00,customs_clearance,"Mumbai, India",Exception at Mumbai
+EVT001475,SHP000484,2025-03-07 14:43:00,exception,"Shanghai, China",Arrival at Shanghai
+EVT001476,SHP000068,2023-08-31 07:36:00,delay,"Valencia, Spain",Arrival at Valencia
+EVT001477,SHP000146,2024-10-21 01:47:00,pickup,"Singapore, Singapore",Delay at Singapore
+EVT001478,SHP000417,2023-10-25 12:04:00,pickup,"Busan, South Korea",Customs Clearance at Busan
+EVT001479,SHP000010,2024-02-09 11:02:00,delay,"Tokyo, Japan",Exception at Tokyo
+EVT001480,SHP000536,2023-11-17 09:54:00,departure,"Antwerp, Belgium",Exception at Antwerp
+EVT001481,SHP000116,2024-03-30 18:08:00,arrival,"Toronto, Canada",Delivery at Toronto
+EVT001482,SHP000300,2023-05-16 07:01:00,pickup,"Osaka, Japan",Arrival at Osaka
+EVT001483,SHP000110,2023-06-02 00:20:00,delay,"Valencia, Spain",Departure at Valencia
+EVT001484,SHP000048,2023-07-26 11:58:00,pickup,"Los Angeles, USA",Customs Clearance at Los Angeles
+EVT001485,SHP000488,2025-03-05 22:18:00,customs_clearance,"Hong Kong, China",Exception at Hong Kong
+EVT001486,SHP000251,2024-11-06 07:19:00,delivery,"Mumbai, India",Pickup at Mumbai
+EVT001487,SHP000096,2024-10-29 00:52:00,pickup,"Shanghai, China",Delay at Shanghai
+EVT001488,SHP000283,2025-05-11 08:49:00,departure,"Barcelona, Spain",Customs Clearance at Barcelona
+EVT001489,SHP000518,2025-05-19 03:20:00,customs_clearance,"Sydney, Australia",Departure at Sydney
+EVT001490,SHP000566,2024-10-19 23:48:00,delay,"Houston, USA",Pickup at Houston
+EVT001491,SHP000141,2023-06-06 14:58:00,customs_clearance,"Mumbai, India",Arrival at Mumbai
+EVT001492,SHP000101,2024-04-24 18:23:00,delay,"Los Angeles, USA",Delivery at Los Angeles
+EVT001493,SHP000510,2023-07-21 10:23:00,arrival,"Osaka, Japan",Departure at Osaka
+EVT001494,SHP000386,2023-04-04 21:51:00,delivery,"São Paulo, Brazil",Customs Clearance at São Paulo
+EVT001495,SHP000165,2025-02-24 00:09:00,arrival,"Mumbai, India",Delay at Mumbai
+EVT001496,SHP000300,2025-01-27 08:27:00,delay,"Valencia, Spain",Customs Clearance at Valencia
+EVT001497,SHP000480,2023-03-17 11:04:00,customs_clearance,"Los Angeles, USA",Pickup at Los Angeles
+EVT001498,SHP000028,2024-02-21 01:52:00,delivery,"Chicago, USA",Customs Clearance at Chicago
+EVT001499,SHP000126,2025-02-25 08:48:00,exception,"Hong Kong, China",Customs Clearance at Hong Kong
+EVT001500,SHP000545,2024-04-15 15:42:00,exception,"São Paulo, Brazil",Pickup at São Paulo

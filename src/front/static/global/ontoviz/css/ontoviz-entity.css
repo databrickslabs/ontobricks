@@ -1,0 +1,424 @@
+/**
+ * OntoViz - Entity Styles
+ */
+
+/* Entity Container */
+.ovz-entity {
+    position: absolute;
+    min-width: 180px;
+    max-width: 320px;
+    background: var(--ovz-entity-bg);
+    border: 1px solid var(--ovz-entity-border);
+    border-radius: var(--ovz-radius-lg);
+    box-shadow: var(--ovz-entity-shadow);
+    cursor: move;
+    user-select: none;
+    z-index: 10;
+    transition: box-shadow var(--ovz-transition), border-color var(--ovz-transition);
+    overflow: visible;
+}
+
+.ovz-entity:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    border-color: #808080;
+}
+
+.ovz-entity.ovz-selected {
+    border-color: #404040;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.15), 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.ovz-entity.ovz-dragging {
+    opacity: 0.9;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+    z-index: 100;
+}
+
+/* Entity Header */
+.ovz-entity-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--ovz-entity-header-bg);
+    border-radius: var(--ovz-radius-lg) var(--ovz-radius-lg) 0 0;
+    border-bottom: 1px solid var(--ovz-entity-border);
+}
+
+.ovz-entity-icon {
+    font-size: 20px;
+    cursor: pointer;
+    transition: transform var(--ovz-transition);
+    line-height: 1;
+}
+
+.ovz-entity-icon:hover {
+    transform: scale(1.15);
+}
+
+.ovz-entity-title {
+    font-family: var(--ovz-font-display);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ovz-text-primary);
+    letter-spacing: 0.02em;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ovz-entity-title input {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    width: 100%;
+    outline: none;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    border-radius: var(--ovz-radius-sm);
+    transition: background var(--ovz-transition);
+}
+
+.ovz-entity-title input:focus {
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.ovz-entity-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--ovz-transition);
+}
+
+.ovz-entity:hover .ovz-entity-actions {
+    opacity: 1;
+}
+
+.ovz-entity-btn {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: var(--ovz-radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    transition: all var(--ovz-transition);
+}
+
+.ovz-entity-btn:hover {
+    background: #505050;
+    color: white;
+}
+
+/* Entity Description */
+.ovz-entity-description {
+    padding: 8px 14px;
+    font-size: 11px;
+    color: var(--ovz-text-muted);
+    border-bottom: 1px solid var(--ovz-entity-border);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-style: italic;
+    max-width: 100%;
+}
+
+/* Entity Body (Properties) */
+.ovz-entity-body {
+    padding: 6px 0;
+}
+
+/* Entity Property */
+.ovz-property {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    transition: background var(--ovz-transition);
+}
+
+.ovz-property:hover {
+    background: var(--ovz-bg-overlay);
+}
+
+.ovz-property-icon {
+    font-size: 10px;
+    color: var(--ovz-text-muted);
+    width: 16px;
+    text-align: center;
+}
+
+.ovz-property-icon.ovz-key {
+    color: #606060;
+}
+
+.ovz-property-name {
+    flex: 1;
+    font-size: 12px;
+    color: var(--ovz-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ovz-property-name input {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font: inherit;
+    width: 100%;
+    outline: none;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    border-radius: var(--ovz-radius-sm);
+    transition: background var(--ovz-transition);
+}
+
+.ovz-property-name input:focus {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.ovz-property-type {
+    font-size: 10px;
+    color: var(--ovz-text-muted);
+    font-family: var(--ovz-font-mono);
+    background: var(--ovz-bg-overlay);
+    padding: 2px 6px;
+    border-radius: var(--ovz-radius-sm);
+}
+
+.ovz-property-actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity var(--ovz-transition);
+}
+
+.ovz-property:hover .ovz-property-actions {
+    opacity: 1;
+}
+
+.ovz-property-btn {
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    color: var(--ovz-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    border-radius: var(--ovz-radius-sm);
+    transition: all var(--ovz-transition);
+}
+
+.ovz-property-btn:hover {
+    background: #505050;
+    color: white;
+}
+
+.ovz-property-btn.ovz-delete:hover {
+    background: #303030;
+}
+
+/* Add Property Button */
+.ovz-add-property {
+    padding: 8px 14px;
+    font-size: 11px;
+    color: var(--ovz-text-muted);
+    cursor: pointer;
+    transition: all var(--ovz-transition);
+    text-align: center;
+    border-top: 1px dashed var(--ovz-entity-border);
+}
+
+.ovz-add-property:hover {
+    background: var(--ovz-bg-overlay);
+    color: #404040;
+}
+
+/* Entity Connectors (Anchors) */
+.ovz-connector {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: var(--ovz-bg-surface);
+    border: 2px solid #606060;
+    border-radius: 50%;
+    cursor: crosshair;
+    z-index: 20;
+    transition: all var(--ovz-transition);
+    opacity: 0;
+}
+
+.ovz-entity:hover .ovz-connector,
+.ovz-connector.ovz-active {
+    opacity: 1;
+}
+
+.ovz-connector:hover,
+.ovz-connector.ovz-active {
+    transform: scale(1.3);
+    background: #505050;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
+}
+
+.ovz-connector-left {
+    left: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.ovz-connector-right {
+    right: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.ovz-connector-top {
+    top: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.ovz-connector-bottom {
+    bottom: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.ovz-connector-left:hover {
+    transform: translateY(-50%) scale(1.3);
+}
+
+.ovz-connector-right:hover {
+    transform: translateY(-50%) scale(1.3);
+}
+
+.ovz-connector-top:hover {
+    transform: translateX(-50%) scale(1.3);
+}
+
+.ovz-connector-bottom:hover {
+    transform: translateX(-50%) scale(1.3);
+}
+
+/* Anchor highlighting states */
+.ovz-connector.ovz-anchor-available {
+    opacity: 1;
+    animation: ovz-pulse 1s infinite;
+}
+
+.ovz-connector.ovz-anchor-closest {
+    opacity: 1;
+    background: #404040;
+    border-color: #404040;
+    transform: scale(1.4);
+    box-shadow: 0 0 16px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes ovz-pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+/* ==========================================
+   Inherited Properties Section
+   ========================================== */
+
+.ovz-inherited-section {
+    border-top: 1px dashed var(--ovz-entity-border, #d0d0d0);
+    margin-top: 4px;
+    background: linear-gradient(135deg, rgba(100, 100, 100, 0.04) 0%, rgba(80, 80, 80, 0.04) 100%);
+}
+
+.ovz-inherited-header {
+    padding: 6px 14px 4px;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--ovz-text-muted, #888);
+}
+
+.ovz-property.ovz-property-inherited {
+    opacity: 0.75;
+    background: transparent;
+    cursor: default;
+}
+
+.ovz-property.ovz-property-inherited:hover {
+    background: rgba(100, 100, 100, 0.05);
+}
+
+.ovz-property-icon.ovz-inherited {
+    color: #707070;
+    font-size: 11px;
+}
+
+.ovz-inherited-name {
+    font-style: italic;
+    color: var(--ovz-text-secondary, #555);
+}
+
+.ovz-inherited-from {
+    font-size: 9px;
+    color: var(--ovz-text-muted, #888);
+    font-style: italic;
+    margin-left: auto;
+    padding-left: 8px;
+}
+
+/* ==========================================================================
+   View-Only Mode Styles
+   ========================================================================== */
+
+/* Container class when in view-only mode */
+.ovz-canvas.ovz-view-only .ovz-entity-icon {
+    cursor: default;
+}
+
+/* Entity title as text (view-only mode) */
+.ovz-entity-title-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ovz-text-primary, #111);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Property name as text (view-only mode) */
+.ovz-property-name-text {
+    font-size: 11px;
+    color: var(--ovz-text-secondary, #555);
+}
+
+/* Relationship name as text (view-only mode) */
+.ovz-rel-name-text {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ovz-text-primary, #333);
+}
+
+/* Hide add-property section in view-only mode */
+.ovz-canvas.ovz-view-only .ovz-add-property {
+    display: none;
+}
+
+/* Hide toolbar buttons that modify content in view-only mode */
+.ovz-canvas.ovz-view-only .ovz-toolbar [data-action="add-entity"],
+.ovz-canvas.ovz-view-only .ovz-toolbar [data-action="delete"],
+.ovz-canvas.ovz-view-only .ovz-toolbar [data-action="add-relationship"],
+.ovz-canvas.ovz-view-only .ovz-toolbar [data-action="add-inheritance"] {
+    display: none;
+}
+

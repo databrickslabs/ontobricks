@@ -1,0 +1,383 @@
+{
+    "brand": {
+        "label": "OntoBricks",
+        "route": "/"
+    },
+
+    "menus": [
+        {
+            "id": "project",
+            "label": "Project",
+            "icon": "bi-folder2",
+            "route": "/project/",
+            "requires_project_saved": false,
+            "status_indicator": null,
+            "navbar_actions": [
+                {
+                    "label": "New Project",
+                    "icon": "bi-file-earmark-plus",
+                    "action": "projectNew",
+                    "element_id": null
+                },
+                {
+                    "label": "Load Project",
+                    "icon": "bi-cloud-download",
+                    "action": "projectLoad",
+                    "element_id": null
+                },
+                {
+                    "label": "Save Project",
+                    "icon": "bi-cloud-upload",
+                    "action": "projectSave",
+                    "element_id": "menuSaveProject"
+                }
+            ],
+            "groups": [
+                {
+                    "id": "project-main",
+                    "title": "Project",
+                    "icon": "bi-folder2-open",
+                    "items": [
+                        {
+                            "id": "information",
+                            "label": "Information",
+                            "icon": "bi-info-circle",
+                            "default": true,
+                            "requires": null
+                        },
+                        {
+                            "id": "versions",
+                            "label": "Versions",
+                            "icon": "bi-clock-history",
+                            "default": false,
+                            "requires": "project_saved"
+                        },
+                        {
+                            "id": "validation",
+                            "label": "Status",
+                            "icon": "bi-shield-check",
+                            "default": false,
+                            "requires": "project_saved"
+                        },
+                        {
+                            "id": "metadata",
+                            "label": "Metadata",
+                            "icon": "bi-database",
+                            "default": false,
+                            "requires": "project_saved"
+                        },
+                        {
+                            "id": "documents",
+                            "label": "Documents",
+                            "icon": "bi-file-earmark-text",
+                            "default": false,
+                            "requires": "project_saved"
+                        }
+                    ]
+                },
+                {
+                    "id": "project-w3c",
+                    "title": "W3C Standards",
+                    "icon": "bi-filetype-xml",
+                    "sidebar_only": true,
+                    "items": [
+                        {
+                            "id": "owl-content",
+                            "label": "OWL",
+                            "icon": "bi-file-earmark-code",
+                            "default": false,
+                            "requires": "project_saved"
+                        },
+                        {
+                            "id": "r2rml",
+                            "label": "R2RML",
+                            "icon": "bi-diagram-3",
+                            "default": false,
+                            "requires": "project_saved"
+                        }
+                    ]
+                }
+            ]
+        },
+
+        {
+            "id": "ontology",
+            "label": "Ontology",
+            "icon": "bi-bezier2",
+            "route": "/ontology/",
+            "requires_project_saved": true,
+            "status_indicator": null,
+            "navbar_actions": [],
+            "groups": [
+                {
+                    "id": "ontology-editor",
+                    "title": "Ontology Design",
+                    "icon": "bi-pencil-square",
+                    "items": [
+                        {
+                            "id": "information",
+                            "label": "Information",
+                            "icon": "bi-info-circle",
+                            "default": true,
+                            "requires": null
+                        },
+                        {
+                            "id": "import",
+                            "label": "Import",
+                            "icon": "bi-box-arrow-in-down",
+                            "default": false,
+                            "requires": null,
+                            "hidden_in_view_mode": true
+                        },
+                        {
+                            "id": "wizard",
+                            "label": "Generate",
+                            "icon": "bi-magic",
+                            "default": false,
+                            "requires": null,
+                            "hidden_in_view_mode": true
+                        },
+                        {
+                            "id": "map",
+                            "label": "Model",
+                            "icon": "bi-diagram-3",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "design",
+                            "label": "Business Views",
+                            "icon": "bi-pencil-square",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "entities",
+                            "label": "Entities",
+                            "icon": "bi-box",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "relationships",
+                            "label": "Relationships",
+                            "icon": "bi-arrow-left-right",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
+                    "id": "ontology-advanced",
+                    "title": "Advanced",
+                    "icon": "bi-gear",
+                    "items": [
+                        {
+                            "id": "dataquality",
+                            "label": "Data Quality",
+                            "icon": "bi-shield-check",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "swrl",
+                            "label": "Business Rules",
+                            "icon": "bi-lightning",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "axioms",
+                            "label": "Expr. & Axioms",
+                            "icon": "bi-diagram-2",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
+                    "id": "ontology-w3c",
+                    "title": "W3C Standards",
+                    "icon": "bi-filetype-xml",
+                    "items": [
+                        {
+                            "id": "owl",
+                            "label": "OWL",
+                            "icon": "bi-file-earmark-code",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                }
+            ]
+        },
+
+        {
+            "id": "assignment",
+            "label": "Mapping",
+            "icon": "bi-shuffle",
+            "route": "/mapping/",
+            "requires_project_saved": true,
+            "status_indicator": null,
+            "navbar_actions": [],
+            "groups": [
+                {
+                    "id": "assignment-main",
+                    "title": "Mapping Design",
+                    "icon": "bi-link-45deg",
+                    "items": [
+                        {
+                            "id": "information",
+                            "label": "Information",
+                            "icon": "bi-info-circle",
+                            "default": true,
+                            "requires": null,
+                            "disabled_during": "autoassign"
+                        },
+                        {
+                            "id": "design",
+                            "label": "Designer",
+                            "icon": "bi-diagram-3",
+                            "default": false,
+                            "requires": null,
+                            "disabled_during": "autoassign"
+                        },
+                        {
+                            "id": "manual",
+                            "label": "Manual",
+                            "icon": "bi-list-nested",
+                            "default": false,
+                            "requires": null,
+                            "disabled_during": "autoassign"
+                        },
+                        {
+                            "id": "autoassign",
+                            "label": "Auto-Map",
+                            "icon": "bi-lightning-charge",
+                            "default": false,
+                            "requires": null,
+                            "hidden_in_view_mode": true
+                        }
+                    ]
+                },
+                {
+                    "id": "assignment-w3c",
+                    "title": "W3C Standards",
+                    "icon": "bi-filetype-xml",
+                    "items": [
+                        {
+                            "id": "r2rml",
+                            "label": "R2RML",
+                            "icon": "bi-link-45deg",
+                            "default": false,
+                            "requires": null,
+                            "disabled_during": "autoassign"
+                        },
+                        {
+                            "id": "sparksql",
+                            "label": "Spark SQL",
+                            "icon": "bi-file-earmark-code",
+                            "default": false,
+                            "requires": null,
+                            "disabled_during": "autoassign"
+                        }
+                    ]
+                }
+            ]
+        },
+
+        {
+            "id": "digitaltwin",
+            "label": "Digital Twin",
+            "icon": "bi-box-fill",
+            "route": "/dtwin/",
+            "requires_project_saved": true,
+            "status_indicator": null,
+            "navbar_actions": [],
+            "groups": [
+                {
+                    "id": "digitaltwin-management",
+                    "title": "Management",
+                    "icon": "bi-gear",
+                    "items": [
+                        {
+                            "id": "sync",
+                            "label": "Build",
+                            "icon": "bi-info-circle",
+                            "default": true,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
+                    "id": "digitaltwin-data",
+                    "title": "Graph",
+                    "icon": "bi-database",
+                    "items": [
+                        {
+                            "id": "sigmagraph",
+                            "label": "Knowledge Graph",
+                            "icon": "bi-layers-half",
+                            "default": false,
+                            "requires": "sync_ready"
+                        },
+                        {
+                            "id": "graphql",
+                            "label": "GraphQL",
+                            "icon": "bi-braces-asterisk",
+                            "default": false,
+                            "requires": "sync_ready"
+                        }
+                    ]
+                },
+                {
+                    "id": "digitaltwin-advanced",
+                    "title": "Advanced",
+                    "icon": "bi-gear",
+                    "items": [
+                        {
+                            "id": "dataquality",
+                            "label": "Data Quality",
+                            "icon": "bi-shield-check",
+                            "default": false,
+                            "requires": "sync_ready"
+                        },
+                        {
+                            "id": "reasoning",
+                            "label": "Inference",
+                            "icon": "bi-lightning",
+                            "default": false,
+                            "requires": "sync_ready"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+
+    "utility_links": [
+        {
+            "id": "warehouse",
+            "label": null,
+            "icon": "bi-server",
+            "route": "/settings",
+            "element_id": "warehouseStatusLink",
+            "tooltip": "SQL Warehouse – click to configure"
+        },
+        {
+            "id": "tasks",
+            "label": null,
+            "icon": "bi-hourglass-split",
+            "element_id": "taskTrackerToggle",
+            "tooltip": "Background tasks"
+        },
+        {
+            "id": "settings",
+            "label": "Settings",
+            "icon": "bi-gear-fill",
+            "route": "/settings",
+            "element_id": null,
+            "tooltip": null
+        }
+    ]
+}

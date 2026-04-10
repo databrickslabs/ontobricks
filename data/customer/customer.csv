@@ -1,0 +1,201 @@
+customer_id,first_name,last_name,email,phone,street_address,city,postal_code,country,date_of_birth,registration_date,segment,loyalty_points,is_active
+CUST00001,Ella,Francois,customer00001@email.fr,+33637456926,29 Rue de la Gare,Brest,29200,France,1959-03-13,2022-08-03,professional,4467,true
+CUST00002,Mia,Bonnet,customer00002@email.fr,+33662454433,109 Rue de la République,Nimes,30000,France,1995-05-04,2021-10-01,residential,4597,true
+CUST00003,Camila,Guerin,customer00003@email.fr,+33601744497,140 Place du Commerce,Villeurbanne,69100,France,1964-04-28,2022-10-30,small_business,2787,true
+CUST00004,Charlotte,Laurent,customer00004@email.fr,+33701985959,56 Impasse Voltaire,Nice,06000,France,1958-09-05,2019-01-10,small_business,4945,true
+CUST00005,Luke,David,customer00005@email.fr,+33701612049,12 Chemin des Roses,Limoges,87000,France,1957-01-26,2021-03-11,small_business,2962,true
+CUST00006,Avery,Henry,customer00006@email.fr,+33621418995,18 Rue de Lyon,Villeurbanne,69100,France,1970-11-20,2024-09-19,residential,3113,true
+CUST00007,Lily,Lambert,customer00007@email.fr,+33779898778,94 Avenue de Paris,Toulon,83000,France,1973-12-14,2022-11-14,professional,584,true
+CUST00008,John,Blanc,customer00008@email.fr,+33771798626,63 Avenue des Roses,Angers,49000,France,1999-12-20,2017-06-18,professional,2656,true
+CUST00009,Penelope,Blanc,customer00009@email.fr,+33617767368,9 Impasse Voltaire,Montpellier,34000,France,1968-12-05,2021-05-12,professional,2577,true
+CUST00010,Liam,Vincent,customer00010@email.fr,+33671103229,128 Place Saint-Michel,Brest,29200,France,1962-07-12,2017-10-07,professional,4598,true
+CUST00011,Penelope,Lopez,customer00011@email.fr,+33658873467,150 Place des Alpes,Tours,37000,France,1962-05-30,2020-09-18,small_business,744,true
+CUST00012,David,Boyer,customer00012@email.fr,+33760097331,29 Avenue Saint-Michel,Perpignan,66000,France,1955-09-13,2019-04-26,small_business,4881,false
+CUST00013,Daniel,Blanc,customer00013@email.fr,+33772056873,65 Allée de la République,Dijon,21000,France,1980-07-08,2016-04-01,small_business,3561,true
+CUST00014,Aiden,Andre,customer00014@email.fr,+33736279761,1 Chemin de la Gare,Toulon,83000,France,1959-07-19,2024-10-05,professional,2444,true
+CUST00015,Natalie,Martin,customer00015@email.fr,+33760777963,96 Impasse de la Liberté,Nice,06000,France,1979-01-30,2020-06-24,residential,916,true
+CUST00016,Ethan,Simon,customer00016@email.fr,+33622992422,79 Avenue Victor Hugo,Metz,57000,France,1993-08-07,2024-02-25,residential,4363,true
+CUST00017,Scarlett,Boyer,customer00017@email.fr,+33656854146,122 Allée de la Liberté,Nice,06000,France,1998-05-20,2023-06-21,professional,1647,true
+CUST00018,Camila,David,customer00018@email.fr,+33666546657,96 Place Charles de Gaulle,Le Havre,76600,France,1970-02-27,2015-09-20,small_business,172,true
+CUST00019,Sophia,Martinez,customer00019@email.fr,+33618092636,57 Rue Jean Jaurès,Nimes,30000,France,1952-10-26,2024-08-22,small_business,580,true
+CUST00020,Matthew,Roger,customer00020@email.fr,+33665229074,125 Avenue du Château,Bordeaux,33000,France,1992-06-07,2024-01-21,small_business,1559,true
+CUST00021,Oliver,Gautier,customer00021@email.fr,+33795709809,111 Boulevard du Moulin,Toulouse,31000,France,1954-11-11,2022-07-21,professional,806,true
+CUST00022,Ella,Mercier,customer00022@email.fr,+33651058814,87 Impasse des Fleurs,Le Havre,76600,France,1998-02-11,2020-01-12,residential,3456,true
+CUST00023,Noah,Lefebvre,customer00023@email.fr,+33613579701,119 Avenue Jean Jaurès,Bordeaux,33000,France,1998-07-01,2024-05-17,residential,764,true
+CUST00024,Sofia,Sanchez,customer00024@email.fr,+33615739821,105 Place de Verdun,Nantes,44000,France,1964-10-08,2019-04-02,residential,3198,true
+CUST00025,Leah,Roy,customer00025@email.fr,+33641552957,117 Boulevard du Moulin,Limoges,87000,France,1967-01-14,2018-04-30,residential,479,true
+CUST00026,Elijah,Roche,customer00026@email.fr,+33734982870,81 Rue Victor Hugo,Tours,37000,France,1997-08-25,2016-10-06,residential,4160,true
+CUST00027,Benjamin,Legrand,customer00027@email.fr,+33708387674,48 Rue du Port,Perpignan,66000,France,1960-10-03,2024-12-25,professional,2016,true
+CUST00028,Elijah,Perrin,customer00028@email.fr,+33669998758,21 Place de Lyon,Aix-en-Provence,13100,France,1968-04-29,2022-07-06,professional,2573,true
+CUST00029,Nicholas,Joly,customer00029@email.fr,+33684873168,102 Avenue de Lyon,Bordeaux,33000,France,1956-07-05,2015-02-08,small_business,4612,true
+CUST00030,Scarlett,Bertrand,customer00030@email.fr,+33693686345,138 Avenue Charles de Gaulle,Marseille,13001,France,1956-03-04,2024-11-10,residential,3027,true
+CUST00031,Nicholas,Bernard,customer00031@email.fr,+33779278163,113 Impasse du Château,Nantes,44000,France,1999-10-04,2018-05-11,professional,848,true
+CUST00032,Evelyn,Blanc,customer00032@email.fr,+33675633373,30 Rue du Château,Bordeaux,33000,France,1968-11-23,2023-01-18,small_business,1667,true
+CUST00033,Mia,Boyer,customer00033@email.fr,+33674270783,126 Boulevard Victor Hugo,Dijon,21000,France,1953-12-15,2015-01-15,small_business,1071,true
+CUST00034,Sebastian,Bernard,customer00034@email.fr,+33630030916,114 Allée du Marché,Nantes,44000,France,1956-10-01,2024-11-26,professional,1221,true
+CUST00035,Joseph,Denis,customer00035@email.fr,+33634210896,95 Allée du Château,Metz,57000,France,1953-10-02,2018-06-16,small_business,326,true
+CUST00036,Lily,Gerard,customer00036@email.fr,+33766607554,64 Chemin des Fleurs,Strasbourg,67000,France,1963-11-13,2017-08-27,residential,1450,false
+CUST00037,Oliver,Garnier,customer00037@email.fr,+33671620112,46 Chemin Voltaire,Paris,75001,France,1964-04-13,2023-10-31,professional,885,false
+CUST00038,Joshua,Dupont,customer00038@email.fr,+33723561709,10 Impasse de Verdun,Perpignan,66000,France,1981-05-15,2018-06-04,residential,1826,true
+CUST00039,Grace,Leroy,customer00039@email.fr,+33674927045,50 Place Voltaire,Clermont-Ferrand,63000,France,1981-07-03,2022-03-12,professional,3274,true
+CUST00040,Elijah,Rousseau,customer00040@email.fr,+33610269588,30 Boulevard de la Liberté,Paris,75001,France,1959-09-23,2021-09-09,small_business,2831,true
+CUST00041,Savannah,Mercier,customer00041@email.fr,+33668376552,131 Rue Emile Zola,Saint-Etienne,42000,France,1953-12-25,2022-12-13,small_business,13,true
+CUST00042,Charles,Perrin,customer00042@email.fr,+33778076718,111 Rue de Lyon,Reims,51100,France,1961-03-07,2023-01-27,small_business,4154,true
+CUST00043,Chloe,Bertrand,customer00043@email.fr,+33651496683,105 Boulevard Emile Zola,Clermont-Ferrand,63000,France,1987-09-21,2022-06-16,small_business,1425,true
+CUST00044,Nicholas,Muller,customer00044@email.fr,+33656420484,141 Impasse de la République,Le Havre,76600,France,1988-07-26,2023-10-24,professional,4969,true
+CUST00045,Sofia,Roger,customer00045@email.fr,+33797558147,114 Place de Lyon,Toulon,83000,France,1965-03-23,2022-05-22,residential,2324,true
+CUST00046,Joshua,Dupont,customer00046@email.fr,+33639555028,61 Chemin des Lilas,Marseille,13001,France,1952-03-11,2015-07-09,residential,3892,true
+CUST00047,Christopher,Robin,customer00047@email.fr,+33732708361,107 Chemin des Alpes,Toulon,83000,France,1985-11-08,2017-09-26,residential,45,true
+CUST00048,Owen,Gautier,customer00048@email.fr,+33613480394,109 Avenue de la Liberté,Amiens,80000,France,2000-01-04,2017-10-17,residential,3739,true
+CUST00049,Leah,Perrin,customer00049@email.fr,+33718802399,119 Chemin Charles de Gaulle,Limoges,87000,France,1995-04-15,2019-10-14,professional,3652,true
+CUST00050,Ella,Guerin,customer00050@email.fr,+33739935353,122 Place de la Gare,Tours,37000,France,1993-06-23,2022-01-11,residential,2249,false
+CUST00051,Charles,Perrin,customer00051@email.fr,+33744996008,74 Avenue de la Gare,Marseille,13001,France,1957-03-25,2016-07-20,residential,1894,false
+CUST00052,Benjamin,Nguyen,customer00052@email.fr,+33709414123,40 Chemin Pasteur,Villeurbanne,69100,France,1979-09-08,2021-01-31,small_business,3406,true
+CUST00053,Michael,Chevalier,customer00053@email.fr,+33728038272,108 Place des Alpes,Strasbourg,67000,France,1950-07-13,2018-12-11,small_business,3194,false
+CUST00054,Joshua,Roy,customer00054@email.fr,+33658900547,140 Impasse du Port,Angers,49000,France,1974-06-27,2019-11-21,small_business,237,false
+CUST00055,Hannah,Bertrand,customer00055@email.fr,+33767035831,104 Chemin de la Liberté,Rennes,35000,France,1997-12-02,2015-04-21,small_business,4848,true
+CUST00056,Emily,Petit,customer00056@email.fr,+33669835178,110 Avenue des Roses,Marseille,13001,France,1984-01-05,2018-09-02,residential,3724,true
+CUST00057,Nathan,Simon,customer00057@email.fr,+33726247030,98 Boulevard du Moulin,Rennes,35000,France,1951-09-28,2023-05-27,professional,426,true
+CUST00058,Ava,Thomas,customer00058@email.fr,+33666379606,18 Impasse Saint-Michel,Montpellier,34000,France,1967-11-20,2024-05-30,residential,1248,true
+CUST00059,Gabriel,Bonnet,customer00059@email.fr,+33724831609,122 Chemin des Fleurs,Nice,06000,France,1972-12-27,2023-08-08,small_business,1374,true
+CUST00060,Elijah,Thomas,customer00060@email.fr,+33683740385,42 Boulevard des Fleurs,Amiens,80000,France,1983-09-03,2019-06-13,professional,1624,true
+CUST00061,Nicholas,David,customer00061@email.fr,+33751916362,63 Rue du Marché,Nimes,30000,France,1953-09-07,2018-11-23,professional,3509,true
+CUST00062,Emma,Nguyen,customer00062@email.fr,+33731587518,130 Chemin Voltaire,Marseille,13001,France,1959-06-21,2019-11-11,small_business,3766,true
+CUST00063,Ryan,Roche,customer00063@email.fr,+33724788603,46 Chemin Charles de Gaulle,Saint-Etienne,42000,France,1989-01-28,2024-04-05,professional,4853,true
+CUST00064,Grace,Duval,customer00064@email.fr,+33665461592,63 Impasse Jean Jaurès,Rennes,35000,France,1991-09-10,2021-05-23,professional,3104,true
+CUST00065,Emily,Roy,customer00065@email.fr,+33656940488,127 Impasse Voltaire,Paris,75001,France,1981-10-31,2023-12-12,small_business,2788,true
+CUST00066,Owen,Mercier,customer00066@email.fr,+33622981554,71 Allée de la République,Aix-en-Provence,13100,France,1971-08-27,2023-01-28,small_business,4002,true
+CUST00067,Mason,Duval,customer00067@email.fr,+33604628703,122 Chemin du Marché,Villeurbanne,69100,France,1958-05-08,2018-04-20,residential,3312,true
+CUST00068,Jack,Gauthier,customer00068@email.fr,+33714220309,149 Boulevard de Verdun,Lille,59000,France,1999-05-19,2018-09-16,small_business,3717,true
+CUST00069,Christopher,Perrin,customer00069@email.fr,+33632092731,65 Avenue des Fleurs,Lille,59000,France,1998-01-28,2023-07-19,professional,1516,true
+CUST00070,Stella,Muller,customer00070@email.fr,+33626984771,124 Boulevard des Alpes,Strasbourg,67000,France,1967-06-01,2018-04-28,residential,2956,true
+CUST00071,Matthew,Guerin,customer00071@email.fr,+33612218027,4 Chemin du Château,Lille,59000,France,1954-11-22,2021-03-16,small_business,1034,false
+CUST00072,Logan,Roche,customer00072@email.fr,+33718237443,4 Allée des Lilas,Toulouse,31000,France,1980-07-26,2017-01-25,residential,2068,false
+CUST00073,Isabella,Petit,customer00073@email.fr,+33640728909,17 Place de Verdun,Toulouse,31000,France,1963-05-21,2024-02-05,professional,2489,true
+CUST00074,Claire,Francois,customer00074@email.fr,+33740276996,31 Allée du Moulin,Montpellier,34000,France,1984-02-16,2020-01-20,small_business,2435,false
+CUST00075,Caleb,Lefebvre,customer00075@email.fr,+33655777640,146 Allée Victor Hugo,Lille,59000,France,1968-12-06,2017-12-19,professional,665,true
+CUST00076,David,Martin,customer00076@email.fr,+33709660600,45 Allée Jean Jaurès,Montpellier,34000,France,1990-06-02,2022-09-24,professional,3849,true
+CUST00077,Jacob,Joly,customer00077@email.fr,+33619107171,60 Boulevard du Marché,Lyon,69001,France,1970-12-10,2017-12-19,professional,4831,true
+CUST00078,Evelyn,Blanc,customer00078@email.fr,+33638181262,30 Allée du Commerce,Saint-Etienne,42000,France,1956-05-28,2015-09-02,residential,2519,true
+CUST00079,Nicholas,Sanchez,customer00079@email.fr,+33673080530,32 Place du Marché,Toulon,83000,France,1994-11-25,2021-01-20,small_business,3586,true
+CUST00080,Claire,Faure,customer00080@email.fr,+33606943055,11 Place Voltaire,Aix-en-Provence,13100,France,1958-03-12,2017-07-26,professional,4712,true
+CUST00081,Samuel,Roger,customer00081@email.fr,+33739308294,69 Allée Victor Hugo,Amiens,80000,France,1989-09-03,2018-02-13,residential,4795,false
+CUST00082,George,Gerard,customer00082@email.fr,+33689471791,126 Rue de Verdun,Brest,29200,France,1978-10-21,2022-07-07,residential,1317,true
+CUST00083,Penelope,Robert,customer00083@email.fr,+33722091401,127 Boulevard de Lyon,Saint-Etienne,42000,France,1957-11-25,2018-07-12,small_business,2648,true
+CUST00084,James,Gautier,customer00084@email.fr,+33710930301,104 Impasse Charles de Gaulle,Amiens,80000,France,1954-11-12,2017-02-07,professional,2963,false
+CUST00085,Andrew,Blanc,customer00085@email.fr,+33747430025,114 Impasse Victor Hugo,Brest,29200,France,1961-10-03,2018-03-25,small_business,3970,true
+CUST00086,Victoria,Bernard,customer00086@email.fr,+33748243859,62 Chemin de la Liberté,Paris,75001,France,1986-08-09,2016-01-17,residential,929,false
+CUST00087,Chloe,Blanc,customer00087@email.fr,+33711532338,40 Place du Marché,Toulouse,31000,France,1993-04-15,2020-04-18,residential,3741,true
+CUST00088,Harper,Leroy,customer00088@email.fr,+33674154597,49 Allée Charles de Gaulle,Le Havre,76600,France,1987-03-24,2018-10-24,professional,2188,true
+CUST00089,Elijah,Roy,customer00089@email.fr,+33639888278,77 Impasse des Alpes,Lille,59000,France,1990-01-23,2021-01-15,small_business,2827,true
+CUST00090,Riley,Mercier,customer00090@email.fr,+33787233309,140 Place des Roses,Angers,49000,France,1971-06-05,2021-05-31,small_business,1913,false
+CUST00091,John,Robin,customer00091@email.fr,+33778157613,82 Chemin de Verdun,Lyon,69001,France,1963-08-25,2020-07-21,residential,1034,true
+CUST00092,Henry,Joly,customer00092@email.fr,+33604119839,26 Impasse des Roses,Perpignan,66000,France,1962-12-07,2019-08-07,professional,1264,true
+CUST00093,Edward,Simon,customer00093@email.fr,+33688198652,68 Boulevard du Port,Grenoble,38000,France,1997-11-15,2019-04-06,small_business,3997,true
+CUST00094,Jacob,Martinez,customer00094@email.fr,+33624261017,18 Avenue Saint-Michel,Aix-en-Provence,13100,France,1988-12-07,2016-02-08,professional,823,false
+CUST00095,Riley,Durand,customer00095@email.fr,+33678750313,77 Rue Victor Hugo,Nantes,44000,France,1982-02-28,2019-03-16,small_business,1192,true
+CUST00096,Emily,Girard,customer00096@email.fr,+33646994822,106 Allée de Lyon,Dijon,21000,France,1957-01-31,2021-11-01,small_business,1972,false
+CUST00097,Nathan,Joly,customer00097@email.fr,+33668538740,37 Avenue des Roses,Nimes,30000,France,1950-11-04,2024-01-09,small_business,2356,true
+CUST00098,Nicholas,Boyer,customer00098@email.fr,+33785304622,114 Boulevard des Alpes,Marseille,13001,France,1972-06-09,2020-02-15,small_business,1631,false
+CUST00099,John,Dumont,customer00099@email.fr,+33754299903,124 Rue du Commerce,Perpignan,66000,France,1976-07-18,2022-11-04,small_business,179,false
+CUST00100,Alexander,Noel,customer00100@email.fr,+33676824657,3 Allée de Lyon,Bordeaux,33000,France,1970-08-24,2021-10-22,small_business,1794,true
+CUST00101,Harper,Lefebvre,customer00101@email.fr,+33768432003,65 Chemin de Lyon,Aix-en-Provence,13100,France,1953-07-15,2018-06-19,small_business,273,true
+CUST00102,Riley,Nguyen,customer00102@email.fr,+33647148023,34 Rue des Lilas,Tours,37000,France,1968-01-06,2016-06-25,professional,2997,true
+CUST00103,Chloe,Clement,customer00103@email.fr,+33630915633,43 Boulevard de Verdun,Metz,57000,France,1992-01-07,2015-11-05,residential,1848,false
+CUST00104,Edward,Bernard,customer00104@email.fr,+33670990059,143 Boulevard Jean Jaurès,Perpignan,66000,France,1998-02-20,2016-05-21,small_business,3019,true
+CUST00105,Aurora,Michel,customer00105@email.fr,+33781150058,98 Impasse Saint-Michel,Nimes,30000,France,1970-12-23,2020-04-15,residential,4599,true
+CUST00106,Hannah,Roussel,customer00106@email.fr,+33774278887,57 Chemin Jean Jaurès,Aix-en-Provence,13100,France,1986-08-19,2016-04-22,residential,371,true
+CUST00107,Ethan,Roux,customer00107@email.fr,+33704326320,127 Rue des Fleurs,Lille,59000,France,1990-09-12,2019-02-28,professional,4425,false
+CUST00108,Henry,Roy,customer00108@email.fr,+33765262883,40 Place Saint-Michel,Nimes,30000,France,1986-08-13,2018-02-19,residential,3035,true
+CUST00109,Henry,Fontaine,customer00109@email.fr,+33746153940,114 Avenue de Paris,Toulon,83000,France,1982-03-07,2015-09-06,small_business,2260,true
+CUST00110,Sofia,Dubois,customer00110@email.fr,+33613577065,117 Rue de Lyon,Toulouse,31000,France,1979-12-03,2017-09-24,residential,4625,true
+CUST00111,Sofia,Martinez,customer00111@email.fr,+33688197032,142 Avenue des Alpes,Marseille,13001,France,1963-03-29,2023-11-05,professional,23,true
+CUST00112,Nathan,Andre,customer00112@email.fr,+33629508128,38 Avenue du Château,Perpignan,66000,France,1952-04-24,2016-06-23,residential,2934,true
+CUST00113,Scarlett,Petit,customer00113@email.fr,+33634026486,83 Rue de la Liberté,Nimes,30000,France,1987-10-08,2020-11-24,residential,520,false
+CUST00114,Charlotte,Duval,customer00114@email.fr,+33735248169,93 Allée des Alpes,Toulon,83000,France,1969-11-16,2021-11-24,residential,4271,true
+CUST00115,Penelope,Boyer,customer00115@email.fr,+33784172894,8 Rue de Verdun,Toulon,83000,France,1959-09-08,2020-07-01,professional,3633,true
+CUST00116,Benjamin,Bertrand,customer00116@email.fr,+33673824044,83 Allée du Général Leclerc,Marseille,13001,France,1999-03-13,2022-12-26,small_business,3120,true
+CUST00117,Henry,Garcia,customer00117@email.fr,+33775748171,130 Allée du Moulin,Toulon,83000,France,1999-06-19,2023-01-31,residential,3523,false
+CUST00118,Penelope,Nguyen,customer00118@email.fr,+33795853867,106 Boulevard des Roses,Montpellier,34000,France,1958-07-13,2018-07-04,small_business,2560,true
+CUST00119,Benjamin,Laurent,customer00119@email.fr,+33622914821,40 Chemin de Verdun,Reims,51100,France,1958-05-13,2019-11-04,residential,3052,true
+CUST00120,Leah,Mathieu,customer00120@email.fr,+33779855317,16 Allée du Château,Angers,49000,France,1960-12-19,2019-08-10,small_business,3464,true
+CUST00121,Savannah,Bonnet,customer00121@email.fr,+33641535064,80 Boulevard des Fleurs,Lille,59000,France,1993-04-05,2017-07-07,residential,2868,true
+CUST00122,Sebastian,Thomas,customer00122@email.fr,+33763475827,72 Allée du Commerce,Toulouse,31000,France,1973-12-29,2015-04-29,residential,2238,true
+CUST00123,Joseph,Sanchez,customer00123@email.fr,+33618679195,90 Rue de la Liberté,Rennes,35000,France,1962-09-23,2023-04-24,professional,251,true
+CUST00124,Layla,Joly,customer00124@email.fr,+33691508569,136 Avenue Emile Zola,Tours,37000,France,1964-02-14,2019-02-24,small_business,2657,true
+CUST00125,Alexander,Simon,customer00125@email.fr,+33673042050,40 Avenue du Port,Lyon,69001,France,1989-10-02,2022-06-04,small_business,3978,false
+CUST00126,Daniel,Gauthier,customer00126@email.fr,+33715404062,70 Avenue Charles de Gaulle,Saint-Etienne,42000,France,1959-12-13,2018-03-06,professional,4858,false
+CUST00127,Edward,Durand,customer00127@email.fr,+33602063486,79 Rue du Commerce,Dijon,21000,France,1968-05-04,2018-05-19,residential,1124,true
+CUST00128,Brooklyn,Denis,customer00128@email.fr,+33647162715,84 Rue de la République,Lille,59000,France,1961-08-04,2019-04-07,professional,1885,true
+CUST00129,Nora,Dubois,customer00129@email.fr,+33723414341,102 Impasse Victor Hugo,Marseille,13001,France,1956-12-26,2024-09-01,small_business,4716,false
+CUST00130,Layla,Henry,customer00130@email.fr,+33630916617,104 Chemin Saint-Michel,Nimes,30000,France,1986-05-04,2015-03-27,small_business,1407,false
+CUST00131,Charlotte,Garnier,customer00131@email.fr,+33716951026,93 Rue du Moulin,Metz,57000,France,1985-12-04,2020-11-16,residential,3242,true
+CUST00132,Abigail,Moreau,customer00132@email.fr,+33737031813,87 Avenue Voltaire,Tours,37000,France,1960-03-25,2020-12-13,professional,1588,true
+CUST00133,Joseph,Faure,customer00133@email.fr,+33652954746,38 Avenue des Fleurs,Reims,51100,France,1965-07-26,2021-10-03,residential,617,true
+CUST00134,Elijah,Duval,customer00134@email.fr,+33782840374,127 Place des Alpes,Amiens,80000,France,2000-08-23,2022-03-18,professional,2647,true
+CUST00135,Noah,Roussel,customer00135@email.fr,+33673732150,113 Rue de Verdun,Nice,06000,France,1955-01-15,2018-12-12,professional,607,true
+CUST00136,Aurora,Muller,customer00136@email.fr,+33620597321,116 Rue Victor Hugo,Toulon,83000,France,1958-02-06,2021-11-24,professional,4153,false
+CUST00137,Camila,Mercier,customer00137@email.fr,+33686309183,149 Allée Victor Hugo,Toulon,83000,France,1992-09-02,2020-08-15,residential,506,false
+CUST00138,Aiden,Andre,customer00138@email.fr,+33610507135,88 Chemin Jean Jaurès,Toulouse,31000,France,1972-03-24,2022-12-08,small_business,3599,true
+CUST00139,Oliver,Clement,customer00139@email.fr,+33782240218,96 Boulevard Emile Zola,Reims,51100,France,1954-09-12,2023-11-07,professional,2741,true
+CUST00140,Zoey,Muller,customer00140@email.fr,+33667644603,25 Allée de Lyon,Rennes,35000,France,1963-06-29,2018-09-27,residential,4773,true
+CUST00141,Edward,Bertrand,customer00141@email.fr,+33759730162,80 Chemin du Marché,Reims,51100,France,1957-08-08,2018-06-22,professional,3085,true
+CUST00142,Stella,Laurent,customer00142@email.fr,+33773415966,33 Chemin du Marché,Metz,57000,France,1987-12-27,2020-09-13,small_business,149,true
+CUST00143,Mason,Mercier,customer00143@email.fr,+33660812185,47 Avenue Voltaire,Lille,59000,France,1962-05-05,2016-09-26,residential,2423,true
+CUST00144,William,Clement,customer00144@email.fr,+33765901559,139 Impasse Charles de Gaulle,Dijon,21000,France,1961-10-04,2021-09-12,small_business,1263,true
+CUST00145,Ava,Gerard,customer00145@email.fr,+33697790878,43 Chemin des Roses,Nantes,44000,France,1971-04-24,2019-12-25,professional,2334,false
+CUST00146,Logan,Mercier,customer00146@email.fr,+33698741554,137 Avenue des Lilas,Montpellier,34000,France,1989-07-12,2020-03-06,small_business,3128,false
+CUST00147,Harper,Faure,customer00147@email.fr,+33614006908,52 Impasse du Port,Nantes,44000,France,1993-02-11,2024-10-20,small_business,4542,true
+CUST00148,Jacob,Simon,customer00148@email.fr,+33643033515,133 Impasse des Fleurs,Villeurbanne,69100,France,1974-06-22,2020-01-15,professional,1207,false
+CUST00149,George,Thomas,customer00149@email.fr,+33711373041,57 Impasse des Roses,Marseille,13001,France,1954-10-12,2019-06-12,professional,3063,true
+CUST00150,Olivia,Perrin,customer00150@email.fr,+33626597423,21 Boulevard du Commerce,Le Havre,76600,France,1980-01-30,2023-11-16,residential,1127,true
+CUST00151,Logan,Duval,customer00151@email.fr,+33765181290,121 Chemin du Général Leclerc,Lille,59000,France,1950-06-22,2015-11-21,residential,2096,true
+CUST00152,Stella,Boyer,customer00152@email.fr,+33629846495,39 Allée du Port,Metz,57000,France,1975-11-06,2017-08-31,small_business,998,true
+CUST00153,Liam,Leroy,customer00153@email.fr,+33629758188,108 Chemin du Port,Montpellier,34000,France,1994-11-04,2021-09-10,professional,134,true
+CUST00154,James,Dumont,customer00154@email.fr,+33664575971,37 Boulevard du Moulin,Villeurbanne,69100,France,1987-05-17,2017-02-06,professional,701,true
+CUST00155,Aiden,Dubois,customer00155@email.fr,+33704811625,135 Allée Charles de Gaulle,Marseille,13001,France,1992-03-06,2015-06-28,professional,3169,true
+CUST00156,George,Legrand,customer00156@email.fr,+33796747356,5 Boulevard Jean Jaurès,Bordeaux,33000,France,1959-04-20,2023-08-27,professional,2723,true
+CUST00157,Samuel,Gautier,customer00157@email.fr,+33786667131,91 Allée Voltaire,Lyon,69001,France,1992-12-06,2022-01-31,residential,1104,true
+CUST00158,Elizabeth,Richard,customer00158@email.fr,+33653544775,118 Rue des Lilas,Villeurbanne,69100,France,1953-10-05,2018-07-16,small_business,4222,false
+CUST00159,William,Mercier,customer00159@email.fr,+33676802308,140 Place de la Gare,Metz,57000,France,1982-01-10,2024-09-01,residential,2719,true
+CUST00160,Noah,Robin,customer00160@email.fr,+33691009451,95 Place Emile Zola,Toulouse,31000,France,1966-10-05,2020-07-25,professional,4075,true
+CUST00161,Sebastian,Simon,customer00161@email.fr,+33715590227,133 Boulevard Jean Jaurès,Limoges,87000,France,1966-03-11,2021-02-12,small_business,2631,true
+CUST00162,Victoria,Duval,customer00162@email.fr,+33761765011,84 Chemin des Lilas,Marseille,13001,France,1988-03-24,2016-11-13,professional,3636,true
+CUST00163,Caleb,Denis,customer00163@email.fr,+33673700393,11 Chemin de Paris,Toulon,83000,France,1955-02-23,2015-11-04,professional,3327,true
+CUST00164,Claire,Lemaire,customer00164@email.fr,+33609341277,41 Rue du Général Leclerc,Dijon,21000,France,1961-04-29,2015-10-03,residential,3000,true
+CUST00165,Evelyn,Duval,customer00165@email.fr,+33699580027,146 Rue du Port,Le Havre,76600,France,1983-05-18,2019-12-24,residential,4701,true
+CUST00166,Grace,Garnier,customer00166@email.fr,+33630453631,94 Place Voltaire,Dijon,21000,France,1952-04-29,2023-04-02,residential,4088,false
+CUST00167,Camila,Bonnet,customer00167@email.fr,+33764249531,31 Boulevard de la Gare,Angers,49000,France,1975-08-15,2022-10-13,small_business,1639,true
+CUST00168,Noah,Laurent,customer00168@email.fr,+33783053991,19 Place de la Liberté,Nice,06000,France,1978-09-03,2022-06-28,small_business,531,true
+CUST00169,Samuel,Lopez,customer00169@email.fr,+33736568080,41 Chemin du Marché,Lille,59000,France,1970-02-12,2016-05-12,residential,1137,true
+CUST00170,Jack,Fontaine,customer00170@email.fr,+33725468299,127 Rue de Paris,Limoges,87000,France,1999-06-29,2016-06-15,professional,706,true
+CUST00171,Stella,Gerard,customer00171@email.fr,+33709906474,102 Chemin de Verdun,Lille,59000,France,1956-08-13,2016-05-28,small_business,607,false
+CUST00172,Jack,Lefevre,customer00172@email.fr,+33634637021,133 Boulevard du Général Leclerc,Toulon,83000,France,1988-10-24,2020-08-21,residential,1017,true
+CUST00173,Joshua,Gauthier,customer00173@email.fr,+33739290564,43 Avenue Voltaire,Lille,59000,France,1975-06-26,2024-06-26,residential,2052,true
+CUST00174,Nicholas,Laurent,customer00174@email.fr,+33734908451,142 Boulevard du Général Leclerc,Brest,29200,France,1965-02-16,2021-08-21,professional,1263,true
+CUST00175,Ava,Thomas,customer00175@email.fr,+33621803094,87 Impasse des Alpes,Clermont-Ferrand,63000,France,1954-01-29,2022-03-12,professional,2168,true
+CUST00176,Olivia,Noel,customer00176@email.fr,+33768353057,147 Place du Port,Amiens,80000,France,1998-12-12,2018-04-01,professional,2474,false
+CUST00177,Isabella,Durand,customer00177@email.fr,+33642434397,104 Boulevard des Roses,Montpellier,34000,France,1989-06-09,2019-08-30,small_business,3804,true
+CUST00178,Thomas,Gauthier,customer00178@email.fr,+33707029675,37 Boulevard du Marché,Rennes,35000,France,1961-09-24,2023-07-13,small_business,4218,true
+CUST00179,Ryan,Duval,customer00179@email.fr,+33666550218,62 Place des Fleurs,Rennes,35000,France,1962-08-22,2016-02-01,residential,2377,false
+CUST00180,Riley,Perrin,customer00180@email.fr,+33650958203,108 Avenue de la Liberté,Perpignan,66000,France,1964-04-18,2020-08-02,professional,3824,false
+CUST00181,Edward,Joly,customer00181@email.fr,+33664620103,128 Rue Jean Jaurès,Lille,59000,France,1969-04-20,2021-07-17,small_business,398,true
+CUST00182,Logan,Muller,customer00182@email.fr,+33744066826,127 Allée Saint-Michel,Lille,59000,France,1950-09-25,2024-07-02,residential,3530,true
+CUST00183,Robert,Richard,customer00183@email.fr,+33707530311,94 Impasse Emile Zola,Bordeaux,33000,France,1954-08-04,2021-05-24,professional,1594,true
+CUST00184,Aiden,Duval,customer00184@email.fr,+33747601139,74 Rue Emile Zola,Angers,49000,France,1975-02-04,2024-04-03,professional,973,true
+CUST00185,Leah,Lopez,customer00185@email.fr,+33638726474,101 Boulevard Voltaire,Toulouse,31000,France,1967-11-10,2021-10-03,professional,3288,true
+CUST00186,Charles,Roger,customer00186@email.fr,+33739407312,10 Avenue du Marché,Lyon,69001,France,1990-12-31,2016-09-02,professional,4223,true
+CUST00187,Caleb,Roussel,customer00187@email.fr,+33759376748,82 Avenue Emile Zola,Rennes,35000,France,1980-03-06,2020-09-08,professional,4360,false
+CUST00188,Michael,Fontaine,customer00188@email.fr,+33688916450,145 Boulevard de Verdun,Villeurbanne,69100,France,1959-11-01,2019-09-03,professional,2520,true
+CUST00189,Elijah,Martinez,customer00189@email.fr,+33793649368,122 Boulevard Saint-Michel,Aix-en-Provence,13100,France,1954-08-10,2021-07-18,small_business,1396,false
+CUST00190,Daniel,Mercier,customer00190@email.fr,+33605083461,63 Rue des Alpes,Nice,06000,France,1989-07-26,2018-07-08,small_business,1240,false
+CUST00191,Caleb,Roger,customer00191@email.fr,+33797524813,53 Place Charles de Gaulle,Villeurbanne,69100,France,1955-08-03,2022-11-30,residential,4249,true
+CUST00192,Stella,Chevalier,customer00192@email.fr,+33684222320,84 Chemin de Verdun,Angers,49000,France,1965-07-15,2020-02-26,professional,2804,true
+CUST00193,Christopher,Garnier,customer00193@email.fr,+33674895208,68 Allée de Verdun,Clermont-Ferrand,63000,France,2000-01-26,2018-05-07,residential,2438,true
+CUST00194,Mason,Perrin,customer00194@email.fr,+33728796250,54 Chemin du Marché,Villeurbanne,69100,France,1981-04-17,2021-04-14,professional,2240,true
+CUST00195,John,Masson,customer00195@email.fr,+33692646383,147 Chemin du Château,Toulouse,31000,France,1963-02-21,2018-04-04,residential,2356,true
+CUST00196,Addison,Bonnet,customer00196@email.fr,+33654242216,114 Chemin de la Gare,Reims,51100,France,1998-04-27,2018-01-15,professional,2225,true
+CUST00197,Stella,Francois,customer00197@email.fr,+33771246942,62 Avenue Victor Hugo,Toulouse,31000,France,1970-11-21,2015-08-04,residential,3385,true
+CUST00198,Harper,Martin,customer00198@email.fr,+33747734140,121 Rue de Lyon,Villeurbanne,69100,France,1964-03-03,2019-07-25,professional,3896,false
+CUST00199,Riley,Muller,customer00199@email.fr,+33773381902,52 Impasse des Lilas,Brest,29200,France,1955-04-23,2023-08-15,residential,4703,true
+CUST00200,Samuel,Robert,customer00200@email.fr,+33706567418,10 Avenue du Moulin,Angers,49000,France,1994-06-11,2017-02-02,professional,2371,true

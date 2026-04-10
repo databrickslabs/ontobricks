@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- 3D Isometric Cube with network inside -->
+  
+  <!-- Cube faces -->
+  <path d="M32 8 L56 20 L56 44 L32 56 L8 44 L8 20 Z" fill="#1E293B" opacity="0.1"/>
+  <path d="M32 8 L56 20 L32 32 L8 20 Z" fill="#4ECDC4"/>
+  <path d="M8 20 L32 32 L32 56 L8 44 Z" fill="#6366F1"/>
+  <path d="M32 32 L56 20 L56 44 L32 56 Z" fill="#FF3621"/>
+  
+  <!-- Central node -->
+  <circle cx="32" cy="32" r="6" fill="white"/>
+  <circle cx="32" cy="32" r="4" fill="#1E293B"/>
+  
+  <!-- Corner nodes -->
+  <circle cx="32" cy="12" r="3" fill="white"/>
+  <circle cx="12" cy="32" r="3" fill="white"/>
+  <circle cx="52" cy="32" r="3" fill="white"/>
+</svg>

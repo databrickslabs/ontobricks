@@ -1,0 +1,82 @@
+<!-- Ontology Visual Designer using OntoViz -->
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>Visual Ontology Designer - Business Views</h4>
+            <p class="text-muted mb-0 small" id="designModeDescription">View your ontology visually. Click "Edit" to modify entities and relationships.</p>
+        </div>
+            <!-- View Selector and Mode Toggle -->
+            <div class="view-selector d-flex align-items-center gap-2">
+                <!-- Edit/View Mode Toggle -->
+                <div class="btn-group btn-group-sm me-2" id="designModeToggle">
+                    <button type="button" class="btn btn-outline-primary active" id="viewModeBtn" title="View Only - layout changes allowed">
+                        <i class="bi bi-eye me-1"></i>View
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" id="editModeBtn" title="Edit Mode - full editing">
+                        <i class="bi bi-pencil me-1"></i>Edit
+                    </button>
+                </div>
+                <span class="text-muted">|</span>
+                <label class="text-muted small mb-0"><i class="bi bi-layers me-1"></i>Business View(s):</label>
+                <select id="designViewSelector" class="form-select form-select-sm" style="width: auto; min-width: 150px;">
+                    <option value="default">default</option>
+                </select>
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-secondary" id="createViewBtn" title="Create new view">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="renameViewBtn" title="Rename current view">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="deleteViewBtn" title="Delete current view">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+    </div>
+    
+    <!-- OntoViz Canvas Container - Full Height -->
+    <div id="ontology-designer-canvas-wrapper">
+        <div id="ontology-designer-canvas"></div>
+        <!-- Empty State Overlay - shown when no views or empty view -->
+        <div id="ontologyDesignerEmptyState" class="designer-empty-overlay" style="display: none;">
+            <div class="empty-state-content text-center">
+                <i class="bi bi-layers text-muted" style="font-size: 3rem;"></i>
+                <h5 class="mt-3 text-muted">No View Selected</h5>
+                <p class="text-muted mb-3">Create a view to start designing your ontology visually.</p>
+                <button type="button" class="btn btn-primary" onclick="showCreateViewDialog()">
+                    <i class="bi bi-plus-lg me-1"></i>Create View
+                </button>
+            </div>
+        </div>
+        <!-- Loading Overlay -->
+        <div id="ontologyDesignerLoading" class="designer-loading-overlay">
+            <div class="ob-loading-spinner">
+                <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
+                    <g class="ob-ring">
+                        <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
+                            <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
+                            <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
+                            <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
+                            <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
+                        </g>
+                        <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
+                        <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
+                        <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
+                        <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
+                    </g>
+                    <g transform="translate(40,40)">
+                        <g class="ob-center">
+                            <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
+                            <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
+                            <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
+                        </g>
+                    </g>
+                </svg>
+                <span class="ob-spinner-label">Loading ontology design...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JS loaded from /static/js/ontology-design.js -->
