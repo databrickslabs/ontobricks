@@ -1,12 +1,27 @@
 """Tests for home service module."""
+import asyncio
+import concurrent.futures
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from back.services.home import (
     get_session_status, validate_ontology,
     get_detailed_validation, validate_status,
 )
+from back.core.helpers import DatabricksHelpers
 from back.objects.digitaltwin import DigitalTwin
 from back.objects.domain import Domain as DomainOps
+
+
+def _run_async(coro):
+    """Run a coroutine in a fresh thread to avoid event-loop pollution from other plugins."""
+    def _target():
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(coro)
+        finally:
+            loop.close()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(_target).result()
 
 
 def _make_domain(classes=None, properties=None, entity_mappings=None,
@@ -92,8 +107,7 @@ class TestValidateStatus:
 
 
 class TestGetDetailedValidation:
-    @pytest.mark.asyncio
-    async def test_returns_all_sections(self):
+    def test_returns_all_sections(self):
         domain = _make_domain(classes=[{'uri': 'http://test/A', 'name': 'A'}])
         settings = MagicMock()
         ts = {
@@ -116,7 +130,16 @@ class TestGetDetailedValidation:
             'snapshot_table': '',
             'snapshot_exists': None,
         }
+
+        async def _passthrough(func, *a, **kw):
+            return func(*a, **kw)
+
         with (
+            patch.object(
+                DatabricksHelpers,
+                'run_blocking',
+                side_effect=_passthrough,
+            ),
             patch.object(
                 DigitalTwin,
                 'sync_last_build_from_schedule',
@@ -124,12 +147,12 @@ class TestGetDetailedValidation:
             ),
             patch.object(
                 DigitalTwin,
-                'fetch_graph_triplestore_status',
+                'get_or_fetch_graph_status',
                 AsyncMock(return_value=ts),
             ),
             patch.object(
                 DigitalTwin,
-                'fetch_digital_twin_existence',
+                'get_or_fetch_dt_existence',
                 AsyncMock(return_value=dt),
             ),
             patch.object(
@@ -138,7 +161,7 @@ class TestGetDetailedValidation:
                 MagicMock(return_value=0),
             ),
         ):
-            result = await get_detailed_validation(domain, settings)
+            result = _run_async(get_detailed_validation(domain, settings))
         assert 'ontology_valid' in result
         assert 'mapping_valid' in result
         assert 'ontology' in result
