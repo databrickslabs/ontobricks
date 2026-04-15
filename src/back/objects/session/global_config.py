@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.databricks import VolumeFileService
+from back.objects.registry.registry_cache import set_registry_cache_ttl
 
 logger = get_logger(__name__)
 
@@ -79,6 +80,8 @@ class GlobalConfigService:
                     _sched.pop("registry_cfg", None)
                 self._cache = data
                 self._cache_ts = now
+                if "registry_cache_ttl" in data:
+                    set_registry_cache_ttl(int(data["registry_cache_ttl"]))
                 logger.info("Loaded global config from %s", path)
                 return data
             logger.debug("Global config not found or empty at %s: %s", path, msg)
@@ -182,9 +185,27 @@ class GlobalConfigService:
         """Persist a new default class icon in the global config file."""
         return self._save(host, token, registry_cfg, {"default_emoji": emoji})
 
-    # ------------------------------------------------------------------
-    # Cache management
-    # ------------------------------------------------------------------
+    def get_registry_cache_ttl(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> int:
+        """Return the configured registry cache TTL in seconds."""
+        val = self.get(host, token, registry_cfg, "registry_cache_ttl", "")
+        if val and str(val).isdigit():
+            return int(val)
+        from back.objects.registry.registry_cache import get_registry_cache_ttl
+        return get_registry_cache_ttl()
+
+    def set_registry_cache_ttl(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        ttl: int,
+    ) -> Tuple[bool, str]:
+        """Persist a new registry cache TTL (seconds) in the global config file."""
+        ttl = max(10, int(ttl))
+        set_registry_cache_ttl(ttl)
+        return self._save(host, token, registry_cfg, {"registry_cache_ttl": ttl})
 
     # ------------------------------------------------------------------
     # Helpers
@@ -197,6 +218,7 @@ class GlobalConfigService:
             "warehouse_id": "",
             "default_base_uri": "",
             "default_emoji": "",
+            "registry_cache_ttl": 300,
         }
 
 

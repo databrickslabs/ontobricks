@@ -109,7 +109,7 @@
   <h1>Source code for back.objects.ontology.ontology</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;Ontology management (non-HTTP).</span>
 
-<span class="sd">Use :class:`Ontology` with a :class:`~back.objects.session.ProjectSession` for</span>
+<span class="sd">Use :class:`Ontology` with a :class:`~back.objects.session.DomainSession` for</span>
 <span class="sd">operations that persist to the session; use static methods for pure transforms.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
@@ -130,7 +130,7 @@
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">agents.agent_auto_icon_assign.engine</span><span class="w"> </span><span class="kn">import</span> <span class="n">AgentResult</span> <span class="k">as</span> <span class="n">IconAssignAgentResult</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">agents.agent_owl_generator.engine</span><span class="w"> </span><span class="kn">import</span> <span class="n">AgentResult</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session.project_session</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProjectSession</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session.domain_session</span><span class="w"> </span><span class="kn">import</span> <span class="n">DomainSession</span>
 
 <span class="n">IndustryKind</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;fibo&quot;</span><span class="p">,</span> <span class="s2">&quot;cdisc&quot;</span><span class="p">,</span> <span class="s2">&quot;iof&quot;</span><span class="p">]</span>
 
@@ -158,9 +158,9 @@
 <div class="viewcode-block" id="Ontology">
 <a class="viewcode-back" href="../../../../api/app.objects.ontology.html#back.objects.ontology.ontology.Ontology">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Ontology</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Ontology operations for the current project session or as static helpers.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Ontology operations for the current domain session or as static helpers.&quot;&quot;&quot;</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="s2">&quot;ProjectSession&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="s2">&quot;DomainSession&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_s</span> <span class="o">=</span> <span class="n">session</span>
 
 <div class="viewcode-block" id="Ontology.generate_with_agent">
@@ -206,8 +206,9 @@
             <span class="n">guidelines</span><span class="o">=</span><span class="n">guidelines</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
             <span class="n">options</span><span class="o">=</span><span class="n">options</span> <span class="ow">or</span> <span class="p">{},</span>
             <span class="n">base_uri</span><span class="o">=</span><span class="n">base_uri</span><span class="p">,</span>
-            <span class="n">project_name</span><span class="o">=</span><span class="n">s</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-            <span class="n">project_folder</span><span class="o">=</span><span class="n">s</span><span class="o">.</span><span class="n">project_folder</span><span class="p">,</span>
+            <span class="n">domain_name</span><span class="o">=</span><span class="n">s</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="n">domain_folder</span><span class="o">=</span><span class="n">s</span><span class="o">.</span><span class="n">domain_folder</span><span class="p">,</span>
+            <span class="n">domain_version</span><span class="o">=</span><span class="n">s</span><span class="o">.</span><span class="n">current_version</span><span class="p">,</span>
             <span class="n">selected_tables</span><span class="o">=</span><span class="n">selected_tables</span><span class="p">,</span>
             <span class="n">selected_docs</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">selected_docs</span> <span class="ow">or</span> <span class="p">[]),</span>
             <span class="n">on_step</span><span class="o">=</span><span class="n">on_step</span><span class="p">,</span>
@@ -320,7 +321,8 @@
             <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;properties&#39;</span><span class="p">,</span> <span class="p">[])),</span>
             <span class="s1">&#39;constraints&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;constraints&#39;</span><span class="p">,</span> <span class="p">[])),</span>
             <span class="s1">&#39;swrl_rules&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;swrl_rules&#39;</span><span class="p">,</span> <span class="p">[])),</span>
-            <span class="s1">&#39;axioms&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;axioms&#39;</span><span class="p">,</span> <span class="p">[]))</span>
+            <span class="s1">&#39;axioms&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;axioms&#39;</span><span class="p">,</span> <span class="p">[])),</span>
+            <span class="s1">&#39;expressions&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;expressions&#39;</span><span class="p">,</span> <span class="p">[])),</span>
         <span class="p">}</span></div>
 
 
@@ -413,6 +415,7 @@
         <span class="n">existing_constraints</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">constraints</span>
         <span class="n">existing_swrl_rules</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">swrl_rules</span>
         <span class="n">existing_axioms</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">axioms</span>
+        <span class="n">existing_expressions</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">expressions</span>
 
         <span class="n">new_class_uris</span> <span class="o">=</span> <span class="p">{</span><span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">ontology_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">)}</span>
         <span class="n">new_property_uris</span> <span class="o">=</span> <span class="p">{</span><span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">ontology_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">)}</span>
@@ -438,8 +441,9 @@
             <span class="p">)</span>
 
         <span class="n">s</span><span class="o">.</span><span class="n">clear_generated_content</span><span class="p">()</span>
+        <span class="n">canonical_name</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">or</span> <span class="n">ontology_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">s</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
-            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">ontology_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">canonical_name</span><span class="p">,</span>
             <span class="s2">&quot;base_uri&quot;</span><span class="p">:</span> <span class="n">ontology_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
             <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="n">ontology_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
             <span class="s2">&quot;classes&quot;</span><span class="p">:</span> <span class="n">ontology_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="p">[]),</span>
@@ -447,6 +451,7 @@
             <span class="s2">&quot;constraints&quot;</span><span class="p">:</span> <span class="n">ontology_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;constraints&quot;</span><span class="p">,</span> <span class="n">existing_constraints</span><span class="p">),</span>
             <span class="s2">&quot;swrl_rules&quot;</span><span class="p">:</span> <span class="n">ontology_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;swrl_rules&quot;</span><span class="p">,</span> <span class="n">existing_swrl_rules</span><span class="p">),</span>
             <span class="s2">&quot;axioms&quot;</span><span class="p">:</span> <span class="n">ontology_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;axioms&quot;</span><span class="p">,</span> <span class="n">existing_axioms</span><span class="p">),</span>
+            <span class="s2">&quot;expressions&quot;</span><span class="p">:</span> <span class="n">ontology_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;expressions&quot;</span><span class="p">,</span> <span class="n">existing_expressions</span><span class="p">),</span>
         <span class="p">})</span>
         <span class="n">s</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
 
@@ -589,7 +594,7 @@
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">owl_content</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
-        <span class="n">name_fallback_to_project</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">name_fallback_to_domain</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">outcome</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;import&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse OWL content, apply to project, return the appropriate success payload.</span>
@@ -600,28 +605,29 @@
 <span class="sd">        - ``&quot;load_file&quot;``→ :meth:`build_load_owl_file_success_payload`</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">result</span> <span class="o">=</span> <span class="n">Ontology</span><span class="o">.</span><span class="n">parse_owl</span><span class="p">(</span><span class="n">owl_content</span><span class="p">,</span> <span class="n">extract_advanced</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-        <span class="n">ontology_info</span><span class="p">,</span> <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">axioms</span> <span class="o">=</span> <span class="n">result</span>
+        <span class="n">ontology_info</span><span class="p">,</span> <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">axioms</span><span class="p">,</span> <span class="n">expressions</span><span class="p">,</span> <span class="n">groups</span> <span class="o">=</span> <span class="n">result</span>
 
-        <span class="n">resolved_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_parsed_owl_to_project</span><span class="p">(</span>
-            <span class="n">ontology_info</span><span class="p">,</span> <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">axioms</span><span class="p">,</span>
-            <span class="n">name_fallback_to_project</span><span class="o">=</span><span class="n">name_fallback_to_project</span><span class="p">,</span>
+        <span class="n">resolved_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_parsed_owl_to_domain</span><span class="p">(</span>
+            <span class="n">ontology_info</span><span class="p">,</span> <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">axioms</span><span class="p">,</span> <span class="n">expressions</span><span class="p">,</span>
+            <span class="n">groups</span><span class="o">=</span><span class="n">groups</span><span class="p">,</span>
+            <span class="n">name_fallback_to_domain</span><span class="o">=</span><span class="n">name_fallback_to_domain</span><span class="p">,</span>
         <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">outcome</span> <span class="o">==</span> <span class="s2">&quot;parse&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">build_parse_owl_success_payload</span><span class="p">(</span>
                 <span class="n">ontology_info</span><span class="p">,</span> <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span>
-                <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">axioms</span><span class="p">,</span> <span class="n">resolved_name</span><span class="p">,</span>
+                <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">axioms</span><span class="p">,</span> <span class="n">expressions</span><span class="p">,</span> <span class="n">resolved_name</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">if</span> <span class="n">outcome</span> <span class="o">==</span> <span class="s2">&quot;load_file&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">build_load_owl_file_success_payload</span><span class="p">(</span>
-                <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">axioms</span><span class="p">,</span>
+                <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">axioms</span><span class="p">,</span> <span class="n">expressions</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">build_import_owl_success_payload</span><span class="p">(</span><span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">constraints</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="Ontology.apply_parsed_rdfs_to_project">
-<a class="viewcode-back" href="../../../../api/app.objects.ontology.html#back.objects.ontology.ontology.Ontology.apply_parsed_rdfs_to_project">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">apply_parsed_rdfs_to_project</span><span class="p">(</span>
+<div class="viewcode-block" id="Ontology.apply_parsed_rdfs_to_domain">
+<a class="viewcode-back" href="../../../../api/app.objects.ontology.html#back.objects.ontology.ontology.Ontology.apply_parsed_rdfs_to_domain">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">apply_parsed_rdfs_to_domain</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">rdfs_content</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
@@ -782,7 +788,8 @@
             <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;properties&#39;</span><span class="p">,</span> <span class="n">existing</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;properties&#39;</span><span class="p">,</span> <span class="p">[])),</span>
             <span class="s1">&#39;dataProperties&#39;</span><span class="p">:</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;dataProperties&#39;</span><span class="p">,</span> <span class="n">existing</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;dataProperties&#39;</span><span class="p">,</span> <span class="p">[])),</span>
             <span class="s1">&#39;dashboard&#39;</span><span class="p">:</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;dashboard&#39;</span><span class="p">,</span> <span class="n">existing</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;dashboard&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)),</span>
-            <span class="s1">&#39;dashboardParams&#39;</span><span class="p">:</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;dashboardParams&#39;</span><span class="p">,</span> <span class="n">existing</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;dashboardParams&#39;</span><span class="p">,</span> <span class="p">{}))</span>
+            <span class="s1">&#39;dashboardParams&#39;</span><span class="p">:</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;dashboardParams&#39;</span><span class="p">,</span> <span class="n">existing</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;dashboardParams&#39;</span><span class="p">,</span> <span class="p">{})),</span>
+            <span class="s1">&#39;bridges&#39;</span><span class="p">:</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bridges&#39;</span><span class="p">,</span> <span class="n">existing</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bridges&#39;</span><span class="p">,</span> <span class="p">[]))</span>
         <span class="p">}</span></div>
 
 
@@ -914,15 +921,18 @@
 <div class="viewcode-block" id="Ontology.generate_owl">
 <a class="viewcode-back" href="../../../../api/app.objects.ontology.html#back.objects.ontology.ontology.Ontology.generate_owl">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">generate_owl</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">constraints</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">axioms</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">generate_owl</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">constraints</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">axioms</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                     <span class="n">expressions</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">groups</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate OWL from ontology configuration.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Args:</span>
 <span class="sd">            data: dict with base_uri, name, classes, properties</span>
 <span class="sd">            constraints: list of property constraints (optional)</span>
 <span class="sd">            swrl_rules: list of SWRL rules (optional)</span>
 <span class="sd">            axioms: list of OWL axioms (optional)</span>
-<span class="sd">            </span>
+<span class="sd">            expressions: list of OWL class expressions (optional)</span>
+<span class="sd">            groups: list of entity group definitions (optional)</span>
+
 <span class="sd">        Returns:</span>
 <span class="sd">            str: Generated OWL content</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -933,7 +943,9 @@
             <span class="n">properties</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;properties&#39;</span><span class="p">,</span> <span class="p">[]),</span>
             <span class="n">constraints</span><span class="o">=</span><span class="n">constraints</span><span class="p">,</span>
             <span class="n">swrl_rules</span><span class="o">=</span><span class="n">swrl_rules</span><span class="p">,</span>
-            <span class="n">axioms</span><span class="o">=</span><span class="n">axioms</span>
+            <span class="n">axioms</span><span class="o">=</span><span class="n">axioms</span><span class="p">,</span>
+            <span class="n">expressions</span><span class="o">=</span><span class="n">expressions</span><span class="p">,</span>
+            <span class="n">groups</span><span class="o">=</span><span class="n">groups</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">return</span> <span class="n">generator</span><span class="o">.</span><span class="n">generate</span><span class="p">()</span></div>
 
@@ -943,26 +955,28 @@
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">parse_owl</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">extract_advanced</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse OWL content and return structured data.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Args:</span>
 <span class="sd">            content: OWL/Turtle content</span>
-<span class="sd">            extract_advanced: If True, also extract constraints, SWRL rules, and axioms</span>
-<span class="sd">            </span>
+<span class="sd">            extract_advanced: If True, also extract constraints, SWRL rules, axioms, expressions, and groups</span>
+
 <span class="sd">        Returns:</span>
-<span class="sd">            tuple: (ontology_info, classes, properties) or </span>
-<span class="sd">                   (ontology_info, classes, properties, constraints, swrl_rules, axioms) if extract_advanced=True</span>
+<span class="sd">            tuple: (ontology_info, classes, properties) or</span>
+<span class="sd">                   (ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions, groups)</span>
+<span class="sd">                   if extract_advanced=True</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">parser</span> <span class="o">=</span> <span class="n">OntologyParser</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
         <span class="n">ontology_info</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_ontology_info</span><span class="p">()</span>
         <span class="n">classes</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_classes</span><span class="p">()</span>
         <span class="n">properties</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_properties</span><span class="p">()</span>
-        
+
         <span class="k">if</span> <span class="n">extract_advanced</span><span class="p">:</span>
             <span class="n">constraints</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_constraints</span><span class="p">()</span>
             <span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_swrl_rules</span><span class="p">()</span>
-            <span class="n">axioms</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_axioms</span><span class="p">()</span>
-            <span class="k">return</span> <span class="n">ontology_info</span><span class="p">,</span> <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">axioms</span>
-        
+            <span class="n">split</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_axioms_and_expressions</span><span class="p">()</span>
+            <span class="n">groups</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_groups</span><span class="p">()</span>
+            <span class="k">return</span> <span class="n">ontology_info</span><span class="p">,</span> <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">split</span><span class="p">[</span><span class="s1">&#39;axioms&#39;</span><span class="p">],</span> <span class="n">split</span><span class="p">[</span><span class="s1">&#39;expressions&#39;</span><span class="p">],</span> <span class="n">groups</span>
+
         <span class="k">return</span> <span class="n">ontology_info</span><span class="p">,</span> <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span></div>
 
 
@@ -1031,6 +1045,7 @@
                 <span class="s2">&quot;constraints&quot;</span><span class="p">:</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;constraints&quot;</span><span class="p">],</span>
                 <span class="s2">&quot;swrl_rules&quot;</span><span class="p">:</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;swrl_rules&quot;</span><span class="p">],</span>
                 <span class="s2">&quot;axioms&quot;</span><span class="p">:</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;axioms&quot;</span><span class="p">],</span>
+                <span class="s2">&quot;expressions&quot;</span><span class="p">:</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;expressions&quot;</span><span class="p">],</span>
             <span class="p">})</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
     
@@ -1048,9 +1063,9 @@
             <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span></div>
 
 
-<div class="viewcode-block" id="Ontology.apply_parsed_owl_to_project">
-<a class="viewcode-back" href="../../../../api/app.objects.ontology.html#back.objects.ontology.ontology.Ontology.apply_parsed_owl_to_project">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">apply_parsed_owl_to_project</span><span class="p">(</span>
+<div class="viewcode-block" id="Ontology.apply_parsed_owl_to_domain">
+<a class="viewcode-back" href="../../../../api/app.objects.ontology.html#back.objects.ontology.ontology.Ontology.apply_parsed_owl_to_domain">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">apply_parsed_owl_to_domain</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">ontology_info</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
         <span class="n">classes</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
@@ -1058,16 +1073,18 @@
         <span class="n">constraints</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
         <span class="n">swrl_rules</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
         <span class="n">axioms</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
+        <span class="n">expressions</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
-        <span class="n">name_fallback_to_project</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">groups</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">name_fallback_to_domain</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Write parse result into self._s.ontology and save. Returns resolved ontology name.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">name_fallback_to_project</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">name_fallback_to_domain</span><span class="p">:</span>
             <span class="n">default_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
             <span class="n">resolved_name</span> <span class="o">=</span> <span class="n">ontology_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">default_name</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">resolved_name</span> <span class="o">=</span> <span class="n">ontology_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-    
+
         <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
             <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">resolved_name</span><span class="p">,</span>
             <span class="s2">&quot;base_uri&quot;</span><span class="p">:</span> <span class="n">ontology_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
@@ -1076,6 +1093,8 @@
             <span class="s2">&quot;constraints&quot;</span><span class="p">:</span> <span class="n">constraints</span><span class="p">,</span>
             <span class="s2">&quot;swrl_rules&quot;</span><span class="p">:</span> <span class="n">swrl_rules</span><span class="p">,</span>
             <span class="s2">&quot;axioms&quot;</span><span class="p">:</span> <span class="n">axioms</span><span class="p">,</span>
+            <span class="s2">&quot;expressions&quot;</span><span class="p">:</span> <span class="n">expressions</span> <span class="ow">or</span> <span class="p">[],</span>
+            <span class="s2">&quot;groups&quot;</span><span class="p">:</span> <span class="n">groups</span> <span class="ow">or</span> <span class="p">[],</span>
         <span class="p">})</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">resolved_name</span></div>
@@ -1110,7 +1129,8 @@
         <span class="n">constraints</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
         <span class="n">swrl_rules</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
         <span class="n">axioms</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
-        <span class="n">resolved_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">expressions</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">resolved_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
@@ -1130,6 +1150,7 @@
                 <span class="s2">&quot;constraints&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">constraints</span><span class="p">),</span>
                 <span class="s2">&quot;swrl_rules&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">swrl_rules</span><span class="p">),</span>
                 <span class="s2">&quot;axioms&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">axioms</span><span class="p">),</span>
+                <span class="s2">&quot;expressions&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">expressions</span> <span class="ow">or</span> <span class="p">[]),</span>
             <span class="p">},</span>
         <span class="p">}</span></div>
 
@@ -1143,6 +1164,7 @@
         <span class="n">constraints</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
         <span class="n">swrl_rules</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
         <span class="n">axioms</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
+        <span class="n">expressions</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
@@ -1153,6 +1175,7 @@
                 <span class="s2">&quot;constraints&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">constraints</span><span class="p">),</span>
                 <span class="s2">&quot;swrl_rules&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">swrl_rules</span><span class="p">),</span>
                 <span class="s2">&quot;axioms&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">axioms</span><span class="p">),</span>
+                <span class="s2">&quot;expressions&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">expressions</span> <span class="ow">or</span> <span class="p">[]),</span>
             <span class="p">},</span>
         <span class="p">}</span></div>
 
@@ -1297,6 +1320,136 @@
 
         <span class="k">return</span> <span class="n">content</span></div>
 
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Group management (entity groups modelled as owl:unionOf)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="Ontology.save_group">
+<a class="viewcode-back" href="../../../../api/app.objects.ontology.html#back.objects.ontology.ontology.Ontology.save_group">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">save_group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">group</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create or update an entity group.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            group: Group dict with keys *name*, *label*, *description*, *color*,</span>
+<span class="sd">                   *icon*, *members*.</span>
+<span class="sd">            index: When ``&gt;= 0`` the group at that position is replaced;</span>
+<span class="sd">                   otherwise a new group is appended (duplicate names are rejected).</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The updated list of all groups.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            ValidationError: if the name is missing or already exists (on create).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="p">(</span><span class="n">group</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Group name is required&quot;</span><span class="p">)</span>
+
+        <span class="n">groups</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">groups</span>
+
+        <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">):</span>
+            <span class="n">groups</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">group</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="n">name</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">groups</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Group &quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">&quot; already exists&#39;</span><span class="p">)</span>
+            <span class="n">groups</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">group</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_enforce_exclusive_membership</span><span class="p">(</span><span class="n">groups</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sync_class_group_field</span><span class="p">(</span><span class="n">groups</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">groups</span> <span class="o">=</span> <span class="n">groups</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">groups</span></div>
+
+
+<div class="viewcode-block" id="Ontology.delete_group">
+<a class="viewcode-back" href="../../../../api/app.objects.ontology.html#back.objects.ontology.ontology.Ontology.delete_group">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete an entity group by *index* or *name*.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The updated list of all groups.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            ValidationError: if neither *index* nor *name* identifies a group.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">groups</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">groups</span>
+
+        <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">):</span>
+            <span class="n">groups</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">name</span><span class="p">:</span>
+            <span class="n">groups</span><span class="p">[:]</span> <span class="o">=</span> <span class="p">[</span><span class="n">g</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">groups</span> <span class="k">if</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">name</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Provide index or name to identify the group&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sync_class_group_field</span><span class="p">(</span><span class="n">groups</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">groups</span> <span class="o">=</span> <span class="n">groups</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">groups</span></div>
+
+
+<div class="viewcode-block" id="Ontology.update_group_members">
+<a class="viewcode-back" href="../../../../api/app.objects.ontology.html#back.objects.ontology.ontology.Ontology.update_group_members">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">update_group_members</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">group_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span>
+                             <span class="n">add</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                             <span class="n">remove</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add or remove members from the group identified by *group_name*.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The updated list of all groups.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            ValidationError: if *group_name* is empty or not found.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">group_name</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Group name is required&quot;</span><span class="p">)</span>
+
+        <span class="n">groups</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">groups</span>
+        <span class="n">target</span> <span class="o">=</span> <span class="nb">next</span><span class="p">((</span><span class="n">g</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">groups</span> <span class="k">if</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="n">group_name</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">target</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Group &quot;</span><span class="si">{</span><span class="n">group_name</span><span class="si">}</span><span class="s1">&quot; not found&#39;</span><span class="p">)</span>
+
+        <span class="n">to_remove</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">remove</span> <span class="ow">or</span> <span class="p">[])</span>
+        <span class="n">members</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">target</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;members&#39;</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">m</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">to_remove</span><span class="p">]</span>
+        <span class="n">existing</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">members</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="p">(</span><span class="n">add</span> <span class="ow">or</span> <span class="p">[]):</span>
+            <span class="k">if</span> <span class="n">m</span> <span class="ow">and</span> <span class="n">m</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">existing</span><span class="p">:</span>
+                <span class="n">members</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+                <span class="n">existing</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+        <span class="n">target</span><span class="p">[</span><span class="s1">&#39;members&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">members</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_enforce_exclusive_membership</span><span class="p">(</span><span class="n">groups</span><span class="p">,</span> <span class="n">group_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sync_class_group_field</span><span class="p">(</span><span class="n">groups</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">groups</span> <span class="o">=</span> <span class="n">groups</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">groups</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_enforce_exclusive_membership</span><span class="p">(</span><span class="n">groups</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+                                      <span class="n">authoritative_group_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Ensure every entity belongs to at most one group.</span>
+
+<span class="sd">        After the group identified by *authoritative_group_name* has been</span>
+<span class="sd">        updated, remove any of its members that appear in other groups.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">target</span> <span class="o">=</span> <span class="nb">next</span><span class="p">((</span><span class="n">g</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">groups</span> <span class="k">if</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="n">authoritative_group_name</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">target</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">owner_members</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">target</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;members&#39;</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">groups</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="n">authoritative_group_name</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">g</span><span class="p">[</span><span class="s1">&#39;members&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;members&#39;</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">m</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">owner_members</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_sync_class_group_field</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">groups</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Keep each class&#39;s ``group`` field in sync with the groups list.&quot;&quot;&quot;</span>
+        <span class="n">class_to_group</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">groups</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;members&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+                <span class="n">class_to_group</span><span class="p">[</span><span class="n">m</span><span class="p">]</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">get_classes</span><span class="p">():</span>
+            <span class="bp">cls</span><span class="p">[</span><span class="s1">&#39;group&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">class_to_group</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="Ontology.calculate_owl_stats">
 <a class="viewcode-back" href="../../../../api/app.objects.ontology.html#back.objects.ontology.ontology.Ontology.calculate_owl_stats">[docs]</a>

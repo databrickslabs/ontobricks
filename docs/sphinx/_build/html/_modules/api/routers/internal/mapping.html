@@ -116,7 +116,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">Response</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings</span><span class="p">,</span> <span class="n">Settings</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksClient</span><span class="p">,</span> <span class="n">VolumeFileService</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksClient</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">get_databricks_client</span><span class="p">,</span>
     <span class="n">get_databricks_credentials</span><span class="p">,</span>
@@ -124,7 +124,7 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">agents.serialization</span><span class="w"> </span><span class="kn">import</span> <span class="n">serialize_agent_steps</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">get_project</span><span class="p">,</span> <span class="n">get_session_manager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">get_domain</span><span class="p">,</span> <span class="n">get_session_manager</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.task_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_task_manager</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.mapping</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapping</span>
 
@@ -142,9 +142,9 @@
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/load&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">load_mapping</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Load mapping configuration from session.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">entity_mappings</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">()</span>
-    <span class="n">relationship_mappings</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">()</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">entity_mappings</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">()</span>
+    <span class="n">relationship_mappings</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">()</span>
     <span class="k">return</span> <span class="p">{</span>
         <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
         <span class="s1">&#39;config&#39;</span><span class="p">:</span> <span class="p">{</span>
@@ -152,9 +152,9 @@
             <span class="s1">&#39;relationships&#39;</span><span class="p">:</span> <span class="n">relationship_mappings</span><span class="p">,</span>
             <span class="s1">&#39;data_source_mappings&#39;</span><span class="p">:</span> <span class="n">entity_mappings</span><span class="p">,</span>  <span class="c1"># backward compat</span>
             <span class="s1">&#39;relationship_mappings&#39;</span><span class="p">:</span> <span class="n">relationship_mappings</span><span class="p">,</span>  <span class="c1"># backward compat</span>
-            <span class="s1">&#39;r2rml_output&#39;</span><span class="p">:</span> <span class="n">project</span><span class="o">.</span><span class="n">get_r2rml</span><span class="p">()</span>
+            <span class="s1">&#39;r2rml_output&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_r2rml</span><span class="p">()</span>
         <span class="p">},</span>
-        <span class="s1">&#39;r2rml_output&#39;</span><span class="p">:</span> <span class="n">project</span><span class="o">.</span><span class="n">get_r2rml</span><span class="p">()</span>
+        <span class="s1">&#39;r2rml_output&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_r2rml</span><span class="p">()</span>
     <span class="p">}</span></div>
 
 
@@ -167,8 +167,8 @@
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
     <span class="n">mapping_config</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;config&#39;</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>  <span class="c1"># Support both wrapped and unwrapped</span>
     
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">stats</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">save_mapping_config</span><span class="p">(</span><span class="n">mapping_config</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">stats</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">save_mapping_config</span><span class="p">(</span><span class="n">mapping_config</span><span class="p">)</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Mapping saved&#39;</span><span class="p">,</span> <span class="s1">&#39;stats&#39;</span><span class="p">:</span> <span class="n">stats</span><span class="p">}</span></div>
 
 
@@ -178,8 +178,8 @@
 <span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/reset&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">reset_mapping_endpoint</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Reset mapping configuration.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">Mapping</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">reset_mapping</span><span class="p">()</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">Mapping</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">reset_mapping</span><span class="p">()</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Mapping reset&#39;</span><span class="p">}</span></div>
 
 
@@ -203,8 +203,8 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">add_entity_mapping</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Add an entity mapping.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">_</span><span class="p">,</span> <span class="n">new_mapping</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">add_or_update_entity_mapping</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">new_mapping</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">add_or_update_entity_mapping</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;mapping&#39;</span><span class="p">:</span> <span class="n">new_mapping</span><span class="p">}</span></div>
 
 
@@ -215,10 +215,10 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_entity_mapping</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Delete an entity mapping.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     <span class="n">ontology_class</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class&#39;</span><span class="p">)</span>
     
-    <span class="k">if</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">delete_entity_mapping</span><span class="p">(</span><span class="n">ontology_class</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">delete_entity_mapping</span><span class="p">(</span><span class="n">ontology_class</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Mapping not found&#39;</span><span class="p">}</span></div>
 
@@ -234,8 +234,8 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">add_relationship_mapping</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a relationship mapping.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">_</span><span class="p">,</span> <span class="n">new_mapping</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">add_or_update_relationship_mapping</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">new_mapping</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">add_or_update_relationship_mapping</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;mapping&#39;</span><span class="p">:</span> <span class="n">new_mapping</span><span class="p">}</span></div>
 
 
@@ -246,10 +246,10 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_relationship_mapping</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Delete a relationship mapping.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     <span class="n">property_uri</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;property&#39;</span><span class="p">)</span>
     
-    <span class="k">if</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">delete_relationship_mapping</span><span class="p">(</span><span class="n">property_uri</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">delete_relationship_mapping</span><span class="p">(</span><span class="n">property_uri</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Mapping not found&#39;</span><span class="p">}</span></div>
 
@@ -280,8 +280,8 @@
     <span class="n">excluded</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;excluded&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">))</span>
     <span class="n">item_type</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;item_type&#39;</span><span class="p">,</span> <span class="s1">&#39;entity&#39;</span><span class="p">)</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">changed</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">toggle_exclude_items</span><span class="p">(</span><span class="n">uris</span><span class="p">,</span> <span class="n">excluded</span><span class="p">,</span> <span class="n">item_type</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">changed</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">toggle_exclude_items</span><span class="p">(</span><span class="n">uris</span><span class="p">,</span> <span class="n">excluded</span><span class="p">,</span> <span class="n">item_type</span><span class="p">)</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Toggled excluded=</span><span class="si">%s</span><span class="s2"> for </span><span class="si">%d</span><span class="s2"> </span><span class="si">%s</span><span class="s2">(s)&quot;</span><span class="p">,</span> <span class="n">excluded</span><span class="p">,</span> <span class="n">changed</span><span class="p">,</span> <span class="n">item_type</span><span class="p">)</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;changed&#39;</span><span class="p">:</span> <span class="n">changed</span><span class="p">}</span></div>
 
@@ -296,9 +296,9 @@
 <span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/generate&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">generate_r2rml</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate R2RML from current mapping configuration.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     
-    <span class="n">m</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+    <span class="n">m</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
     <span class="n">r2rml_content</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">generate_r2rml</span><span class="p">()</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;r2rml&#39;</span><span class="p">:</span> <span class="n">r2rml_content</span><span class="p">,</span> <span class="s1">&#39;stats&#39;</span><span class="p">:</span> <span class="n">m</span><span class="o">.</span><span class="n">get_mapping_stats</span><span class="p">()}</span></div>
 
@@ -325,8 +325,8 @@
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No SQL query provided&#39;</span><span class="p">}</span>
     
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">get_databricks_credentials</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">get_databricks_credentials</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         
         <span class="k">if</span> <span class="ow">not</span> <span class="n">warehouse_id</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No SQL warehouse configured&#39;</span><span class="p">}</span>
@@ -361,8 +361,8 @@
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;Catalog and schema are required&#39;</span><span class="p">}</span>
     
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">client</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;Databricks not configured&#39;</span><span class="p">}</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;tables&#39;</span><span class="p">:</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">get_tables</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">)}</span>
@@ -388,8 +388,8 @@
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;Catalog, schema, and table are required&#39;</span><span class="p">}</span>
     
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">client</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;Databricks not configured&#39;</span><span class="p">}</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;columns&#39;</span><span class="p">:</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">get_table_columns</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">table</span><span class="p">)}</span>
@@ -415,7 +415,7 @@
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No R2RML content provided&#39;</span><span class="p">}</span>
     
     <span class="k">try</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">parse_r2rml</span><span class="p">(</span><span class="n">r2rml_content</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">parse_r2rml</span><span class="p">(</span><span class="n">r2rml_content</span><span class="p">)</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Parse R2RML failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)}</span></div>
@@ -427,8 +427,8 @@
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/download&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">download_r2rml</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Download generated R2RML as TTL file.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">r2rml_content</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get_r2rml</span><span class="p">()</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">r2rml_content</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_r2rml</span><span class="p">()</span>
     
     <span class="k">if</span> <span class="ow">not</span> <span class="n">r2rml_content</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No R2RML to download&#39;</span><span class="p">}</span>
@@ -456,10 +456,17 @@
 
 
 <span class="c1"># ===========================================</span>
-<span class="c1"># Helper Functions</span>
+<span class="c1"># Diagnostics</span>
 <span class="c1"># ===========================================</span>
-<span class="c1"># Mapping helpers live on back.objects.mapping.Mapping.</span>
-<span class="c1"># Use get_databricks_client from app/core/helpers.py for Databricks client</span>
+
+<div class="viewcode-block" id="run_diagnostics">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.mapping.run_diagnostics">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/diagnostics&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">run_diagnostics</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run comprehensive validation on all entity and relationship mappings.&quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">run_diagnostics</span><span class="p">()</span></div>
+
 
 
 <span class="c1"># ===========================================</span>
@@ -477,8 +484,8 @@
     <span class="k">try</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.sqlwizard</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLWizardService</span>
         
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         
         <span class="k">if</span> <span class="ow">not</span> <span class="n">client</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;Databricks not configured&#39;</span><span class="p">,</span> <span class="s1">&#39;endpoints&#39;</span><span class="p">:</span> <span class="p">[]}</span>
@@ -512,8 +519,8 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">catalog</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">schema</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;Catalog and schema are required&#39;</span><span class="p">}</span>
         
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         
         <span class="k">if</span> <span class="ow">not</span> <span class="n">client</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;Databricks not configured&#39;</span><span class="p">}</span>
@@ -552,7 +559,7 @@
 <span class="sd">        prompt: Natural language description of the query</span>
 <span class="sd">        limit: Optional result limit (default: 100)</span>
 <span class="sd">        validate_plan: Whether to run EXPLAIN validation (default: true)</span>
-<span class="sd">        schema_context: Optional pre-built schema context with tables (from project metadata)</span>
+<span class="sd">        schema_context: Optional pre-built schema context with tables (from domain metadata)</span>
 <span class="sd">        mapping_type: Type of mapping (&#39;entity&#39;, &#39;relationship&#39;, or None for general)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">try</span><span class="p">:</span>
@@ -583,8 +590,8 @@
                     <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;Missing required fields: schema_context with tables (or catalog/schema for legacy fetch)&#39;</span>
                 <span class="p">}</span>
         
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         
         <span class="k">if</span> <span class="ow">not</span> <span class="n">client</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;Databricks not configured&#39;</span><span class="p">}</span>
@@ -639,8 +646,8 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">sql</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;SQL query is required&#39;</span><span class="p">}</span>
         
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         
         <span class="k">if</span> <span class="ow">not</span> <span class="n">client</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;Databricks not configured&#39;</span><span class="p">}</span>
@@ -689,10 +696,10 @@
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No items to process&#39;</span><span class="p">}</span>
     
     <span class="c1"># Validate configuration</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">get_databricks_credentials</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">get_databricks_credentials</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
     
-    <span class="n">schema_context</span><span class="p">,</span> <span class="n">schema_err</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">resolve_auto_assign_schema_context</span><span class="p">(</span>
+    <span class="n">schema_context</span><span class="p">,</span> <span class="n">schema_err</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">resolve_auto_assign_schema_context</span><span class="p">(</span>
         <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema_context&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
     <span class="p">)</span>
     <span class="k">if</span> <span class="n">schema_err</span><span class="p">:</span>
@@ -711,7 +718,7 @@
         <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Auto-assign: no SQL warehouse configured&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No SQL warehouse configured&#39;</span><span class="p">}</span>
     
-    <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;llm_endpoint&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+    <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;llm_endpoint&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">llm_endpoint</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Auto-assign: no LLM serving endpoint configured&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No LLM serving endpoint configured&#39;</span><span class="p">}</span>
@@ -750,8 +757,8 @@
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Auto-assign: task created — id=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
 
     <span class="c1"># Get current mappings to update</span>
-    <span class="n">entity_mappings</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">())</span>
-    <span class="n">relationship_mappings</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">())</span>
+    <span class="n">entity_mappings</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">())</span>
+    <span class="n">relationship_mappings</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">())</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
         <span class="s2">&quot;Auto-assign: existing mappings — </span><span class="si">%d</span><span class="s2"> entity, </span><span class="si">%d</span><span class="s2"> relationship&quot;</span><span class="p">,</span>
         <span class="nb">len</span><span class="p">(</span><span class="n">entity_mappings</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">relationship_mappings</span><span class="p">),</span>
@@ -777,7 +784,7 @@
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Auto-assign agent thread started — task=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
 
             <span class="c1"># Fetch documents once at agent start</span>
-            <span class="n">documents</span> <span class="o">=</span> <span class="n">Mapping</span><span class="o">.</span><span class="n">fetch_documents_for_agent</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
+            <span class="n">documents</span> <span class="o">=</span> <span class="n">Mapping</span><span class="o">.</span><span class="n">fetch_documents_for_agent</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
 
             <span class="c1"># Split items into chunks to avoid rate-limit exhaustion</span>
             <span class="n">all_items</span> <span class="o">=</span> <span class="p">[(</span><span class="s2">&quot;entity&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entities</span><span class="p">]</span> <span class="o">+</span> <span class="p">[(</span><span class="s2">&quot;rel&quot;</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">relationships</span><span class="p">]</span>
@@ -830,7 +837,7 @@
                 <span class="n">context_rel_mappings</span> <span class="o">=</span> <span class="n">relationship_mappings</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="n">rel_mapping_by_uri</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
 
                 <span class="k">try</span><span class="p">:</span>
-                    <span class="n">agent_result</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">auto_assign_with_agent</span><span class="p">(</span>
+                    <span class="n">agent_result</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">auto_assign_with_agent</span><span class="p">(</span>
                         <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span>
                         <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
                         <span class="n">endpoint_name</span><span class="o">=</span><span class="n">llm_endpoint</span><span class="p">,</span>
@@ -1001,19 +1008,19 @@
     <span class="k">if</span> <span class="n">item_type</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;entity&quot;</span><span class="p">,</span> <span class="s2">&quot;relationship&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">item</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;Provide type (&#39;entity&#39;|&#39;relationship&#39;) and item.&quot;</span><span class="p">}</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">get_databricks_credentials</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">get_databricks_credentials</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;Databricks not configured&quot;</span><span class="p">}</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">warehouse_id</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;No SQL warehouse configured&quot;</span><span class="p">}</span>
 
-    <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;llm_endpoint&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;llm_endpoint&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">llm_endpoint</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;No LLM serving endpoint configured&quot;</span><span class="p">}</span>
 
-    <span class="n">schema_context</span><span class="p">,</span> <span class="n">schema_err</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">resolve_auto_assign_schema_context</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+    <span class="n">schema_context</span><span class="p">,</span> <span class="n">schema_err</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">resolve_auto_assign_schema_context</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">schema_err</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="n">schema_err</span><span class="p">}</span>
 
@@ -1043,19 +1050,19 @@
 
     <span class="n">session_id</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="s1">&#39;session_id&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
     <span class="n">session_ref</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="s1">&#39;session&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-    <span class="n">existing_entity_mappings</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">())</span>
-    <span class="n">existing_relationship_mappings</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">())</span>
+    <span class="n">existing_entity_mappings</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">())</span>
+    <span class="n">existing_relationship_mappings</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">())</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_run</span><span class="p">():</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">tm</span><span class="o">.</span><span class="n">start_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Auto-mapping </span><span class="si">{</span><span class="n">item_type</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">item_name</span><span class="si">}</span><span class="s2">…&quot;</span><span class="p">)</span>
 
-            <span class="n">documents</span> <span class="o">=</span> <span class="n">Mapping</span><span class="o">.</span><span class="n">fetch_documents_for_agent</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
+            <span class="n">documents</span> <span class="o">=</span> <span class="n">Mapping</span><span class="o">.</span><span class="n">fetch_documents_for_agent</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
 
             <span class="k">def</span><span class="w"> </span><span class="nf">on_step</span><span class="p">(</span><span class="n">msg</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">progress_pct</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">):</span>
                 <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">progress_pct</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
 
-            <span class="n">agent_result</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">auto_assign_with_agent</span><span class="p">(</span>
+            <span class="n">agent_result</span> <span class="o">=</span> <span class="n">Mapping</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">auto_assign_with_agent</span><span class="p">(</span>
                 <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span>
                 <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
                 <span class="n">endpoint_name</span><span class="o">=</span><span class="n">llm_endpoint</span><span class="p">,</span>

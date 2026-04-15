@@ -13,10 +13,10 @@
     <p class="tagline">Transform your Databricks data into a semantic knowledge graph using RDF, OWL, and R2RML standards</p>
 </div>
 
-<!-- Project Management -->
-<div class="project-panel" id="sessionPanel">
-    <div class="project-header">
-        <h5><i class="bi bi-folder2-open"></i> Current Project: <span id="homeProjectName">Loading...</span></h5>
+<!-- Domain management -->
+<div class="domain-panel" id="sessionPanel">
+    <div class="domain-header">
+        <h5><i class="bi bi-folder2-open"></i> Current Domain: <span id="homeDomainName">Loading...</span></h5>
         <div class="quick-links-inline">
             <a href="/settings" class="quick-link-sm admin-only-nav" style="display:none"><i class="bi bi-gear"></i> Settings</a>
             <a href="/about" class="quick-link-sm"><i class="bi bi-info-circle"></i> About</a>
@@ -42,32 +42,32 @@
         </div>
     </div>
     
-    <!-- Project Actions -->
-    <div class="project-actions">
-        <button class="project-btn new" onclick="newProject()">
+    <!-- Domain actions -->
+    <div class="domain-actions">
+        <button class="domain-btn new" onclick="newDomain()">
             <i class="bi bi-file-earmark-plus"></i>
             <span>New</span>
         </button>
-        <a href="/project/" class="project-btn manage">
+        <a href="/domain/" class="domain-btn manage">
             <i class="bi bi-folder-symlink"></i>
             <span>Manage</span>
         </a>
-        <a href="/project/?section=metadata" class="project-btn">
+        <a href="/domain/?section=metadata" class="domain-btn">
             <i class="bi bi-database"></i>
-            <span>Metadata</span>
+            <span>Data Sources</span>
         </a>
         <!-- Save Button -->
-        <button class="project-btn" onclick="projectSave()">
+        <button class="domain-btn" onclick="domainSave()">
             <i class="bi bi-cloud-upload"></i>
             <span>Save</span>
         </button>
         <!-- Load Button -->
-        <button class="project-btn" onclick="projectLoad()">
+        <button class="domain-btn" onclick="domainLoad()">
             <i class="bi bi-cloud-download"></i>
             <span>Load</span>
         </button>
     </div>
-    <div id="projectStatus" class="project-status hidden-initial"></div>
+    <div id="domainStatus" class="domain-status hidden-initial"></div>
 </div>
 
 <!-- Workflow Steps -->

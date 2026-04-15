@@ -107,7 +107,7 @@
           <div class="body" role="main">
             
   <h1>Source code for back.core.triplestore.TripleStoreFactory</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Factory for creating triple store backends from project configuration.</span>
+<span></span><span class="sd">&quot;&quot;&quot;Factory for creating triple store backends from domain session configuration.</span>
 
 <span class="sd">Supports two backend types:</span>
 <span class="sd">- ``&quot;view&quot;``  -- DeltaTripleStore (SQL against a Unity Catalog VIEW via warehouse)</span>
@@ -116,7 +116,11 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_databricks_app</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_databricks_host_and_token</span><span class="p">,</span> <span class="n">resolve_warehouse_id</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">effective_uc_version_path</span><span class="p">,</span>
+    <span class="n">get_databricks_host_and_token</span><span class="p">,</span>
+    <span class="n">resolve_warehouse_id</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_GRAPH_NAME</span>
 
@@ -126,7 +130,7 @@
 <div class="viewcode-block" id="TripleStoreFactory">
 <a class="viewcode-back" href="../../../../api/app.core.triplestore.html#back.core.triplestore.TripleStoreFactory.TripleStoreFactory">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">TripleStoreFactory</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Construct triple-store backend instances from project configuration.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Construct triple-store backend instances from domain session configuration.&quot;&quot;&quot;</span>
 
     <span class="n">LADYBUG_AVAILABLE</span> <span class="o">=</span> <span class="kc">False</span>
 
@@ -134,14 +138,14 @@
 <a class="viewcode-back" href="../../../../api/app.core.triplestore.html#back.core.triplestore.TripleStoreFactory.TripleStoreFactory.create">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">create</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
-        <span class="n">project</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
         <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">backend</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a triple store backend.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            project: Project session with info and databricks config.</span>
+<span class="sd">            domain: Domain session with info and databricks config.</span>
 <span class="sd">            settings: Optional application settings (for sql_warehouse_id fallback).</span>
 <span class="sd">            backend: ``&quot;view&quot;`` for DeltaTripleStore, ``&quot;graph&quot;`` for LadybugDB.</span>
 <span class="sd">                     Defaults to ``&quot;graph&quot;`` when *None*.</span>
@@ -153,26 +157,26 @@
             <span class="n">backend</span> <span class="o">=</span> <span class="s2">&quot;graph&quot;</span>
 
         <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;view&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_delta</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_delta</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_ladybug</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_ladybug</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
 
         <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Unknown triplestore backend: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">backend</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span></div>
 
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_create_delta</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">project</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_delta</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Instantiate a DeltaTripleStore backed by a Databricks SQL warehouse.&quot;&quot;&quot;</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksClient</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.delta.DeltaTripleStore</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeltaTripleStore</span>
 
             <span class="k">if</span> <span class="n">settings</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-                <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">resolve_warehouse_id</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+                <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+                <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">resolve_warehouse_id</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">db</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">databricks</span> <span class="ow">or</span> <span class="p">{}</span>
+                <span class="n">db</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span> <span class="ow">or</span> <span class="p">{}</span>
                 <span class="n">host</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
                 <span class="n">token</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
                 <span class="n">warehouse_id</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
@@ -197,7 +201,7 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_build_auto_restore</span><span class="p">(</span>
-        <span class="n">project</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
         <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
         <span class="n">db_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">db_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -207,14 +211,14 @@
 <span class="sd">        Returns *None* when the registry or Databricks credentials are</span>
 <span class="sd">        not configured — in that case auto-restore is simply disabled.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">uc_project_path</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;uc_project_path&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">uc_project_path</span><span class="p">:</span>
+        <span class="n">uc_domain_path</span> <span class="o">=</span> <span class="n">effective_uc_version_path</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">uc_domain_path</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
 
         <span class="k">if</span> <span class="n">settings</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+            <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">db_cfg</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;databricks&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="n">db_cfg</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;databricks&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
             <span class="n">host</span> <span class="o">=</span> <span class="n">db_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;host&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
             <span class="n">token</span> <span class="o">=</span> <span class="n">db_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;token&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
 
@@ -229,28 +233,28 @@
 
             <span class="n">uc</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
             <span class="n">svc</span> <span class="o">=</span> <span class="n">GraphSyncService</span><span class="p">(</span><span class="n">uc</span><span class="p">,</span> <span class="n">db_name</span><span class="p">,</span> <span class="n">local_base</span><span class="o">=</span><span class="n">db_path</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">svc</span><span class="o">.</span><span class="n">sync_from_volume</span><span class="p">(</span><span class="n">uc_project_path</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">svc</span><span class="o">.</span><span class="n">sync_from_volume</span><span class="p">(</span><span class="n">uc_domain_path</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">_restore</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_create_ladybug</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">project</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Instantiate a LadybugDB store, choosing graph or flat model.&quot;&quot;&quot;</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">lb_cfg</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;ladybug&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">lb_cfg</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;triplestore&#39;</span><span class="p">):</span>
-                <span class="n">lb_cfg</span> <span class="o">=</span> <span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">triplestore</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ladybug&#39;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="n">lb_cfg</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;ladybug&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">lb_cfg</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;triplestore&#39;</span><span class="p">):</span>
+                <span class="n">lb_cfg</span> <span class="o">=</span> <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">triplestore</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ladybug&#39;</span><span class="p">,</span> <span class="p">{})</span>
             <span class="n">db_path</span> <span class="o">=</span> <span class="n">lb_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;db_path&quot;</span><span class="p">,</span> <span class="s2">&quot;/tmp/ontobricks&quot;</span><span class="p">)</span>
-            <span class="n">base_name</span> <span class="o">=</span> <span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">info</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">)</span>
-            <span class="n">version</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;current_version&#39;</span><span class="p">,</span> <span class="s1">&#39;1&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;1&#39;</span>
+            <span class="n">base_name</span> <span class="o">=</span> <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">info</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">)</span>
+            <span class="n">version</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;current_version&#39;</span><span class="p">,</span> <span class="s1">&#39;1&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;1&#39;</span>
             <span class="n">db_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_name</span><span class="si">}</span><span class="s2">_V</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="n">ontology</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;ontology&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="n">ontology</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;ontology&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">ontology</span><span class="p">):</span>
                 <span class="n">ontology</span> <span class="o">=</span> <span class="kc">None</span>
 
             <span class="n">auto_restore</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_auto_restore</span><span class="p">(</span>
-                <span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">db_name</span><span class="p">,</span> <span class="n">db_path</span><span class="p">,</span>
+                <span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">db_name</span><span class="p">,</span> <span class="n">db_path</span><span class="p">,</span>
             <span class="p">)</span>
 
             <span class="k">if</span> <span class="n">ontology</span><span class="p">:</span>
@@ -277,13 +281,13 @@
     <span class="nd">@classmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_triplestore</span><span class="p">(</span>
         <span class="bp">cls</span><span class="p">,</span>
-        <span class="n">project</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
         <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">backend</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Convenience wrapper using the package singleton factory instance.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">_get_factory_singleton</span><span class="p">()</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
-            <span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="o">=</span><span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+            <span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="o">=</span><span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
         <span class="p">)</span></div>
 </div>
 

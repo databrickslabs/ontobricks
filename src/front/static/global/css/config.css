@@ -2,7 +2,56 @@
    Config Page Specific Styles
    ========================================================================== */
 
-/* (Settings page uses sidebar-layout, no extra full-height rules needed) */
+/* Settings page: override sidebar-layout flex-fill defaults.
+   Most tabs have short content; only Databricks needs full-height. */
+.sidebar-content:has(#settings-section.active) {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+#settings-section.active {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* By default the card does NOT stretch — short-content tabs stay compact */
+#settings-section > .content-section > .card {
+    flex: 0 1 auto;
+    overflow: visible;
+}
+
+/* Databricks tab needs the card to fill remaining height */
+#settings-section > .content-section > .card:has(#pane-databricks.active.show) {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#settings-section > .content-section > .card:has(#pane-databricks.active.show) > .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#settings-section > .content-section > .card:has(#pane-databricks.active.show) #settingsTabContent {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#pane-databricks.active.show {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
 
 /* ==========================================================================
    Document Upload Drop Zone
@@ -29,20 +78,42 @@
 }
 
 /* ==========================================================================
+   Registry Projects Section (used on the Registry page)
+   ========================================================================== */
+#registryDomainsSection {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+}
+
+#registryDomainsList {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+}
+
+/* ==========================================================================
    Registry Project Table
    ========================================================================== */
-.registry-project-table-wrapper {
-    max-height: 320px;
+.registry-domain-table-wrapper {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     border: 1px solid #dee2e6;
     border-radius: 0.375rem;
 }
 
-.registry-project-table {
+.registry-domain-table {
     font-size: 0.85rem;
+    width: 100%;
+    table-layout: fixed;
 }
 
-.registry-project-table thead th {
+.registry-domain-table thead th {
     background: #f8f9fa;
     position: sticky;
     top: 0;
@@ -55,12 +126,18 @@
     border-bottom: 2px solid #dee2e6;
 }
 
-.registry-project-table tbody tr .registry-delete-btn {
+.registry-domain-table td.text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.registry-domain-table tbody tr .registry-delete-btn {
     opacity: 0;
     transition: opacity 0.15s;
 }
 
-.registry-project-table tbody tr:hover .registry-delete-btn {
+.registry-domain-table tbody tr:hover .registry-delete-btn {
     opacity: 1;
 }
 

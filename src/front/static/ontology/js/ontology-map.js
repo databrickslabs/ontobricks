@@ -25,11 +25,11 @@ function showOntologyMapLoading(show) {
 }
 
 /**
- * Load saved map layout from project
+ * Load saved map layout from domain session
  */
 async function loadMapLayout() {
     try {
-        const response = await fetch('/project/map-layout', { credentials: 'same-origin' });
+        const response = await fetch('/domain/map-layout', { credentials: 'same-origin' });
         const data = await response.json();
         if (data.success && data.layout) {
             return data.layout;
@@ -41,7 +41,7 @@ async function loadMapLayout() {
 }
 
 /**
- * Save map layout to project
+ * Save map layout to domain session
  */
 async function saveMapLayout(nodes) {
     try {
@@ -55,7 +55,7 @@ async function saveMapLayout(nodes) {
             };
         });
         
-        await fetch('/project/map-layout', {
+        await fetch('/domain/map-layout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ positions }),
@@ -1494,6 +1494,7 @@ async function createInheritanceFromMap(childEntity, parentEntity) {
  * then updates OntologyState, saves to session, and refreshes the map.
  */
 async function autoAssignEntityIcons() {
+    if (window.isActiveVersion === false) return;
     const classes = OntologyState?.config?.classes;
     if (!classes || classes.length === 0) {
         if (typeof showNotification === 'function') {

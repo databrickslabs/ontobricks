@@ -30,13 +30,13 @@ logger = get_logger(__name__)
 class GraphQLSchemaBuilder:
     """Build and cache Strawberry GraphQL schemas from ontology metadata.
 
-    A single instance manages a per-project cache so that repeated
+    A single instance manages a per-domain cache so that repeated
     calls with the same ontology fingerprint return the same schema.
 
     Usage::
 
         builder = GraphQLSchemaBuilder()
-        result  = builder.build_for_project(classes, props, base_uri, "my_project")
+        result  = builder.build_for_domain(classes, props, base_uri, "my_domain")
         if result:
             schema, metadata = result
     """
@@ -48,12 +48,12 @@ class GraphQLSchemaBuilder:
     # Public API
     # ------------------------------------------------------------------
 
-    def build_for_project(
+    def build_for_domain(
         self,
         ontology_classes: List[Dict],
         ontology_properties: List[Dict],
         base_uri: str,
-        project_name: str = "",
+        domain_name: str = "",
     ) -> Optional[Tuple[strawberry.Schema, SchemaMetadata]]:
         """Build (or return cached) a Strawberry Schema from ontology metadata.
 
@@ -61,21 +61,21 @@ class GraphQLSchemaBuilder:
         """
         h = self._ontology_hash(ontology_classes, ontology_properties)
 
-        if project_name and project_name in self._cache:
-            cached_schema, cached_hash, cached_meta = self._cache[project_name]
+        if domain_name and domain_name in self._cache:
+            cached_schema, cached_hash, cached_meta = self._cache[domain_name]
             if cached_hash == h:
-                logger.debug("GraphQL schema cache hit for project '%s'", project_name)
+                logger.debug("GraphQL schema cache hit for domain '%s'", domain_name)
                 return cached_schema, cached_meta
 
         result = self._build(ontology_classes, ontology_properties, base_uri)
-        if result and project_name:
+        if result and domain_name:
             schema, meta = result
-            self._cache[project_name] = (schema, h, meta)
+            self._cache[domain_name] = (schema, h, meta)
         return result
 
-    def invalidate_cache(self, project_name: str) -> None:
-        """Remove a project's cached schema."""
-        self._cache.pop(project_name, None)
+    def invalidate_cache(self, domain_name: str) -> None:
+        """Remove a domain's cached schema."""
+        self._cache.pop(domain_name, None)
 
     # ------------------------------------------------------------------
     # Text / URI helpers (static)
@@ -411,21 +411,21 @@ class GraphQLSchemaBuilder:
 _default_builder = GraphQLSchemaBuilder()
 
 
-def build_schema_for_project(
+def build_schema_for_domain(
     ontology_classes: List[Dict],
     ontology_properties: List[Dict],
     base_uri: str,
-    project_name: str = "",
+    domain_name: str = "",
 ) -> Optional[Tuple[strawberry.Schema, SchemaMetadata]]:
     """Module-level delegate — uses the default ``GraphQLSchemaBuilder``."""
-    return _default_builder.build_for_project(
-        ontology_classes, ontology_properties, base_uri, project_name,
+    return _default_builder.build_for_domain(
+        ontology_classes, ontology_properties, base_uri, domain_name,
     )
 
 
-def invalidate_cache(project_name: str) -> None:
+def invalidate_cache(domain_name: str) -> None:
     """Module-level delegate — invalidates on the default builder."""
-    _default_builder.invalidate_cache(project_name)
+    _default_builder.invalidate_cache(domain_name)
 
 
 # Backward-compatible aliases for helpers used by tests

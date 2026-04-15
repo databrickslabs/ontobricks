@@ -1,17 +1,21 @@
 """
 Registry Service for OntoBricks.
 
-Centralises all project-registry management (config resolution, path
-construction, project CRUD, version management) behind a single
+Centralises all domain-registry management (config resolution, path
+construction, domain CRUD, version management) behind a single
 ``RegistryService`` class and a lightweight ``RegistryCfg`` dataclass.
+
+New registries store domain folders under ``/domains/``.  For backward
+compatibility, if the new folder does not exist but the legacy
+``/projects/`` folder does, the service transparently falls back to it.
 
 Usage in a route handler::
 
     from back.objects.registry import RegistryCfg, RegistryService
 
-    cfg  = RegistryCfg.from_project(project, settings)
-    svc  = RegistryService.from_context(project, settings)
-    ok, names, msg = svc.list_projects()
+    cfg  = RegistryCfg.from_domain(domain, settings)
+    svc  = RegistryService.from_context(domain, settings)
+    ok, names, msg = svc.list_domains()
 """
 from __future__ import annotations
 
@@ -21,11 +25,21 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.databricks import VolumeFileService
+from back.objects.registry.registry_cache import (
+    registry_cache_key,
+    get_cached_registry_details,
+    set_cached_registry_details,
+    get_cached_registry_names,
+    set_cached_registry_names,
+    invalidate_registry_cache,
+)
 
 logger = get_logger(__name__)
 
 _DEFAULT_VOLUME = "OntoBricksRegistry"
 _REGISTRY_MARKER = ".registry"
+_DOMAINS_FOLDER = "domains"
+_LEGACY_DOMAINS_FOLDER = "projects"
 
 
 # ------------------------------------------------------------------
@@ -52,8 +66,8 @@ class RegistryCfg:
         return cls(catalog="", schema="", volume="")
 
     @classmethod
-    def from_project(cls, project, settings) -> RegistryCfg:
-        """Build from a *ProjectSession* and *Settings* with env-var fallbacks.
+    def from_domain(cls, domain, settings) -> RegistryCfg:
+        """Build from a *DomainSession* and *Settings* with env-var fallbacks.
 
         When the app is deployed with a Volume resource the injected path
         (``settings.registry_volume_path``) takes highest priority so that
@@ -63,7 +77,7 @@ class RegistryCfg:
         if vol_path:
             return cls.from_volume_path(vol_path)
 
-        reg = project.settings.get("registry", {})
+        reg = domain.settings.get("registry", {})
         return cls(
             catalog=reg.get("catalog") or settings.registry_catalog,
             schema=reg.get("schema") or settings.registry_schema,
@@ -73,8 +87,8 @@ class RegistryCfg:
     @classmethod
     def from_session(cls, session_mgr, settings) -> RegistryCfg:
         """Build from *SessionManager* and *Settings*."""
-        from back.objects.session.project_session import get_project
-        return cls.from_project(get_project(session_mgr), settings)
+        from back.objects.session.domain_session import get_domain
+        return cls.from_domain(get_domain(session_mgr), settings)
 
     @classmethod
     def from_dict(cls, d: Dict[str, str]) -> RegistryCfg:
@@ -106,16 +120,17 @@ class RegistryService:
     def __init__(self, cfg: RegistryCfg, uc: VolumeFileService):
         self._cfg = cfg
         self._uc = uc
+        self._resolved_domains_folder: Optional[str] = None
 
     # -- factory -----------------------------------------------------
 
     @classmethod
-    def from_context(cls, project, settings) -> RegistryService:
+    def from_context(cls, domain, settings) -> RegistryService:
         """One-call factory: resolve config + build VolumeFileService."""
         from back.core.helpers import get_databricks_host_and_token
 
-        cfg = RegistryCfg.from_project(project, settings)
-        host, token = get_databricks_host_and_token(project, settings)
+        cfg = RegistryCfg.from_domain(domain, settings)
+        host, token = get_databricks_host_and_token(domain, settings)
         uc = VolumeFileService(host=host, token=token)
         return cls(cfg, uc)
 
@@ -130,20 +145,57 @@ class RegistryService:
         """Expose the underlying VolumeFileService for callers that need it."""
         return self._uc
 
+    @property
+    def cache_key(self) -> str:
+        """Build a cache key from the registry config triplet."""
+        c = self._cfg
+        return registry_cache_key(c.catalog, c.schema, c.volume)
+
     # -- path builders -----------------------------------------------
 
     def volume_root(self) -> str:
         c = self._cfg
         return f"/Volumes/{c.catalog}/{c.schema}/{c.volume}"
 
-    def projects_path(self) -> str:
-        return f"{self.volume_root()}/projects"
+    def _resolve_domains_folder(self) -> str:
+        """Return the actual domains sub-folder name inside the volume.
 
-    def project_path(self, folder: str) -> str:
-        return f"{self.projects_path()}/{folder}"
+        New registries use ``domains/``.  If that folder does not exist
+        but the legacy ``projects/`` folder does, fall back transparently
+        so that existing registries keep working.
+        """
+        if self._resolved_domains_folder is not None:
+            return self._resolved_domains_folder
+
+        root = self.volume_root()
+        new_path = f"{root}/{_DOMAINS_FOLDER}"
+        ok, _, _ = self._uc.list_directory(new_path, dirs_only=True)
+        if ok:
+            self._resolved_domains_folder = _DOMAINS_FOLDER
+            return _DOMAINS_FOLDER
+
+        legacy_path = f"{root}/{_LEGACY_DOMAINS_FOLDER}"
+        ok_legacy, _, _ = self._uc.list_directory(legacy_path, dirs_only=True)
+        if ok_legacy:
+            logger.info("Using legacy '%s/' folder in registry volume", _LEGACY_DOMAINS_FOLDER)
+            self._resolved_domains_folder = _LEGACY_DOMAINS_FOLDER
+            return _LEGACY_DOMAINS_FOLDER
+
+        self._resolved_domains_folder = _DOMAINS_FOLDER
+        return _DOMAINS_FOLDER
+
+    def domains_path(self) -> str:
+        return f"{self.volume_root()}/{self._resolve_domains_folder()}"
+
+    def domain_path(self, folder: str) -> str:
+        return f"{self.domains_path()}/{folder}"
+
+    def version_path(self, folder: str, version: str) -> str:
+        """Return the version directory: ``.../domains/{folder}/V{version}``."""
+        return f"{self.domain_path(folder)}/V{version}"
 
     def version_file_path(self, folder: str, version: str) -> str:
-        return f"{self.project_path(folder)}/v{version}.json"
+        return f"{self.version_path(folder, version)}/V{version}.json"
 
     def marker_path(self) -> str:
         return f"{self.volume_root()}/{_REGISTRY_MARKER}"
@@ -155,7 +207,7 @@ class RegistryService:
         return f"{self.volume_root()}/.permissions.json"
 
     def history_file_path(self, folder: str) -> str:
-        return f"{self.project_path(folder)}/.schedule_history.json"
+        return f"{self.domain_path(folder)}/.schedule_history.json"
 
     # -- registry lifecycle ------------------------------------------
 
@@ -178,28 +230,51 @@ class RegistryService:
                 return False, f"Failed to create volume {c.volume}"
 
         self._uc.write_file(
-            self.marker_path(), "OntoBricks Project Registry", overwrite=True,
+            self.marker_path(), "OntoBricks Domain Registry", overwrite=True,
         )
         logger.info("Registry initialized at %s.%s.%s", c.catalog, c.schema, c.volume)
         return True, f"Registry initialized: {c.catalog}.{c.schema}.{c.volume}"
 
-    # -- project CRUD ------------------------------------------------
+    # -- domain CRUD -------------------------------------------------
 
-    def list_projects(self) -> Tuple[bool, List[str], str]:
-        """Return sorted project folder names (hidden dirs excluded)."""
-        ok, items, msg = self._uc.list_directory(self.projects_path(), dirs_only=True)
+    def list_domains(self) -> Tuple[bool, List[str], str]:
+        """Return sorted domain folder names (hidden dirs excluded)."""
+        ok, items, msg = self._uc.list_directory(self.domains_path(), dirs_only=True)
         if not ok:
             return False, [], msg
         names = sorted(i["name"] for i in items if not i["name"].startswith("."))
         return True, names, ""
 
-    def list_project_details(self) -> Tuple[bool, List[Dict[str, Any]], str]:
-        """List projects with description and version list.
+    def list_domains_cached(self) -> Tuple[bool, List[str], str]:
+        """Like :meth:`list_domains` but with an in-memory TTL cache."""
+        cached = get_cached_registry_names(self.cache_key)
+        if cached is not None:
+            return True, cached, ""
+        ok, names, msg = self.list_domains()
+        if ok:
+            set_cached_registry_names(self.cache_key, names)
+        return ok, names, msg
 
-        For each project folder the latest version file is opened to
-        extract the description from ``info.description``.
+    def domain_exists(self, folder: str) -> bool:
+        """Check whether a domain folder already exists in the registry."""
+        ok, names, _ = self.list_domains()
+        if not ok:
+            return False
+        return folder in names
+
+    def list_domain_details(self) -> Tuple[bool, List[Dict[str, Any]], str]:
+        """List domains with name, URI, description and enriched version list.
+
+        For each domain folder every version file is opened to extract
+        ``info.mcp_enabled`` (exposed as ``active``).  The latest version
+        also provides description and base URI.
+
+        Each entry in ``versions`` is a dict::
+
+            {"version": "2", "active": True,
+             "last_update": "2025-…", "last_build": "2025-…"}
         """
-        ok, items, msg = self._uc.list_directory(self.projects_path(), dirs_only=True)
+        ok, items, msg = self._uc.list_directory(self.domains_path(), dirs_only=True)
         if not ok:
             return False, [], msg
 
@@ -210,48 +285,74 @@ class RegistryService:
                 continue
 
             description = ""
-            version_list: List[str] = []
+            base_uri = ""
+            version_objects: List[Dict[str, Any]] = []
             try:
-                ver_ok, ver_items, _ = self._uc.list_directory(
-                    f"{self.projects_path()}/{name}", extensions=[".json"],
-                )
-                if ver_ok and ver_items:
-                    version_list = sorted(
-                        [
-                            f["name"][1:-5]
-                            for f in ver_items
-                            if f["name"].startswith("v") and f["name"].endswith(".json")
-                        ],
-                        key=lambda v: [int(x) for x in v.split(".")],
-                        reverse=True,
+                sorted_versions = self.list_versions_sorted(name)
+                for idx, ver in enumerate(sorted_versions):
+                    active = False
+                    last_update = ""
+                    last_build = ""
+                    f_ok, content, _ = self._uc.read_file(
+                        self.version_file_path(name, ver),
                     )
-                    if version_list:
-                        latest_file = f"v{version_list[0]}.json"
-                        f_ok, content, _ = self._uc.read_file(
-                            f"{self.projects_path()}/{name}/{latest_file}",
-                        )
-                        if f_ok and content:
-                            description = json.loads(content).get("info", {}).get("description", "")
+                    if f_ok and content:
+                        doc = json.loads(content)
+                        info = doc.get("info", {})
+                        active = bool(info.get("mcp_enabled"))
+                        last_update = info.get("last_update", "")
+                        last_build = info.get("last_build", "")
+                        if idx == 0:
+                            description = info.get("description", "")
+                            ontology = self._extract_latest_ontology(doc)
+                            base_uri = ontology.get("base_uri", "")
+                    version_objects.append({
+                        "version": ver,
+                        "active": active,
+                        "last_update": last_update,
+                        "last_build": last_build,
+                    })
             except Exception:
-                logger.debug("Could not read description for project %s", name)
+                logger.debug("Could not read details for domain %s", name)
 
             result.append({
                 "name": name,
+                "base_uri": base_uri,
                 "description": description,
-                "versions": version_list,
+                "versions": version_objects,
             })
 
         return True, result, ""
 
-    def list_mcp_projects(self, require_ontology: bool = False) -> Tuple[bool, List[Dict[str, str]], str]:
-        """List projects that have an MCP-enabled version.
+    def list_domain_details_cached(self) -> Tuple[bool, List[Dict[str, Any]], str]:
+        """Like :meth:`list_domain_details` but with an in-memory TTL cache."""
+        cached = get_cached_registry_details(self.cache_key)
+        if cached is not None:
+            return True, cached, ""
+        ok, details, msg = self.list_domain_details()
+        if ok:
+            set_cached_registry_details(self.cache_key, details)
+        return ok, details, msg
 
-        Returns ``(ok, projects, message)`` where each project is
+    @staticmethod
+    def _extract_latest_ontology(doc: Dict[str, Any]) -> Dict[str, Any]:
+        """Return the ontology dict from the latest version in a domain document."""
+        versions = doc.get("versions")
+        if versions:
+            latest_key = sorted(versions.keys(), reverse=True)
+            if latest_key:
+                return versions[latest_key[0]].get("ontology", {})
+        return doc.get("ontology", {})
+
+    def list_mcp_domains(self, require_ontology: bool = False) -> Tuple[bool, List[Dict[str, str]], str]:
+        """List domains that have an MCP-enabled version.
+
+        Returns ``(ok, domains, message)`` where each domain is
         ``{"name": ..., "description": ...}``.  When *require_ontology* is
-        ``True`` only projects whose MCP version has a non-empty ``classes``
+        ``True`` only domains whose MCP version has a non-empty ``classes``
         list are included.
         """
-        ok, items, msg = self._uc.list_directory(self.projects_path(), dirs_only=True)
+        ok, items, msg = self._uc.list_directory(self.domains_path(), dirs_only=True)
         if not ok:
             return False, [], msg
 
@@ -272,12 +373,14 @@ class RegistryService:
                         continue
                 result.append({"name": name, "description": info.get("description", "")})
             except Exception:
-                logger.debug("Could not inspect project %s", name)
+                logger.debug("Could not inspect domain %s", name)
         return True, result, ""
 
-    def delete_project(self, folder: str) -> List[str]:
-        """Delete a project directory and all its contents."""
-        return self.recursive_delete(self.project_path(folder))
+    def delete_domain(self, folder: str) -> List[str]:
+        """Delete a domain directory and all its contents."""
+        errors = self.recursive_delete(self.domain_path(folder))
+        invalidate_registry_cache(self.cache_key)
+        return errors
 
     def recursive_delete(self, dir_path: str) -> List[str]:
         """Recursively delete all files and then empty directories."""
@@ -319,16 +422,19 @@ class RegistryService:
     # -- version management ------------------------------------------
 
     def list_versions(self, folder: str) -> Tuple[bool, List[str], str]:
-        """Return version strings (e.g. ``['2', '1']``) for a project folder."""
+        """Return version strings (e.g. ``['2', '1']``) for a domain folder.
+
+        Scans ``V{N}/`` subdirectories inside the domain folder.
+        """
         ok, items, msg = self._uc.list_directory(
-            self.project_path(folder), extensions=[".json"],
+            self.domain_path(folder), dirs_only=True,
         )
         if not ok:
             return False, [], msg
         versions = [
-            f["name"][1:-5]
-            for f in items
-            if f["name"].startswith("v") and f["name"].endswith(".json")
+            d["name"][1:]
+            for d in items
+            if d["name"].startswith("V") and d["name"][1:].replace(".", "").isdigit()
         ]
         return True, versions, ""
 
@@ -362,20 +468,24 @@ class RegistryService:
         return self._uc.write_file(path, data)
 
     def delete_version(self, folder: str, version: str) -> Tuple[bool, str]:
-        """Delete a single version file."""
-        path = self.version_file_path(folder, version)
-        return self._uc.delete_file(path)
+        """Delete an entire version directory (``V{version}/``) and its contents."""
+        ver_dir = self.version_path(folder, version)
+        errors = self.recursive_delete(ver_dir)
+        if not errors:
+            invalidate_registry_cache(self.cache_key)
+            return True, ""
+        return False, "; ".join(errors)
 
-    # -- load project from registry (stateless) ----------------------
+    # -- load domain from registry (stateless) -----------------------
 
-    def load_latest_project_data(self, folder: str) -> Tuple[bool, dict, str, str]:
+    def load_latest_domain_data(self, folder: str) -> Tuple[bool, dict, str, str]:
         """Load the latest version for *folder*.
 
         Returns ``(ok, data_dict, version_str, error_msg)``.
         """
         latest = self.get_latest_version(folder)
         if not latest:
-            return False, {}, "", f'No versions found for project "{folder}"'
+            return False, {}, "", f'No versions found for domain "{folder}"'
         ok, data, msg = self.read_version(folder, latest)
         if not ok:
             return False, {}, latest, msg
@@ -395,7 +505,7 @@ class RegistryService:
                 return ver, data
         return None, {}
 
-    def load_mcp_project_data(self, folder: str) -> Tuple[bool, dict, str, str]:
+    def load_mcp_domain_data(self, folder: str) -> Tuple[bool, dict, str, str]:
         """Load the MCP-enabled version for *folder*.
 
         Falls back to the latest version when no version has
@@ -406,4 +516,210 @@ class RegistryService:
         ver, data = self.find_mcp_version(folder)
         if ver:
             return True, data, ver, ""
-        return self.load_latest_project_data(folder)
+        return self.load_latest_domain_data(folder)
+
+    # -- document operations -------------------------------------------
+
+    def copy_version_documents(
+        self, folder: str, src_version: str, dst_version: str,
+    ) -> Tuple[int, List[str]]:
+        """Copy all documents from one version directory to another.
+
+        Returns ``(copied_count, error_messages)``.
+        """
+        src_docs = f"{self.version_path(folder, src_version)}/documents"
+        dst_docs = f"{self.version_path(folder, dst_version)}/documents"
+        ok, items, msg = self._uc.list_directory(src_docs)
+        if not ok:
+            if "not found" in msg.lower():
+                return 0, []
+            return 0, [msg]
+        errors: List[str] = []
+        copied = 0
+        for item in items:
+            if item.get("is_directory"):
+                continue
+            name = item["name"]
+            src_file = f"{src_docs}/{name}"
+            dst_file = f"{dst_docs}/{name}"
+            r_ok, content, r_msg = self._uc.read_binary_file(src_file)
+            if not r_ok:
+                errors.append(f"Read {name}: {r_msg}")
+                continue
+            w_ok, w_msg = self._uc.write_binary_file(dst_file, content)
+            if not w_ok:
+                errors.append(f"Write {name}: {w_msg}")
+                continue
+            copied += 1
+        return copied, errors
+
+    # -- bridge aggregation ---------------------------------------------
+
+    def list_all_bridges(self) -> Tuple[bool, List[Dict[str, Any]], str]:
+        """Collect all bridges across every domain in the registry.
+
+        Iterates over each domain, loads its latest version, and extracts
+        bridges from ``ontology.classes[].bridges``.
+
+        Returns ``(ok, domains_with_bridges, error_msg)`` where each entry
+        has ``name``, ``base_uri``, and ``bridges`` (list of bridge dicts
+        with ``source_class``, ``source_class_uri``, ``source_emoji``,
+        ``target_domain``, ``target_class_name``, ``target_class_uri``,
+        ``label``).
+        """
+        ok, items, msg = self._uc.list_directory(self.domains_path(), dirs_only=True)
+        if not ok:
+            return False, [], msg
+
+        result: List[Dict[str, Any]] = []
+        for item in sorted(items, key=lambda i: i["name"]):
+            name = item["name"]
+            if name.startswith("."):
+                continue
+
+            try:
+                d_ok, data, _ver, d_msg = self.load_latest_domain_data(name)
+                if not d_ok:
+                    continue
+
+                ontology = self._extract_latest_ontology(data)
+                base_uri = ontology.get("base_uri", "")
+                raw_classes = ontology.get("classes", [])
+
+                bridges: List[Dict[str, Any]] = []
+                for cls in raw_classes:
+                    cls_bridges = cls.get("bridges") or []
+                    if not cls_bridges:
+                        continue
+                    for b in cls_bridges:
+                        bridges.append({
+                            "source_class": cls.get("name", ""),
+                            "source_class_uri": cls.get("uri", ""),
+                            "source_emoji": cls.get("emoji", "📦"),
+                            "target_domain": b.get("target_domain") or b.get("target_project", ""),
+                            "target_class_name": b.get("target_class_name", ""),
+                            "target_class_uri": b.get("target_class_uri", ""),
+                            "label": b.get("label", ""),
+                        })
+
+                result.append({
+                    "name": name,
+                    "base_uri": base_uri,
+                    "bridges": bridges,
+                })
+            except Exception:
+                logger.debug("Could not read bridges for domain %s", name)
+
+        return True, result, ""
+
+    # -- one-time layout migration -------------------------------------
+
+    def migrate_domain_layout(self, folder: str) -> Tuple[bool, str]:
+        """Migrate a single domain from the flat layout to the versioned layout.
+
+        Flat layout (old)::
+
+            domains/{folder}/v1.json
+            domains/{folder}/v2.json
+            domains/{folder}/documents/
+            domains/{folder}/ontobricks_*.lbug.tar.gz
+
+        Versioned layout (new)::
+
+            domains/{folder}/V1/V1.json
+            domains/{folder}/V1/documents/
+            domains/{folder}/V1/ontobricks_*.lbug.tar.gz
+            domains/{folder}/V2/V2.json
+            domains/{folder}/V2/documents/
+            domains/{folder}/V2/ontobricks_*.lbug.tar.gz
+
+        Returns ``(ok, message)``.
+        """
+        base = self.domain_path(folder)
+
+        ok, items, msg = self._uc.list_directory(base)
+        if not ok:
+            return False, f"Cannot list {base}: {msg}"
+
+        flat_versions: List[str] = []
+        lbug_files: List[Dict[str, str]] = []
+        has_documents = False
+
+        for item in items:
+            name = item["name"]
+            if name.startswith("v") and name.endswith(".json"):
+                flat_versions.append(name[1:-5])  # "v1.json" -> "1"
+            elif name.endswith(".lbug.tar.gz"):
+                lbug_files.append({"name": name, "path": item["path"]})
+            elif name == "documents" and item.get("is_directory"):
+                has_documents = True
+
+        if not flat_versions:
+            return True, "No flat version files found — nothing to migrate"
+
+        flat_versions.sort(
+            key=lambda v: [int(x) for x in v.split(".")], reverse=True,
+        )
+        latest_version = flat_versions[0]
+        errors: List[str] = []
+
+        for ver in flat_versions:
+            old_file = f"{base}/v{ver}.json"
+            new_file = self.version_file_path(folder, ver)
+            r_ok, content, r_msg = self._uc.read_file(old_file)
+            if not r_ok:
+                errors.append(f"Read v{ver}.json: {r_msg}")
+                continue
+            w_ok, w_msg = self._uc.write_file(new_file, content)
+            if not w_ok:
+                errors.append(f"Write V{ver}/V{ver}.json: {w_msg}")
+                continue
+            d_ok, d_msg = self._uc.delete_file(old_file)
+            if not d_ok:
+                errors.append(f"Delete old v{ver}.json: {d_msg}")
+
+        for lbug in lbug_files:
+            name = lbug["name"]
+            matched_version: Optional[str] = None
+            for ver in flat_versions:
+                if f"_V{ver}" in name:
+                    matched_version = ver
+                    break
+            target_version = matched_version or latest_version
+            old_path = f"{base}/{name}"
+            new_path = f"{self.version_path(folder, target_version)}/{name}"
+            r_ok, content, r_msg = self._uc.read_binary_file(old_path)
+            if not r_ok:
+                errors.append(f"Read {name}: {r_msg}")
+                continue
+            w_ok, w_msg = self._uc.write_binary_file(new_path, content)
+            if not w_ok:
+                errors.append(f"Write {name}: {w_msg}")
+                continue
+            d_ok, d_msg = self._uc.delete_file(old_path)
+            if not d_ok:
+                errors.append(f"Delete old {name}: {d_msg}")
+
+        if has_documents:
+            src_docs = f"{base}/documents"
+            dst_docs = f"{self.version_path(folder, latest_version)}/documents"
+            doc_ok, doc_items, doc_msg = self._uc.list_directory(src_docs)
+            if doc_ok:
+                for item in doc_items:
+                    if item.get("is_directory"):
+                        continue
+                    name = item["name"]
+                    r_ok, content, r_msg = self._uc.read_binary_file(f"{src_docs}/{name}")
+                    if not r_ok:
+                        errors.append(f"Read doc {name}: {r_msg}")
+                        continue
+                    w_ok, w_msg = self._uc.write_binary_file(f"{dst_docs}/{name}", content)
+                    if not w_ok:
+                        errors.append(f"Write doc {name}: {w_msg}")
+                        continue
+                    self._uc.delete_file(f"{src_docs}/{name}")
+                self._uc.delete_directory(src_docs)
+
+        if errors:
+            return False, f"Migration completed with errors: {'; '.join(errors)}"
+        return True, f"Migrated {len(flat_versions)} version(s) to versioned layout"

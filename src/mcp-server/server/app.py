@@ -1,24 +1,24 @@
 """
 OntoBricks MCP Server
 
-Exposes Project registry metadata and Digital Twin triple-store capabilities
+Exposes Domain registry metadata and Digital Twin triple-store capabilities
 as MCP tools and resources. HTTP calls target the OntoBricks **external REST**
 surface (``/api/v1/...``) and in-app GraphQL (``/graphql/...``).
 
 REST layout (see ``api.external_app``):
 
-- **Project** — ``GET /api/v1/projects``, ``/api/v1/project/versions``,
-  ``/api/v1/project/design-status``, ``/api/v1/project/ontology``, etc.
+- **Domain** — ``GET /api/v1/domains``, ``/api/v1/domain/versions``,
+  ``/api/v1/domain/design-status``, ``/api/v1/domain/ontology``, etc.
 - **Digital Twin** — ``GET /api/v1/digitaltwin/registry``, ``status``,
   ``stats``, ``triples/find``, build, quality, inference, …
 
 Workflow:
-  1. ``list_projects`` — discover available projects (knowledge graphs).
-  2. ``list_project_versions`` / ``get_design_status`` (optional) —
+  1. ``list_domains`` — discover available domains (knowledge graphs).
+  2. ``list_domain_versions`` / ``get_design_status`` (optional) —
      versions and design readiness before heavy queries.
-  3. ``select_project`` — choose which project to work with.
+  3. ``select_domain`` — choose which domain to work with.
   4. ``list_entity_types`` / ``describe_entity`` / ``get_status`` —
-     query the selected project's Digital Twin.
+     query the selected domain's Digital Twin.
 
 Three operating modes controlled by the ``mode`` argument:
 
@@ -51,9 +51,9 @@ _oauth_cache: dict = {"token": "", "ts": 0.0}
 _OAUTH_TOKEN_TTL = 3000  # refresh well before the typical 3600 s expiry
 
 # REST paths — keep in sync with ``api.external_app`` / ``api.routers.*``
-API_V1_PROJECTS = "/api/v1/projects"
-API_V1_PROJECT_VERSIONS = "/api/v1/project/versions"
-API_V1_PROJECT_DESIGN_STATUS = "/api/v1/project/design-status"
+API_V1_DOMAINS = "/api/v1/domains"
+API_V1_DOMAIN_VERSIONS = "/api/v1/domain/versions"
+API_V1_DOMAIN_DESIGN_STATUS = "/api/v1/domain/design-status"
 API_V1_DT_REGISTRY = "/api/v1/digitaltwin/registry"
 API_V1_DT_STATUS = "/api/v1/digitaltwin/status"
 API_V1_DT_STATS = "/api/v1/digitaltwin/stats"
@@ -234,7 +234,7 @@ def _format_find_response(data: dict) -> str:
     return "\n".join(parts)
 
 
-def _format_graphql_response(data: dict, project_name: str) -> str:
+def _format_graphql_response(data: dict, domain_name: str) -> str:
     """Convert a GraphQL JSON response into LLM-friendly text."""
     errors = data.get("errors")
     result_data = data.get("data")
@@ -247,7 +247,7 @@ def _format_graphql_response(data: dict, project_name: str) -> str:
         return "GraphQL query returned no data."
 
     lines: list[str] = []
-    lines.append(f"GraphQL Result — {project_name}")
+    lines.append(f"GraphQL Result — {domain_name}")
     lines.append("=" * 50)
 
     for field_name, field_data in result_data.items():
@@ -417,7 +417,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
     base = _base_url(mode)
     logger.info("Creating MCP server — mode=%s, base_url=%s", mode, base)
 
-    _selected_project: dict = {"name": None}
+    _selected_domain: dict = {"name": None}
     _registry: dict = {"catalog": "", "schema": "", "volume": "OntoBricksRegistry", "_loaded": False}
 
     def _client() -> httpx.AsyncClient:
@@ -480,42 +480,42 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             params["registry_volume"] = _registry["volume"]
         return params
 
-    def _project_params(extra: dict | None = None) -> dict:
-        """Build query params, injecting project_name and registry when set."""
+    def _domain_params(extra: dict | None = None) -> dict:
+        """Build query params, injecting domain registry name and registry when set."""
         params = _registry_params()
         if extra:
             params.update(extra)
-        if _selected_project["name"]:
-            params["project_name"] = _selected_project["name"]
+        if _selected_domain["name"]:
+            params["domain_name"] = _selected_domain["name"]
         return params
 
     mcp = FastMCP(
         "OntoBricks",
         instructions=(
-            "You are connected to OntoBricks: project registry + Digital Twin "
+            "You are connected to OntoBricks: domain registry + Digital Twin "
             "(triple store) over external REST at /api/v1.\n"
             "Workflow:\n"
-            "1. Call 'list_projects' to see available projects.\n"
-            "2. Optionally call 'list_project_versions' or 'get_design_status' "
+            "1. Call 'list_domains' to see available domains.\n"
+            "2. Optionally call 'list_domain_versions' or 'get_design_status' "
             "to inspect versions or design readiness (ontology, mappings, build_ready).\n"
-            "3. Call 'select_project' with the project name that best matches "
+            "3. Call 'select_domain' with the domain name that best matches "
             "the user's question.\n"
             "4. Use 'list_entity_types' and 'describe_entity' for exploration, "
             "or GraphQL tools for typed queries.\n\n"
-            "**GraphQL** (after select_project): 'get_graphql_schema', then "
+            "**GraphQL** (after select_domain): 'get_graphql_schema', then "
             "'query_graphql' for nested relationships.\n\n"
-            "Always select a project before entity/triple/GraphQL queries. "
-            "If the user's question maps clearly to one project, select it automatically."
+            "Always select a domain before entity/triple/GraphQL queries. "
+            "If the user's question maps clearly to one domain, select it automatically."
         ),
     )
 
-    # ── Tools — Project selection ─────────────────────────────────────
+    # ── Tools — Domain selection ──────────────────────────────────────
 
     @mcp.tool()
-    async def list_projects() -> str:
-        """List all projects (knowledge graphs) available in the registry.
+    async def list_domains() -> str:
+        """List all domains (knowledge graphs) available in the registry.
 
-        Returns each project's name and description so you can choose
+        Returns each domain's name and description so you can choose
         the right one for the user's question.
 
         Always call this first before any other tool.
@@ -523,51 +523,51 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         await _ensure_registry()
 
         async with _client() as client:
-            data = await _get(client, API_V1_PROJECTS,
+            data = await _get(client, API_V1_DOMAINS,
                               params=_registry_params())
 
         if not data.get("success"):
-            return data.get("message", "Could not retrieve projects.")
+            return data.get("message", "Could not retrieve domains.")
 
-        projects = data.get("projects", [])
-        if not projects:
-            return "No projects found in the registry."
+        domains = data.get("domains", [])
+        if not domains:
+            return "No domains found in the registry."
 
         lines: list[str] = []
-        lines.append(f"Available Projects ({len(projects)})")
+        lines.append(f"Available Domains ({len(domains)})")
         lines.append("=" * 40)
-        for p in projects:
-            name = p.get("name", "")
-            desc = p.get("description", "")
+        for d in domains:
+            name = d.get("name", "")
+            desc = d.get("description", "")
             lines.append(f"  • {name}")
             if desc:
                 lines.append(f"    {desc}")
         lines.append("")
 
-        current = _selected_project["name"]
+        current = _selected_domain["name"]
         if current:
             lines.append(f"Currently selected: {current}")
         else:
-            lines.append("No project selected yet — call select_project(<name>) next.")
+            lines.append("No domain selected yet — call select_domain(<name>) next.")
 
         return "\n".join(lines)
 
     @mcp.tool()
-    async def list_project_versions(project_name: str) -> str:
-        """List registry versions for a project (latest first).
+    async def list_domain_versions(domain_name: str) -> str:
+        """List registry versions for a domain (latest first).
 
-        Uses ``GET /api/v1/project/versions``. Call after ``list_projects``
+        Uses ``GET /api/v1/domain/versions``. Call after ``list_domains``
         to see which versions exist before selecting or building.
 
         Args:
-            project_name: Exact project name as returned by ``list_projects``.
+            domain_name: Exact domain name as returned by ``list_domains``.
         """
         await _ensure_registry()
         params = _registry_params()
-        params["project_name"] = project_name
+        params["domain_name"] = domain_name
 
         async with _client() as client:
-            data = await _get(client, API_V1_PROJECT_VERSIONS, params=params)
+            data = await _get(client, API_V1_DOMAIN_VERSIONS, params=params)
 
         if not data.get("success"):
             return data.get("message", "Could not list versions.")
@@ -575,10 +575,10 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         versions = data.get("versions", [])
         latest = data.get("latest_version", "")
         if not versions:
-            return f"No versions returned for '{project_name}'."
+            return f"No versions returned for '{domain_name}'."
 
         lines = [
-            f"Versions — {project_name}",
+            f"Versions — {domain_name}",
             "=" * 40,
             f"Latest: {latest}",
             "",
@@ -590,27 +590,27 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         return "\n".join(lines)
 
     @mcp.tool()
-    async def get_design_status(project_name: Optional[str] = None) -> str:
+    async def get_design_status(domain_name: Optional[str] = None) -> str:
         """Design pipeline readiness: ontology, metadata, assignment, build_ready.
 
-        Uses ``GET /api/v1/project/design-status``. If ``project_name`` is
-        omitted, uses the currently selected project (after ``select_project``).
+        Uses ``GET /api/v1/domain/design-status``. If ``domain_name`` is
+        omitted, uses the currently selected domain (after ``select_domain``).
 
         Args:
-            project_name: Registry project name, or omit to use selected project.
+            domain_name: Registry domain name, or omit to use selected domain.
         """
         await _ensure_registry()
-        name = project_name or _selected_project["name"]
+        name = domain_name or _selected_domain["name"]
         if not name:
             return (
-                "Provide project_name or call select_project first "
-                "to set the active project."
+                "Provide domain_name or call select_domain first "
+                "to set the active domain."
             )
         params = _registry_params()
-        params["project_name"] = name
+        params["domain_name"] = name
 
         async with _client() as client:
-            data = await _get(client, API_V1_PROJECT_DESIGN_STATUS, params=params)
+            data = await _get(client, API_V1_DOMAIN_DESIGN_STATUS, params=params)
 
         if not data.get("success"):
             return data.get("message", "Could not load design status.")
@@ -648,30 +648,30 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         return "\n".join(lines)
 
     @mcp.tool()
-    async def select_project(project_name: str) -> str:
-        """Select a project (knowledge graph) to work with.
+    async def select_domain(domain_name: str) -> str:
+        """Select a domain (knowledge graph) to work with.
 
-        After calling ``list_projects`` to see what is available, call
-        this tool with the exact project name. All subsequent calls to
+        After calling ``list_domains`` to see what is available, call
+        this tool with the exact domain name. All subsequent calls to
         ``list_entity_types``, ``describe_entity``, and ``get_status``
-        will operate on this project's Digital Twin.
+        will operate on this domain's Digital Twin.
 
         Args:
-            project_name: Exact project name as shown by ``list_projects``.
+            domain_name: Exact domain name as shown by ``list_domains``.
         """
         await _ensure_registry()
 
         params = _registry_params()
-        params["project_name"] = project_name
+        params["domain_name"] = domain_name
 
         async with _client() as client:
             data = await _get(client, API_V1_DT_STATUS,
                               params=params)
 
         if not data.get("success") and data.get("message"):
-            return f"Error selecting project: {data['message']}"
+            return f"Error selecting domain: {data['message']}"
 
-        _selected_project["name"] = project_name
+        _selected_domain["name"] = domain_name
 
         has_data = data.get("has_data", False)
         count = data.get("count", 0)
@@ -679,7 +679,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         view_table = data.get("view_table", "N/A")
 
         return (
-            f"Project '{project_name}' selected.\n"
+            f"Domain '{domain_name}' selected.\n"
             f"View:  {view_table}\n"
             f"Graph: {graph_name}\n"
             f"Data:  {'Yes' if has_data else 'No'} ({count:,} triples)\n\n"
@@ -690,27 +690,27 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
 
     @mcp.tool()
     async def list_entity_types() -> str:
-        """List all entity types available in the selected project's knowledge graph.
+        """List all entity types available in the selected domain's knowledge graph.
 
         Returns a readable summary of every entity type (rdf:type) present
         in the triple store together with instance counts, plus overall
         statistics (total triples, distinct subjects, etc.).
 
-        A project must be selected first via ``select_project``.
+        A domain must be selected first via ``select_domain``.
         """
-        if not _selected_project["name"]:
-            return ("No project selected. Call list_projects first, "
-                    "then select_project to choose one.")
+        if not _selected_domain["name"]:
+            return ("No domain selected. Call list_domains first, "
+                    "then select_domain to choose one.")
 
         async with _client() as client:
             data = await _get(client, API_V1_DT_STATS,
-                              params=_project_params())
+                              params=_domain_params())
 
         if not data.get("success"):
             return data.get("message", "Could not retrieve statistics.")
 
         lines: list[str] = []
-        lines.append(f"Knowledge Graph — {_selected_project['name']}")
+        lines.append(f"Knowledge Graph — {_selected_domain['name']}")
         lines.append("=" * 40)
         lines.append(f"Total triples:       {data.get('total_triples', 0):,}")
         lines.append(f"Distinct entities:   {data.get('distinct_subjects', 0):,}")
@@ -753,7 +753,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         """Search for an entity and return a full-text description.
 
         Finds entities matching the search text and/or type in the
-        selected project's knowledge graph, then traverses their
+        selected domain's knowledge graph, then traverses their
         relationships hop-by-hop and returns a human-readable description
         including:
           - Entity identity (name, type, URI)
@@ -761,7 +761,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
           - All relationships to other entities
           - Related entities discovered at each traversal depth
 
-        A project must be selected first via ``select_project``.
+        A domain must be selected first via ``select_domain``.
         At least one of ``search`` or ``entity_type`` must be provided.
 
         Args:
@@ -776,13 +776,13 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             A full-text description of the matching entities, their
             attributes, and their relationships, organized hop by hop.
         """
-        if not _selected_project["name"]:
-            return ("No project selected. Call list_projects first, "
-                    "then select_project to choose one.")
+        if not _selected_domain["name"]:
+            return ("No domain selected. Call list_domains first, "
+                    "then select_domain to choose one.")
         if not search and not entity_type:
             return "Please provide at least a search term or an entity type."
 
-        params = _project_params({
+        params = _domain_params({
             "depth": min(max(depth, 1), 10),
             "limit": 500,
             "offset": 0,
@@ -800,27 +800,27 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
 
     @mcp.tool()
     async def get_status() -> str:
-        """Check whether the selected project's knowledge graph is ready.
+        """Check whether the selected domain's knowledge graph is ready.
 
         Returns view name, graph name, whether data exists, and row count.
         Call this if other tools report errors to diagnose configuration issues.
 
-        A project must be selected first via ``select_project``.
+        A domain must be selected first via ``select_domain``.
         """
-        if not _selected_project["name"]:
-            return ("No project selected. Call list_projects first, "
-                    "then select_project to choose one.")
+        if not _selected_domain["name"]:
+            return ("No domain selected. Call list_domains first, "
+                    "then select_domain to choose one.")
 
         async with _client() as client:
             data = await _get(client, API_V1_DT_STATUS,
-                              params=_project_params())
+                              params=_domain_params())
         status = data.get("reason") or "OK"
         has_data = data.get("has_data", False)
         count = data.get("count", 0)
         graph_name = data.get("graph_name", "N/A")
         view_table = data.get("view_table", "N/A")
         return (
-            f"Project: {_selected_project['name']}\n"
+            f"Domain: {_selected_domain['name']}\n"
             f"View:    {view_table}\n"
             f"Graph:   {graph_name}\n"
             f"Status:  {status}\n"
@@ -831,24 +831,24 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
 
     @mcp.tool()
     async def get_graphql_schema() -> str:
-        """Get the GraphQL schema (SDL) for the selected project.
+        """Get the GraphQL schema (SDL) for the selected domain.
 
         Returns the auto-generated schema in Schema Definition Language
         format, showing all available types, fields, and relationships.
         Use this to understand what data you can query before calling
         ``query_graphql``.
 
-        A project must be selected first via ``select_project``.
+        A domain must be selected first via ``select_domain``.
         """
-        if not _selected_project["name"]:
-            return ("No project selected. Call list_projects first, "
-                    "then select_project to choose one.")
+        if not _selected_domain["name"]:
+            return ("No domain selected. Call list_domains first, "
+                    "then select_domain to choose one.")
 
-        project_name = _selected_project["name"]
+        domain_name = _selected_domain["name"]
         try:
             async with _client() as client:
                 resp = await client.get(
-                    f"/graphql/{project_name}/schema",
+                    f"/graphql/{domain_name}/schema",
                     params=_registry_params(),
                     timeout=120,
                 )
@@ -864,10 +864,10 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
 
         sdl = data.get("sdl", "")
         if not sdl:
-            return "GraphQL schema is empty — the project may have no ontology classes."
+            return "GraphQL schema is empty — the domain may have no ontology classes."
 
         lines: list[str] = []
-        lines.append(f"GraphQL Schema — {project_name}")
+        lines.append(f"GraphQL Schema — {domain_name}")
         lines.append("=" * 50)
         lines.append("")
         lines.append(sdl)
@@ -880,9 +880,9 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         query: str,
         variables: Optional[str] = None,
     ) -> str:
-        """Execute a GraphQL query against the selected project's knowledge graph.
+        """Execute a GraphQL query against the selected domain's knowledge graph.
 
-        The schema is auto-generated from the project's ontology.
+        The schema is auto-generated from the domain's ontology.
         Call ``get_graphql_schema`` first to discover available types
         and fields.
 
@@ -891,7 +891,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
           - Nested relationship traversal in a single request
           - Filtering and pagination (``limit``, ``offset``, ``search``)
 
-        A project must be selected first via ``select_project``.
+        A domain must be selected first via ``select_domain``.
 
         Args:
             query: A valid GraphQL query string.
@@ -902,11 +902,11 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         Returns:
             The query result as formatted text, or an error message.
         """
-        if not _selected_project["name"]:
-            return ("No project selected. Call list_projects first, "
-                    "then select_project to choose one.")
+        if not _selected_domain["name"]:
+            return ("No domain selected. Call list_domains first, "
+                    "then select_domain to choose one.")
 
-        project_name = _selected_project["name"]
+        domain_name = _selected_domain["name"]
 
         body: dict = {"query": query}
         if variables:
@@ -918,7 +918,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         try:
             async with _client() as client:
                 resp = await client.post(
-                    f"/graphql/{project_name}",
+                    f"/graphql/{domain_name}",
                     json=body,
                     params=_registry_params(),
                     timeout=120,
@@ -933,15 +933,15 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             logger.warning("GraphQL query error: %s", exc)
             return f"Error executing GraphQL query: {exc}"
 
-        return _format_graphql_response(data, project_name)
+        return _format_graphql_response(data, domain_name)
 
     # ── Resources ─────────────────────────────────────────────────────
 
-    @mcp.resource("ontobricks://projects")
-    async def resource_projects() -> str:
-        """List of projects in the registry."""
+    @mcp.resource("ontobricks://domains")
+    async def resource_domains() -> str:
+        """List of domains in the registry (raw JSON from GET /api/v1/domains)."""
         async with _client() as client:
-            data = await _get(client, API_V1_PROJECTS,
+            data = await _get(client, API_V1_DOMAINS,
                               params=_registry_params())
         return json.dumps(data, indent=2)
 
@@ -950,7 +950,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         """Current triple store configuration and status."""
         async with _client() as client:
             data = await _get(client, API_V1_DT_STATUS,
-                              params=_project_params())
+                              params=_domain_params())
         return json.dumps(data, indent=2)
 
     @mcp.resource("ontobricks://stats")
@@ -958,19 +958,19 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         """Triple store content statistics."""
         async with _client() as client:
             data = await _get(client, API_V1_DT_STATS,
-                              params=_project_params())
+                              params=_domain_params())
         return json.dumps(data, indent=2)
 
     @mcp.resource("ontobricks://graphql-schema")
     async def resource_graphql_schema() -> str:
-        """GraphQL schema (SDL) for the selected project."""
-        project_name = _selected_project.get("name")
-        if not project_name:
-            return json.dumps({"error": "No project selected"})
+        """GraphQL schema (SDL) for the selected domain."""
+        domain_name = _selected_domain.get("name")
+        if not domain_name:
+            return json.dumps({"error": "No domain selected"})
         try:
             async with _client() as client:
                 resp = await client.get(
-                    f"/graphql/{project_name}/schema",
+                    f"/graphql/{domain_name}/schema",
                     params=_registry_params(),
                     timeout=120,
                 )

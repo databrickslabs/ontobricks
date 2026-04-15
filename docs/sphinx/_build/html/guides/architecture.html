@@ -456,7 +456,7 @@
 </tr>
 <tr class="row-even"><td><p><strong>back</strong></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">back/fastapi/graphql_routes.py</span></code></p></td>
-<td><p>GraphQL router (per-project auto-generated schema)</p></td>
+<td><p>GraphQL router (per-domain auto-generated schema)</p></td>
 </tr>
 </tbody>
 </table>
@@ -550,14 +550,14 @@
 </tr>
 </tbody>
 </table>
-<p>The service caches the JSON file in memory with a TTL to minimize UC Volume reads. Settings are resolved via <code class="docutils literal notranslate"><span class="pre">resolve_warehouse_id()</span></code>, <code class="docutils literal notranslate"><span class="pre">resolve_default_base_uri()</span></code>, and <code class="docutils literal notranslate"><span class="pre">resolve_default_emoji()</span></code> helper functions in <code class="docutils literal notranslate"><span class="pre">src/back/core/helpers/</span></code>.</p>
+<p>The service caches the JSON file in memory with a TTL to minimize UC Volume reads. Settings are resolved via <code class="docutils literal notranslate"><span class="pre">resolve_warehouse_id()</span></code>, <code class="docutils literal notranslate"><span class="pre">resolve_default_base_uri()</span></code>, and <code class="docutils literal notranslate"><span class="pre">resolve_default_emoji()</span></code> helper functions in <code class="docutils literal notranslate"><span class="pre">src/back/core/helpers/</span></code>. For version-scoped UC paths and LadybugDB local layout, <code class="docutils literal notranslate"><span class="pre">DatabricksHelpers.py</span></code> also provides <code class="docutils literal notranslate"><span class="pre">effective_uc_version_path</span></code> and <code class="docutils literal notranslate"><span class="pre">resolve_ladybug_local_path</span></code>.</p>
 <p><strong>UC Volume file layout</strong> (root of the configured registry volume):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>/Volumes/{catalog}/{schema}/{volume}/
 ├── .registry                  # Marker file (presence = initialized)
 ├── .global_config.json        # Instance-level admin settings (includes build schedules)
 ├── .permissions.json          # Per-user permission levels
-└── projects/                  # Project version files
-    └── {project_name}/
+└── domains/                   # Domain version files (legacy registries may use `projects/`)
+    └── {domain_name}/
         ├── v1.json
         ├── v2.json
         └── ...
@@ -574,7 +574,7 @@
 <li><p><strong>Visual-First Design</strong>: OntoViz enables drag-and-drop ontology creation</p></li>
 <li><p><strong>Agentic Automation</strong>: LLM-powered agents with MCP-style tools handle complex tasks autonomously (see <a class="reference internal" href="#agentic-architecture"><span class="std std-ref">Agentic Architecture</span></a>)</p></li>
 <li><p><strong>Observability</strong>: MLflow tracing captures every agent → LLM → tool span for debugging, cost tracking, and evaluation</p></li>
-<li><p><strong>MCP Integration</strong>: The MCP server exposes knowledge-graph tools (entity search, GraphQL queries, project selection) to LLM clients via the Model Context Protocol (see <a class="reference internal" href="mcp.html"><span class="std std-doc">MCP Server</span></a>)</p></li>
+<li><p><strong>MCP Integration</strong>: The MCP server exposes knowledge-graph tools (entity search, GraphQL queries, domain selection) to LLM clients via the Model Context Protocol (see <a class="reference internal" href="mcp.html"><span class="std std-doc">MCP Server</span></a>)</p></li>
 </ol>
 </section>
 </section>
@@ -610,7 +610,7 @@
 │
 ├── back/                               # Backend: domain, core infra, GraphQL
 │   ├── fastapi/
-│   │   └── graphql_routes.py           # GraphQL API (auto-generated schema per project)
+│   │   └── graphql_routes.py           # GraphQL API (auto-generated schema per domain)
 │   ├── services/                       # Optional page-level services (e.g. home.py)
 │   ├── core/                           # Core infrastructure
 │   │   ├── helpers/                    # Centralized helper functions
@@ -635,7 +635,7 @@
 │   │   │   ├── DatabricksClient.py     # Thin facade
 │   │   │   ├── SQLWarehouse.py         # Query execution, DDL
 │   │   │   ├── UnityCatalog.py         # Catalogs, schemas, tables, volumes
-│   │   │   ├── UCProjectIO.py          # Project I/O on UC Volumes
+│   │   │   ├── UCDomainIO.py           # Domain I/O on UC Volumes
 │   │   │   ├── VolumeFileService.py    # File I/O on UC Volumes
 │   │   │   ├── WorkspaceService.py     # SCIM users/groups
 │   │   │   ├── DashboardService.py     # Lakeview + legacy dashboards
@@ -645,7 +645,7 @@
 │   │   │   ├── owl/                    # OntologyGenerator, OntologyParser
 │   │   │   ├── r2rml/                  # R2RMLGenerator, R2RMLParser
 │   │   │   ├── rdfs/                   # RDFSParser
-│   │   │   ├── sparql/                 # SparqlTranslator, SparqlQueryRunner, ProjectQueryService
+│   │   │   ├── sparql/                 # SparqlTranslator, SparqlQueryRunner, DomainQueryService
 │   │   │   └── shacl/                  # SHACLGenerator, SHACLParser, SHACLService
 │   │   │
 │   │   ├── graphql/                    # GraphQLSchemaBuilder, ResolverFactory, SchemaMetadata
@@ -681,12 +681,12 @@
 │   └── objects/                        # Domain objects (business logic layer)
 │       ├── ontology/                   # Ontology domain (ontology.py, json_views.py)
 │       ├── mapping/                    # Mapping domain (mapping.py, json_views.py)
-│       ├── project/                    # Project domain (project.py, payload.py, version_status.py)
+│       ├── domain/                     # Saved domain / UC I/O (domain.py, payload.py, version_status.py)
 │       ├── digitaltwin/                # Digital Twin domain (DigitalTwin.py, models.py)
 │       ├── session/                    # Session management
 │       │   ├── middleware.py           # File-based session middleware (cookie + ASGI)
 │       │   ├── manager.py              # Request-scoped session get/set/delete wrapper
-│       │   ├── project_session.py      # ProjectSession (domain-level project data)
+│       │   ├── domain_session.py       # DomainSession (current OntoBricks domain payload)
 │       │   └── global_config.py        # Instance-level GlobalConfigService
 │       └── registry/                   # Registry, permissions &amp; scheduled builds
 │           ├── service.py              # RegistryService + RegistryCfg
@@ -698,10 +698,10 @@
 │   ├── service.py                      # API business logic
 │   └── routers/
 │       ├── v1.py                       # /api/v1/* endpoints
-│       ├── projects.py                 # Project endpoints
+│       ├── domains.py                  # Domain registry &amp; artifact endpoints (`/api/v1/domains`, `/api/v1/domain/...`)
 │       ├── digitaltwin.py              # Digital Twin REST API
 │       └── internal/                   # Session-aware JSON routes for the web UI
-│           ├── home.py, settings.py, project.py, ontology.py, mapping.py, dtwin.py, tasks.py, …
+│           ├── home.py, settings.py, domain.py, ontology.py, mapping.py, dtwin.py, tasks.py, …
 │
 ├── agents/                             # LLM Agents
 │   ├── llm_utils.py                    # Shared LLM call with retry (429/503 backoff)
@@ -718,7 +718,7 @@
     ├── deploy-mcp-server.sh            # Deployment script
     ├── pyproject.toml                  # Python dependencies
     └── server/
-        ├── app.py                      # MCP tools, project selection, text formatting
+        ├── app.py                      # MCP tools, domain selection, text formatting
         └── main.py                     # Entry point
 
 tests/                                  # Test suite (at project root)
@@ -899,11 +899,11 @@ tests/                                  # Test suite (at project root)
 <td><p><code class="docutils literal notranslate"><span class="pre">R2RMLGenerator</span></code>, <code class="docutils literal notranslate"><span class="pre">SQLWizardService</span></code>, <code class="docutils literal notranslate"><span class="pre">TaskManager</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p><strong>Digital Twin</strong></p></td>
-<td><p>Sync → Quality Check (async) → Auto-load Triples → Explore Knowledge Graph</p></td>
+<td><p>Build → Quality Check (async) → Auto-load Triples → Explore Knowledge Graph</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">sparql_service</span></code>, <code class="docutils literal notranslate"><span class="pre">TaskManager</span></code>, Sigma.js graph</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>API/MCP</strong></p></td>
-<td><p>REST → resolve project → triple store query → formatted response</p></td>
+<td><p>REST → resolve domain → triple store query → formatted response</p></td>
 <td><p>Digital Twin API, MCP Server, GraphQL</p></td>
 </tr>
 </tbody>
@@ -945,7 +945,7 @@ tests/                                  # Test suite (at project root)
 </section>
 <section id="scheduled-builds-buildscheduler">
 <h3>Scheduled Builds (BuildScheduler)<a class="headerlink" href="#scheduled-builds-buildscheduler" title="Link to this heading">¶</a></h3>
-<p>The <strong>BuildScheduler</strong> (<code class="docutils literal notranslate"><span class="pre">src/back/objects/registry/scheduler.py</span></code>) provides per-project scheduled triple store builds using APScheduler’s <code class="docutils literal notranslate"><span class="pre">BackgroundScheduler</span></code>. Schedule definitions are persisted in <code class="docutils literal notranslate"><span class="pre">.global_config.json</span></code> on the UC Volume alongside other instance-level settings.</p>
+<p>The <strong>BuildScheduler</strong> (<code class="docutils literal notranslate"><span class="pre">src/back/objects/registry/scheduler.py</span></code>) provides per-domain scheduled triple store builds using APScheduler’s <code class="docutils literal notranslate"><span class="pre">BackgroundScheduler</span></code>. Schedule definitions are persisted in <code class="docutils literal notranslate"><span class="pre">.global_config.json</span></code> on the UC Volume alongside other instance-level settings.</p>
 <p>Each schedule entry contains:</p>
 <table class="docutils align-default">
 <thead>
@@ -978,7 +978,7 @@ tests/                                  # Test suite (at project root)
 </section>
 <section id="session-state">
 <h3>Session State<a class="headerlink" href="#session-state" title="Link to this heading">¶</a></h3>
-<p>The session middleware maintains state using a <strong>unified project session</strong> pattern:</p>
+<p>The session middleware maintains state using a <strong>unified domain session</strong> pattern (implemented by <code class="docutils literal notranslate"><span class="pre">DomainSession</span></code>):</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Key</p></th>
@@ -988,8 +988,8 @@ tests/                                  # Test suite (at project root)
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">project_data</span></code></p></td>
-<td><p>Complete project: info, ontology, mapping, design_layout, databricks, preferences, generated</p></td>
-<td><p>ProjectSession</p></td>
+<td><p>Complete domain: info, ontology, mapping, design_layout, databricks, preferences, generated</p></td>
+<td><p>DomainSession</p></td>
 </tr>
 </tbody>
 </table>
@@ -1013,9 +1013,9 @@ tests/                                  # Test suite (at project root)
 </pre></div>
 </div>
 <p><strong>Session Service Pattern:</strong></p>
-<p>The <code class="docutils literal notranslate"><span class="pre">ProjectSession</span></code> class (<code class="docutils literal notranslate"><span class="pre">src/back/objects/session/project_session.py</span></code>) provides:</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">DomainSession</span></code> class (<code class="docutils literal notranslate"><span class="pre">src/back/objects/session/domain_session.py</span></code>) provides:</p>
 <ul class="simple">
-<li><p>Unified access to all project data</p></li>
+<li><p>Unified access to all domain data</p></li>
 <li><p>Automatic migration from legacy session keys</p></li>
 <li><p>Export/import for file persistence</p></li>
 <li><p>Version management support</p></li>
@@ -1025,13 +1025,13 @@ tests/                                  # Test suite (at project root)
 <hr class="docutils" />
 <section id="unity-catalog-versioning">
 <h2>Unity Catalog Versioning<a class="headerlink" href="#unity-catalog-versioning" title="Link to this heading">¶</a></h2>
-<p>OntoBricks uses Unity Catalog Volumes for project storage with built-in version control.</p>
+<p>OntoBricks uses Unity Catalog Volumes for domain storage with built-in version control.</p>
 <section id="storage-structure">
 <h3>Storage Structure<a class="headerlink" href="#storage-structure" title="Link to this heading">¶</a></h3>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Unity Catalog
 └── catalog (e.g., main)
     └── schema (e.g., ontobricks)
-        └── volume (= project name)
+        └── volume (= domain name)
             ├── v1.json    (version 1)
             ├── v2.json    (version 2)
             └── v3.json    (version 3)
@@ -1040,10 +1040,10 @@ tests/                                  # Test suite (at project root)
 </section>
 <section id="export-format-versioned">
 <h3>Export Format (Versioned)<a class="headerlink" href="#export-format-versioned" title="Link to this heading">¶</a></h3>
-<p>Projects are exported in a versioned JSON format:</p>
+<p>Domains are exported in a versioned JSON format:</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;info&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span>
-<span class="w">        </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;My Project&quot;</span><span class="p">,</span><span class="w"> </span>
+<span class="w">        </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;My Domain&quot;</span><span class="p">,</span><span class="w"> </span>
 <span class="w">        </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span>
 <span class="w">        </span><span class="nt">&quot;author&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="w"> </span>
 <span class="w">    </span><span class="p">},</span>
@@ -1080,23 +1080,23 @@ tests/                                  # Test suite (at project root)
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/project/list-versions</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/domain/list-versions</span></code></p></td>
 <td><p>GET</p></td>
-<td><p>List all versions of a project</p></td>
+<td><p>List all versions of a domain</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/project/save-to-uc</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/domain/save-to-uc</span></code></p></td>
 <td><p>POST</p></td>
-<td><p>Save project to Unity Catalog</p></td>
+<td><p>Save domain to Unity Catalog</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/project/load-from-uc</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/domain/load-from-uc</span></code></p></td>
 <td><p>POST</p></td>
 <td><p>Load specific version from UC</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/project/create-version</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/domain/create-version</span></code></p></td>
 <td><p>POST</p></td>
 <td><p>Create new version (increment)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/project/version-status</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/domain/version-status</span></code></p></td>
 <td><p>GET</p></td>
 <td><p>Get current version status</p></td>
 </tr>
@@ -1106,10 +1106,10 @@ tests/                                  # Test suite (at project root)
 <section id="version-workflow">
 <h3>Version Workflow<a class="headerlink" href="#version-workflow" title="Link to this heading">¶</a></h3>
 <ol class="arabic simple">
-<li><p><strong>First Save</strong>: Creates volume with name derived from project name, saves as <code class="docutils literal notranslate"><span class="pre">v1.json</span></code></p></li>
-<li><p><strong>Update Save</strong>: Overwrites current version file</p></li>
-<li><p><strong>Create Version</strong>: Increments version number, saves new file (preserves history)</p></li>
-<li><p><strong>Load Version</strong>: Loads specific version, regenerates R2RML and OWL</p></li>
+<li><p><strong>First Save</strong>: Creates <code class="docutils literal notranslate"><span class="pre">domains/{name}/V1/V1.json</span></code></p></li>
+<li><p><strong>Update Save</strong>: Overwrites <code class="docutils literal notranslate"><span class="pre">domains/{name}/V{ver}/V{ver}.json</span></code></p></li>
+<li><p><strong>Create Version</strong>: Increments the version number, copies documents from the previous version directory</p></li>
+<li><p><strong>Load Version</strong>: Loads the requested version from <code class="docutils literal notranslate"><span class="pre">V{ver}/V{ver}.json</span></code>, regenerates R2RML and OWL</p></li>
 </ol>
 </section>
 <section id="auto-save-flow-design-view">
@@ -1122,7 +1122,7 @@ tests/                                  # Test suite (at project root)
 <hr class="docutils" />
 <section id="triple-store-backends">
 <h2>Triple Store Backends<a class="headerlink" href="#triple-store-backends" title="Link to this heading">¶</a></h2>
-<p>OntoBricks supports two interchangeable triple store backends, selectable per project in the <strong>Project → Information → Triple Store</strong> tab:</p>
+<p>OntoBricks supports two interchangeable triple store backends, selectable per domain in the <strong>Domain → Information → Triple Store</strong> tab:</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Backend</p></th>
@@ -1155,7 +1155,7 @@ tests/                                  # Test suite (at project root)
 <li><p>Triple operations: <code class="docutils literal notranslate"><span class="pre">insert_triples</span></code>, <code class="docutils literal notranslate"><span class="pre">query_triples</span></code>, <code class="docutils literal notranslate"><span class="pre">count_triples</span></code></p></li>
 <li><p>Named queries: <code class="docutils literal notranslate"><span class="pre">get_aggregate_stats</span></code>, <code class="docutils literal notranslate"><span class="pre">find_subjects_by_type</span></code>, <code class="docutils literal notranslate"><span class="pre">bfs_traversal</span></code>, etc.</p></li>
 </ul>
-<p>The factory (<code class="docutils literal notranslate"><span class="pre">src/back/core/triplestore/TripleStoreFactory.py</span></code>) reads <code class="docutils literal notranslate"><span class="pre">project.triplestore.backend</span></code> and returns the appropriate implementation.</p>
+<p>The factory (<code class="docutils literal notranslate"><span class="pre">src/back/core/triplestore/TripleStoreFactory.py</span></code>) reads <code class="docutils literal notranslate"><span class="pre">domain.triplestore.backend</span></code> and returns the appropriate implementation.</p>
 </section>
 <section id="ladybugdb-architecture">
 <h3>LadybugDB Architecture<a class="headerlink" href="#ladybugdb-architecture" title="Link to this heading">¶</a></h3>
@@ -1166,7 +1166,7 @@ tests/                                  # Test suite (at project root)
 <li><p>Supports two internal models:</p>
 <ul>
 <li><p><strong>Flat model</strong>: A single <code class="docutils literal notranslate"><span class="pre">Triple</span></code> node table with <code class="docutils literal notranslate"><span class="pre">(id,</span> <span class="pre">subject,</span> <span class="pre">predicate,</span> <span class="pre">object)</span></code> columns — used when no ontology is provided</p></li>
-<li><p><strong>Graph model</strong>: Ontology classes become node tables, object properties become relationship tables — used when the project has a loaded ontology</p></li>
+<li><p><strong>Graph model</strong>: Ontology classes become node tables, object properties become relationship tables — used when the domain has a loaded ontology</p></li>
 </ul>
 </li>
 </ul>
@@ -1179,9 +1179,9 @@ tests/                                  # Test suite (at project root)
 </ul>
 <p><strong>UC Volume Sync</strong> (<code class="docutils literal notranslate"><span class="pre">src/back/core/triplestore/ladybugdb/GraphSyncService.py</span></code>):</p>
 <ul class="simple">
-<li><p>On <strong>project save</strong>: the local <code class="docutils literal notranslate"><span class="pre">.lbug</span></code> directory is archived into a <code class="docutils literal notranslate"><span class="pre">tar.gz</span></code> and uploaded to the project’s registry folder in the UC Volume</p></li>
-<li><p>On <strong>project load</strong>: the archive is downloaded and extracted to <code class="docutils literal notranslate"><span class="pre">/tmp</span></code>, restoring the graph</p></li>
-<li><p>Archive path: <code class="docutils literal notranslate"><span class="pre">/Volumes/{cat}/{sch}/{vol}/projects/{folder}/ontobricks_{name}.lbug.tar.gz</span></code></p></li>
+<li><p><strong>After the Digital Twin build</strong>: the local <code class="docutils literal notranslate"><span class="pre">.lbug</span></code> directory is archived into a <code class="docutils literal notranslate"><span class="pre">tar.gz</span></code> and uploaded to the UC Volume at <code class="docutils literal notranslate"><span class="pre">domains/{folder}/V{version}/ontobricks_{name}_V{version}.lbug.tar.gz</span></code></p></li>
+<li><p>On <strong>domain load</strong>: the archive is downloaded and extracted to <code class="docutils literal notranslate"><span class="pre">/tmp</span></code>, restoring the graph</p></li>
+<li><p>Archive path: <code class="docutils literal notranslate"><span class="pre">/Volumes/{cat}/{sch}/{vol}/domains/{folder}/V{version}/ontobricks_{name}_V{version}.lbug.tar.gz</span></code></p></li>
 </ul>
 <p><strong>Query Translation:</strong></p>
 <ul class="simple">
@@ -1234,7 +1234,7 @@ tests/                                  # Test suite (at project root)
 <p><strong>Implementation</strong> (<code class="docutils literal notranslate"><span class="pre">src/back/core/reasoning/OWLRLReasoner.py</span></code>):</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">OWLRLReasoner</span></code> class uses the <a class="reference external" href="https://owl-rl.readthedocs.io/"><code class="docutils literal notranslate"><span class="pre">owlrl</span></code></a> Python library to perform deductive closure:</p>
 <ol class="arabic simple">
-<li><p>Parses the project’s generated OWL Turtle into an RDFLib <code class="docutils literal notranslate"><span class="pre">Graph</span></code></p></li>
+<li><p>Parses the domain’s generated OWL Turtle into an RDFLib <code class="docutils literal notranslate"><span class="pre">Graph</span></code></p></li>
 <li><p>Snapshots the original triple set</p></li>
 <li><p>Runs <code class="docutils literal notranslate"><span class="pre">DeductiveClosure(OWLRL_Semantics).expand(graph)</span></code> — applying all OWL 2 RL entailment rules via forward chaining</p></li>
 <li><p>Computes the delta (new triples minus original triples)</p></li>
@@ -1977,7 +1977,7 @@ tests/                                  # Test suite (at project root)
 <p>OntoBricks provides a stateless REST API at <code class="docutils literal notranslate"><span class="pre">/api/v1/</span></code> for external applications to:</p>
 <section id="available-endpoints">
 <h3>Available Endpoints<a class="headerlink" href="#available-endpoints" title="Link to this heading">¶</a></h3>
-<p><strong>Project API</strong> (<code class="docutils literal notranslate"><span class="pre">/api/v1/projects</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/v1/project/...</span></code>):</p>
+<p><strong>Domain API</strong> (<code class="docutils literal notranslate"><span class="pre">/api/v1/domains</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/v1/domain/...</span></code>):</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Endpoint</p></th>
@@ -1986,27 +1986,27 @@ tests/                                  # Test suite (at project root)
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/projects</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domains</span></code></p></td>
 <td><p>GET</p></td>
-<td><p>List registry projects (MCP-enabled only)</p></td>
+<td><p>List registry domains (MCP-enabled only)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/project/versions</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domain/versions</span></code></p></td>
 <td><p>GET</p></td>
-<td><p>List versions for a named project</p></td>
+<td><p>List versions for a named domain</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/project/design-status</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domain/design-status</span></code></p></td>
 <td><p>GET</p></td>
 <td><p>Design status (ontology, metadata, mapping readiness)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/project/ontology</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domain/ontology</span></code></p></td>
 <td><p>GET</p></td>
-<td><p>Get project OWL ontology (Turtle)</p></td>
+<td><p>Get domain OWL ontology (Turtle)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/project/r2rml</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domain/r2rml</span></code></p></td>
 <td><p>GET</p></td>
 <td><p>Get R2RML mapping (Turtle)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/project/sparksql</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domain/sparksql</span></code></p></td>
 <td><p>GET</p></td>
 <td><p>Get generated Spark SQL</p></td>
 </tr>
@@ -2056,31 +2056,31 @@ tests/                                  # Test suite (at project root)
 <td><p>GET</p></td>
 <td><p>Health check</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/projects/list</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domains/list</span></code></p></td>
 <td><p>POST</p></td>
-<td><p>List projects in Unity Catalog</p></td>
+<td><p>List domains in Unity Catalog</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/project/info</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domain/info</span></code></p></td>
 <td><p>POST</p></td>
-<td><p>Get project metadata</p></td>
+<td><p>Get domain metadata</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/project/ontology</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domain/ontology</span></code></p></td>
 <td><p>POST</p></td>
 <td><p>Get ontology details</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/project/ontology/classes</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domain/ontology/classes</span></code></p></td>
 <td><p>POST</p></td>
 <td><p>Get ontology classes</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/project/ontology/properties</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domain/ontology/properties</span></code></p></td>
 <td><p>POST</p></td>
 <td><p>Get ontology properties</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/project/mappings</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domain/mappings</span></code></p></td>
 <td><p>POST</p></td>
 <td><p>Get mapping details</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/project/r2rml</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domain/r2rml</span></code></p></td>
 <td><p>POST</p></td>
 <td><p>Get R2RML content</p></td>
 </tr>
@@ -2109,7 +2109,7 @@ tests/                                  # Test suite (at project root)
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/graphql</span></code></p></td>
 <td><p>GET</p></td>
-<td><p>List GraphQL-enabled projects</p></td>
+<td><p>List GraphQL-enabled domains</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/graphql/settings/depth</span></code></p></td>
 <td><p>GET</p></td>
@@ -2251,7 +2251,7 @@ tests/                                  # Test suite (at project root)
 <h3>Agents<a class="headerlink" href="#agents" title="Link to this heading">¶</a></h3>
 <section id="owl-generator-agent-agent-owl-generator">
 <h4>1. OWL Generator Agent (<code class="docutils literal notranslate"><span class="pre">agent_owl_generator</span></code>)<a class="headerlink" href="#owl-generator-agent-agent-owl-generator" title="Link to this heading">¶</a></h4>
-<p><strong>Purpose</strong>: Autonomously generate a complete OWL ontology (Turtle format) from project metadata and uploaded documents.</p>
+<p><strong>Purpose</strong>: Autonomously generate a complete OWL ontology (Turtle format) from domain metadata and uploaded documents.</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Parameter</p></th>
@@ -2286,7 +2286,7 @@ tests/                                  # Test suite (at project root)
 <hr class="docutils" />
 <section id="auto-mapping-agent-agent-auto-assignment">
 <h4>2. Auto-Mapping Agent (<code class="docutils literal notranslate"><span class="pre">agent_auto_assignment</span></code>)<a class="headerlink" href="#auto-mapping-agent-agent-auto-assignment" title="Link to this heading">¶</a></h4>
-<p><strong>Purpose</strong>: Autonomously map ontology entities and relationships to SQL queries against the project’s Databricks tables. The agent writes SQL, validates it by executing queries, and submits the finalized mappings.</p>
+<p><strong>Purpose</strong>: Autonomously map ontology entities and relationships to SQL queries against the domain’s Databricks tables. The agent writes SQL, validates it by executing queries, and submits the finalized mappings.</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Parameter</p></th>
@@ -2375,7 +2375,7 @@ tests/                                  # Test suite (at project root)
 <hr class="docutils" />
 <section id="ontology-assistant-agent-ontology-assistant">
 <h4>4. Ontology Assistant (<code class="docutils literal notranslate"><span class="pre">agent_ontology_assistant</span></code>)<a class="headerlink" href="#ontology-assistant-agent-ontology-assistant" title="Link to this heading">¶</a></h4>
-<p><strong>Purpose</strong>: Interactive conversational agent that can modify the project ontology based on natural language instructions — add/remove entities, adjust relationships, clean orphans, and answer questions about the ontology.</p>
+<p><strong>Purpose</strong>: Interactive conversational agent that can modify the domain ontology based on natural language instructions — add/remove entities, adjust relationships, clean orphans, and answer questions about the ontology.</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Parameter</p></th>
@@ -2431,7 +2431,7 @@ tests/                                  # Test suite (at project root)
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_metadata</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">metadata.py</span></code></p></td>
-<td><p>Returns project table schemas (names, columns, types)</p></td>
+<td><p>Returns domain table schemas (names, columns, types)</p></td>
 <td><p>All agents</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_table_detail</span></code></p></td>
@@ -2441,7 +2441,7 @@ tests/                                  # Test suite (at project root)
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">list_documents</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">documents.py</span></code></p></td>
-<td><p>Lists uploaded project documents from Unity Catalog</p></td>
+<td><p>Lists uploaded domain documents from Unity Catalog</p></td>
 <td><p>OWL Generator</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">read_document</span></code></p></td>
@@ -2485,7 +2485,7 @@ tests/                                  # Test suite (at project root)
     <span class="c1"># Common (all agents)</span>
     <span class="n">host</span><span class="p">:</span> <span class="nb">str</span>                <span class="c1"># Databricks workspace URL</span>
     <span class="n">token</span><span class="p">:</span> <span class="nb">str</span>               <span class="c1"># Databricks access token</span>
-    <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span>           <span class="c1"># Project table metadata</span>
+    <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span>           <span class="c1"># Domain table metadata</span>
 
     <span class="c1"># OWL Generator</span>
     <span class="n">uc_location</span><span class="p">:</span> <span class="nb">dict</span>        <span class="c1"># Unity Catalog file location</span>
@@ -2737,7 +2737,7 @@ interface, making it compatible with:</p>
 <span class="p">}</span>
 </pre></div>
 </div>
-<p>The route automatically fills <code class="docutils literal notranslate"><span class="pre">custom_inputs</span></code> (host, token, endpoint, ontology) from the active session. If the ontology is modified, the project is saved.</p>
+<p>The route automatically fills <code class="docutils literal notranslate"><span class="pre">custom_inputs</span></code> (host, token, endpoint, ontology) from the active session. If the ontology is modified, the domain is saved.</p>
 </section>
 <section id="usage-log-to-mlflow">
 <h5>Usage — Log to MLflow<a class="headerlink" href="#usage-log-to-mlflow" title="Link to this heading">¶</a></h5>
@@ -3594,7 +3594,7 @@ Phase 5: Update State
 <ul class="simple">
 <li><p><strong>Name:</strong> <code class="docutils literal notranslate"><span class="pre">_ob_snapshot_{project_name}</span></code></p></li>
 <li><p><strong>Schema:</strong> <code class="docutils literal notranslate"><span class="pre">(subject</span> <span class="pre">STRING,</span> <span class="pre">predicate</span> <span class="pre">STRING,</span> <span class="pre">object</span> <span class="pre">STRING)</span></code></p></li>
-<li><p><strong>Lifecycle:</strong> Created on first incremental build; dropped on project delete
+<li><p><strong>Lifecycle:</strong> Created on first incremental build; dropped on domain delete
 or forced full rebuild.</p></li>
 </ul>
 <p>Diff queries (executed server-side on SQL Warehouse):</p>
@@ -3675,8 +3675,8 @@ For each source table:</p>
 <section id="modified-files">
 <h4>4. Modified Files<a class="headerlink" href="#modified-files" title="Link to this heading">¶</a></h4>
 <ul class="simple">
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">src/back/objects/session/project_session.py</span></code></strong> — add <code class="docutils literal notranslate"><span class="pre">source_versions</span></code> and <code class="docutils literal notranslate"><span class="pre">snapshot_table</span></code> to
-<code class="docutils literal notranslate"><span class="pre">project.triplestore</span></code> in the empty project template and properties.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">src/back/objects/session/domain_session.py</span></code></strong> — add <code class="docutils literal notranslate"><span class="pre">source_versions</span></code> and <code class="docutils literal notranslate"><span class="pre">snapshot_table</span></code> to
+<code class="docutils literal notranslate"><span class="pre">project.triplestore</span></code> in the empty domain template and properties.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">TripleStoreBackend.py</span></code></strong> — add abstract <code class="docutils literal notranslate"><span class="pre">delete_triples</span></code> method.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">LadybugFlatStore.py</span></code></strong> — implement <code class="docutils literal notranslate"><span class="pre">delete_triples</span></code> for flat model.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">LadybugGraphStore.py</span></code></strong> — implement <code class="docutils literal notranslate"><span class="pre">delete_triples</span></code> for graph model.</p></li>

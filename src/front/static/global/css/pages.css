@@ -448,7 +448,7 @@
 /* ==========================================================================
    Home Page - Project Management Panel
    ========================================================================== */
-.project-panel {
+.domain-panel {
     background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
     border-radius: 16px;
     padding: 1.5rem;
@@ -457,14 +457,14 @@
     box-shadow: 0 4px 20px rgba(0,0,0,0.06);
 }
 
-.project-header {
+.domain-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
 }
 
-.project-panel h5 {
+.domain-panel h5 {
     font-weight: 600;
     margin: 0;
     display: flex;
@@ -473,7 +473,7 @@
     color: var(--db-text);
 }
 
-.project-panel h5 i {
+.domain-panel h5 i {
     color: var(--db-primary);
     font-size: 1.2rem;
 }
@@ -505,23 +505,23 @@
     font-size: 0.9rem;
 }
 
-.project-panel .session-stats {
+.domain-panel .session-stats {
     margin-bottom: 1.25rem;
 }
 
-.project-description {
+.domain-description {
     color: var(--db-text-muted);
     font-size: 0.9rem;
     margin-bottom: 1.25rem;
 }
 
-.project-actions {
+.domain-actions {
     display: flex;
     gap: 0.75rem;
     flex-wrap: wrap;
 }
 
-.project-btn {
+.domain-btn {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -536,38 +536,38 @@
     text-decoration: none;
 }
 
-.project-btn i {
+.domain-btn i {
     font-size: 1.25rem;
     margin-bottom: 0.35rem;
     color: var(--db-text-muted);
 }
 
-.project-btn span {
+.domain-btn span {
     font-size: 0.75rem;
     font-weight: 500;
     color: var(--db-text);
 }
 
-.project-btn:hover {
+.domain-btn:hover {
     background: var(--db-primary);
     border-color: var(--db-primary);
 }
 
-.project-btn:hover i,
-.project-btn:hover span {
+.domain-btn:hover i,
+.domain-btn:hover span {
     color: white;
 }
 
 /* Project Button Dropdowns */
-.project-actions .dropdown {
+.domain-actions .dropdown {
     position: relative;
 }
 
-.project-actions .dropdown-toggle::after {
+.domain-actions .dropdown-toggle::after {
     display: none; /* Hide default caret, icon is enough */
 }
 
-.project-actions .dropdown-menu {
+.domain-actions .dropdown-menu {
     min-width: 200px;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -575,7 +575,7 @@
     margin-top: 0.25rem;
 }
 
-.project-actions .dropdown-menu .dropdown-item {
+.domain-actions .dropdown-menu .dropdown-item {
     padding: 0.5rem 1rem;
     font-size: 0.875rem;
     display: flex;
@@ -583,21 +583,21 @@
     gap: 0.5rem;
 }
 
-.project-actions .dropdown-menu .dropdown-item i {
+.domain-actions .dropdown-menu .dropdown-item i {
     font-size: 1rem;
     color: var(--db-primary);
 }
 
-.project-actions .dropdown-menu .dropdown-item:hover {
+.domain-actions .dropdown-menu .dropdown-item:hover {
     background: var(--db-light-gray);
 }
 
-.project-actions .dropdown-menu .dropdown-item:hover i {
+.domain-actions .dropdown-menu .dropdown-item:hover i {
     color: var(--db-primary);
 }
 
 /* Project Status Messages */
-.project-status {
+.domain-status {
     margin-top: 1rem;
     padding: 0.75rem 1rem;
     border-radius: 8px;
@@ -610,36 +610,36 @@
     color: var(--db-text);
 }
 
-.project-status.hidden-initial {
+.domain-status.hidden-initial {
     display: none !important;
 }
 
-.project-status:empty {
+.domain-status:empty {
     display: none !important;
 }
 
-.project-status.info {
+.domain-status.info {
     border-left: 3px solid var(--db-primary);
 }
 
-.project-status.success {
+.domain-status.success {
     border-left: 3px solid #16a34a;
 }
 
-.project-status.error {
+.domain-status.error {
     border-left: 3px solid #dc2626;
 }
 
-.project-status.warning {
+.domain-status.warning {
     border-left: 3px solid #d97706;
 }
 
 @media (max-width: 768px) {
-    .project-actions {
+    .domain-actions {
         justify-content: center;
     }
     
-    .project-btn {
+    .domain-btn {
         flex: 1 1 calc(50% - 0.75rem);
         min-width: 100px;
     }
@@ -833,24 +833,7 @@
     font-size: 0.85rem;
 }
 
-/* ==========================================================================
-   Emoji Picker Styles
-   ========================================================================== */
-.emoji-preview {
-    font-size: 1.5rem;
-    min-width: 50px;
-    justify-content: center;
-}
-
-.emoji-grid-container {
-    max-height: 250px;
-    overflow-y: auto;
-}
-
-.emoji-inline {
-    font-size: 1.3rem;
-    margin-right: 8px;
-}
+/* Emoji picker styles moved to global/css/emoji-picker.css */
 
 /* ==========================================================================
    Query Page - Results Container
@@ -944,46 +927,6 @@
 /* Smaller graph container variant */
 .graph-container-sm {
     height: 400px;
-}
-
-/* ==========================================================================
-   Emoji Picker Styles (Taxonomy, Config pages)
-   ========================================================================== */
-.emoji-picker-grid {
-    scrollbar-width: thin;
-}
-
-.emoji-picker-grid::-webkit-scrollbar {
-    width: 6px;
-}
-
-.emoji-picker-grid::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 3px;
-}
-
-.emoji-picker-grid::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 3px;
-}
-
-.emoji-btn {
-    cursor: pointer;
-    transition: transform 0.1s, background-color 0.15s;
-    border: none;
-    background: transparent;
-    padding: 0.25rem;
-    border-radius: 4px;
-}
-
-.emoji-btn:hover {
-    transform: scale(1.2);
-    background-color: #e9ecef !important;
-}
-
-.emoji-picker-container {
-    position: relative;
-    z-index: 100;
 }
 
 /* ==========================================================================

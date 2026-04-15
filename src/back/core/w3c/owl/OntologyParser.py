@@ -1,5 +1,6 @@
 """OWL ontology parser."""
-from rdflib import Graph, RDF, RDFS, OWL, Namespace, BNode
+import json
+from rdflib import Graph, RDF, RDFS, OWL, BNode
 from typing import List, Dict, Optional
 
 from back.core.logging import get_logger
@@ -90,13 +91,109 @@ class OntologyParser:
         raw_name = uri.split('#')[-1].split('/')[-1]
         return self._to_camel_case(raw_name)
         
+    def _get_group_class_uris(self) -> set:
+        """Return the set of class URI strings that are marked as groups."""
+        group_uris = set()
+        for cls in self.graph.subjects(ONTOBRICKS_NS.isGroup, None):
+            if isinstance(cls, BNode):
+                continue
+            for val in self.graph.objects(cls, ONTOBRICKS_NS.isGroup):
+                if str(val).lower() == 'true':
+                    group_uris.add(str(cls))
+                    break
+        return group_uris
+
+    def get_groups(self) -> List[Dict]:
+        """Extract entity groups from the ontology.
+
+        Groups are OWL classes annotated with ``ontobricks:isGroup true`` whose
+        ``owl:equivalentClass`` points to an anonymous ``owl:unionOf`` list.
+
+        Returns:
+            List of group dicts with name, label, description, color, icon, members.
+        """
+        groups = []
+        group_uris = self._get_group_class_uris()
+
+        for group_uri_str in group_uris:
+            group_ref = None
+            for s in self.graph.subjects(RDF.type, OWL.Class):
+                if not isinstance(s, BNode) and str(s) == group_uri_str:
+                    group_ref = s
+                    break
+            if group_ref is None:
+                continue
+
+            name = self._extract_local_name(group_uri_str)
+
+            label = None
+            for lbl in self.graph.objects(group_ref, RDFS.label):
+                label = str(lbl)
+                break
+
+            description = None
+            for cmt in self.graph.objects(group_ref, RDFS.comment):
+                description = str(cmt)
+                break
+
+            color = None
+            for c in self.graph.objects(group_ref, ONTOBRICKS_NS.groupColor):
+                color = str(c)
+                break
+
+            icon = None
+            for i in self.graph.objects(group_ref, ONTOBRICKS_NS.icon):
+                icon = str(i)
+                break
+
+            members = []
+            for eq in self.graph.objects(group_ref, OWL.equivalentClass):
+                for union_node in self.graph.objects(eq, OWL.unionOf):
+                    member_uris = self._parse_rdf_list(union_node)
+                    members = [self._extract_local_name(u) for u in member_uris]
+                    break
+                if members:
+                    break
+
+            groups.append({
+                'name': name,
+                'label': label or name,
+                'description': description or '',
+                'color': color or '',
+                'icon': icon or '',
+                'members': members,
+            })
+
+        return sorted(groups, key=lambda x: x['name'])
+
     def get_classes(self) -> List[Dict[str, str]]:
         """Extract all OWL classes from the ontology.
+
+        Classes annotated with ``ontobricks:isGroup true`` are excluded (they
+        are returned by :meth:`get_groups` instead).
         
         Returns:
-            List of dicts with 'uri', 'name', 'label', 'comment', 'emoji', 'parent', 'dashboard', 'dashboardParams', 'dataProperties'
+            List of dicts with 'uri', 'name', 'label', 'comment', 'emoji', 'parent', 'group', 'dashboard', 'dashboardParams', 'dataProperties'
         """
         classes = []
+        group_uris = self._get_group_class_uris()
+
+        # Build a reverse lookup: class URI → group name
+        class_to_group = {}
+        for g_uri in group_uris:
+            g_ref = None
+            for s in self.graph.subjects(RDF.type, OWL.Class):
+                if not isinstance(s, BNode) and str(s) == g_uri:
+                    g_ref = s
+                    break
+            if g_ref is None:
+                continue
+            g_name = self._extract_local_name(g_uri)
+            for eq in self.graph.objects(g_ref, OWL.equivalentClass):
+                for union_node in self.graph.objects(eq, OWL.unionOf):
+                    for member_uri in self._parse_rdf_list(union_node):
+                        class_to_group[member_uri] = g_name
+                    break
         
         # First, collect all DatatypeProperties with their domains
         # to reconstruct class attributes (dataProperties)
@@ -136,8 +233,12 @@ class OntologyParser:
             if isinstance(cls, BNode):
                 continue
             
-            # Get local name
             uri = str(cls)
+
+            # Skip group classes
+            if uri in group_uris:
+                continue
+            
             name = self._extract_local_name(uri)
             
             # Get label
@@ -154,8 +255,8 @@ class OntologyParser:
             
             # Get emoji/icon from OntoBricks custom property
             emoji = None
-            for icon in self.graph.objects(cls, ONTOBRICKS_NS.icon):
-                emoji = str(icon)
+            for icon_val in self.graph.objects(cls, ONTOBRICKS_NS.icon):
+                emoji = str(icon_val)
                 break
             
             # Get dashboard URL from OntoBricks custom property
@@ -168,8 +269,16 @@ class OntologyParser:
             dashboard_params = {}
             for params in self.graph.objects(cls, ONTOBRICKS_NS.dashboardParams):
                 try:
-                    import json
                     dashboard_params = json.loads(str(params))
+                except (json.JSONDecodeError, ValueError):
+                    pass
+                break
+
+            # Get cross-project bridges from OntoBricks custom property
+            bridges = []
+            for b in self.graph.objects(cls, ONTOBRICKS_NS.bridges):
+                try:
+                    bridges = json.loads(str(b))
                 except (json.JSONDecodeError, ValueError):
                     pass
                 break
@@ -185,6 +294,9 @@ class OntologyParser:
             
             # Get dataProperties (attributes) for this class
             data_properties = domain_to_dataprops.get(uri, [])
+
+            # Determine group membership
+            group = class_to_group.get(uri, '')
             
             classes.append({
                 'uri': uri,
@@ -193,8 +305,10 @@ class OntologyParser:
                 'comment': comment or '',
                 'emoji': emoji or '',
                 'parent': parent or '',
+                'group': group,
                 'dashboard': dashboard or '',
                 'dashboardParams': dashboard_params,
+                'bridges': bridges,
                 'dataProperties': data_properties
             })
         

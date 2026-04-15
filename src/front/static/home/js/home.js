@@ -9,9 +9,9 @@ async function loadSessionStatus() {
         const response = await fetch('/session-status', { credentials: 'same-origin' });
         const data = await response.json();
         
-        // Update project name
-        const projectName = data.project_name || 'NewProject';
-        document.getElementById('homeProjectName').textContent = projectName;
+        // Update domain name
+        const domainName = data.domain_name || 'NewDomain';
+        document.getElementById('homeDomainName').textContent = domainName;
         
         // Update class count
         const classCount = data.class_count || 0;
@@ -81,10 +81,10 @@ function updateWorkflowStatus(classCount, mappingCount, hasR2rml) {
 }
 
 // Project Management Functions
-async function newProject() {
+async function newDomain() {
     const confirmed = await showConfirmDialog({
-        title: 'New Project',
-        message: 'Create a new project? This will clear all current ontology and mapping data.',
+        title: 'New Domain',
+        message: 'Create a new domain? This will clear all current ontology and mapping data.',
         confirmText: 'Create New',
         confirmClass: 'btn-warning',
         icon: 'file-earmark-plus'
@@ -92,24 +92,24 @@ async function newProject() {
     if (!confirmed) return;
     
     try {
-        showProjectStatus('Creating new project...', 'info');
+        showDomainStatus('Creating new domain...', 'info');
         const response = await fetch('/reset-session', { method: 'POST', credentials: 'same-origin' });
         const result = await response.json();
         
         if (result.success) {
-            showProjectStatus('New project created', 'success');
+            showDomainStatus('New domain created', 'success');
             setTimeout(() => window.location.reload(), 1000);
         } else {
-            showProjectStatus('Error: ' + result.message, 'error');
+            showDomainStatus('Error: ' + result.message, 'error');
         }
     } catch (error) {
-        showProjectStatus('Error: ' + error.message, 'error');
+        showDomainStatus('Error: ' + error.message, 'error');
     }
 }
 
-function showProjectStatus(message, type) {
-    const statusEl = document.getElementById('projectStatus');
-    statusEl.className = 'project-status ' + type;
+function showDomainStatus(message, type) {
+    const statusEl = document.getElementById('domainStatus');
+    statusEl.className = 'domain-status ' + type;
     statusEl.innerHTML = `<i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'x-circle' : type === 'warning' ? 'exclamation-triangle' : 'hourglass-split'}"></i> ${message}`;
     statusEl.classList.remove('hidden-initial');
     

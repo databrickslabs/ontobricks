@@ -1,4 +1,4 @@
-person_id_1,person_id_2,collaboration_type,project_id,start_date,hours_per_week
+person_id_1,person_id_2,collaboration_type,domain_id,start_date,hours_per_week
 P001,P010,Peer Collaboration,PR001,2023-01-10,15
 P001,P006,Cross-Team,PR002,2023-03-01,8
 P002,P006,Direct Collaboration,PR002,2023-03-01,20

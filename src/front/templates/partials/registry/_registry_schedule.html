@@ -1,0 +1,113 @@
+<!-- Registry → Schedule section -->
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-clock-history me-2"></i>Scheduled Builds</h4>
+            <p class="text-muted mb-0 small">
+                Schedule automatic Digital Twin builds per domain.
+                Builds run in the background, creating the View and populating the Graph.
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshSchedules" title="Refresh">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-primary" id="btnAddSchedule">
+                <i class="bi bi-plus-lg me-1"></i> Add Schedule
+            </button>
+        </div>
+    </div>
+
+    <div id="schedulesTableContainer">
+        <div class="text-center text-muted small py-4">
+            <span class="spinner-border spinner-border-sm me-1"></span> Loading schedules...
+        </div>
+    </div>
+</div>
+
+<!-- Add / Edit Schedule Modal -->
+<div class="modal fade" id="scheduleModal" tabindex="-1" aria-labelledby="scheduleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="scheduleModalLabel">
+                    <i class="bi bi-clock-history me-2"></i>Schedule Build
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small mb-1">Domain</label>
+                    <select class="form-select form-select-sm" id="scheduleDomain">
+                        <option value="">Loading domains...</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small mb-1">Version</label>
+                    <select class="form-select form-select-sm" id="scheduleVersion">
+                        <option value="latest">Latest</option>
+                    </select>
+                    <small class="text-muted">Choose a specific version or <em>Latest</em> to always build the newest</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small mb-1">Frequency</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">Every</span>
+                        <input type="number" class="form-control" id="scheduleIntervalValue" min="1" max="999" value="1">
+                        <select class="form-select" id="scheduleIntervalUnit" style="max-width: 120px;">
+                            <option value="minutes">minute(s)</option>
+                            <option value="hours" selected>hour(s)</option>
+                            <option value="days">day(s)</option>
+                        </select>
+                    </div>
+                    <small class="text-muted">Minimum interval is 10 minutes</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small mb-1">Build Mode</label>
+                    <select class="form-select form-select-sm" id="scheduleBuildMode">
+                        <option value="full">Full Refresh</option>
+                        <option value="incremental">Incremental</option>
+                    </select>
+                    <small class="text-muted">
+                        <strong>Full Refresh</strong> drops and rebuilds the entire graph.
+                        <strong>Incremental</strong> computes a diff and applies only additions/removals.
+                    </small>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="scheduleEnabled" checked>
+                    <label class="form-check-label small" for="scheduleEnabled">
+                        Enabled
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" id="btnApplySchedule">
+                    <i class="bi bi-check-circle me-1"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Schedule History Modal -->
+<div class="modal fade" id="scheduleHistoryModal" tabindex="-1" aria-labelledby="scheduleHistoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="scheduleHistoryModalLabel">
+                    <i class="bi bi-clock-history me-2"></i>Run History
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0" id="scheduleHistoryBody">
+                <div class="text-center text-muted small py-4">
+                    <span class="spinner-border spinner-border-sm me-1"></span> Loading history...
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

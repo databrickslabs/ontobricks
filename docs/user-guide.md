@@ -42,7 +42,7 @@ Click **Design** in the sidebar to use the visual drag-and-drop interface.
 
 Each entity supports:
 - **Icon**: Click the icon button (🎨) to select an emoji
-- **Auto-Map Icons**: In the **Model** view, click the smiley face button (😊) in the toolbar to automatically assign emoji icons to all entities that still have the default icon. This feature uses the project's configured LLM serving endpoint to pick the most appropriate emoji for each entity name.
+- **Auto-Map Icons**: In the **Model** view, click the smiley face button (😊) in the toolbar to automatically assign emoji icons to all entities that still have the default icon. This feature uses the domain's configured LLM serving endpoint to pick the most appropriate emoji for each entity name.
 - **Description**: Click the description button (📝) to add notes
 - **Attributes**: Add data properties directly on the entity
 
@@ -97,10 +97,10 @@ All changes in the Design view are automatically saved. You'll see a brief "Savi
    - Used in the URI and file naming
 3. The **Base URI** is auto-generated from:
    - The Default Base URI Domain (from Settings)
-   - The project name
-   - Format: `{domain}/{ProjectName}#`
+   - The domain name
+   - Format: `{domain}/{DomainName}#`
    - Example: `https://databricks-ontology.com/MyOrganization#`
-   - Toggle the **Custom** switch on the Project page to enter a custom URI
+   - Toggle the **Custom** switch on the Domain page to enter a custom URI
 
 #### Add Classes (Entities)
 
@@ -416,7 +416,7 @@ A green checkmark appears in the navbar when all mappings are complete.
 
 ### R2RML Output
 
-The R2RML mapping output is available in the **Project** section under **R2RML**. Navigate to Project → R2RML to:
+The R2RML mapping output is available in the **Domain** section under **R2RML**. Navigate to Domain → R2RML to:
 - View the automatically generated R2RML mapping in Turtle format
 - Copy to clipboard
 - Download as `.ttl` file
@@ -492,6 +492,21 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 
 **Note**: Empty entities (type URIs without data) are automatically filtered out.
 
+**Data Clusters:**
+
+The Knowledge Graph includes a **Data Clusters** panel (in the View tab) for detecting communities in the graph:
+
+1. **Detect clusters (local)**: Runs the Louvain community detection algorithm client-side using Graphology on the currently displayed subgraph. Adjust the **Resolution** slider to control cluster granularity (higher = more clusters).
+2. **Full graph (backend)**: Sends a request to the server which loads the entire triple store into NetworkX and runs the selected algorithm (Louvain, Label Propagation, or Greedy Modularity) on the full dataset. Use this for large graphs that exceed the visible subgraph.
+3. **Color by cluster**: Toggle to recolor nodes by their detected community instead of by entity type.
+4. **Collapse / Expand**: Collapse clusters into super-nodes that show the cluster size and member count. Click a collapsed cluster super-node to see its members in the detail panel. Expand individual clusters or all at once.
+5. **Clear clusters**: Reset all cluster assignments and return to the default visualization.
+
+The cluster panel also displays:
+- Total number of detected clusters
+- A color-coded chip list of all clusters with their sizes
+- Click a chip to toggle collapse/expand for that cluster
+
 ### Quality Checks (Sidebar)
 
 Click **Quality** in the sidebar to run automated quality checks on your triple store data:
@@ -558,22 +573,22 @@ Results are displayed as inferred triples and violations. Inferred triples can b
 
 ---
 
-## Project Management & Version Control
+## Domain Management & Version Control
 
-OntoBricks stores projects in **Unity Catalog Volumes** with built-in version control. Navigate to the **Project** page by clicking "Project" in the navigation bar.
+OntoBricks stores domains in **Unity Catalog Volumes** with built-in version control. Navigate to the **Domain** page by clicking "Domain" in the navigation bar.
 
-### Project Structure
+### Domain Structure
 
-Each project is stored as a separate Unity Catalog Volume:
-- **Volume Name**: Same as the project name (sanitized: lowercase, underscores)
+Each domain is stored as a separate Unity Catalog Volume:
+- **Volume Name**: Same as the domain name (sanitized: lowercase, underscores)
 - **File Names**: Version numbers (e.g., `v1.json`, `v2.json`, `v3.json`)
-- **Contents**: Ontology, mappings, design layout, and project metadata
+- **Contents**: Ontology, mappings, design layout, and domain metadata
 
 **What is Saved:**
 - ✅ Ontology (classes, properties, constraints, rules, axioms)
 - ✅ Mappings (entity and relationship mappings)
 - ✅ Design layout (OntoViz positions and visual configuration)
-- ✅ Project metadata (name, description, author)
+- ✅ Domain metadata (name, description, author)
 
 **What is NOT Saved (Security):**
 - ❌ Databricks credentials (host, token)
@@ -581,58 +596,58 @@ Each project is stored as a separate Unity Catalog Volume:
 - ❌ R2RML output (regenerated on load)
 - ❌ Generated OWL (regenerated on load)
 
-### Project Information (Global Tab)
+### Domain Information (Global Tab)
 
-The **Global** tab in the Project Information section contains the main project settings:
+The **Global** tab in the Domain Information section contains the main domain settings:
 
 | Field | Description |
 |-------|-------------|
-| **Project Name** | CamelCase, alphanumeric only (e.g. `MyOntologyProject`). Defaults to `NewProject`. Non-alphanumeric characters are stripped automatically and words are capitalized as you type. |
+| **Domain Name** | CamelCase, alphanumeric only (e.g. `MyOntologyDomain`). Defaults to `NewDomain`. Non-alphanumeric characters are stripped automatically and words are capitalized as you type. |
 | **Version** | Current version number with version selector. |
-| **Base URI** | The base namespace for all ontology entities. By default, auto-generated from `Settings → Default Base URI Domain / ProjectName#`. Toggle the **Custom** switch to enter a custom URI. |
-| **Description** | Free-text description of the project. |
+| **Base URI** | The base namespace for all ontology entities. By default, auto-generated from `Settings → Default Base URI Domain / DomainName#`. Toggle the **Custom** switch to enter a custom URI. |
+| **Description** | Free-text description of the domain. |
 | **Author** | Automatically pre-filled with the current Databricks user email. Editable. |
-| **API / MCP** | Toggle **Expose via API & MCP** to make this project visible through the REST API (`/api/v1/projects`) and the MCP server. Disabled by default. |
+| **API / MCP** | Toggle **Expose via API & MCP** to make this domain visible through the REST API (`/api/v1/domains`) and the MCP server. Disabled by default. |
 
 #### Triple Store Tab
 
 | Field | Description |
 |-------|-------------|
 | **Backend** | Select the triple store engine: **Delta** (Databricks SQL Warehouse) or **LadybugDB** (embedded graph database). |
-| **Catalog.Schema** | *(Delta only)* Defaults to the same catalog and schema as the project's registry location. Click the pencil icon to change. |
-| **Table Name** | *(Delta only)* Defaults to `triplestore_<project_name>` (sanitized lowercase). Updated automatically when the project name changes. |
-| **Graph Name** | *(LadybugDB)* Logical name for the embedded graph database (defaults to project name). |
+| **Catalog.Schema** | *(Delta only)* Defaults to the same catalog and schema as the domain's registry location. Click the pencil icon to change. |
+| **Table Name** | *(Delta only)* Defaults to `triplestore_<domain_name>` (sanitized lowercase). Updated automatically when the domain name changes. |
+| **Graph Name** | *(LadybugDB)* Logical name for the embedded graph database (defaults to domain name). |
 
 **Backend details:**
 
 | Backend | Storage | Sync | Best for |
 |---------|---------|------|----------|
 | **Delta** | Databricks Delta table via SQL Warehouse | Immediate (SQL) | Production workloads with Unity Catalog governance |
-| **LadybugDB** | Local disk (`/tmp`) with automatic UC Volume sync | On project save/load | Lightweight demos and local development without a SQL Warehouse |
+| **LadybugDB** | Local disk (`/tmp`) with automatic UC Volume sync | Automatic after Digital Twin build | Lightweight demos and local development without a SQL Warehouse |
 
 **Performance:**
 - **Delta** tables are created with **Liquid Clustering** (`CLUSTER BY (predicate, subject)`), which co-locates rows by predicate and subject for faster query filtering. After each build, an `OPTIMIZE` command is automatically executed to compact data files and apply the clustering layout.
-- **LadybugDB** stores data in an embedded graph database using Cypher. When the project has an ontology loaded, LadybugDB uses a **true graph model** where each OWL class becomes a node table and each object property becomes a relationship table. Graph data is stored locally at `/tmp` and automatically archived to your registry UC Volume when saving a project (and restored on load).
+- **LadybugDB** stores data in an embedded graph database using Cypher. When the domain has an ontology loaded, LadybugDB uses a **true graph model** where each OWL class becomes a node table and each object property becomes a relationship table. Graph data is stored locally at `/tmp` and automatically archived to your registry UC Volume after each Digital Twin build (and restored on domain load).
 
-### Saving Projects
+### Saving Domains
 
 #### First Save
 
-1. Go to **Project** page
-2. Fill in project details:
-   - **Name**: Project name in CamelCase (becomes the volume folder name)
+1. Go to **Domain** page
+2. Fill in domain details:
+   - **Name**: Domain name in CamelCase (becomes the volume folder name)
    - **Description**: Optional description
    - **Author**: Your name (auto-filled from Databricks)
 3. Select **Catalog** and **Schema** for storage
 4. Click **Save to Unity Catalog**
 
 OntoBricks will:
-1. Create a volume named after your project (if it doesn't exist)
-2. Save the project as `v{version}.json`
+1. Create a volume named after your domain (if it doesn't exist)
+2. Save the domain as `v{version}.json`
 
 #### Subsequent Saves
 
-When you save an existing project:
+When you save an existing domain:
 - The current version file is **overwritten**
 - Use **Create New Version** to preserve history
 
@@ -640,8 +655,8 @@ When you save an existing project:
 
 #### Listing Versions
 
-1. Go to **Project** → **Actions** tab
-2. Select catalog/schema containing your project
+1. Go to **Domain** → **Actions** tab
+2. Select catalog/schema containing your domain
 3. Click **Load versions** to see all saved versions
 
 The version list shows:
@@ -653,7 +668,7 @@ The version list shows:
 
 To create a new version (preserving the current state):
 
-1. Go to **Project** → **Actions** tab
+1. Go to **Domain** → **Actions** tab
 2. Click **Create New Version**
 3. OntoBricks will:
    - Increment the version number (e.g., 1 → 2)
@@ -662,16 +677,16 @@ To create a new version (preserving the current state):
 
 **Example version progression:**
 ```
-my_project/
+my_domain/
 ├── v1.json    (initial version)
 ├── v2.json    (after first "Create New Version")
 └── v3.json    (after second "Create New Version")
 ```
 
-#### Loading a Project from Registry
+#### Loading a Domain from Registry
 
-1. Click **Load Project** in the top menu
-2. Select a project from the dropdown
+1. Click **Load Domain** in the top menu
+2. Select a domain from the dropdown
 3. The **active (latest) version** is automatically selected
 4. Change the version if needed, then click **Load**
 
@@ -679,18 +694,18 @@ my_project/
 
 ### Version Status
 
-The Project page shows the current version status:
+The Domain page shows the current version status:
 - **Active Version**: You're working on the latest version
 - **Historical Version**: You've loaded an older version (read-only for new versions)
 
-### Project Save/Load
+### Domain Save/Load
 
-Projects are saved in a versioned JSON format and can be stored in Unity Catalog Volumes. Use the **Save Project** and **Load Project** options in the top menu to persist and restore your work.
+Domains are saved in a versioned JSON format and can be stored in Unity Catalog Volumes. Use the **Save Domain** and **Load Domain** options in the top menu to persist and restore your work.
 
 ### Best Practices for Version Control
 
 1. **Version Before Major Changes**: Create a new version before significant ontology modifications
-2. **Use Descriptive Names**: Project names should clearly identify the domain
+2. **Use Descriptive Names**: Choose domain names that clearly identify the subject area
 3. **Document Versions**: Use the description field to note changes between versions
 4. **Regular Saves**: Save frequently to avoid losing work
 5. **Test After Loading**: Verify R2RML regeneration after loading older versions
@@ -730,21 +745,21 @@ Projects are saved in a versioned JSON format and can be stored in Unity Catalog
 
 ## GraphQL API
 
-Once your triple store is materialized (synced via Digital Twin), OntoBricks automatically provides a **typed GraphQL API** for each project. The schema is auto-generated from the ontology — no manual configuration required.
+Once your triple store is materialized (synced via Digital Twin), OntoBricks automatically provides a **typed GraphQL API** for each domain. The schema is auto-generated from the ontology — no manual configuration required.
 
 ### Accessing GraphQL
 
 1. Navigate to **Digital Twin** → **API** and scroll to the **GraphQL API** section
-2. Alternatively, visit `/graphql/{project_name}` to open the **GraphiQL Playground** directly
+2. Alternatively, visit `/graphql/{domain_name}` to open the **GraphiQL Playground** directly
 
 ### Available Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/graphql` | GET | List all GraphQL-enabled projects |
-| `/graphql/{project_name}` | GET | Open GraphiQL playground for a project |
-| `/graphql/{project_name}` | POST | Execute a GraphQL query |
-| `/graphql/{project_name}/schema` | GET | Get the SDL (Schema Definition Language) |
+| `/graphql` | GET | List all GraphQL-enabled domains |
+| `/graphql/{domain_name}` | GET | Open GraphiQL playground for a domain |
+| `/graphql/{domain_name}` | POST | Execute a GraphQL query |
+| `/graphql/{domain_name}/schema` | GET | Get the SDL (Schema Definition Language) |
 
 ### Querying with GraphQL
 
@@ -773,7 +788,7 @@ The auto-generated schema provides two resolvers per ontology class:
 Use the SDL endpoint to inspect the full schema:
 
 ```bash
-curl http://localhost:8000/graphql/my_project/schema
+curl http://localhost:8000/graphql/my_domain/schema
 ```
 
 This returns the complete type definitions, which is useful for integrating with external tools or for LLM agents to discover the data model programmatically.
@@ -804,13 +819,15 @@ OntoBricks includes an MCP server that exposes knowledge-graph tools to LLM clie
 
 | Tool | Description |
 |------|-------------|
-| `list_projects` | List all MCP-enabled projects in the registry |
-| `select_project` | Activate a project for subsequent queries |
+| `list_domains` | List all MCP-enabled domains in the registry |
+| `select_domain` | Activate a domain for subsequent queries |
+| `list_domain_versions` | List registry versions for a domain |
+| `get_design_status` | Ontology / metadata / assignment readiness for a domain |
 | `list_entity_types` | Overview of entity types, counts, and predicates |
 | `describe_entity` | Full-text description of an entity with BFS traversal |
-| `get_graphql_schema` | Auto-generated GraphQL schema (SDL) for the project |
+| `get_graphql_schema` | Auto-generated GraphQL schema (SDL) for the domain |
 | `query_graphql` | Execute a GraphQL query with structured results |
-| `get_status` | Triple store diagnostic (backend, table, count) |
+| `get_status` | Triple store diagnostic (view, graph, count) |
 
 ### Using in Databricks Playground
 
@@ -819,13 +836,13 @@ OntoBricks includes an MCP server that exposes knowledge-graph tools to LLM clie
 3. Select **mcp-ontobricks** from the MCP Servers list
 4. Ask questions like *"What entity types are in the knowledge graph?"* or *"Tell me about Jacob Martinez"*
 
-### Enabling Projects for MCP
+### Enabling Domains for MCP
 
-Projects must have the **API / MCP** flag enabled to be visible through the MCP server:
+Domains must have the **API / MCP** flag enabled to be visible through the MCP server:
 
-1. Go to **Project > Information > Global** tab
+1. Go to **Domain > Information > Global** tab
 2. Toggle **Expose via API & MCP** to ON
-3. Save the project
+3. Save the domain
 
 See the [MCP Server documentation](mcp.md) for full details including local usage and client configuration.
 
@@ -940,8 +957,8 @@ See the [MCP Server documentation](mcp.md) for full details including local usag
 **Problem**: LadybugDB data is lost after application restart
 
 **Solutions**:
-- Ensure the project is saved to the registry after building the triple store — the LadybugDB graph is synced to the UC Volume only on project save
-- After loading a project, the graph archive is automatically restored from the registry
+- The LadybugDB graph is automatically archived to the registry UC Volume after each Digital Twin build — ensure your build completes successfully
+- After loading a domain, the graph archive is automatically restored from the registry
 - If the registry is not configured, LadybugDB data lives only in `/tmp` and will not survive a restart
 
 ### Design Changes Not Saving
@@ -1012,7 +1029,7 @@ The automated pipeline follows these steps:
 ```
 Step 1: Configure connection
         │
-Step 2: Set up project (LLM endpoint, triple store table)
+Step 2: Set up domain (LLM endpoint, triple store table)
         │
 Step 3: Import table metadata from Unity Catalog
         │
@@ -1044,11 +1061,11 @@ The connection status indicator in the navbar should turn green.
 
 ---
 
-### Step 2: Set Up the Project
+### Step 2: Set Up the Domain
 
-Navigate to **Project** in the top navbar, then open the **Information** sidebar section.
+Navigate to **Domain** in the top navbar, then open the **Information** sidebar section.
 
-1. Enter a **Project Name** (e.g., `CustomerAnalytics`).
+1. Enter a **Domain Name** (e.g., `CustomerAnalytics`).
 2. Set the **Base URI** for your ontology (e.g., `https://ontobricks.com/ontology/`). This is the namespace for all generated RDF resources.
 3. Select the **LLM Endpoint** from the dropdown. This is the Databricks Model Serving endpoint used for ontology generation and auto-mapping.
 4. Configure the **Triple Store Table**: select a catalog, schema, and table name where triples will be stored (e.g., `my_catalog.my_schema.triples`). The table will be created automatically during sync.
@@ -1057,7 +1074,7 @@ Navigate to **Project** in the top navbar, then open the **Information** sidebar
 
 ### Step 3: Import Table Metadata
 
-Navigate to **Project > Metadata** in the sidebar.
+Navigate to **Domain > Metadata** in the sidebar.
 
 This step tells OntoBricks about the Databricks tables you want to model in your ontology.
 
@@ -1095,7 +1112,7 @@ The Wizard uses your LLM endpoint and the imported metadata to automatically des
    - **Use Column Comments** — use UC column comments in descriptions
 5. Click **Generate**.
 6. The LLM generates an OWL ontology in Turtle format. You can **preview** the result.
-7. Click **Apply** to import the generated ontology into your project.
+7. Click **Apply** to import the generated ontology into your domain.
 
 After applying, switch to the **Model** view in the sidebar to see the visual ontology with entities, relationships, and inheritance links.
 
@@ -1118,7 +1135,7 @@ Auto-Map uses the LLM to automatically generate SQL queries that map each ontolo
    - Column mappings are inferred (ID, Label, and attribute columns)
 4. A progress bar shows the mapping progress.
 5. When complete, review the results — successfully mapped items show in green.
-6. Click **Apply All** to save all mappings to the project.
+6. Click **Apply All** to save all mappings to the domain.
 
 You can verify individual mappings by switching to the **Designer** view:
 - **Green** nodes = fully assigned (all attributes mapped)
@@ -1152,7 +1169,7 @@ If all checks pass:
 
 > **Note**: If the triple store table already exists, you can choose to **drop and recreate** it or append to the existing data.
 
-> **Triple Store Backend**: OntoBricks supports two backends — **Delta** (SQL Warehouse, recommended for production) and **LadybugDB** (embedded graph, ideal for development/testing). Configure the backend in Project > Information > Triple Store settings.
+> **Triple Store Backend**: OntoBricks supports two backends — **Delta** (SQL Warehouse, recommended for production) and **LadybugDB** (embedded graph, ideal for development/testing). Configure the backend in Domain > Information > Triple Store settings.
 
 ---
 
@@ -1237,8 +1254,8 @@ Open **Knowledge Graph** in the sidebar to explore the knowledge graph interacti
 | Step | Where | Action | Automated? |
 |------|-------|--------|------------|
 | 1 | Settings | Configure Databricks connection | Manual (one-time) |
-| 2 | Project > Information | Set LLM endpoint and triple store table | Manual (one-time) |
-| 3 | Project > Metadata | Import table metadata from Unity Catalog | One click |
+| 2 | Domain > Information | Set LLM endpoint and triple store table | Manual (one-time) |
+| 3 | Domain > Metadata | Import table metadata from Unity Catalog | One click |
 | 4 | Ontology > Wizard | Generate ontology from metadata using LLM | One click |
 | 5 | Mapping > Auto-Map | Auto-map entities and relationships to SQL | One click |
 | 6 | Digital Twin > Status | Synchronize to triple store | One click |
@@ -1254,7 +1271,7 @@ After the initial one-time configuration (steps 1–2), the entire pipeline from
 - **Start with a template**: Use one of the Wizard quick-templates (CRM, IoT, etc.) if your domain matches — it provides better guidelines for the LLM.
 - **Review before syncing**: After auto-map, quickly review the Designer view. Fix any red or orange nodes before synchronizing.
 - **Iterate**: The pipeline is not a one-shot process. You can re-generate the ontology, re-run auto-map, or manually adjust individual mappings at any time.
-- **Save your project**: After achieving a good result, save the project to Unity Catalog (Project > Save) so you can reload it later.
+- **Save your domain**: After achieving a good result, save the domain to Unity Catalog (**Save Domain** in the top menu) so you can reload it later.
 
 ---
 
@@ -1264,7 +1281,7 @@ The full pipeline is also available via REST API for automation or CI/CD integra
 
 ```bash
 ## Step 3: Import metadata
-curl -X POST /project/metadata/initialize-async \
+curl -X POST /domain/metadata/initialize-async \
   -d '{"catalog": "my_catalog", "schema": "my_schema", "tables": ["t1", "t2"]}'
 
 ## Step 4: Generate ontology
@@ -1297,7 +1314,7 @@ Async endpoints return a `task_id`. Poll `GET /tasks/{task_id}/status` for progr
 After your knowledge graph is built, it can be queried programmatically:
 
 - **Digital Twin API** (`/api/v1/digitaltwin/`): Stateless REST endpoints for triple store status, entity search, ontology retrieval, and more. See [External API](api.md).
-- **GraphQL API** (`/graphql/{project_name}`): Auto-generated typed schema with nested relationship traversal. See [External API](api.md#graphql-api).
+- **GraphQL API** (`/graphql/{domain_name}`): Auto-generated typed schema with nested relationship traversal. See [External API](api.md#graphql-api).
 - **MCP Server**: Expose your knowledge graph to the Databricks Playground and LLM clients. See [MCP Server](mcp.md).
 
 ---
@@ -1320,7 +1337,7 @@ OntoBricks supports multiple ways to create or bootstrap an ontology: from scrat
 | **CDISC** | PhUSE GitHub repository | RDF/XML, Turtle | Clinical data standards |
 | **IOF** | IOF GitHub repository | RDF/XML | Digital manufacturing ontology |
 
-All imports merge the fetched content, parse it, and store the result in the current project session. You can continue editing entities, relationships, and attributes after import.
+All imports merge the fetched content, parse it, and store the result in the current domain session. You can continue editing entities, relationships, and attributes after import.
 
 ---
 
@@ -1508,7 +1525,7 @@ Parse with OWL/RDFS parser
 Post-processing (filtering, restriction extraction, label resolution)
         │
         ▼
-Store in project session
+Store in domain session
         │
         ▼
 UI refreshes (entities, relationships, map)

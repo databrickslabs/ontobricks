@@ -19,10 +19,10 @@ TABLES = [
     "course",
     "enrollment",
     "course_assignment",
-    "research_project",
+    "research_domain",
     "publication",
     "grant_award",
-    "project_collaboration",
+    "domain_collaboration",
     "course_prerequisite",
     "department_affiliation",
 ]

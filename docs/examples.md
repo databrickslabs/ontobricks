@@ -143,7 +143,7 @@ foaf:gender a rdfs:Property .
 
 #### Step 5: View R2RML Output
 
-1. Navigate to **Project** → **Export**
+1. Navigate to **Domain** → **Export**
 2. The R2RML mapping is auto-generated
 3. Copy or download as needed
 4. Review the generated R2RML

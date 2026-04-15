@@ -158,8 +158,8 @@
                        <span class="s2">&quot;Queries are translated to SQL and executed on Databricks.&quot;</span><span class="p">,</span>
     <span class="p">},</span>
     <span class="p">{</span>
-        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Project&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Project management - Save, load, import/export complete project configurations &quot;</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Domain&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Domain management - Save, load, import/export complete domain configurations &quot;</span>
                        <span class="s2">&quot;including ontology, mappings, and settings.&quot;</span><span class="p">,</span>
     <span class="p">},</span>
     <span class="p">{</span>
@@ -185,7 +185,7 @@
 <span class="s2">- 🔗 **Data Mapping** - Map ontology concepts to Databricks tables</span>
 <span class="s2">- 🔍 **SPARQL Queries** - Query data using W3C standard SPARQL</span>
 <span class="s2">- 📊 **Digital Twin Knowledge Graph** - Interactive sigma.js WebGL graph exploration with SPARQL-based quality checks</span>
-<span class="s2">- 📦 **Project Management** - Save/load projects to Unity Catalog volumes</span>
+<span class="s2">- 📦 **Domain Management** - Save/load domains to Unity Catalog volumes</span>
 <span class="s2">- 🔮 **GraphQL API** - Auto-generated typed schema from ontology with nested entity traversal</span>
 
 <span class="s2">## Quick Start</span>
@@ -336,15 +336,15 @@
         <span class="n">settings</span> <span class="o">=</span> <span class="n">get_settings</span><span class="p">()</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">permission_service</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_databricks_host_and_token</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_project</span><span class="p">,</span> <span class="n">SessionManager</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_domain</span><span class="p">,</span> <span class="n">SessionManager</span>
 
         <span class="n">session_mgr</span> <span class="o">=</span> <span class="n">SessionManager</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="n">user_token</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;x-forwarded-access-token&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
 
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
-        <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_project</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span>
+        <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span>
 
         <span class="k">return</span> <span class="n">permission_service</span><span class="o">.</span><span class="n">get_user_role</span><span class="p">(</span>
             <span class="n">email</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">settings</span><span class="o">.</span><span class="n">ontobricks_app_name</span><span class="p">,</span>

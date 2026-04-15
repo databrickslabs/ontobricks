@@ -31,7 +31,7 @@ async function updateMetadataStatus() {
     if (!prereqAlert) return;
 
     try {
-        const response = await fetch('/project/metadata', { credentials: 'same-origin' });
+        const response = await fetch('/domain/metadata', { credentials: 'same-origin' });
         const data = await response.json();
 
         if (data.success && data.has_metadata && data.metadata?.tables?.length) {
@@ -41,12 +41,12 @@ async function updateMetadataStatus() {
         } else {
             prereqAlert.className = 'alert alert-warning';
             checkIcon.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>';
-            checkStatus.innerHTML = '<strong>No metadata loaded</strong> — Metadata is required before creating mappings. Please load metadata first.';
+            checkStatus.innerHTML = '<strong>No data sources loaded</strong> — Data sources are required before creating mappings. Please load data sources first.';
         }
     } catch (e) {
         prereqAlert.className = 'alert alert-danger';
         checkIcon.innerHTML = '<i class="bi bi-x-circle-fill me-2"></i>';
-        checkStatus.textContent = 'Error checking metadata status';
+        checkStatus.textContent = 'Error checking data sources status';
     }
 }
 

@@ -1,4 +1,5 @@
 """OWL ontology generator."""
+import json
 import re
 from rdflib import BNode, Graph, Namespace, URIRef, Literal
 from rdflib.collection import Collection
@@ -16,7 +17,8 @@ class OntologyGenerator:
     
     def __init__(self, base_uri: str, ontology_name: str, classes: List[Dict], properties: List[Dict], 
                  constraints: List[Dict] = None, swrl_rules: List[Dict] = None,
-                 axioms: List[Dict] = None, expressions: List[Dict] = None):
+                 axioms: List[Dict] = None, expressions: List[Dict] = None,
+                 groups: List[Dict] = None):
         """Initialize the OWL generator.
         
         Args:
@@ -28,6 +30,7 @@ class OntologyGenerator:
             swrl_rules: List of SWRL rules
             axioms: List of OWL axioms (logical assertions)
             expressions: List of OWL class expressions (unionOf, intersectionOf, etc.)
+            groups: List of entity group definitions (name, label, color, icon, members)
         """
         self.base_uri = base_uri.rstrip('#') + '#'
         self.ontology_name = ontology_name
@@ -37,6 +40,7 @@ class OntologyGenerator:
         self.swrl_rules = swrl_rules or []
         self.axioms = axioms or []
         self.expressions = expressions or []
+        self.groups = groups or []
         
         self.graph = Graph()
         self.ns = Namespace(self.base_uri)
@@ -84,9 +88,24 @@ class OntologyGenerator:
         for expr in self.expressions:
             self._add_axiom(expr)
         
+        # Add entity groups (defined classes with owl:unionOf)
+        self._add_groups()
+        
         # Serialize to Turtle format
         return self.graph.serialize(format='turtle')
     
+    def _resolve_uri(self, ref: str):
+        """Convert a name or full URI string to a URIRef, or None if empty."""
+        if not ref:
+            return None
+        if ref.startswith('http://') or ref.startswith('https://'):
+            return URIRef(ref)
+        return URIRef(self.base_uri + ref)
+
+    def _collect_uris(self, refs: list) -> list:
+        """Resolve a list of name/URI strings to URIRefs, skipping empty values."""
+        return [u for u in (self._resolve_uri(r) for r in refs if r) if u]
+
     def _add_constraint(self, constraint: Dict):
         """Add a property constraint to the ontology.
         
@@ -105,15 +124,7 @@ class OntologyGenerator:
         if not constraint_type:
             return
         
-        # Helper to get URI from name or full URI
-        def get_uri(ref, is_property=False):
-            if not ref:
-                return None
-            # If it's already a full URI, use it directly
-            if ref.startswith('http://') or ref.startswith('https://'):
-                return URIRef(ref)
-            # Otherwise, prepend base_uri
-            return URIRef(self.base_uri + ref)
+        get_uri = self._resolve_uri
         
         # Handle property characteristics (applied directly to property)
         property_characteristics = {
@@ -128,7 +139,7 @@ class OntologyGenerator:
         
         if constraint_type in property_characteristics:
             if property_ref:
-                prop_uri = get_uri(property_ref, is_property=True)
+                prop_uri = get_uri(property_ref)
                 self.graph.add((prop_uri, RDF.type, property_characteristics[constraint_type]))
                 logger.debug("Added property characteristic: %s a %s", prop_uri, property_characteristics[constraint_type])
             return
@@ -152,7 +163,7 @@ class OntologyGenerator:
         
         # Handle value check constraints (custom OntoBricks annotations)
         if constraint_type == 'valueCheck':
-            self._add_value_check_constraint(constraint, get_uri)
+            self._add_value_check_constraint(constraint)
             return
         
         # Handle global rules (custom OntoBricks annotations)
@@ -255,15 +266,12 @@ class OntologyGenerator:
         self.graph.add((class_uri, RDFS.subClassOf, restriction))
         logger.debug("Added hasValue restriction: %s subClassOf %s", class_uri, restriction)
     
-    def _add_value_check_constraint(self, constraint: Dict, get_uri):
+    def _add_value_check_constraint(self, constraint: Dict):
         """Add a value check constraint as OntoBricks annotation.
         
         Args:
             constraint: Constraint definition with 'className', 'attributeName', 'checkType', 'checkValue', etc.
-            get_uri: Function to convert name/URI reference to URIRef
         """
-        import re
-        
         class_ref = constraint.get('className', '')
         attribute_name = constraint.get('attributeName', '')
         check_type = constraint.get('checkType', '')
@@ -274,7 +282,7 @@ class OntologyGenerator:
             logger.debug("Missing required values for valueCheck: %s", constraint)
             return
         
-        class_uri = get_uri(class_ref)
+        class_uri = self._resolve_uri(class_ref)
         
         # Extract class local name for constraint naming
         class_local = str(class_uri).split('#')[-1].split('/')[-1]
@@ -369,8 +377,12 @@ class OntologyGenerator:
         # Add dashboard parameters as JSON string
         dashboard_params = cls.get('dashboardParams', {})
         if dashboard_params:
-            import json
             self.graph.add((class_uri, ONTOBRICKS_NS.dashboardParams, Literal(json.dumps(dashboard_params))))
+
+        # Add cross-project bridges as JSON string
+        bridges = cls.get('bridges', [])
+        if bridges:
+            self.graph.add((class_uri, ONTOBRICKS_NS.bridges, Literal(json.dumps(bridges))))
         
         # Add parent class (subClassOf)
         parent = cls.get('parent', '').strip() if cls.get('parent') else ''
@@ -437,14 +449,7 @@ class OntologyGenerator:
         # Use format: className_propertyName or just propertyName
         prop_uri = URIRef(self.base_uri + prop_name)
         
-        # Check if already added (to avoid duplicates)
         if (prop_uri, RDF.type, OWL.DatatypeProperty) in self.graph:
-            # Property already exists, just add domain if not already there
-            domain_uri = URIRef(self.base_uri + class_name)
-            if (prop_uri, RDFS.domain, domain_uri) not in self.graph:
-                # For shared properties, we could use union of domains
-                # For simplicity, we skip if domain already exists
-                pass
             return
         
         # Define as OWL DatatypeProperty
@@ -606,15 +611,8 @@ class OntologyGenerator:
         if not axiom_type:
             return
         
-        def get_uri(ref):
-            if not ref:
-                return None
-            if ref.startswith('http://') or ref.startswith('https://'):
-                return URIRef(ref)
-            return URIRef(self.base_uri + ref)
-        
-        def collect_uris(refs):
-            return [u for u in (get_uri(r) for r in refs if r) if u]
+        get_uri = self._resolve_uri
+        collect_uris = self._collect_uris
         
         subject_uri = get_uri(subject) if subject else None
         
@@ -715,5 +713,68 @@ class OntologyGenerator:
                 self.graph.add((anon, OWL.oneOf, members))
                 self.graph.add((subject_uri, OWL.equivalentClass, anon))
                 logger.debug("Added oneOf: %s equivalentClass oneOf(%s)", subject, individuals)
+
+    def _add_groups(self):
+        """Add entity groups as OWL defined classes using owl:equivalentClass + owl:unionOf.
+
+        Each group becomes an ``owl:Class`` annotated with ``ontobricks:isGroup true``
+        and linked via ``owl:equivalentClass`` to an anonymous class whose
+        ``owl:unionOf`` lists the member classes.  Annotation properties
+        ``ontobricks:isGroup`` and ``ontobricks:groupColor`` are declared once.
+        """
+        if not self.groups:
+            return
+
+        # Declare annotation properties once
+        is_group_prop = ONTOBRICKS_NS.isGroup
+        group_color_prop = ONTOBRICKS_NS.groupColor
+        self.graph.add((is_group_prop, RDF.type, OWL.AnnotationProperty))
+        self.graph.add((group_color_prop, RDF.type, OWL.AnnotationProperty))
+
+        for group in self.groups:
+            name = group.get('name', '').strip()
+            if not name:
+                continue
+            member_names = [m.strip() for m in group.get('members', []) if m and m.strip()]
+            if not member_names:
+                logger.debug("Skipping group '%s' — no members", name)
+                continue
+
+            group_uri = URIRef(self.base_uri + name)
+
+            self.graph.add((group_uri, RDF.type, OWL.Class))
+            self.graph.add((group_uri, ONTOBRICKS_NS.isGroup, Literal(True, datatype=XSD.boolean)))
+
+            label = group.get('label', name)
+            if label:
+                self.graph.add((group_uri, RDFS.label, Literal(label)))
+
+            description = group.get('description', '')
+            if description:
+                self.graph.add((group_uri, RDFS.comment, Literal(description)))
+
+            color = group.get('color', '')
+            if color:
+                self.graph.add((group_uri, ONTOBRICKS_NS.groupColor, Literal(color)))
+
+            icon = group.get('icon', '')
+            if icon:
+                self.graph.add((group_uri, ONTOBRICKS_NS.icon, Literal(icon)))
+
+            member_uris = []
+            for m in member_names:
+                if m.startswith('http://') or m.startswith('https://'):
+                    member_uris.append(URIRef(m))
+                else:
+                    member_uris.append(URIRef(self.base_uri + m))
+
+            members_list = BNode()
+            Collection(self.graph, members_list, member_uris)
+            union_class = BNode()
+            self.graph.add((union_class, RDF.type, OWL.Class))
+            self.graph.add((union_class, OWL.unionOf, members_list))
+            self.graph.add((group_uri, OWL.equivalentClass, union_class))
+
+            logger.debug("Added group '%s' with %d members: %s", name, len(member_uris), member_names)
 
 

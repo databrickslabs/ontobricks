@@ -28,7 +28,7 @@ def __getattr__(name):
     if name == "sparql":
         from back.core.w3c import sparql as _sparql
         return _sparql
-    if name in ("ProjectSession", "get_project", "get_empty_project"):
+    if name in ("DomainSession", "get_domain", "get_empty_domain"):
         import back.objects.session as _sess
         return getattr(_sess, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -38,9 +38,9 @@ __all__ = [
     'DatabricksClient',
     'VolumeFileService',
     'sparql',
-    'ProjectSession',
-    'get_project',
-    'get_empty_project',
+    'DomainSession',
+    'get_domain',
+    'get_empty_domain',
     'get_databricks_client',
     'get_databricks_credentials',
     'get_databricks_host_and_token',

@@ -109,11 +109,12 @@ class WorkspaceService:
             logger.warning("Error listing workspace groups: %s", exc)
             return []
 
-    def search_users(self, query: str, max_results: int = 50) -> List[Dict[str, Any]]:
+    def search_users(self, query: str, max_results: int = 500) -> List[Dict[str, Any]]:
         """Search workspace users via SCIM ``filter``.
 
         Uses a server-side ``co`` (contains) filter on ``userName`` and
-        ``displayName`` so results are relevant even in large workspaces.
+        ``displayName``.  Paginates through all matching SCIM pages so
+        every workspace user matching *query* is returned.
         """
         import requests as req
 
@@ -123,30 +124,47 @@ class WorkspaceService:
         host = self._auth.host.rstrip("/")
         headers = self._auth.get_auth_headers()
         scim_filter = f'userName co "{query}" or displayName co "{query}"'
+        users: List[Dict[str, Any]] = []
+        start_index = 1
+        page_size = 100
+
         try:
-            resp = req.get(
-                f"{host}{SCIM_USERS_PATH}",
-                headers=headers,
-                params={"filter": scim_filter, "count": max_results},
-            )
-            resp.raise_for_status()
-            users: List[Dict[str, Any]] = []
-            for u in resp.json().get("Resources", []):
-                email = u.get("userName", "")
-                if email:
-                    users.append({
-                        "email": email,
-                        "display_name": u.get("displayName", email),
-                        "active": u.get("active", True),
-                    })
+            while True:
+                resp = req.get(
+                    f"{host}{SCIM_USERS_PATH}",
+                    headers=headers,
+                    params={
+                        "filter": scim_filter,
+                        "startIndex": start_index,
+                        "count": page_size,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                for u in data.get("Resources", []):
+                    email = u.get("userName", "")
+                    if email:
+                        users.append({
+                            "email": email,
+                            "display_name": u.get("displayName", email),
+                            "active": u.get("active", True),
+                        })
+                total = data.get("totalResults", 0)
+                start_index += data.get("itemsPerPage", page_size)
+                if start_index > total or len(users) >= max_results:
+                    break
             logger.info("SCIM user search '%s': %d results", query, len(users))
             return users
         except Exception as exc:
             logger.warning("Error searching workspace users: %s", exc)
             return []
 
-    def search_groups(self, query: str, max_results: int = 50) -> List[Dict[str, Any]]:
-        """Search workspace groups via SCIM ``filter``."""
+    def search_groups(self, query: str, max_results: int = 500) -> List[Dict[str, Any]]:
+        """Search workspace groups via SCIM ``filter``.
+
+        Paginates through all matching SCIM pages so every workspace
+        group matching *query* is returned.
+        """
         import requests as req
 
         if not self._auth.host or not self._auth.has_valid_auth() or not query:
@@ -155,18 +173,31 @@ class WorkspaceService:
         host = self._auth.host.rstrip("/")
         headers = self._auth.get_auth_headers()
         scim_filter = f'displayName co "{query}"'
+        groups: List[Dict[str, Any]] = []
+        start_index = 1
+        page_size = 100
+
         try:
-            resp = req.get(
-                f"{host}{SCIM_GROUPS_PATH}",
-                headers=headers,
-                params={"filter": scim_filter, "count": max_results},
-            )
-            resp.raise_for_status()
-            groups: List[Dict[str, Any]] = []
-            for g in resp.json().get("Resources", []):
-                name = g.get("displayName", "")
-                if name:
-                    groups.append({"display_name": name, "id": g.get("id", "")})
+            while True:
+                resp = req.get(
+                    f"{host}{SCIM_GROUPS_PATH}",
+                    headers=headers,
+                    params={
+                        "filter": scim_filter,
+                        "startIndex": start_index,
+                        "count": page_size,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                for g in data.get("Resources", []):
+                    name = g.get("displayName", "")
+                    if name:
+                        groups.append({"display_name": name, "id": g.get("id", "")})
+                total = data.get("totalResults", 0)
+                start_index += data.get("itemsPerPage", page_size)
+                if start_index > total or len(groups) >= max_results:
+                    break
             logger.info("SCIM group search '%s': %d results", query, len(groups))
             return groups
         except Exception as exc:

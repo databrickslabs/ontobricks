@@ -108,8 +108,10 @@
             
   <h1>Source code for back.core.w3c.owl.OntologyGenerator</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;OWL ontology generator.&quot;&quot;&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">Namespace</span><span class="p">,</span> <span class="n">URIRef</span><span class="p">,</span> <span class="n">Literal</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">BNode</span><span class="p">,</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">Namespace</span><span class="p">,</span> <span class="n">URIRef</span><span class="p">,</span> <span class="n">Literal</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">Collection</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib.namespace</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF</span><span class="p">,</span> <span class="n">RDFS</span><span class="p">,</span> <span class="n">OWL</span><span class="p">,</span> <span class="n">XSD</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span>
 
@@ -127,7 +129,9 @@
 <div class="viewcode-block" id="OntologyGenerator.__init__">
 <a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.owl.OntologyGenerator.OntologyGenerator.__init__">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">ontology_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">classes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="n">properties</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> 
-                 <span class="n">constraints</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">axioms</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+                 <span class="n">constraints</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">axioms</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">expressions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">groups</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize the OWL generator.</span>
 <span class="sd">        </span>
 <span class="sd">        Args:</span>
@@ -137,7 +141,9 @@
 <span class="sd">            properties: List of property definitions</span>
 <span class="sd">            constraints: List of property constraints (cardinality, characteristics)</span>
 <span class="sd">            swrl_rules: List of SWRL rules</span>
-<span class="sd">            axioms: List of OWL axioms</span>
+<span class="sd">            axioms: List of OWL axioms (logical assertions)</span>
+<span class="sd">            expressions: List of OWL class expressions (unionOf, intersectionOf, etc.)</span>
+<span class="sd">            groups: List of entity group definitions (name, label, color, icon, members)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">base_uri</span> <span class="o">=</span> <span class="n">base_uri</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;#&#39;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ontology_name</span> <span class="o">=</span> <span class="n">ontology_name</span>
@@ -146,6 +152,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">constraints</span> <span class="o">=</span> <span class="n">constraints</span> <span class="ow">or</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">swrl_rules</span> <span class="ow">or</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">axioms</span> <span class="o">=</span> <span class="n">axioms</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">expressions</span> <span class="o">=</span> <span class="n">expressions</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">groups</span> <span class="o">=</span> <span class="n">groups</span> <span class="ow">or</span> <span class="p">[]</span>
         
         <span class="bp">self</span><span class="o">.</span><span class="n">graph</span> <span class="o">=</span> <span class="n">Graph</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ns</span> <span class="o">=</span> <span class="n">Namespace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">base_uri</span><span class="p">)</span>
@@ -190,14 +198,31 @@
         <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">swrl_rules</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_add_swrl_rule</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
         
-        <span class="c1"># Add OWL axioms</span>
+        <span class="c1"># Add OWL axioms and class expressions</span>
         <span class="k">for</span> <span class="n">axiom</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">axioms</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_add_axiom</span><span class="p">(</span><span class="n">axiom</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">expr</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">expressions</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_add_axiom</span><span class="p">(</span><span class="n">expr</span><span class="p">)</span>
+        
+        <span class="c1"># Add entity groups (defined classes with owl:unionOf)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_add_groups</span><span class="p">()</span>
         
         <span class="c1"># Serialize to Turtle format</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="s1">&#39;turtle&#39;</span><span class="p">)</span></div>
 
     
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_uri</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ref</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a name or full URI string to a URIRef, or None if empty.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ref</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">ref</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;http://&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">ref</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;https://&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">URIRef</span><span class="p">(</span><span class="n">ref</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">URIRef</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">base_uri</span> <span class="o">+</span> <span class="n">ref</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_collect_uris</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">refs</span><span class="p">:</span> <span class="nb">list</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve a list of name/URI strings to URIRefs, skipping empty values.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">u</span> <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_resolve_uri</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">refs</span> <span class="k">if</span> <span class="n">r</span><span class="p">)</span> <span class="k">if</span> <span class="n">u</span><span class="p">]</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_add_constraint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">constraint</span><span class="p">:</span> <span class="n">Dict</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Add a property constraint to the ontology.</span>
 <span class="sd">        </span>
@@ -216,15 +241,7 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">constraint_type</span><span class="p">:</span>
             <span class="k">return</span>
         
-        <span class="c1"># Helper to get URI from name or full URI</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">get_uri</span><span class="p">(</span><span class="n">ref</span><span class="p">,</span> <span class="n">is_property</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">ref</span><span class="p">:</span>
-                <span class="k">return</span> <span class="kc">None</span>
-            <span class="c1"># If it&#39;s already a full URI, use it directly</span>
-            <span class="k">if</span> <span class="n">ref</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;http://&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">ref</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;https://&#39;</span><span class="p">):</span>
-                <span class="k">return</span> <span class="n">URIRef</span><span class="p">(</span><span class="n">ref</span><span class="p">)</span>
-            <span class="c1"># Otherwise, prepend base_uri</span>
-            <span class="k">return</span> <span class="n">URIRef</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">base_uri</span> <span class="o">+</span> <span class="n">ref</span><span class="p">)</span>
+        <span class="n">get_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_uri</span>
         
         <span class="c1"># Handle property characteristics (applied directly to property)</span>
         <span class="n">property_characteristics</span> <span class="o">=</span> <span class="p">{</span>
@@ -239,7 +256,7 @@
         
         <span class="k">if</span> <span class="n">constraint_type</span> <span class="ow">in</span> <span class="n">property_characteristics</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">property_ref</span><span class="p">:</span>
-                <span class="n">prop_uri</span> <span class="o">=</span> <span class="n">get_uri</span><span class="p">(</span><span class="n">property_ref</span><span class="p">,</span> <span class="n">is_property</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">prop_uri</span> <span class="o">=</span> <span class="n">get_uri</span><span class="p">(</span><span class="n">property_ref</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">prop_uri</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">property_characteristics</span><span class="p">[</span><span class="n">constraint_type</span><span class="p">]))</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added property characteristic: </span><span class="si">%s</span><span class="s2"> a </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">,</span> <span class="n">property_characteristics</span><span class="p">[</span><span class="n">constraint_type</span><span class="p">])</span>
             <span class="k">return</span>
@@ -263,7 +280,7 @@
         
         <span class="c1"># Handle value check constraints (custom OntoBricks annotations)</span>
         <span class="k">if</span> <span class="n">constraint_type</span> <span class="o">==</span> <span class="s1">&#39;valueCheck&#39;</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_add_value_check_constraint</span><span class="p">(</span><span class="n">constraint</span><span class="p">,</span> <span class="n">get_uri</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_add_value_check_constraint</span><span class="p">(</span><span class="n">constraint</span><span class="p">)</span>
             <span class="k">return</span>
         
         <span class="c1"># Handle global rules (custom OntoBricks annotations)</span>
@@ -366,15 +383,12 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">class_uri</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">subClassOf</span><span class="p">,</span> <span class="n">restriction</span><span class="p">))</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added hasValue restriction: </span><span class="si">%s</span><span class="s2"> subClassOf </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">class_uri</span><span class="p">,</span> <span class="n">restriction</span><span class="p">)</span>
     
-    <span class="k">def</span><span class="w"> </span><span class="nf">_add_value_check_constraint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">constraint</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">get_uri</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_add_value_check_constraint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">constraint</span><span class="p">:</span> <span class="n">Dict</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Add a value check constraint as OntoBricks annotation.</span>
 <span class="sd">        </span>
 <span class="sd">        Args:</span>
 <span class="sd">            constraint: Constraint definition with &#39;className&#39;, &#39;attributeName&#39;, &#39;checkType&#39;, &#39;checkValue&#39;, etc.</span>
-<span class="sd">            get_uri: Function to convert name/URI reference to URIRef</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
-        
         <span class="n">class_ref</span> <span class="o">=</span> <span class="n">constraint</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;className&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
         <span class="n">attribute_name</span> <span class="o">=</span> <span class="n">constraint</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;attributeName&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
         <span class="n">check_type</span> <span class="o">=</span> <span class="n">constraint</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;checkType&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
@@ -385,7 +399,7 @@
             <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Missing required values for valueCheck: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">constraint</span><span class="p">)</span>
             <span class="k">return</span>
         
-        <span class="n">class_uri</span> <span class="o">=</span> <span class="n">get_uri</span><span class="p">(</span><span class="n">class_ref</span><span class="p">)</span>
+        <span class="n">class_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_uri</span><span class="p">(</span><span class="n">class_ref</span><span class="p">)</span>
         
         <span class="c1"># Extract class local name for constraint naming</span>
         <span class="n">class_local</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">class_uri</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
@@ -480,8 +494,12 @@
         <span class="c1"># Add dashboard parameters as JSON string</span>
         <span class="n">dashboard_params</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;dashboardParams&#39;</span><span class="p">,</span> <span class="p">{})</span>
         <span class="k">if</span> <span class="n">dashboard_params</span><span class="p">:</span>
-            <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">class_uri</span><span class="p">,</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">dashboardParams</span><span class="p">,</span> <span class="n">Literal</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">dashboard_params</span><span class="p">))))</span>
+
+        <span class="c1"># Add cross-project bridges as JSON string</span>
+        <span class="n">bridges</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bridges&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">if</span> <span class="n">bridges</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">class_uri</span><span class="p">,</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">bridges</span><span class="p">,</span> <span class="n">Literal</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">bridges</span><span class="p">))))</span>
         
         <span class="c1"># Add parent class (subClassOf)</span>
         <span class="n">parent</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;parent&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">if</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;parent&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
@@ -548,14 +566,7 @@
         <span class="c1"># Use format: className_propertyName or just propertyName</span>
         <span class="n">prop_uri</span> <span class="o">=</span> <span class="n">URIRef</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">base_uri</span> <span class="o">+</span> <span class="n">prop_name</span><span class="p">)</span>
         
-        <span class="c1"># Check if already added (to avoid duplicates)</span>
         <span class="k">if</span> <span class="p">(</span><span class="n">prop_uri</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">DatatypeProperty</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">:</span>
-            <span class="c1"># Property already exists, just add domain if not already there</span>
-            <span class="n">domain_uri</span> <span class="o">=</span> <span class="n">URIRef</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">base_uri</span> <span class="o">+</span> <span class="n">class_name</span><span class="p">)</span>
-            <span class="k">if</span> <span class="p">(</span><span class="n">prop_uri</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span> <span class="n">domain_uri</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">:</span>
-                <span class="c1"># For shared properties, we could use union of domains</span>
-                <span class="c1"># For simplicity, we skip if domain already exists</span>
-                <span class="k">pass</span>
             <span class="k">return</span>
         
         <span class="c1"># Define as OWL DatatypeProperty</span>
@@ -703,6 +714,10 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_add_axiom</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axiom</span><span class="p">:</span> <span class="n">Dict</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Add an OWL axiom to the ontology.</span>
 <span class="sd">        </span>
+<span class="sd">        Expressions (unionOf, intersectionOf, complementOf, oneOf) are wrapped</span>
+<span class="sd">        in an anonymous owl:Class node linked via owl:equivalentClass, per the</span>
+<span class="sd">        OWL 2 specification.</span>
+<span class="sd">        </span>
 <span class="sd">        Args:</span>
 <span class="sd">            axiom: Axiom definition with &#39;type&#39;, &#39;subject&#39;, &#39;objects&#39;, etc.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -713,108 +728,171 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">axiom_type</span><span class="p">:</span>
             <span class="k">return</span>
         
-        <span class="c1"># Helper to get URI</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">get_uri</span><span class="p">(</span><span class="n">ref</span><span class="p">):</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">ref</span><span class="p">:</span>
-                <span class="k">return</span> <span class="kc">None</span>
-            <span class="k">if</span> <span class="n">ref</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;http://&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">ref</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;https://&#39;</span><span class="p">):</span>
-                <span class="k">return</span> <span class="n">URIRef</span><span class="p">(</span><span class="n">ref</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">URIRef</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">base_uri</span> <span class="o">+</span> <span class="n">ref</span><span class="p">)</span>
+        <span class="n">get_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_uri</span>
+        <span class="n">collect_uris</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_uris</span>
         
         <span class="n">subject_uri</span> <span class="o">=</span> <span class="n">get_uri</span><span class="p">(</span><span class="n">subject</span><span class="p">)</span> <span class="k">if</span> <span class="n">subject</span> <span class="k">else</span> <span class="kc">None</span>
         
-        <span class="c1"># Handle different axiom types</span>
+        <span class="c1"># ── Class axioms ─────────────────────────────────────────</span>
+        
         <span class="k">if</span> <span class="n">axiom_type</span> <span class="o">==</span> <span class="s1">&#39;equivalentClass&#39;</span> <span class="ow">and</span> <span class="n">subject_uri</span> <span class="ow">and</span> <span class="n">objects</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">obj</span> <span class="ow">in</span> <span class="n">objects</span><span class="p">:</span>
-                <span class="n">obj_uri</span> <span class="o">=</span> <span class="n">get_uri</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">obj_uri</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">equivalentClass</span><span class="p">,</span> <span class="n">obj_uri</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">obj_uri</span> <span class="ow">in</span> <span class="n">collect_uris</span><span class="p">(</span><span class="n">objects</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">equivalentClass</span><span class="p">,</span> <span class="n">obj_uri</span><span class="p">))</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added equivalentClass: </span><span class="si">%s</span><span class="s2"> = </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
         
         <span class="k">elif</span> <span class="n">axiom_type</span> <span class="o">==</span> <span class="s1">&#39;disjointWith&#39;</span> <span class="ow">and</span> <span class="n">subject_uri</span> <span class="ow">and</span> <span class="n">objects</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">obj</span> <span class="ow">in</span> <span class="n">objects</span><span class="p">:</span>
-                <span class="n">obj_uri</span> <span class="o">=</span> <span class="n">get_uri</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">obj_uri</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">disjointWith</span><span class="p">,</span> <span class="n">obj_uri</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">obj_uri</span> <span class="ow">in</span> <span class="n">collect_uris</span><span class="p">(</span><span class="n">objects</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">disjointWith</span><span class="p">,</span> <span class="n">obj_uri</span><span class="p">))</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added disjointWith: </span><span class="si">%s</span><span class="s2"> disjoint </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
         
+        <span class="k">elif</span> <span class="n">axiom_type</span> <span class="o">==</span> <span class="s1">&#39;disjointUnion&#39;</span> <span class="ow">and</span> <span class="n">subject_uri</span> <span class="ow">and</span> <span class="n">objects</span><span class="p">:</span>
+            <span class="n">obj_uris</span> <span class="o">=</span> <span class="n">collect_uris</span><span class="p">(</span><span class="n">objects</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">obj_uris</span><span class="p">:</span>
+                <span class="n">members</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
+                <span class="n">Collection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="n">members</span><span class="p">,</span> <span class="n">obj_uris</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">disjointUnionOf</span><span class="p">,</span> <span class="n">members</span><span class="p">))</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added disjointUnion: </span><span class="si">%s</span><span class="s2"> disjointUnionOf </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
+        
+        <span class="c1"># ── Property axioms ──────────────────────────────────────</span>
+        
+        <span class="k">elif</span> <span class="n">axiom_type</span> <span class="o">==</span> <span class="s1">&#39;equivalentProperty&#39;</span> <span class="ow">and</span> <span class="n">subject_uri</span> <span class="ow">and</span> <span class="n">objects</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">obj_uri</span> <span class="ow">in</span> <span class="n">collect_uris</span><span class="p">(</span><span class="n">objects</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">equivalentProperty</span><span class="p">,</span> <span class="n">obj_uri</span><span class="p">))</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added equivalentProperty: </span><span class="si">%s</span><span class="s2"> = </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
+        
         <span class="k">elif</span> <span class="n">axiom_type</span> <span class="o">==</span> <span class="s1">&#39;inverseOf&#39;</span> <span class="ow">and</span> <span class="n">subject_uri</span> <span class="ow">and</span> <span class="n">objects</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">obj</span> <span class="ow">in</span> <span class="n">objects</span><span class="p">:</span>
-                <span class="n">obj_uri</span> <span class="o">=</span> <span class="n">get_uri</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">obj_uri</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">inverseOf</span><span class="p">,</span> <span class="n">obj_uri</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">obj_uri</span> <span class="ow">in</span> <span class="n">collect_uris</span><span class="p">(</span><span class="n">objects</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">inverseOf</span><span class="p">,</span> <span class="n">obj_uri</span><span class="p">))</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added inverseOf: </span><span class="si">%s</span><span class="s2"> inverse </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
         
         <span class="k">elif</span> <span class="n">axiom_type</span> <span class="o">==</span> <span class="s1">&#39;disjointProperties&#39;</span> <span class="ow">and</span> <span class="n">subject_uri</span> <span class="ow">and</span> <span class="n">objects</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">obj</span> <span class="ow">in</span> <span class="n">objects</span><span class="p">:</span>
-                <span class="n">obj_uri</span> <span class="o">=</span> <span class="n">get_uri</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">obj_uri</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">propertyDisjointWith</span><span class="p">,</span> <span class="n">obj_uri</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">obj_uri</span> <span class="ow">in</span> <span class="n">collect_uris</span><span class="p">(</span><span class="n">objects</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">propertyDisjointWith</span><span class="p">,</span> <span class="n">obj_uri</span><span class="p">))</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added disjointProperties: </span><span class="si">%s</span><span class="s2"> disjoint </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
         
         <span class="k">elif</span> <span class="n">axiom_type</span> <span class="o">==</span> <span class="s1">&#39;propertyChain&#39;</span><span class="p">:</span>
             <span class="n">chain</span> <span class="o">=</span> <span class="n">axiom</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;chain&#39;</span><span class="p">,</span> <span class="p">[])</span>
             <span class="n">result_property</span> <span class="o">=</span> <span class="n">axiom</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;resultProperty&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">chain</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">result_property</span><span class="p">:</span>
-                <span class="c1"># Property chain: p owl:propertyChainAxiom (p1 p2 ...)</span>
                 <span class="n">result_uri</span> <span class="o">=</span> <span class="n">get_uri</span><span class="p">(</span><span class="n">result_property</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">result_uri</span><span class="p">:</span>
-                    <span class="c1"># Create RDF list for the chain</span>
-                    <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">BNode</span>
-                    <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">Collection</span>
-                    <span class="n">chain_uris</span> <span class="o">=</span> <span class="p">[</span><span class="n">get_uri</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">chain</span> <span class="k">if</span> <span class="n">p</span><span class="p">]</span>
-                    <span class="n">chain_uris</span> <span class="o">=</span> <span class="p">[</span><span class="n">u</span> <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">chain_uris</span> <span class="k">if</span> <span class="n">u</span><span class="p">]</span>  <span class="c1"># Filter None</span>
-                    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">chain_uris</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
-                        <span class="n">chain_list</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
-                        <span class="n">Collection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="n">chain_list</span><span class="p">,</span> <span class="n">chain_uris</span><span class="p">)</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">result_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">propertyChainAxiom</span><span class="p">,</span> <span class="n">chain_list</span><span class="p">))</span>
-                        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added propertyChain: </span><span class="si">%s</span><span class="s2"> = </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">result_property</span><span class="p">,</span> <span class="n">chain</span><span class="p">)</span>
+                <span class="n">chain_uris</span> <span class="o">=</span> <span class="n">collect_uris</span><span class="p">(</span><span class="n">chain</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">result_uri</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">chain_uris</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
+                    <span class="n">chain_list</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
+                    <span class="n">Collection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="n">chain_list</span><span class="p">,</span> <span class="n">chain_uris</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">result_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">propertyChainAxiom</span><span class="p">,</span> <span class="n">chain_list</span><span class="p">))</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added propertyChain: </span><span class="si">%s</span><span class="s2"> = </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">result_property</span><span class="p">,</span> <span class="n">chain</span><span class="p">)</span>
+        
+        <span class="c1"># ── Class expressions (wrapped via owl:equivalentClass) ──</span>
         
         <span class="k">elif</span> <span class="n">axiom_type</span> <span class="o">==</span> <span class="s1">&#39;unionOf&#39;</span> <span class="ow">and</span> <span class="n">subject_uri</span> <span class="ow">and</span> <span class="n">objects</span><span class="p">:</span>
-            <span class="c1"># Create union class</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">BNode</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">Collection</span>
-            <span class="n">obj_uris</span> <span class="o">=</span> <span class="p">[</span><span class="n">get_uri</span><span class="p">(</span><span class="n">o</span><span class="p">)</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">objects</span> <span class="k">if</span> <span class="n">o</span><span class="p">]</span>
-            <span class="n">obj_uris</span> <span class="o">=</span> <span class="p">[</span><span class="n">u</span> <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">obj_uris</span> <span class="k">if</span> <span class="n">u</span><span class="p">]</span>
+            <span class="n">obj_uris</span> <span class="o">=</span> <span class="n">collect_uris</span><span class="p">(</span><span class="n">objects</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">obj_uris</span><span class="p">:</span>
-                <span class="n">union_list</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
-                <span class="n">Collection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="n">union_list</span><span class="p">,</span> <span class="n">obj_uris</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">unionOf</span><span class="p">,</span> <span class="n">union_list</span><span class="p">))</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added unionOf: </span><span class="si">%s</span><span class="s2"> = union of </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
+                <span class="n">members</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
+                <span class="n">Collection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="n">members</span><span class="p">,</span> <span class="n">obj_uris</span><span class="p">)</span>
+                <span class="n">anon</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">anon</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">Class</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">anon</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">unionOf</span><span class="p">,</span> <span class="n">members</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">equivalentClass</span><span class="p">,</span> <span class="n">anon</span><span class="p">))</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added unionOf: </span><span class="si">%s</span><span class="s2"> equivalentClass unionOf(</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
         
         <span class="k">elif</span> <span class="n">axiom_type</span> <span class="o">==</span> <span class="s1">&#39;intersectionOf&#39;</span> <span class="ow">and</span> <span class="n">subject_uri</span> <span class="ow">and</span> <span class="n">objects</span><span class="p">:</span>
-            <span class="c1"># Create intersection class</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">BNode</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">Collection</span>
-            <span class="n">obj_uris</span> <span class="o">=</span> <span class="p">[</span><span class="n">get_uri</span><span class="p">(</span><span class="n">o</span><span class="p">)</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">objects</span> <span class="k">if</span> <span class="n">o</span><span class="p">]</span>
-            <span class="n">obj_uris</span> <span class="o">=</span> <span class="p">[</span><span class="n">u</span> <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">obj_uris</span> <span class="k">if</span> <span class="n">u</span><span class="p">]</span>
+            <span class="n">obj_uris</span> <span class="o">=</span> <span class="n">collect_uris</span><span class="p">(</span><span class="n">objects</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">obj_uris</span><span class="p">:</span>
-                <span class="n">intersection_list</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
-                <span class="n">Collection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="n">intersection_list</span><span class="p">,</span> <span class="n">obj_uris</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">intersectionOf</span><span class="p">,</span> <span class="n">intersection_list</span><span class="p">))</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added intersectionOf: </span><span class="si">%s</span><span class="s2"> = intersection of </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
+                <span class="n">members</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
+                <span class="n">Collection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="n">members</span><span class="p">,</span> <span class="n">obj_uris</span><span class="p">)</span>
+                <span class="n">anon</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">anon</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">Class</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">anon</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">intersectionOf</span><span class="p">,</span> <span class="n">members</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">equivalentClass</span><span class="p">,</span> <span class="n">anon</span><span class="p">))</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added intersectionOf: </span><span class="si">%s</span><span class="s2"> equivalentClass intersectionOf(</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">objects</span><span class="p">)</span>
         
         <span class="k">elif</span> <span class="n">axiom_type</span> <span class="o">==</span> <span class="s1">&#39;complementOf&#39;</span> <span class="ow">and</span> <span class="n">subject_uri</span> <span class="ow">and</span> <span class="n">objects</span><span class="p">:</span>
-            <span class="c1"># Complement of first object</span>
-            <span class="k">if</span> <span class="n">objects</span><span class="p">:</span>
-                <span class="n">obj_uri</span> <span class="o">=</span> <span class="n">get_uri</span><span class="p">(</span><span class="n">objects</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-                <span class="k">if</span> <span class="n">obj_uri</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">complementOf</span><span class="p">,</span> <span class="n">obj_uri</span><span class="p">))</span>
-                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added complementOf: </span><span class="si">%s</span><span class="s2"> = complement of </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">objects</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">obj_uri</span> <span class="o">=</span> <span class="n">get_uri</span><span class="p">(</span><span class="n">objects</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">obj_uri</span><span class="p">:</span>
+                <span class="n">anon</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">anon</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">Class</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">anon</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">complementOf</span><span class="p">,</span> <span class="n">obj_uri</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">equivalentClass</span><span class="p">,</span> <span class="n">anon</span><span class="p">))</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added complementOf: </span><span class="si">%s</span><span class="s2"> equivalentClass complementOf(</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">objects</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
         
         <span class="k">elif</span> <span class="n">axiom_type</span> <span class="o">==</span> <span class="s1">&#39;oneOf&#39;</span> <span class="ow">and</span> <span class="n">subject_uri</span><span class="p">:</span>
-            <span class="c1"># Enumerated class (oneOf individuals)</span>
-            <span class="n">individuals</span> <span class="o">=</span> <span class="n">axiom</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;individuals&#39;</span><span class="p">,</span> <span class="p">[])</span>
-            <span class="k">if</span> <span class="n">individuals</span><span class="p">:</span>
-                <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">BNode</span>
-                <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">Collection</span>
-                <span class="n">ind_uris</span> <span class="o">=</span> <span class="p">[</span><span class="n">get_uri</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">individuals</span> <span class="k">if</span> <span class="n">i</span><span class="p">]</span>
-                <span class="n">ind_uris</span> <span class="o">=</span> <span class="p">[</span><span class="n">u</span> <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">ind_uris</span> <span class="k">if</span> <span class="n">u</span><span class="p">]</span>
-                <span class="k">if</span> <span class="n">ind_uris</span><span class="p">:</span>
-                    <span class="n">one_of_list</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
-                    <span class="n">Collection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="n">one_of_list</span><span class="p">,</span> <span class="n">ind_uris</span><span class="p">)</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">oneOf</span><span class="p">,</span> <span class="n">one_of_list</span><span class="p">))</span>
-                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added oneOf: </span><span class="si">%s</span><span class="s2"> = one of </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">individuals</span><span class="p">)</span></div>
+            <span class="n">individuals_raw</span> <span class="o">=</span> <span class="n">axiom</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;individuals&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">individuals_raw</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">individuals</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">individuals_raw</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)</span> <span class="k">if</span> <span class="n">i</span><span class="o">.</span><span class="n">strip</span><span class="p">()]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">individuals</span> <span class="o">=</span> <span class="n">individuals_raw</span> <span class="ow">or</span> <span class="p">[]</span>
+            <span class="n">ind_uris</span> <span class="o">=</span> <span class="n">collect_uris</span><span class="p">(</span><span class="n">individuals</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">ind_uris</span><span class="p">:</span>
+                <span class="n">members</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
+                <span class="n">Collection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="n">members</span><span class="p">,</span> <span class="n">ind_uris</span><span class="p">)</span>
+                <span class="n">anon</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">anon</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">Class</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">anon</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">oneOf</span><span class="p">,</span> <span class="n">members</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">subject_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">equivalentClass</span><span class="p">,</span> <span class="n">anon</span><span class="p">))</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added oneOf: </span><span class="si">%s</span><span class="s2"> equivalentClass oneOf(</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">individuals</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_add_groups</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add entity groups as OWL defined classes using owl:equivalentClass + owl:unionOf.</span>
+
+<span class="sd">        Each group becomes an ``owl:Class`` annotated with ``ontobricks:isGroup true``</span>
+<span class="sd">        and linked via ``owl:equivalentClass`` to an anonymous class whose</span>
+<span class="sd">        ``owl:unionOf`` lists the member classes.  Annotation properties</span>
+<span class="sd">        ``ontobricks:isGroup`` and ``ontobricks:groupColor`` are declared once.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">groups</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="c1"># Declare annotation properties once</span>
+        <span class="n">is_group_prop</span> <span class="o">=</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">isGroup</span>
+        <span class="n">group_color_prop</span> <span class="o">=</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">groupColor</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">is_group_prop</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">AnnotationProperty</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">group_color_prop</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">AnnotationProperty</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">groups</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">member_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">group</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;members&#39;</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">m</span> <span class="ow">and</span> <span class="n">m</span><span class="o">.</span><span class="n">strip</span><span class="p">()]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">member_names</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Skipping group &#39;</span><span class="si">%s</span><span class="s2">&#39; — no members&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+                <span class="k">continue</span>
+
+            <span class="n">group_uri</span> <span class="o">=</span> <span class="n">URIRef</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">base_uri</span> <span class="o">+</span> <span class="n">name</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">group_uri</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">Class</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">group_uri</span><span class="p">,</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">isGroup</span><span class="p">,</span> <span class="n">Literal</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">datatype</span><span class="o">=</span><span class="n">XSD</span><span class="o">.</span><span class="n">boolean</span><span class="p">)))</span>
+
+            <span class="n">label</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;label&#39;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">label</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">group_uri</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">Literal</span><span class="p">(</span><span class="n">label</span><span class="p">)))</span>
+
+            <span class="n">description</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;description&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">description</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">group_uri</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">comment</span><span class="p">,</span> <span class="n">Literal</span><span class="p">(</span><span class="n">description</span><span class="p">)))</span>
+
+            <span class="n">color</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;color&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">color</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">group_uri</span><span class="p">,</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">groupColor</span><span class="p">,</span> <span class="n">Literal</span><span class="p">(</span><span class="n">color</span><span class="p">)))</span>
+
+            <span class="n">icon</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;icon&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">icon</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">group_uri</span><span class="p">,</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">icon</span><span class="p">,</span> <span class="n">Literal</span><span class="p">(</span><span class="n">icon</span><span class="p">)))</span>
+
+            <span class="n">member_uris</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">member_names</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">m</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;http://&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">m</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;https://&#39;</span><span class="p">):</span>
+                    <span class="n">member_uris</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">URIRef</span><span class="p">(</span><span class="n">m</span><span class="p">))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">member_uris</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">URIRef</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">base_uri</span> <span class="o">+</span> <span class="n">m</span><span class="p">))</span>
+
+            <span class="n">members_list</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
+            <span class="n">Collection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="n">members_list</span><span class="p">,</span> <span class="n">member_uris</span><span class="p">)</span>
+            <span class="n">union_class</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">union_class</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">Class</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">union_class</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">unionOf</span><span class="p">,</span> <span class="n">members_list</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">group_uri</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">equivalentClass</span><span class="p">,</span> <span class="n">union_class</span><span class="p">))</span>
+
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added group &#39;</span><span class="si">%s</span><span class="s2">&#39; with </span><span class="si">%d</span><span class="s2"> members: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">member_uris</span><span class="p">),</span> <span class="n">member_names</span><span class="p">)</span></div>
 
 
 

@@ -22,7 +22,7 @@ class TestNavigation:
         ("/settings", "Settings"),
         ("/ontology", "Ontology"),
         ("/mapping", "Mapping"),
-        ("/project", "Project"),
+        ("/domain", "Domain"),
         ("/dtwin/", "Digital Twin"),
         ("/about", "About"),
     ])
@@ -58,7 +58,7 @@ class TestHomePage:
         assert hero.is_visible()
         assert "OntoBricks" in hero.text_content()
 
-    def test_project_panel_visible(self, page, live_server):
+    def test_domain_panel_visible(self, page, live_server):
         page.goto(live_server)
         page.wait_for_load_state("domcontentloaded")
         assert page.locator("#sessionPanel").is_visible()
@@ -156,20 +156,20 @@ class TestMappingSidebar:
 
 
 # =====================================================
-# PROJECT PAGE -- SIDEBAR NAVIGATION
+# DOMAIN PAGE -- SIDEBAR NAVIGATION
 # =====================================================
 
-class TestProjectSidebar:
+class TestDomainSidebar:
     @pytest.mark.parametrize("section", [
         "information", "metadata", "documents", "validation",
         "owl-content", "r2rml"
     ])
     def test_sidebar_switches_section(self, page, live_server, section):
-        page.goto(f"{live_server}/project")
+        page.goto(f"{live_server}/domain")
         page.wait_for_load_state("domcontentloaded")
         page.wait_for_timeout(500)
         # Some links get sidebar-disabled (pointer-events:none) when no
-        # project is saved; bypass CSS by using JS to switch directly.
+        # domain is saved; bypass CSS by using JS to switch directly.
         page.evaluate(f'SidebarNav.switchTo("{section}")')
         page.wait_for_timeout(400)
         section_div = page.locator(f"#{section}-section")
@@ -181,18 +181,17 @@ class TestProjectSidebar:
 # =====================================================
 
 class TestDigitalTwinSidebar:
-    def test_sync_section_visible_by_default(self, page, live_server):
+    def test_sigmagraph_section_visible_by_default(self, page, live_server):
         page.goto(f"{live_server}/dtwin/")
         page.wait_for_load_state("domcontentloaded")
-        assert page.locator("#sync-section").is_visible()
+        assert page.locator("#sigmagraph-section").is_visible()
 
-    def test_sidebar_information_link(self, page, live_server):
+    def test_sidebar_knowledge_graph_link(self, page, live_server):
         page.goto(f"{live_server}/dtwin/")
         page.wait_for_load_state("domcontentloaded")
-        link = page.locator('a[data-section="sync"]')
+        link = page.locator('a[data-section="sigmagraph"]')
         assert link.is_visible()
-        # Menu label from menu_config.json: "Build information"
-        assert "information" in (link.text_content() or "").lower()
+        assert "knowledge" in (link.text_content() or "").lower() or "graph" in (link.text_content() or "").lower()
 
 
 # =====================================================

@@ -127,7 +127,7 @@
 <p>OWL ontology generator.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="back.core.w3c.owl.OntologyGenerator.OntologyGenerator">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.owl.OntologyGenerator.</span></span><span class="sig-name descname"><span class="pre">OntologyGenerator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyGenerator.html#OntologyGenerator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyGenerator.OntologyGenerator" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.owl.OntologyGenerator.</span></span><span class="sig-name descname"><span class="pre">OntologyGenerator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expressions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groups</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyGenerator.html#OntologyGenerator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyGenerator.OntologyGenerator" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
 <p>Generate OWL ontologies from configuration.</p>
 <dl class="field-list simple">
@@ -140,12 +140,14 @@
 <li><p><strong>constraints</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
 <li><p><strong>swrl_rules</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
 <li><p><strong>axioms</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>expressions</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>groups</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
 </ul>
 </dd>
 </dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.w3c.owl.OntologyGenerator.OntologyGenerator.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyGenerator.html#OntologyGenerator.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyGenerator.OntologyGenerator.__init__" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expressions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groups</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyGenerator.html#OntologyGenerator.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyGenerator.OntologyGenerator.__init__" title="Link to this definition">¶</a></dt>
 <dd><p>Initialize the OWL generator.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -156,7 +158,9 @@
 <li><p><strong>properties</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of property definitions</p></li>
 <li><p><strong>constraints</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of property constraints (cardinality, characteristics)</p></li>
 <li><p><strong>swrl_rules</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of SWRL rules</p></li>
-<li><p><strong>axioms</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of OWL axioms</p></li>
+<li><p><strong>axioms</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of OWL axioms (logical assertions)</p></li>
+<li><p><strong>expressions</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of OWL class expressions (unionOf, intersectionOf, etc.)</p></li>
+<li><p><strong>groups</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of entity group definitions (name, label, color, icon, members)</p></li>
 </ul>
 </dd>
 </dl>
@@ -201,12 +205,30 @@
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser.get_groups">
+<span class="sig-name descname"><span class="pre">get_groups</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser.get_groups"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_groups" title="Link to this definition">¶</a></dt>
+<dd><p>Extract entity groups from the ontology.</p>
+<p>Groups are OWL classes annotated with <code class="docutils literal notranslate"><span class="pre">ontobricks:isGroup</span> <span class="pre">true</span></code> whose
+<code class="docutils literal notranslate"><span class="pre">owl:equivalentClass</span></code> points to an anonymous <code class="docutils literal notranslate"><span class="pre">owl:unionOf</span></code> list.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of group dicts with name, label, description, color, icon, members.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser.get_classes">
 <span class="sig-name descname"><span class="pre">get_classes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser.get_classes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_classes" title="Link to this definition">¶</a></dt>
 <dd><p>Extract all OWL classes from the ontology.</p>
+<p>Classes annotated with <code class="docutils literal notranslate"><span class="pre">ontobricks:isGroup</span> <span class="pre">true</span></code> are excluded (they
+are returned by <a class="reference internal" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_groups" title="back.core.w3c.owl.OntologyParser.OntologyParser.get_groups"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_groups()</span></code></a> instead).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>List of dicts with ‘uri’, ‘name’, ‘label’, ‘comment’, ‘emoji’, ‘parent’, ‘dashboard’, ‘dashboardParams’, ‘dataProperties’</p>
+<dd class="field-odd"><p>List of dicts with ‘uri’, ‘name’, ‘label’, ‘comment’, ‘emoji’, ‘parent’, ‘group’, ‘dashboard’, ‘dashboardParams’, ‘dataProperties’</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
@@ -271,9 +293,24 @@
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser.get_axioms_and_expressions">
+<span class="sig-name descname"><span class="pre">get_axioms_and_expressions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser.get_axioms_and_expressions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_axioms_and_expressions" title="Link to this definition">¶</a></dt>
+<dd><p>Extract OWL axioms and class expressions as two separate lists.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict with <code class="docutils literal notranslate"><span class="pre">'axioms'</span></code> (logical assertions) and <code class="docutils literal notranslate"><span class="pre">'expressions'</span></code>
+(class compositions: unionOf, intersectionOf, complementOf, oneOf).</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser.get_axioms">
 <span class="sig-name descname"><span class="pre">get_axioms</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser.get_axioms"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_axioms" title="Link to this definition">¶</a></dt>
-<dd><p>Extract OWL axioms from the ontology.</p>
+<dd><p>Extract OWL axioms from the ontology (backward-compat: returns all items).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><p>List of axiom dicts with ‘type’, ‘subject’, ‘objects’, etc.</p>
@@ -557,70 +594,6 @@ RDFS is simpler than OWL and uses rdfs:Class instead of owl:Class.</p>
 
 </dd></dl>
 
-<p id="module-back.core.w3c.sparql.ProjectQueryService">SPARQL validation, execution, and samples over project JSON (R2RML in assignment).</p>
-<dl class="py class">
-<dt class="sig sig-object py" id="back.core.w3c.sparql.ProjectQueryService.ProjectQueryService">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.sparql.ProjectQueryService.</span></span><span class="sig-name descname"><span class="pre">ProjectQueryService</span></span><a class="reference internal" href="../_modules/back/core/w3c/sparql/ProjectQueryService.html#ProjectQueryService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.sparql.ProjectQueryService.ProjectQueryService" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
-<p>Validate and run SPARQL against project slice data; build sample queries.</p>
-<dl class="py method">
-<dt class="sig sig-object py" id="back.core.w3c.sparql.ProjectQueryService.ProjectQueryService.validate_sparql_query">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_sparql_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/sparql/ProjectQueryService.html#ProjectQueryService.validate_sparql_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.sparql.ProjectQueryService.ProjectQueryService.validate_sparql_query" title="Link to this definition">¶</a></dt>
-<dd><p>Validate SPARQL query syntax.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Tuple of (is_valid, error_message)</p>
-</dd>
-<dt class="field-even">Parameters<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>query</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="back.core.w3c.sparql.ProjectQueryService.ProjectQueryService.execute_sparql_query">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">execute_sparql_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'local'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/sparql/ProjectQueryService.html#ProjectQueryService.execute_sparql_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.sparql.ProjectQueryService.ProjectQueryService.execute_sparql_query" title="Link to this definition">¶</a></dt>
-<dd><p>Execute a SPARQL query against project data.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Raises<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><a class="reference internal" href="app.core.errors.html#back.core.errors.ValidationError.ValidationError" title="back.core.errors.ValidationError.ValidationError"><strong>ValidationError</strong></a> – No R2RML mapping or unsupported engine.</p></li>
-<li><p><a class="reference internal" href="app.core.errors.html#back.core.errors.InfrastructureError.InfrastructureError" title="back.core.errors.InfrastructureError.InfrastructureError"><strong>InfrastructureError</strong></a> – Query execution failure.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Parameters<span class="colon">:</span></dt>
-<dd class="field-even"><ul class="simple">
-<li><p><strong>project_data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p></li>
-<li><p><strong>query</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-<li><p><strong>engine</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="back.core.w3c.sparql.ProjectQueryService.ProjectQueryService.generate_sample_queries">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">generate_sample_queries</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/sparql/ProjectQueryService.html#ProjectQueryService.generate_sample_queries"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.sparql.ProjectQueryService.ProjectQueryService.generate_sample_queries" title="Link to this definition">¶</a></dt>
-<dd><p>Generate sample SPARQL queries based on the ontology.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>project_data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
 </section>
 <section id="module-back.core.w3c.shacl.SHACLService">
 <span id="shacl-shapes-constraint-language"></span><h2>SHACL (Shapes Constraint Language)<a class="headerlink" href="#module-back.core.w3c.shacl.SHACLService" title="Link to this heading">¶</a></h2>
@@ -632,7 +605,7 @@ are internal implementation details.</p>
 <dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.SHACLService.</span></span><span class="sig-name descname"><span class="pre">SHACLService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://example.org/ontology#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
-<p>Manage SHACL shapes for a project’s data-quality rules.</p>
+<p>Manage SHACL shapes for a domain’s data-quality rules.</p>
 <p>Constructor receives the base URI for the ontology so that the
 generator can produce correct shape URIs.</p>
 <dl class="field-list simple">

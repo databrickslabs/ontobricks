@@ -5,10 +5,7 @@ Moved from app/frontend/tasks/routes.py during the front/back split.
 """
 from fastapi import APIRouter
 
-from back.core.logging import get_logger
 from back.core.task_manager import get_task_manager, TaskStatus
-
-logger = get_logger(__name__)
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 

@@ -23,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
 from back.core.logging import get_logger
+from shared.config.constants import HTTP_USER_AGENT
 from rdflib import Graph, RDF, RDFS, OWL, BNode, URIRef
 
 from back.core.helpers import extract_local_name as _extract_local_name
@@ -172,7 +173,7 @@ class IofImportService:
             resp = requests.get(
                 url,
                 timeout=IofImportService._REQUEST_TIMEOUT,
-                headers={"User-Agent": "OntoBricks/1.0", "Accept": "*/*"},
+                headers={"User-Agent": HTTP_USER_AGENT, "Accept": "*/*"},
                 allow_redirects=True,
             )
             if resp.status_code == 200:
@@ -211,9 +212,10 @@ class IofImportService:
 
         return modules
 
+    _property_label_cache: Dict[str, str] = {}
+
     @staticmethod
-    def _resolve_property_label(graph: Graph, prop_uri: str,
-                                _cache: Dict[str, str] = {}) -> str:
+    def _resolve_property_label(graph: Graph, prop_uri: str) -> str:
         """Return a human-readable label for a property URI.
 
         Resolution order:
@@ -222,6 +224,7 @@ class IofImportService:
           3. Hardcoded BFO/RO label dictionary
           4. Local name from URI (last resort)
         """
+        _cache = IofImportService._property_label_cache
         if prop_uri in _cache:
             return _cache[prop_uri]
 
@@ -439,7 +442,7 @@ class IofImportService:
         from back.objects.ontology import Ontology
 
         result = Ontology.parse_owl(turtle_content, extract_advanced=True)
-        ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions = result
+        ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions, _groups = result
 
         # ------------------------------------------------------------------
         # Post-processing: fix relationships for BFO-based ontologies

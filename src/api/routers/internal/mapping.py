@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import Response
 
 from shared.config.settings import get_settings, Settings
-from back.core.databricks import DatabricksClient, VolumeFileService
+from back.core.databricks import DatabricksClient
 from back.core.helpers import (
     get_databricks_client,
     get_databricks_credentials,
@@ -15,7 +15,7 @@ from back.core.helpers import (
 )
 from agents.serialization import serialize_agent_steps
 from back.core.logging import get_logger
-from back.objects.session import SessionManager, get_project, get_session_manager
+from back.objects.session import SessionManager, get_domain, get_session_manager
 from back.core.task_manager import get_task_manager
 from back.objects.mapping import Mapping
 
@@ -31,9 +31,9 @@ router = APIRouter(prefix="/mapping", tags=["Mapping"])
 @router.get("/load")
 async def load_mapping(session_mgr: SessionManager = Depends(get_session_manager)):
     """Load mapping configuration from session."""
-    project = get_project(session_mgr)
-    entity_mappings = project.get_entity_mappings()
-    relationship_mappings = project.get_relationship_mappings()
+    domain = get_domain(session_mgr)
+    entity_mappings = domain.get_entity_mappings()
+    relationship_mappings = domain.get_relationship_mappings()
     return {
         'success': True,
         'config': {
@@ -41,9 +41,9 @@ async def load_mapping(session_mgr: SessionManager = Depends(get_session_manager
             'relationships': relationship_mappings,
             'data_source_mappings': entity_mappings,  # backward compat
             'relationship_mappings': relationship_mappings,  # backward compat
-            'r2rml_output': project.get_r2rml()
+            'r2rml_output': domain.get_r2rml()
         },
-        'r2rml_output': project.get_r2rml()
+        'r2rml_output': domain.get_r2rml()
     }
 
 
@@ -53,16 +53,16 @@ async def save_mapping(request: Request, session_mgr: SessionManager = Depends(g
     data = await request.json()
     mapping_config = data.get('config', data)  # Support both wrapped and unwrapped
     
-    project = get_project(session_mgr)
-    stats = Mapping(project).save_mapping_config(mapping_config)
+    domain = get_domain(session_mgr)
+    stats = Mapping(domain).save_mapping_config(mapping_config)
     return {'success': True, 'message': 'Mapping saved', 'stats': stats}
 
 
 @router.post("/reset")
 async def reset_mapping_endpoint(session_mgr: SessionManager = Depends(get_session_manager)):
     """Reset mapping configuration."""
-    project = get_project(session_mgr)
-    Mapping(project).reset_mapping()
+    domain = get_domain(session_mgr)
+    Mapping(domain).reset_mapping()
     return {'success': True, 'message': 'Mapping reset'}
 
 
@@ -80,8 +80,8 @@ async def clear_mapping(session_mgr: SessionManager = Depends(get_session_manage
 async def add_entity_mapping(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
     """Add an entity mapping."""
     data = await request.json()
-    project = get_project(session_mgr)
-    _, new_mapping = Mapping(project).add_or_update_entity_mapping(data)
+    domain = get_domain(session_mgr)
+    _, new_mapping = Mapping(domain).add_or_update_entity_mapping(data)
     return {'success': True, 'mapping': new_mapping}
 
 
@@ -89,10 +89,10 @@ async def add_entity_mapping(request: Request, session_mgr: SessionManager = Dep
 async def delete_entity_mapping(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
     """Delete an entity mapping."""
     data = await request.json()
-    project = get_project(session_mgr)
+    domain = get_domain(session_mgr)
     ontology_class = data.get('ontology_class')
     
-    if Mapping(project).delete_entity_mapping(ontology_class):
+    if Mapping(domain).delete_entity_mapping(ontology_class):
         return {'success': True}
     return {'success': False, 'message': 'Mapping not found'}
 
@@ -105,8 +105,8 @@ async def delete_entity_mapping(request: Request, session_mgr: SessionManager = 
 async def add_relationship_mapping(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
     """Add a relationship mapping."""
     data = await request.json()
-    project = get_project(session_mgr)
-    _, new_mapping = Mapping(project).add_or_update_relationship_mapping(data)
+    domain = get_domain(session_mgr)
+    _, new_mapping = Mapping(domain).add_or_update_relationship_mapping(data)
     return {'success': True, 'mapping': new_mapping}
 
 
@@ -114,10 +114,10 @@ async def add_relationship_mapping(request: Request, session_mgr: SessionManager
 async def delete_relationship_mapping(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
     """Delete a relationship mapping."""
     data = await request.json()
-    project = get_project(session_mgr)
+    domain = get_domain(session_mgr)
     property_uri = data.get('property')
     
-    if Mapping(project).delete_relationship_mapping(property_uri):
+    if Mapping(domain).delete_relationship_mapping(property_uri):
         return {'success': True}
     return {'success': False, 'message': 'Mapping not found'}
 
@@ -145,8 +145,8 @@ async def toggle_exclude(request: Request, session_mgr: SessionManager = Depends
     excluded = bool(data.get('excluded', True))
     item_type = data.get('item_type', 'entity')
 
-    project = get_project(session_mgr)
-    changed = Mapping(project).toggle_exclude_items(uris, excluded, item_type)
+    domain = get_domain(session_mgr)
+    changed = Mapping(domain).toggle_exclude_items(uris, excluded, item_type)
     logger.info("Toggled excluded=%s for %d %s(s)", excluded, changed, item_type)
     return {'success': True, 'changed': changed}
 
@@ -158,9 +158,9 @@ async def toggle_exclude(request: Request, session_mgr: SessionManager = Depends
 @router.post("/generate")
 async def generate_r2rml(session_mgr: SessionManager = Depends(get_session_manager)):
     """Generate R2RML from current mapping configuration."""
-    project = get_project(session_mgr)
+    domain = get_domain(session_mgr)
     
-    m = Mapping(project)
+    m = Mapping(domain)
     r2rml_content = m.generate_r2rml()
     return {'success': True, 'r2rml': r2rml_content, 'stats': m.get_mapping_stats()}
 
@@ -184,8 +184,8 @@ async def test_sql_query(
         return {'success': False, 'message': 'No SQL query provided'}
     
     try:
-        project = get_project(session_mgr)
-        host, token, warehouse_id = get_databricks_credentials(project, settings)
+        domain = get_domain(session_mgr)
+        host, token, warehouse_id = get_databricks_credentials(domain, settings)
         
         if not warehouse_id:
             return {'success': False, 'message': 'No SQL warehouse configured'}
@@ -217,8 +217,8 @@ async def get_tables(
         return {'error': 'Catalog and schema are required'}
     
     try:
-        project = get_project(session_mgr)
-        client = get_databricks_client(project, settings)
+        domain = get_domain(session_mgr)
+        client = get_databricks_client(domain, settings)
         if not client:
             return {'error': 'Databricks not configured'}
         return {'tables': await run_blocking(client.get_tables, catalog, schema)}
@@ -241,8 +241,8 @@ async def get_table_columns(
         return {'error': 'Catalog, schema, and table are required'}
     
     try:
-        project = get_project(session_mgr)
-        client = get_databricks_client(project, settings)
+        domain = get_domain(session_mgr)
+        client = get_databricks_client(domain, settings)
         if not client:
             return {'error': 'Databricks not configured'}
         return {'columns': await run_blocking(client.get_table_columns, catalog, schema, table)}
@@ -265,7 +265,7 @@ async def parse_r2rml(request: Request, session_mgr: SessionManager = Depends(ge
         return {'success': False, 'message': 'No R2RML content provided'}
     
     try:
-        return Mapping(get_project(session_mgr)).parse_r2rml(r2rml_content)
+        return Mapping(get_domain(session_mgr)).parse_r2rml(r2rml_content)
     except Exception as e:
         logger.exception("Parse R2RML failed: %s", e)
         return {'success': False, 'message': str(e)}
@@ -274,8 +274,8 @@ async def parse_r2rml(request: Request, session_mgr: SessionManager = Depends(ge
 @router.get("/download")
 async def download_r2rml(session_mgr: SessionManager = Depends(get_session_manager)):
     """Download generated R2RML as TTL file."""
-    project = get_project(session_mgr)
-    r2rml_content = project.get_r2rml()
+    domain = get_domain(session_mgr)
+    r2rml_content = domain.get_r2rml()
     
     if not r2rml_content:
         return {'success': False, 'message': 'No R2RML to download'}
@@ -299,10 +299,14 @@ async def save_mapping_to_uc(
 
 
 # ===========================================
-# Helper Functions
+# Diagnostics
 # ===========================================
-# Mapping helpers live on back.objects.mapping.Mapping.
-# Use get_databricks_client from app/core/helpers.py for Databricks client
+
+@router.get("/diagnostics")
+async def run_diagnostics(session_mgr: SessionManager = Depends(get_session_manager)):
+    """Run comprehensive validation on all entity and relationship mappings."""
+    domain = get_domain(session_mgr)
+    return Mapping(domain).run_diagnostics()
 
 
 # ===========================================
@@ -318,8 +322,8 @@ async def get_llm_endpoints(
     try:
         from back.core.sqlwizard import SQLWizardService
         
-        project = get_project(session_mgr)
-        client = get_databricks_client(project, settings)
+        domain = get_domain(session_mgr)
+        client = get_databricks_client(domain, settings)
         
         if not client:
             return {'success': False, 'error': 'Databricks not configured', 'endpoints': []}
@@ -350,8 +354,8 @@ async def get_schema_context(
         if not catalog or not schema:
             return {'success': False, 'error': 'Catalog and schema are required'}
         
-        project = get_project(session_mgr)
-        client = get_databricks_client(project, settings)
+        domain = get_domain(session_mgr)
+        client = get_databricks_client(domain, settings)
         
         if not client:
             return {'success': False, 'error': 'Databricks not configured'}
@@ -387,7 +391,7 @@ async def generate_sql_from_prompt(
         prompt: Natural language description of the query
         limit: Optional result limit (default: 100)
         validate_plan: Whether to run EXPLAIN validation (default: true)
-        schema_context: Optional pre-built schema context with tables (from project metadata)
+        schema_context: Optional pre-built schema context with tables (from domain metadata)
         mapping_type: Type of mapping ('entity', 'relationship', or None for general)
     """
     try:
@@ -418,8 +422,8 @@ async def generate_sql_from_prompt(
                     'error': 'Missing required fields: schema_context with tables (or catalog/schema for legacy fetch)'
                 }
         
-        project = get_project(session_mgr)
-        client = get_databricks_client(project, settings)
+        domain = get_domain(session_mgr)
+        client = get_databricks_client(domain, settings)
         
         if not client:
             return {'success': False, 'error': 'Databricks not configured'}
@@ -471,8 +475,8 @@ async def validate_sql(
         if not sql:
             return {'success': False, 'error': 'SQL query is required'}
         
-        project = get_project(session_mgr)
-        client = get_databricks_client(project, settings)
+        domain = get_domain(session_mgr)
+        client = get_databricks_client(domain, settings)
         
         if not client:
             return {'success': False, 'error': 'Databricks not configured'}
@@ -518,10 +522,10 @@ async def start_auto_assign(
         return {'success': False, 'message': 'No items to process'}
     
     # Validate configuration
-    project = get_project(session_mgr)
-    host, token, warehouse_id = get_databricks_credentials(project, settings)
+    domain = get_domain(session_mgr)
+    host, token, warehouse_id = get_databricks_credentials(domain, settings)
     
-    schema_context, schema_err = Mapping(project).resolve_auto_assign_schema_context(
+    schema_context, schema_err = Mapping(domain).resolve_auto_assign_schema_context(
         data.get("schema_context") or {}
     )
     if schema_err:
@@ -540,7 +544,7 @@ async def start_auto_assign(
         logger.warning("Auto-assign: no SQL warehouse configured")
         return {'success': False, 'message': 'No SQL warehouse configured'}
     
-    llm_endpoint = project.info.get('llm_endpoint', '')
+    llm_endpoint = domain.info.get('llm_endpoint', '')
     if not llm_endpoint:
         logger.warning("Auto-assign: no LLM serving endpoint configured")
         return {'success': False, 'message': 'No LLM serving endpoint configured'}
@@ -579,8 +583,8 @@ async def start_auto_assign(
     logger.info("Auto-assign: task created — id=%s", task.id)
 
     # Get current mappings to update
-    entity_mappings = list(project.get_entity_mappings())
-    relationship_mappings = list(project.get_relationship_mappings())
+    entity_mappings = list(domain.get_entity_mappings())
+    relationship_mappings = list(domain.get_relationship_mappings())
     logger.info(
         "Auto-assign: existing mappings — %d entity, %d relationship",
         len(entity_mappings), len(relationship_mappings),
@@ -606,7 +610,7 @@ async def start_auto_assign(
             logger.info("Auto-assign agent thread started — task=%s", task.id)
 
             # Fetch documents once at agent start
-            documents = Mapping.fetch_documents_for_agent(project, host, token)
+            documents = Mapping.fetch_documents_for_agent(domain, host, token)
 
             # Split items into chunks to avoid rate-limit exhaustion
             all_items = [("entity", e) for e in entities] + [("rel", r) for r in relationships]
@@ -659,7 +663,7 @@ async def start_auto_assign(
                 context_rel_mappings = relationship_mappings + list(rel_mapping_by_uri.values())
 
                 try:
-                    agent_result = Mapping(project).auto_assign_with_agent(
+                    agent_result = Mapping(domain).auto_assign_with_agent(
                         host=host,
                         token=token,
                         endpoint_name=llm_endpoint,
@@ -827,19 +831,19 @@ async def single_auto_assign(
     if item_type not in ("entity", "relationship") or not item:
         return {"success": False, "error": "Provide type ('entity'|'relationship') and item."}
 
-    project = get_project(session_mgr)
-    host, token, warehouse_id = get_databricks_credentials(project, settings)
+    domain = get_domain(session_mgr)
+    host, token, warehouse_id = get_databricks_credentials(domain, settings)
 
     if not host or not token:
         return {"success": False, "error": "Databricks not configured"}
     if not warehouse_id:
         return {"success": False, "error": "No SQL warehouse configured"}
 
-    llm_endpoint = project.info.get("llm_endpoint", "")
+    llm_endpoint = domain.info.get("llm_endpoint", "")
     if not llm_endpoint:
         return {"success": False, "error": "No LLM serving endpoint configured"}
 
-    schema_context, schema_err = Mapping(project).resolve_auto_assign_schema_context(None)
+    schema_context, schema_err = Mapping(domain).resolve_auto_assign_schema_context(None)
     if schema_err:
         return {"success": False, "error": schema_err}
 
@@ -869,19 +873,19 @@ async def single_auto_assign(
 
     session_id = getattr(request.state, 'session_id', None)
     session_ref = getattr(request.state, 'session', None)
-    existing_entity_mappings = list(project.get_entity_mappings())
-    existing_relationship_mappings = list(project.get_relationship_mappings())
+    existing_entity_mappings = list(domain.get_entity_mappings())
+    existing_relationship_mappings = list(domain.get_relationship_mappings())
 
     def _run():
         try:
             tm.start_task(task.id, f"Auto-mapping {item_type}: {item_name}…")
 
-            documents = Mapping.fetch_documents_for_agent(project, host, token)
+            documents = Mapping.fetch_documents_for_agent(domain, host, token)
 
             def on_step(msg: str, progress_pct: int = 0):
                 tm.update_progress(task.id, progress_pct, msg)
 
-            agent_result = Mapping(project).auto_assign_with_agent(
+            agent_result = Mapping(domain).auto_assign_with_agent(
                 host=host,
                 token=token,
                 endpoint_name=llm_endpoint,

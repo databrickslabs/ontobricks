@@ -9,13 +9,13 @@ from back.core.helpers import (
 )
 
 
-def _make_project(**overrides):
-    """Build a minimal project-like object."""
+def _make_domain(**overrides):
+    """Build a minimal domain-session-like object for credential resolution."""
     data = {"host": "", "token": "", "warehouse_id": ""}
     data.update(overrides)
-    proj = MagicMock()
-    proj.databricks = data
-    return proj
+    domain = MagicMock()
+    domain.databricks = data
+    return domain
 
 
 def _make_settings(**overrides):
@@ -34,30 +34,30 @@ def _make_settings(**overrides):
 class TestGetDatabricksClient:
     @patch("back.core.databricks.is_databricks_app", return_value=False)
     def test_returns_client_with_credentials(self, _):
-        proj = _make_project()
+        domain = _make_domain()
         settings = _make_settings()
-        client = get_databricks_client(proj, settings)
+        client = get_databricks_client(domain, settings)
         assert client is not None
 
     @patch("back.core.databricks.is_databricks_app", return_value=False)
     def test_returns_none_without_credentials(self, _):
-        proj = _make_project()
+        domain = _make_domain()
         settings = _make_settings(databricks_host="", databricks_token="")
-        client = get_databricks_client(proj, settings)
+        client = get_databricks_client(domain, settings)
         assert client is None
 
     @patch("back.core.databricks.is_databricks_app", return_value=True)
     def test_returns_client_in_app_mode(self, _):
-        proj = _make_project()
+        domain = _make_domain()
         settings = _make_settings(databricks_host="", databricks_token="")
-        client = get_databricks_client(proj, settings)
+        client = get_databricks_client(domain, settings)
         assert client is not None
 
     @patch("back.core.databricks.is_databricks_app", return_value=False)
-    def test_project_overrides_settings(self, _):
-        proj = _make_project(host="https://proj.databricks.com", token="proj-tok")
+    def test_domain_overrides_settings(self, _):
+        domain = _make_domain(host="https://proj.databricks.com", token="proj-tok")
         settings = _make_settings()
-        client = get_databricks_client(proj, settings)
+        client = get_databricks_client(domain, settings)
         assert client is not None
         assert "proj.databricks.com" in client.host
 
@@ -65,9 +65,9 @@ class TestGetDatabricksClient:
 class TestGetDatabricksCredentials:
     @patch("back.core.databricks.is_databricks_app", return_value=False)
     def test_returns_three_values(self, _):
-        proj = _make_project()
+        domain = _make_domain()
         settings = _make_settings()
-        host, token, wh = get_databricks_credentials(proj, settings)
+        host, token, wh = get_databricks_credentials(domain, settings)
         assert host
         assert token
         assert wh
@@ -76,15 +76,15 @@ class TestGetDatabricksCredentials:
 class TestGetDatabricksHostAndToken:
     @patch("back.core.databricks.is_databricks_app", return_value=False)
     def test_normalizes_host(self, _):
-        proj = _make_project(host="test.databricks.com")
+        domain = _make_domain(host="test.databricks.com")
         settings = _make_settings(databricks_host="", databricks_token="")
-        host, token = get_databricks_host_and_token(proj, settings)
+        host, token = get_databricks_host_and_token(domain, settings)
         assert host.startswith("https://")
 
     @patch("back.core.databricks.is_databricks_app", return_value=False)
     def test_settings_fallback(self, _):
-        proj = _make_project()
+        domain = _make_domain()
         settings = _make_settings()
-        host, token = get_databricks_host_and_token(proj, settings)
+        host, token = get_databricks_host_and_token(domain, settings)
         assert "test.databricks.com" in host
         assert token == "tok-123"

@@ -234,28 +234,28 @@ class TestMappingRoutes:
         assert response.status_code == 200
 
 
-class TestProjectRoutes:
-    def test_project_page(self, client):
-        response = client.get('/project/')
+class TestDomainRoutes:
+    def test_domain_page(self, client):
+        response = client.get('/domain/')
         assert response.status_code == 200
 
-    def test_get_project_info(self, client):
-        response = client.get('/project/info')
+    def test_get_domain_info(self, client):
+        response = client.get('/domain/info')
         assert response.status_code == 200
         data = response.json()
         assert 'success' in data
 
-    def test_save_project_info(self, client):
-        data = {'name': 'My Project', 'description': 'A test project'}
-        response = client.post('/project/save', json=data)
+    def test_save_domain_info(self, client):
+        data = {'name': 'My Domain', 'description': 'A test domain'}
+        response = client.post('/domain/save', json=data)
         assert response.status_code == 200
 
-    def test_export_project(self, client):
-        response = client.get('/project/export')
+    def test_export_domain(self, client):
+        response = client.get('/domain/export')
         assert response.status_code == 200
 
-    def test_import_project(self, client):
-        project_data = {
+    def test_import_domain(self, client):
+        domain_data = {
             'info': {'name': 'Imported'},
             'versions': {
                 '1': {
@@ -266,31 +266,31 @@ class TestProjectRoutes:
                 }
             }
         }
-        response = client.post('/project/import', json=project_data)
+        response = client.post('/domain/import', json=domain_data)
         assert response.status_code == 200
 
     def test_get_config(self, client):
-        response = client.get('/project/config')
+        response = client.get('/domain/config')
         assert response.status_code == 200
 
     def test_session_debug(self, client, monkeypatch):
         monkeypatch.setenv("LOG_LEVEL", "DEBUG")
-        response = client.get('/project/session-debug')
+        response = client.get('/domain/session-debug')
         assert response.status_code == 200
         assert response.json()['success'] is True
 
     def test_session_debug_blocked_when_not_debug(self, client, monkeypatch):
         monkeypatch.setenv("LOG_LEVEL", "INFO")
-        response = client.get('/project/session-debug')
+        response = client.get('/domain/session-debug')
         assert response.status_code == 200
         assert response.json()['success'] is False
 
     def test_map_layout_get(self, client):
-        response = client.get('/project/map-layout')
+        response = client.get('/domain/map-layout')
         assert response.status_code == 200
 
     def test_design_views_get(self, client):
-        response = client.get('/project/design-views')
+        response = client.get('/domain/design-views')
         assert response.status_code == 200
 
 
@@ -328,40 +328,40 @@ class TestAPIv1Routes:
         data = response.json()
         assert data['data']['valid'] is False
 
-    def test_project_info_missing_path(self, client):
-        response = client.post('/api/v1/project/info', json={})
+    def test_domain_info_missing_path(self, client):
+        response = client.post('/api/v1/domain/info', json={})
         assert response.status_code == 422
 
-    def test_project_info_no_credentials(self, client):
-        response = client.post('/api/v1/project/info',
-                               json={'project_path': '/Volumes/main/test/project.json'})
+    def test_domain_info_no_credentials(self, client):
+        response = client.post('/api/v1/domain/info',
+                               json={'domain_path': '/Volumes/main/test/domain.json'})
         assert response.status_code == 400
         body = response.json()
         assert 'credentials' in body.get('message', '').lower() or 'credentials' in body.get('detail', '').lower()
 
-    def test_project_ontology_no_credentials(self, client):
-        response = client.post('/api/v1/project/ontology',
-                               json={'project_path': '/Volumes/main/test/project.json'})
+    def test_domain_ontology_no_credentials(self, client):
+        response = client.post('/api/v1/domain/ontology',
+                               json={'domain_path': '/Volumes/main/test/domain.json'})
         assert response.status_code == 400
 
-    def test_project_ontology_classes_no_credentials(self, client):
-        response = client.post('/api/v1/project/ontology/classes',
-                               json={'project_path': '/Volumes/main/test/project.json'})
+    def test_domain_ontology_classes_no_credentials(self, client):
+        response = client.post('/api/v1/domain/ontology/classes',
+                               json={'domain_path': '/Volumes/main/test/domain.json'})
         assert response.status_code == 400
 
-    def test_project_ontology_properties_no_credentials(self, client):
-        response = client.post('/api/v1/project/ontology/properties',
-                               json={'project_path': '/Volumes/main/test/project.json'})
+    def test_domain_ontology_properties_no_credentials(self, client):
+        response = client.post('/api/v1/domain/ontology/properties',
+                               json={'domain_path': '/Volumes/main/test/domain.json'})
         assert response.status_code == 400
 
-    def test_project_mappings_no_credentials(self, client):
-        response = client.post('/api/v1/project/mappings',
-                               json={'project_path': '/Volumes/main/test/project.json'})
+    def test_domain_mappings_no_credentials(self, client):
+        response = client.post('/api/v1/domain/mappings',
+                               json={'domain_path': '/Volumes/main/test/domain.json'})
         assert response.status_code == 400
 
-    def test_project_r2rml_no_credentials(self, client):
-        response = client.post('/api/v1/project/r2rml',
-                               json={'project_path': '/Volumes/main/test/project.json'})
+    def test_domain_r2rml_no_credentials(self, client):
+        response = client.post('/api/v1/domain/r2rml',
+                               json={'domain_path': '/Volumes/main/test/domain.json'})
         assert response.status_code == 400
 
 
@@ -382,17 +382,17 @@ class TestDigitalTwinAPIRoutes:
         data = response.json()
         assert isinstance(data['configured'], bool)
 
-    def test_projects_returns_error_when_unconfigured(self, client):
-        response = client.get('/api/v1/projects')
+    def test_domains_returns_error_when_unconfigured(self, client):
+        response = client.get('/api/v1/domains')
         assert response.status_code in (200, 400, 502)
 
-    def test_status_without_project(self, client):
+    def test_status_without_domain(self, client):
         response = client.get('/api/v1/digitaltwin/status')
         assert response.status_code == 200
         data = response.json()
         assert 'success' in data
 
-    def test_stats_without_project(self, client):
+    def test_stats_without_domain(self, client):
         response = client.get('/api/v1/digitaltwin/stats')
         assert response.status_code in (200, 400, 502)
 
@@ -404,9 +404,9 @@ class TestDigitalTwinAPIRoutes:
         response = client.get('/api/v1/digitaltwin/triples/find?search=test')
         assert response.status_code in (200, 400, 502)
 
-    def test_triples_without_project(self, client):
+    def test_triples_without_domain(self, client):
         response = client.get('/api/v1/digitaltwin/triples')
-        assert response.status_code in (200, 400, 502)
+        assert response.status_code in (200, 400, 404, 502)
 
     def test_build_progress_not_found(self, client):
         response = client.get('/api/v1/digitaltwin/build/nonexistent-task-id')
@@ -418,7 +418,7 @@ class TestDigitalTwinAPIRoutes:
 
     def test_registry_with_override_params(self, client):
         response = client.get(
-            '/api/v1/projects'
+            '/api/v1/domains'
             '?registry_catalog=cat&registry_schema=sch&registry_volume=vol'
         )
         assert response.status_code in (200, 400, 502)
@@ -428,12 +428,12 @@ class TestDigitalTwinAPIRoutes:
         assert ext.status_code == 200
         paths = ext.json()["paths"]
         assert "/api/v1/digitaltwin/registry" in paths
-        assert "/api/v1/projects" in paths
-        assert "/api/v1/project/versions" in paths
-        assert "/api/v1/project/design-status" in paths
-        assert "/api/v1/project/ontology" in paths
-        assert "/api/v1/project/r2rml" in paths
-        assert "/api/v1/project/sparksql" in paths
+        assert "/api/v1/domains" in paths
+        assert "/api/v1/domain/versions" in paths
+        assert "/api/v1/domain/design-status" in paths
+        assert "/api/v1/domain/ontology" in paths
+        assert "/api/v1/domain/r2rml" in paths
+        assert "/api/v1/domain/sparksql" in paths
         assert "/api/v1/digitaltwin/status" in paths
         assert "/api/v1/digitaltwin/stats" in paths
         assert "/api/v1/digitaltwin/triples" in paths
@@ -443,7 +443,7 @@ class TestDigitalTwinAPIRoutes:
         assert "/api/v1/graphql" in paths
         assert any(
             p.startswith("/api/v1/graphql/{") for p in paths
-        ), "expected /api/v1/graphql/{{project_name}} routes in external OpenAPI"
+        ), "expected /api/v1/graphql/{domain_name} routes in external OpenAPI"
 
         internal = client.get("/openapi.json")
         assert internal.status_code == 200

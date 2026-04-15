@@ -169,7 +169,7 @@ class UnityCatalog:
                 "schema_name": schema,
                 "name": volume_name,
                 "volume_type": "MANAGED",
-                "comment": f"OntoBricks project volume: {volume_name}",
+                "comment": f"OntoBricks domain volume: {volume_name}",
             }
             response = requests.post(url, headers=headers, json=payload)
             response.raise_for_status()

@@ -1,14 +1,14 @@
-"""Read-model helpers for ontology data inside project JSON dicts."""
+"""Read-model helpers for ontology data inside domain JSON dicts."""
 from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from back.objects.project.payload import resolve_project_slice
+from back.objects.domain.payload import resolve_domain_slice
 
 
-def get_ontology_info(project_data: Dict[str, Any]) -> Dict[str, Any]:
+def get_ontology_info(domain_data: Dict[str, Any]) -> Dict[str, Any]:
     """Get ontology details including classes and properties."""
-    sl = resolve_project_slice(project_data)
+    sl = resolve_domain_slice(domain_data)
     ontology = sl["ontology"]
 
     return {
@@ -23,9 +23,9 @@ def get_ontology_info(project_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def get_ontology_classes(project_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+def get_ontology_classes(domain_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Get list of ontology classes with URIs."""
-    sl = resolve_project_slice(project_data)
+    sl = resolve_domain_slice(domain_data)
     ontology = sl["ontology"]
     classes = ontology.get("classes", [])
 
@@ -40,9 +40,9 @@ def get_ontology_classes(project_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
-def get_ontology_properties(project_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+def get_ontology_properties(domain_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Get list of ontology properties (relationships)."""
-    sl = resolve_project_slice(project_data)
+    sl = resolve_domain_slice(domain_data)
     ontology = sl["ontology"]
     properties = ontology.get("properties", [])
 

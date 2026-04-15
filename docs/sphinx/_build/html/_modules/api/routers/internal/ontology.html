@@ -119,7 +119,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings</span><span class="p">,</span> <span class="n">Settings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.ontology</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ontology</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_project</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_domain</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.task_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_task_manager</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_databricks_host_and_token</span><span class="p">,</span> <span class="n">require_serving_llm</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">agents.serialization</span><span class="w"> </span><span class="kn">import</span> <span class="n">serialize_agent_steps</span>
@@ -145,25 +145,25 @@
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/load&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">load_ontology</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Load ontology from session.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">classes</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get_classes</span><span class="p">()</span>
-    <span class="n">properties</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get_properties</span><span class="p">()</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;/ontology/load: ontology name=</span><span class="si">%s</span><span class="s2">, classes=</span><span class="si">%s</span><span class="s2">, properties=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">classes</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">properties</span><span class="p">))</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">classes</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_classes</span><span class="p">()</span>
+    <span class="n">properties</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_properties</span><span class="p">()</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;/ontology/load: ontology name=</span><span class="si">%s</span><span class="s2">, classes=</span><span class="si">%s</span><span class="s2">, properties=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">classes</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">properties</span><span class="p">))</span>
     <span class="k">if</span> <span class="n">classes</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;/ontology/load: first class=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">classes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;unknown&#39;</span><span class="p">))</span>
 
     <span class="k">if</span> <span class="n">Ontology</span><span class="o">.</span><span class="n">normalize_property_domain_range</span><span class="p">({</span><span class="s2">&quot;classes&quot;</span><span class="p">:</span> <span class="n">classes</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="n">properties</span><span class="p">}):</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;/ontology/load: fixed domain/range case mismatches in properties&quot;</span><span class="p">)</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="p">[</span><span class="s2">&quot;properties&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">properties</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="p">[</span><span class="s2">&quot;properties&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">properties</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
 
-    <span class="n">ontology_name</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">project</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+    <span class="n">ontology_name</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">or</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
     <span class="k">return</span> <span class="p">{</span>
         <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
         <span class="s1">&#39;config&#39;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">ontology_name</span><span class="p">,</span>
-            <span class="s1">&#39;base_uri&#39;</span><span class="p">:</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;base_uri&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span>
-            <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;description&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span>
+            <span class="s1">&#39;base_uri&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;base_uri&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span>
+            <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;description&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span>
             <span class="s1">&#39;classes&#39;</span><span class="p">:</span> <span class="n">classes</span><span class="p">,</span>
             <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="n">properties</span>
         <span class="p">}</span>
@@ -177,8 +177,8 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">save_ontology</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Save ontology to session and clean up orphaned mappings.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">save_ontology_config_from_editor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></div>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">save_ontology_config_from_editor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></div>
 
 
 
@@ -187,8 +187,8 @@
 <span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/reset&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">reset_ontology</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Reset ontology, associated mappings, and design layout.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">project</span><span class="o">.</span><span class="n">reset_ontology</span><span class="p">()</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span><span class="o">.</span><span class="n">reset_ontology</span><span class="p">()</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Ontology, mappings, and design layout reset&quot;</span><span class="p">)</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Ontology, mappings, and layout reset&#39;</span><span class="p">}</span></div>
 
@@ -204,7 +204,7 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">add_class</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a class to the ontology.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">add_class</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">add_class</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></div>
 
 
 
@@ -214,7 +214,7 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">update_class</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Update a class in the ontology.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">update_class</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">update_class</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></div>
 
 
 
@@ -224,8 +224,8 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_class</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Delete a class from the ontology and its associated mappings.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">delete_class_by_uri</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">))</span></div>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">delete_class_by_uri</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">))</span></div>
 
 
 
@@ -239,7 +239,7 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">add_property</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a property (relationship) to the ontology.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">add_property</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">add_property</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></div>
 
 
 
@@ -249,7 +249,7 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">update_property</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Update a property in the ontology.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">update_property</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">update_property</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></div>
 
 
 
@@ -259,8 +259,8 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_property</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Delete a property from the ontology and its associated mappings.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">delete_property_by_uri</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">))</span></div>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">delete_property_by_uri</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">))</span></div>
 
 
 
@@ -278,14 +278,16 @@
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No data provided&#39;</span><span class="p">}</span>
     
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">constraints</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;constraints&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">project</span><span class="o">.</span><span class="n">constraints</span>
-        <span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;swrl_rules&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">project</span><span class="o">.</span><span class="n">swrl_rules</span>
-        <span class="n">axioms</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;axioms&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">project</span><span class="o">.</span><span class="n">axioms</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">constraints</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;constraints&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">domain</span><span class="o">.</span><span class="n">constraints</span>
+        <span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;swrl_rules&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span>
+        <span class="n">axioms</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;axioms&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">domain</span><span class="o">.</span><span class="n">axioms</span>
+        <span class="n">expressions</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;expressions&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">domain</span><span class="o">.</span><span class="n">expressions</span>
+        <span class="n">groups</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;groups&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">domain</span><span class="o">.</span><span class="n">groups</span>
         
-        <span class="n">owl_content</span> <span class="o">=</span> <span class="n">Ontology</span><span class="o">.</span><span class="n">generate_owl</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">axioms</span><span class="p">)</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">generated</span><span class="p">[</span><span class="s1">&#39;owl&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">owl_content</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">owl_content</span> <span class="o">=</span> <span class="n">Ontology</span><span class="o">.</span><span class="n">generate_owl</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">axioms</span><span class="p">,</span> <span class="n">expressions</span><span class="p">,</span> <span class="n">groups</span><span class="p">)</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">generated</span><span class="p">[</span><span class="s1">&#39;owl&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">owl_content</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
         
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;owl&#39;</span><span class="p">:</span> <span class="n">owl_content</span><span class="p">,</span> <span class="s1">&#39;format&#39;</span><span class="p">:</span> <span class="s1">&#39;turtle&#39;</span><span class="p">}</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -304,8 +306,8 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="n">owl_content</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No OWL content provided&#39;</span><span class="p">}</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">ingest_owl</span><span class="p">(</span>
-            <span class="n">owl_content</span><span class="p">,</span> <span class="n">name_fallback_to_project</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">outcome</span><span class="o">=</span><span class="s2">&quot;import&quot;</span><span class="p">,</span>
+        <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">ingest_owl</span><span class="p">(</span>
+            <span class="n">owl_content</span><span class="p">,</span> <span class="n">name_fallback_to_domain</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">outcome</span><span class="o">=</span><span class="s2">&quot;import&quot;</span><span class="p">,</span>
         <span class="p">)</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;OWL import failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
@@ -318,17 +320,19 @@
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/export-owl&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">export_owl</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Export ontology to OWL/TTL format.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">project</span><span class="o">.</span><span class="n">get_classes</span><span class="p">():</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_classes</span><span class="p">():</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No ontology to export&#39;</span><span class="p">}</span>
     
     <span class="k">try</span><span class="p">:</span>
         <span class="n">owl_content</span> <span class="o">=</span> <span class="n">Ontology</span><span class="o">.</span><span class="n">generate_owl</span><span class="p">(</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="p">,</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">constraints</span><span class="p">,</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">swrl_rules</span><span class="p">,</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">axioms</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="p">,</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">constraints</span><span class="p">,</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span><span class="p">,</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">axioms</span><span class="p">,</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">expressions</span><span class="p">,</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">groups</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;owl_content&#39;</span><span class="p">:</span> <span class="n">owl_content</span><span class="p">,</span> <span class="s1">&#39;format&#39;</span><span class="p">:</span> <span class="s1">&#39;turtle&#39;</span><span class="p">}</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -342,9 +346,9 @@
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/get-loaded-ontology&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_loaded_ontology</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get currently loaded ontology from session.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">project</span><span class="o">.</span><span class="n">get_classes</span><span class="p">():</span>
-        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;ontology&#39;</span><span class="p">:</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="p">}</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_classes</span><span class="p">():</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;ontology&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="p">}</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No ontology loaded&#39;</span><span class="p">}</span></div>
 
 
@@ -359,8 +363,8 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="n">owl_content</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No OWL content provided&#39;</span><span class="p">}</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">ingest_owl</span><span class="p">(</span>
-            <span class="n">owl_content</span><span class="p">,</span> <span class="n">name_fallback_to_project</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">outcome</span><span class="o">=</span><span class="s2">&quot;parse&quot;</span><span class="p">,</span>
+        <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">ingest_owl</span><span class="p">(</span>
+            <span class="n">owl_content</span><span class="p">,</span> <span class="n">name_fallback_to_domain</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">outcome</span><span class="o">=</span><span class="s2">&quot;parse&quot;</span><span class="p">,</span>
         <span class="p">)</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Parse OWL content failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
@@ -378,7 +382,7 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="n">rdfs_content</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No RDFS content provided&#39;</span><span class="p">}</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">apply_parsed_rdfs_to_project</span><span class="p">(</span><span class="n">rdfs_content</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">apply_parsed_rdfs_to_domain</span><span class="p">(</span><span class="n">rdfs_content</span><span class="p">)</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Parse RDFS content failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)}</span></div>
@@ -420,8 +424,8 @@
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown industry kind: </span><span class="si">{</span><span class="n">kind</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
     <span class="n">domain_keys</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domains&quot;</span><span class="p">,</span> <span class="p">[])</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">import_industry_ontology</span><span class="p">(</span><span class="n">kind</span><span class="p">,</span> <span class="n">domain_keys</span><span class="p">)</span></div>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">import_industry_ontology</span><span class="p">(</span><span class="n">kind</span><span class="p">,</span> <span class="n">domain_keys</span><span class="p">)</span></div>
 
 
 
@@ -434,8 +438,8 @@
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/constraints/list&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_constraints</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get list of legacy constraints from session.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;constraints&#39;</span><span class="p">:</span> <span class="n">project</span><span class="o">.</span><span class="n">constraints</span><span class="p">}</span></div>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;constraints&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">constraints</span><span class="p">}</span></div>
 
 
 
@@ -451,9 +455,9 @@
     <span class="n">category</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;List all SHACL data-quality shapes, optionally filtered by category.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">project</span><span class="o">.</span><span class="n">deduplicate_shacl_shapes</span><span class="p">()</span>
-    <span class="n">shapes</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span><span class="o">.</span><span class="n">deduplicate_shacl_shapes</span><span class="p">()</span>
+    <span class="n">shapes</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span>
     <span class="k">if</span> <span class="n">category</span><span class="p">:</span>
         <span class="n">shapes</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shapes</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;category&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">category</span><span class="p">]</span>
     <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;shapes&quot;</span><span class="p">:</span> <span class="n">shapes</span><span class="p">}</span></div>
@@ -474,8 +478,8 @@
         <span class="k">if</span> <span class="n">error</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">error</span><span class="p">}</span>
 
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">shapes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">shapes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">shape_id</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">shape_id</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shapes</span><span class="p">):</span>
             <span class="n">shapes</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">update_shape</span><span class="p">(</span><span class="n">shapes</span><span class="p">,</span> <span class="n">shape_id</span><span class="p">,</span> <span class="n">shape_data</span><span class="p">)</span>
@@ -495,8 +499,8 @@
             <span class="p">)</span>
             <span class="n">shapes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_shape</span><span class="p">)</span>
 
-        <span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span> <span class="o">=</span> <span class="n">shapes</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span> <span class="o">=</span> <span class="n">shapes</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Shape saved&quot;</span><span class="p">,</span> <span class="s2">&quot;shapes&quot;</span><span class="p">:</span> <span class="n">shapes</span><span class="p">}</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Save shape failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
@@ -515,10 +519,10 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">shape_id</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Shape id is required&quot;</span><span class="p">}</span>
 
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">shapes</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">delete_shape</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">,</span> <span class="n">shape_id</span><span class="p">)</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span> <span class="o">=</span> <span class="n">shapes</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">shapes</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">delete_shape</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">,</span> <span class="n">shape_id</span><span class="p">)</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span> <span class="o">=</span> <span class="n">shapes</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Shape deleted&quot;</span><span class="p">,</span> <span class="s2">&quot;shapes&quot;</span><span class="p">:</span> <span class="n">shapes</span><span class="p">}</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Delete shape failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
@@ -532,10 +536,10 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_shacl_turtle</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate and return the SHACL Turtle for all shapes.&quot;&quot;&quot;</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
         <span class="n">turtle</span> <span class="o">=</span> <span class="n">Ontology</span><span class="o">.</span><span class="n">generate_shacl</span><span class="p">(</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">,</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">,</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
         <span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;turtle&quot;</span><span class="p">:</span> <span class="n">turtle</span><span class="p">}</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -555,17 +559,16 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">turtle_content</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;No Turtle content provided&quot;</span><span class="p">}</span>
 
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c</span><span class="w"> </span><span class="kn">import</span> <span class="n">SHACLService</span>
         <span class="n">svc</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="p">()</span>
         <span class="n">imported</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">import_shapes</span><span class="p">(</span><span class="n">turtle_content</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">imported</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;No valid shapes found in the provided Turtle&quot;</span><span class="p">}</span>
 
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">shapes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">shapes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">)</span>
         <span class="n">shapes</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">imported</span><span class="p">)</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span> <span class="o">=</span> <span class="n">shapes</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span> <span class="o">=</span> <span class="n">shapes</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
             <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Imported </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">imported</span><span class="p">)</span><span class="si">}</span><span class="s2"> shapes&quot;</span><span class="p">,</span>
@@ -585,13 +588,13 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Download SHACL shapes as a Turtle file.&quot;&quot;&quot;</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">Response</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     <span class="n">turtle</span> <span class="o">=</span> <span class="n">Ontology</span><span class="o">.</span><span class="n">generate_shacl</span><span class="p">(</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">,</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">,</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
     <span class="p">)</span>
-    <span class="n">proj_name</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;project&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">)</span>
-    <span class="n">filename</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">proj_name</span><span class="si">}</span><span class="s2">_shacl_shapes.ttl&quot;</span>
+    <span class="n">export_name</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domain&quot;</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;project&quot;</span><span class="p">,</span> <span class="p">{}))</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">)</span>
+    <span class="n">filename</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">export_name</span><span class="si">}</span><span class="s2">_shacl_shapes.ttl&quot;</span>
     <span class="k">return</span> <span class="n">Response</span><span class="p">(</span>
         <span class="n">content</span><span class="o">=</span><span class="n">turtle</span><span class="p">,</span>
         <span class="n">media_type</span><span class="o">=</span><span class="s2">&quot;text/turtle&quot;</span><span class="p">,</span>
@@ -606,22 +609,22 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">migrate_constraints</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;One-time migration: convert legacy constraints to SHACL shapes.&quot;&quot;&quot;</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">legacy</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">constraints</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">legacy</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">constraints</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">legacy</span><span class="p">:</span>
-            <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;No legacy constraints to migrate&quot;</span><span class="p">,</span> <span class="s2">&quot;shapes&quot;</span><span class="p">:</span> <span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">}</span>
+            <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;No legacy constraints to migrate&quot;</span><span class="p">,</span> <span class="s2">&quot;shapes&quot;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">}</span>
 
-        <span class="n">svc</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="p">(</span><span class="n">base_uri</span><span class="o">=</span><span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
-        <span class="n">migrated</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">migrate_legacy_constraints</span><span class="p">(</span><span class="n">legacy</span><span class="p">,</span> <span class="n">base_uri</span><span class="o">=</span><span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
+        <span class="n">svc</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="p">(</span><span class="n">base_uri</span><span class="o">=</span><span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
+        <span class="n">migrated</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">migrate_legacy_constraints</span><span class="p">(</span><span class="n">legacy</span><span class="p">,</span> <span class="n">base_uri</span><span class="o">=</span><span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
         <span class="n">migrated_ids</span> <span class="o">=</span> <span class="p">{</span><span class="n">s</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">migrated</span><span class="p">}</span>
-        <span class="n">existing</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="n">existing</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span> <span class="ow">or</span> <span class="p">[]</span>
         <span class="n">manual</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">existing</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">migrated_ids</span><span class="p">]</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span> <span class="o">=</span> <span class="n">manual</span> <span class="o">+</span> <span class="n">migrated</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span> <span class="o">=</span> <span class="n">manual</span> <span class="o">+</span> <span class="n">migrated</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
             <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Migrated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">migrated</span><span class="p">)</span><span class="si">}</span><span class="s2"> constraints to SHACL shapes&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;shapes&quot;</span><span class="p">:</span> <span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">,</span>
+            <span class="s2">&quot;shapes&quot;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span><span class="p">,</span>
             <span class="s2">&quot;migrated_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">migrated</span><span class="p">),</span>
         <span class="p">}</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -639,8 +642,8 @@
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/swrl/list&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_swrl_rules</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get list of SWRL rules from session.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;rules&#39;</span><span class="p">:</span> <span class="n">project</span><span class="o">.</span><span class="n">swrl_rules</span><span class="p">}</span></div>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;rules&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span><span class="p">}</span></div>
 
 
 
@@ -659,16 +662,16 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;antecedent&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;consequent&#39;</span><span class="p">):</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Rule antecedent and consequent are required&#39;</span><span class="p">}</span>
         
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">rules</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">swrl_rules</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">rules</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span>
         
         <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">rules</span><span class="p">):</span>
             <span class="n">rules</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">rule</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">rules</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
         
-        <span class="n">project</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">rules</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">rules</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;SWRL rule saved successfully&#39;</span><span class="p">,</span> <span class="s1">&#39;rules&#39;</span><span class="p">:</span> <span class="n">rules</span><span class="p">}</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Save SWRL rule failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
@@ -684,15 +687,15 @@
     <span class="k">try</span><span class="p">:</span>
         <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
         <span class="n">index</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;index&#39;</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">rules</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">swrl_rules</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">rules</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span>
         
         <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">rules</span><span class="p">)):</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Invalid rule index&#39;</span><span class="p">}</span>
         
         <span class="n">rules</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">rules</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">rules</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;SWRL rule deleted&#39;</span><span class="p">,</span> <span class="s1">&#39;rules&#39;</span><span class="p">:</span> <span class="n">rules</span><span class="p">}</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Delete SWRL rule failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
@@ -736,8 +739,8 @@
     <span class="n">key</span> <span class="o">=</span> <span class="n">_RULE_TYPES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">rule_type</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">key</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Unknown rule type: </span><span class="si">{</span><span class="n">rule_type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">}</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">rules</span> <span class="o">=</span> <span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">ontology</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">rules</span> <span class="o">=</span> <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">ontology</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[])</span>
     <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;rules&quot;</span><span class="p">:</span> <span class="n">rules</span><span class="p">}</span></div>
 
 
@@ -762,16 +765,16 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">):</span>
             <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Rule name is required&quot;</span><span class="p">}</span>
 
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">rules</span> <span class="o">=</span> <span class="nb">list</span><span class="p">((</span><span class="n">project</span><span class="o">.</span><span class="n">ontology</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">rules</span> <span class="o">=</span> <span class="nb">list</span><span class="p">((</span><span class="n">domain</span><span class="o">.</span><span class="n">ontology</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[]))</span>
 
         <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">rules</span><span class="p">):</span>
             <span class="n">rules</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">rule</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">rules</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
 
-        <span class="n">project</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">][</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">rules</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">][</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">rules</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Rule saved&quot;</span><span class="p">,</span> <span class="s2">&quot;rules&quot;</span><span class="p">:</span> <span class="n">rules</span><span class="p">}</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Save rule (</span><span class="si">%s</span><span class="s2">) failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">rule_type</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
@@ -795,15 +798,15 @@
         <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
         <span class="n">index</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;index&quot;</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">rules</span> <span class="o">=</span> <span class="nb">list</span><span class="p">((</span><span class="n">project</span><span class="o">.</span><span class="n">ontology</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">rules</span> <span class="o">=</span> <span class="nb">list</span><span class="p">((</span><span class="n">domain</span><span class="o">.</span><span class="n">ontology</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[]))</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">rules</span><span class="p">)):</span>
             <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Invalid rule index&quot;</span><span class="p">}</span>
 
         <span class="n">rules</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">][</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">rules</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">][</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">rules</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Rule deleted&quot;</span><span class="p">,</span> <span class="s2">&quot;rules&quot;</span><span class="p">:</span> <span class="n">rules</span><span class="p">}</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Delete rule (</span><span class="si">%s</span><span class="s2">) failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">rule_type</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
@@ -851,9 +854,9 @@
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.list_axioms">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/axioms/list&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_axioms</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get list of axioms from session.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;axioms&#39;</span><span class="p">:</span> <span class="n">project</span><span class="o">.</span><span class="n">axioms</span><span class="p">}</span></div>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get list of axioms and expressions from session.&quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;axioms&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">axioms</span><span class="p">,</span> <span class="s1">&#39;expressions&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">expressions</span><span class="p">}</span></div>
 
 
 
@@ -861,26 +864,41 @@
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.save_axiom">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/axioms/save&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">save_axiom</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Save an axiom (add or update).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Save an axiom or expression (add or update).</span>
+
+<span class="sd">    Accepts ``collection``: ``&quot;expressions&quot;`` or ``&quot;axioms&quot;`` (default).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
         <span class="n">axiom</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;axiom&#39;</span><span class="p">,</span> <span class="p">{})</span>
         <span class="n">index</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;index&#39;</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">collection</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;collection&#39;</span><span class="p">,</span> <span class="s1">&#39;axioms&#39;</span><span class="p">)</span>
         
         <span class="k">if</span> <span class="ow">not</span> <span class="n">axiom</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">):</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Axiom type is required&#39;</span><span class="p">}</span>
         
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">axioms</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">axioms</span>
-        
-        <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">axioms</span><span class="p">):</span>
-            <span class="n">axioms</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">axiom</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">collection</span> <span class="o">==</span> <span class="s1">&#39;expressions&#39;</span><span class="p">:</span>
+            <span class="n">items</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">expressions</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">axioms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">axiom</span><span class="p">)</span>
+            <span class="n">items</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">axioms</span>
         
-        <span class="n">project</span><span class="o">.</span><span class="n">axioms</span> <span class="o">=</span> <span class="n">axioms</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
-        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Axiom saved successfully&#39;</span><span class="p">,</span> <span class="s1">&#39;axioms&#39;</span><span class="p">:</span> <span class="n">axioms</span><span class="p">}</span>
+        <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">items</span><span class="p">):</span>
+            <span class="n">items</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">axiom</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">items</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">axiom</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">collection</span> <span class="o">==</span> <span class="s1">&#39;expressions&#39;</span><span class="p">:</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">expressions</span> <span class="o">=</span> <span class="n">items</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">axioms</span> <span class="o">=</span> <span class="n">items</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Axiom saved successfully&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;axioms&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">axioms</span><span class="p">,</span>
+            <span class="s1">&#39;expressions&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">expressions</span><span class="p">,</span>
+        <span class="p">}</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Save axiom failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)}</span></div>
@@ -891,20 +909,36 @@
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.delete_axiom">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/axioms/delete&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_axiom</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Delete an axiom by index.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Delete an axiom or expression by index.</span>
+
+<span class="sd">    Accepts ``collection``: ``&quot;expressions&quot;`` or ``&quot;axioms&quot;`` (default).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
         <span class="n">index</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;index&#39;</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">axioms</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">axioms</span>
+        <span class="n">collection</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;collection&#39;</span><span class="p">,</span> <span class="s1">&#39;axioms&#39;</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">collection</span> <span class="o">==</span> <span class="s1">&#39;expressions&#39;</span><span class="p">:</span>
+            <span class="n">items</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">expressions</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">items</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">axioms</span>
         
-        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">axioms</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">items</span><span class="p">)):</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Invalid axiom index&#39;</span><span class="p">}</span>
         
-        <span class="n">axioms</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">axioms</span> <span class="o">=</span> <span class="n">axioms</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
-        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Axiom deleted&#39;</span><span class="p">,</span> <span class="s1">&#39;axioms&#39;</span><span class="p">:</span> <span class="n">axioms</span><span class="p">}</span>
+        <span class="n">items</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">collection</span> <span class="o">==</span> <span class="s1">&#39;expressions&#39;</span><span class="p">:</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">expressions</span> <span class="o">=</span> <span class="n">items</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">axioms</span> <span class="o">=</span> <span class="n">items</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Axiom deleted&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;axioms&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">axioms</span><span class="p">,</span>
+            <span class="s1">&#39;expressions&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">expressions</span><span class="p">,</span>
+        <span class="p">}</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Delete axiom failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)}</span></div>
@@ -915,11 +949,16 @@
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.get_axioms_by_class">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/axioms/get-by-class/{class_uri:path}&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_axioms_by_class</span><span class="p">(</span><span class="n">class_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get all axioms for a specific class.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get all axioms and expressions for a specific class.&quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_matches</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">class_uri</span> <span class="ow">in</span> <span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;class1&#39;</span><span class="p">),</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;class2&#39;</span><span class="p">),</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;className&#39;</span><span class="p">),</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;subject&#39;</span><span class="p">))</span>
+
     <span class="k">return</span> <span class="p">{</span>
         <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-        <span class="s1">&#39;axioms&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">project</span><span class="o">.</span><span class="n">axioms</span> <span class="k">if</span> <span class="n">class_uri</span> <span class="ow">in</span> <span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;class1&#39;</span><span class="p">),</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;class2&#39;</span><span class="p">),</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;className&#39;</span><span class="p">),</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;subject&#39;</span><span class="p">))]</span>
+        <span class="s1">&#39;axioms&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">domain</span><span class="o">.</span><span class="n">axioms</span> <span class="k">if</span> <span class="n">_matches</span><span class="p">(</span><span class="n">a</span><span class="p">)],</span>
+        <span class="s1">&#39;expressions&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">domain</span><span class="o">.</span><span class="n">expressions</span> <span class="k">if</span> <span class="n">_matches</span><span class="p">(</span><span class="n">a</span><span class="p">)],</span>
     <span class="p">}</span></div>
 
 
@@ -928,9 +967,72 @@
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.get_axioms_by_type">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/axioms/get-by-type/</span><span class="si">{axiom_type}</span><span class="s2">&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_axioms_by_type</span><span class="p">(</span><span class="n">axiom_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get all axioms of a specific type.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;axioms&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">project</span><span class="o">.</span><span class="n">axioms</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="n">axiom_type</span><span class="p">]}</span></div>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get all axioms or expressions of a specific type.&quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">both</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">axioms</span><span class="p">)</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">expressions</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;axioms&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">both</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="n">axiom_type</span><span class="p">]}</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Group Management (entity groups via owl:unionOf)</span>
+<span class="c1"># ===========================================</span>
+
+<div class="viewcode-block" id="list_groups">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.list_groups">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/groups/list&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_groups</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get list of entity groups from session.&quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;groups&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">groups</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="save_group">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.save_group">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/groups/save&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">save_group</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create or update an entity group.</span>
+
+<span class="sd">    Body: ``{ &quot;group&quot;: { &quot;name&quot;, &quot;label&quot;, &quot;description&quot;, &quot;color&quot;, &quot;icon&quot;, &quot;members&quot;: [...] }, &quot;index&quot;: -1 }``</span>
+<span class="sd">    When ``index &gt;= 0`` the group at that position is replaced; otherwise a new</span>
+<span class="sd">    group is appended (duplicating a name is prevented).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">groups</span> <span class="o">=</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">save_group</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;group&#39;</span><span class="p">,</span> <span class="p">{}),</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;index&#39;</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Group saved&#39;</span><span class="p">,</span> <span class="s1">&#39;groups&#39;</span><span class="p">:</span> <span class="n">groups</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="delete_group">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.delete_group">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/groups/delete&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_group</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Delete an entity group by index or name.&quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">groups</span> <span class="o">=</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">delete_group</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;index&#39;</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">name</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">))</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Group deleted&#39;</span><span class="p">,</span> <span class="s1">&#39;groups&#39;</span><span class="p">:</span> <span class="n">groups</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="update_group_members">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.update_group_members">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/groups/members&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">update_group_members</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Add or remove members from a group.</span>
+
+<span class="sd">    Body: ``{ &quot;name&quot;: &quot;G1&quot;, &quot;add&quot;: [&quot;D&quot;], &quot;remove&quot;: [&quot;A&quot;] }``</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">groups</span> <span class="o">=</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">update_group_members</span><span class="p">(</span>
+        <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span>
+        <span class="n">add</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="p">[]),</span>
+        <span class="n">remove</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;remove&#39;</span><span class="p">,</span> <span class="p">[]),</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Members updated&#39;</span><span class="p">,</span> <span class="s1">&#39;groups&#39;</span><span class="p">:</span> <span class="n">groups</span><span class="p">}</span></div>
 
 
 
@@ -949,8 +1051,8 @@
     <span class="k">try</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksClient</span>
 
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         
         <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Databricks host not configured&#39;</span><span class="p">,</span> <span class="s1">&#39;dashboards&#39;</span><span class="p">:</span> <span class="p">[]}</span>
@@ -978,8 +1080,8 @@
     <span class="k">try</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksClient</span>
 
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         
         <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Databricks host not configured&#39;</span><span class="p">,</span> <span class="s1">&#39;parameters&#39;</span><span class="p">:</span> <span class="p">[]}</span>
@@ -995,6 +1097,90 @@
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error getting dashboard parameters: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="s1">&#39;parameters&#39;</span><span class="p">:</span> <span class="p">[]}</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Cross-Domain Bridges</span>
+<span class="c1"># ===========================================</span>
+
+<div class="viewcode-block" id="list_bridge_domains">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.list_bridge_domains">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/bridges/domains&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_bridge_domains</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List registry domains available as bridge targets (excludes the current domain).&quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryService</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_blocking</span>
+
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">svc</span> <span class="o">=</span> <span class="n">RegistryService</span><span class="o">.</span><span class="n">from_context</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">details</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">svc</span><span class="o">.</span><span class="n">list_domain_details_cached</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">msg</span><span class="p">,</span> <span class="s1">&#39;domains&#39;</span><span class="p">:</span> <span class="p">[]}</span>
+
+        <span class="n">current_name</span> <span class="o">=</span> <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="n">current_folder</span> <span class="o">=</span> <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">domain_folder</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+        <span class="n">domains</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">details</span>
+            <span class="k">if</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="n">current_name</span><span class="p">,</span> <span class="n">current_folder</span><span class="p">)</span>
+        <span class="p">]</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;domains&#39;</span><span class="p">:</span> <span class="n">domains</span><span class="p">,</span> <span class="s1">&#39;projects&#39;</span><span class="p">:</span> <span class="n">domains</span><span class="p">}</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error listing bridge domains: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="s1">&#39;domains&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;projects&#39;</span><span class="p">:</span> <span class="p">[]}</span></div>
+
+
+
+<div class="viewcode-block" id="list_bridge_domain_classes">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.list_bridge_domain_classes">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/bridges/domains/</span><span class="si">{domain_name}</span><span class="s2">/classes&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_bridge_domain_classes</span><span class="p">(</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Load a target domain&#39;s ontology classes for bridge selection.&quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryService</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_blocking</span>
+
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">svc</span> <span class="o">=</span> <span class="n">RegistryService</span><span class="o">.</span><span class="n">from_context</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">_version</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span>
+            <span class="n">svc</span><span class="o">.</span><span class="n">load_latest_domain_data</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">msg</span><span class="p">,</span> <span class="s1">&#39;classes&#39;</span><span class="p">:</span> <span class="p">[]}</span>
+
+        <span class="n">ontology</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">_extract_latest_ontology</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">raw_classes</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="p">[])</span>
+
+        <span class="n">classes</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
+                <span class="s2">&quot;emoji&quot;</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;emoji&quot;</span><span class="p">,</span> <span class="s2">&quot;📦&quot;</span><span class="p">),</span>
+                <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;comment&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
+            <span class="p">}</span>
+            <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">raw_classes</span>
+            <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+        <span class="p">]</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s1">&#39;domain&#39;</span><span class="p">:</span> <span class="n">domain_name</span><span class="p">,</span>
+            <span class="s1">&#39;project&#39;</span><span class="p">:</span> <span class="n">domain_name</span><span class="p">,</span>
+            <span class="s1">&#39;base_uri&#39;</span><span class="p">:</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="s1">&#39;classes&#39;</span><span class="p">:</span> <span class="n">classes</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error loading classes for domain </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="s1">&#39;classes&#39;</span><span class="p">:</span> <span class="p">[]}</span></div>
 
 
 
@@ -1015,8 +1201,8 @@
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Missing required parameters&#39;</span><span class="p">,</span> <span class="s1">&#39;files&#39;</span><span class="p">:</span> <span class="p">[]}</span>
     
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="n">uc_service</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
         <span class="n">success</span><span class="p">,</span> <span class="n">files</span><span class="p">,</span> <span class="n">message</span> <span class="o">=</span> <span class="n">uc_service</span><span class="o">.</span><span class="n">list_files</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">volume</span><span class="p">,</span> <span class="n">extensions</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;.ttl&#39;</span><span class="p">,</span> <span class="s1">&#39;.owl&#39;</span><span class="p">,</span> <span class="s1">&#39;.rdf&#39;</span><span class="p">])</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="n">success</span><span class="p">,</span> <span class="s1">&#39;files&#39;</span><span class="p">:</span> <span class="n">files</span><span class="p">}</span> <span class="k">if</span> <span class="n">success</span> <span class="k">else</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span> <span class="s1">&#39;files&#39;</span><span class="p">:</span> <span class="p">[]}</span>
@@ -1042,8 +1228,8 @@
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Missing required fields&#39;</span><span class="p">}</span>
     
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="n">uc_service</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
         <span class="n">file_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;/Volumes/</span><span class="si">{</span><span class="n">catalog</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">schema</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">volume</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2">&quot;</span>
         
@@ -1051,8 +1237,8 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">success</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">}</span>
         
-        <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">ingest_owl</span><span class="p">(</span>
-            <span class="n">owl_content</span><span class="p">,</span> <span class="n">name_fallback_to_project</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">outcome</span><span class="o">=</span><span class="s2">&quot;load_file&quot;</span><span class="p">,</span>
+        <span class="k">return</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">ingest_owl</span><span class="p">(</span>
+            <span class="n">owl_content</span><span class="p">,</span> <span class="n">name_fallback_to_domain</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">outcome</span><span class="o">=</span><span class="s2">&quot;load_file&quot;</span><span class="p">,</span>
         <span class="p">)</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Load OWL file failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
@@ -1083,7 +1269,7 @@
     <span class="n">old_name</span><span class="p">,</span> <span class="n">new_name</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;old_name&#39;</span><span class="p">),</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;new_name&#39;</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">old_name</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">new_name</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Both old_name and new_name are required&#39;</span><span class="p">}</span>
-    <span class="n">updates</span> <span class="o">=</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">rename_relationship_references</span><span class="p">(</span><span class="n">old_name</span><span class="p">,</span> <span class="n">new_name</span><span class="p">)</span>
+    <span class="n">updates</span> <span class="o">=</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">rename_relationship_references</span><span class="p">(</span><span class="n">old_name</span><span class="p">,</span> <span class="n">new_name</span><span class="p">)</span>
     <span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">updates</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s1">&#39;Updated </span><span class="si">{</span><span class="n">total</span><span class="si">}</span><span class="s1"> references&#39;</span><span class="p">,</span> <span class="s1">&#39;updates&#39;</span><span class="p">:</span> <span class="n">updates</span><span class="p">}</span></div>
 
@@ -1126,8 +1312,8 @@
 
     <span class="n">tables_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tables&#39;</span><span class="p">,</span> <span class="p">[]))</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">err</span><span class="p">,</span> <span class="n">llm_ctx</span> <span class="o">=</span> <span class="n">require_serving_llm</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">err</span><span class="p">,</span> <span class="n">llm_ctx</span> <span class="o">=</span> <span class="n">require_serving_llm</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">err</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">err</span>
     <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="n">llm_ctx</span>
@@ -1152,7 +1338,7 @@
             <span class="k">def</span><span class="w"> </span><span class="nf">on_step</span><span class="p">(</span><span class="n">msg</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
                 <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">progress</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
 
-            <span class="n">agent_result</span> <span class="o">=</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">generate_with_agent</span><span class="p">(</span>
+            <span class="n">agent_result</span> <span class="o">=</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">generate_with_agent</span><span class="p">(</span>
                 <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span>
                 <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
                 <span class="n">endpoint_name</span><span class="o">=</span><span class="n">llm_endpoint</span><span class="p">,</span>
@@ -1222,15 +1408,15 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">entity_names</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No entity names provided&#39;</span><span class="p">}</span>
 
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">err</span><span class="p">,</span> <span class="n">llm_ctx</span> <span class="o">=</span> <span class="n">require_serving_llm</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">err</span><span class="p">,</span> <span class="n">llm_ctx</span> <span class="o">=</span> <span class="n">require_serving_llm</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">err</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">err</span>
         <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="n">llm_ctx</span>
 
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;AutoIcons: launching agent for </span><span class="si">%d</span><span class="s2"> entities&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">entity_names</span><span class="p">))</span>
 
-        <span class="n">agent_result</span> <span class="o">=</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">assign_icons_with_agent</span><span class="p">(</span>
+        <span class="n">agent_result</span> <span class="o">=</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">assign_icons_with_agent</span><span class="p">(</span>
             <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span>
             <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
             <span class="n">endpoint_name</span><span class="o">=</span><span class="n">llm_endpoint</span><span class="p">,</span>
@@ -1300,15 +1486,15 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="n">user_message</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;No message provided&quot;</span><span class="p">}</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">err</span><span class="p">,</span> <span class="n">llm_ctx</span> <span class="o">=</span> <span class="n">require_serving_llm</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">err</span><span class="p">,</span> <span class="n">llm_ctx</span> <span class="o">=</span> <span class="n">require_serving_llm</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">err</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">err</span>
     <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="n">llm_ctx</span>
 
-    <span class="n">classes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">get_classes</span><span class="p">())</span>
-    <span class="n">properties</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">get_properties</span><span class="p">())</span>
-    <span class="n">base_uri</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">DEFAULT_BASE_URI</span>
+    <span class="n">classes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_classes</span><span class="p">())</span>
+    <span class="n">properties</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_properties</span><span class="p">())</span>
+    <span class="n">base_uri</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">DEFAULT_BASE_URI</span>
 
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;OntologyAssistant: user_message=</span><span class="si">%s</span><span class="s2">, classes=</span><span class="si">%d</span><span class="s2">, properties=</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span>
                 <span class="n">user_message</span><span class="p">[:</span><span class="mi">80</span><span class="p">],</span> <span class="nb">len</span><span class="p">(</span><span class="n">classes</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">properties</span><span class="p">))</span>
@@ -1338,7 +1524,7 @@
     <span class="p">}</span>
 
     <span class="k">if</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">ontology_changed</span><span class="p">:</span>
-        <span class="n">config</span> <span class="o">=</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">apply_agent_ontology_changes</span><span class="p">(</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">apply_agent_ontology_changes</span><span class="p">(</span>
             <span class="n">agent_result</span><span class="o">.</span><span class="n">classes</span><span class="p">,</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">properties</span><span class="p">,</span> <span class="n">prune_orphan_mappings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="n">response</span><span class="p">[</span><span class="s2">&quot;config&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">config</span>
@@ -1388,18 +1574,18 @@
 
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-    <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;llm_endpoint&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-    <span class="n">base_uri</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">DEFAULT_BASE_URI</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;llm_endpoint&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="n">base_uri</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">DEFAULT_BASE_URI</span>
 
     <span class="n">custom_inputs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;custom_inputs&quot;</span><span class="p">,</span> <span class="p">{})</span>
     <span class="n">custom_inputs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">,</span> <span class="n">host</span><span class="p">)</span>
     <span class="n">custom_inputs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
     <span class="n">custom_inputs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;endpoint_name&quot;</span><span class="p">,</span> <span class="n">llm_endpoint</span><span class="p">)</span>
     <span class="n">custom_inputs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">)</span>
-    <span class="n">custom_inputs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">get_classes</span><span class="p">()))</span>
-    <span class="n">custom_inputs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">get_properties</span><span class="p">()))</span>
+    <span class="n">custom_inputs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_classes</span><span class="p">()))</span>
+    <span class="n">custom_inputs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_properties</span><span class="p">()))</span>
     <span class="n">data</span><span class="p">[</span><span class="s2">&quot;custom_inputs&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">custom_inputs</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">custom_inputs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">custom_inputs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">):</span>
@@ -1414,7 +1600,7 @@
 
         <span class="n">co</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">custom_outputs</span> <span class="ow">or</span> <span class="p">{}</span>
         <span class="k">if</span> <span class="n">co</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology_changed&quot;</span><span class="p">):</span>
-            <span class="n">Ontology</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">apply_agent_ontology_changes</span><span class="p">(</span>
+            <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">apply_agent_ontology_changes</span><span class="p">(</span>
                 <span class="n">co</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="p">[]),</span> <span class="n">co</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="p">[]),</span>
                 <span class="n">prune_orphan_mappings</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="p">)</span>
@@ -1426,11 +1612,6 @@
 
 
 
-<span class="c1"># ===========================================</span>
-<span class="c1"># Helper Functions</span>
-<span class="c1"># ===========================================</span>
-<span class="c1"># Ontology helpers live on back.objects.ontology.Ontology (e.g. ensure_uris, build_class_from_data).</span>
-<span class="c1"># Use get_databricks_host_and_token from app/core/helpers.py for Databricks credentials</span>
 </pre></div>
 
           </div>

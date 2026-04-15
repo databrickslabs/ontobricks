@@ -1,0 +1,62 @@
+/* ==========================================================================
+   Shared Emoji Picker Styles
+   Consolidated from pages.css and ontology-shared-panels.css
+   ========================================================================== */
+
+.emoji-preview {
+    font-size: 1.5rem;
+    min-width: 50px;
+    justify-content: center;
+}
+
+.emoji-grid-container {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.emoji-inline {
+    font-size: 1.3rem;
+    margin-right: 8px;
+}
+
+.emoji-picker-grid {
+    max-height: 150px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+.emoji-picker-grid::-webkit-scrollbar {
+    width: 6px;
+}
+
+.emoji-picker-grid::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.emoji-picker-grid::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.emoji-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: transform 0.1s, background-color 0.15s;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+}
+
+.emoji-btn:hover {
+    transform: scale(1.2);
+    background-color: #e9ecef !important;
+}
+
+.emoji-picker-container {
+    position: relative;
+    z-index: 1060;
+}

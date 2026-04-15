@@ -3,7 +3,12 @@
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="mb-1"><i class="bi bi-lightning me-2"></i>Inference</h4>
-            <p class="text-muted mb-0 small">OWL 2 RL inference, SWRL rules, graph reasoning, and business rules</p>
+            <p class="text-muted mb-0 small">OWL 2 RL inference, SWRL rules, graph reasoning, and business rules<br>
+                <i class="bi bi-folder2-open"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50" style="font-size:.65rem">v{{ current_version }}</span>
+                <button class="btn btn-sm btn-outline-secondary py-0 px-1 ms-2" onclick="_openGraphSwitcherModal()" title="Switch to another domain graph">
+                    <i class="bi bi-arrow-left-right me-1"></i>Switch domain
+                </button>
+            </p>
         </div>
         <button class="btn btn-sm btn-outline-primary" onclick="ReasoningModule.runReasoning()" id="runReasoningBtn">
             <i class="bi bi-play-fill me-1"></i> Run Inference

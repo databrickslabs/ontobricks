@@ -237,7 +237,7 @@ class TestCreateDirectory:
         svc = VolumeFileService(auth=auth)
         svc._session = MagicMock()
         svc._session.put.return_value = MagicMock(status_code=200)
-        ok, msg = svc.create_directory("/Volumes/c/s/v/projects/p/documents")
+        ok, msg = svc.create_directory("/Volumes/c/s/v/domains/p/documents")
         assert ok is True
         assert "documents" in msg
 

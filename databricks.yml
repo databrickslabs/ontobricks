@@ -15,18 +15,43 @@
 bundle:
   name: ontobricks_bundle
 
+sync:
+  exclude:
+    - tests/
+    - docs/
+    - data/
+    - .venv/
+    - .git/
+    - .cursor/
+    - .pytest_cache/
+    - htmlcov/
+    - logs/
+    - fastapi_session/
+    - mlruns/
+    - mlartifacts/
+    - "*.pid"
+    - "*.log"
+    - ".env"
+    - deploy.sh
+    - setup.sh
+    - start.sh
+    - build_docs.sh
+    - Makefile
+    - INFO.md
+    - CHANGELOG.md
+
 variables:
   warehouse_id:
     description: "SQL Warehouse ID for query execution"
     default: "d2096aa075ad44a3"
   registry_catalog:
-    description: "Unity Catalog catalog for the project registry"
+    description: "Unity Catalog catalog for the domain registry"
     default: "benoit_cayla"
   registry_schema:
-    description: "Unity Catalog schema for the project registry"
+    description: "Unity Catalog schema for the domain registry"
     default: "ontobricks_deployed"
   registry_volume:
-    description: "Volume name for the project registry"
+    description: "Volume name for the domain registry"
     default: "registry"
   admin_user:
     description: "User with CAN_MANAGE on both apps (used in prod target)"
@@ -46,7 +71,7 @@ resources:
             id: ${var.warehouse_id}
             permission: CAN_USE
         - name: volume
-          description: "Unity Catalog Volume for the OntoBricks project registry"
+          description: "Unity Catalog Volume for the OntoBricks domain registry"
           uc_securable:
             securable_type: "VOLUME"
             securable_full_name: "${var.registry_catalog}.${var.registry_schema}.${var.registry_volume}"
@@ -64,7 +89,7 @@ resources:
             id: ${var.warehouse_id}
             permission: CAN_USE
         - name: volume
-          description: "Unity Catalog Volume for reading the project registry"
+          description: "Unity Catalog Volume for reading the domain registry"
           uc_securable:
             securable_type: "VOLUME"
             securable_full_name: "${var.registry_catalog}.${var.registry_schema}.${var.registry_volume}"

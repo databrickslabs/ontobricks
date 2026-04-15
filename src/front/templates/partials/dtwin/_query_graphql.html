@@ -4,9 +4,12 @@
     <div>
         <h4 class="mb-1"><i class="bi bi-braces-asterisk me-2"></i>GraphQL Playground</h4>
         <p class="text-muted mb-0 small">
-            Query the knowledge graph with the auto-generated GraphQL schema
-            &mdash; <i class="bi bi-diagram-3"></i> LadybugDB: <code id="graphqlGraphDbName" class="text-primary">{{ graph_name or 'Not configured' }}</code>
-            <span id="graphqlProjectBadge" class="badge bg-info ms-1" style="display:none"></span>
+            Query the knowledge graph with the auto-generated GraphQL schema<br>
+            <i class="bi bi-folder2-open"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50" style="font-size:.65rem">v{{ current_version }}</span><br>
+            <i class="bi bi-diagram-3"></i> LadybugDB: <code id="graphqlGraphDbName" class="text-primary">{{ graph_name or 'Not configured' }}</code>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-1 ms-2" onclick="_openGraphSwitcherModal()" title="Switch to another domain graph">
+                <i class="bi bi-arrow-left-right me-1"></i>Switch domain
+            </button>
         </p>
     </div>
     <div class="d-flex align-items-center gap-2">

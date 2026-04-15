@@ -1,8 +1,8 @@
 """Abstraction over agent invocation.
 
 Currently runs agents in-process via the ``agents`` package.
-When agents become a separate service, switch ``_MODE`` to ``"http"``
-and route calls through an HTTP client without changing callers.
+When agents become a separate service, route calls through an HTTP
+client without changing callers.
 """
 from __future__ import annotations
 
@@ -12,8 +12,6 @@ if TYPE_CHECKING:
     from agents.agent_owl_generator.engine import AgentResult
     from agents.agent_auto_assignment.engine import AgentResult as AutoAssignAgentResult
     from agents.agent_auto_icon_assign.engine import AgentResult as IconAssignAgentResult
-
-_MODE = "in_process"
 
 
 class AgentClient:

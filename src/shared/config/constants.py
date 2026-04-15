@@ -32,6 +32,7 @@ def _read_version() -> str:
 APP_NAME: str = "OntoBricks"
 APP_VERSION: str = _read_version()
 APP_DESCRIPTION: str = "Ontology-driven data integration for Databricks"
+HTTP_USER_AGENT: str = f"{APP_NAME}/{APP_VERSION}"
 
 # =====================================================
 # Logging
@@ -49,7 +50,7 @@ ONTOBRICKS_NS = Namespace("http://ontobricks.com/schema#")
 DEFAULT_BASE_URI: str = "https://databricks-ontology.com/"
 
 # =====================================================
-# Project / Graph Defaults
+# Domain / graph defaults
 # =====================================================
 DEFAULT_GRAPH_NAME: str = "ontobricks"
 DEFAULT_GRAPH_VERSION: str = "1"

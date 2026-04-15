@@ -113,10 +113,10 @@
 
 
 <div class="viewcode-block" id="SQLHelpers">
-<a class="viewcode-back" href="../../../../api/app.core.html#back.core.helpers.SQLHelpers">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.SQLHelpers.SQLHelpers">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">SQLHelpers</span><span class="p">:</span>
 <div class="viewcode-block" id="SQLHelpers.sql_escape">
-<a class="viewcode-back" href="../../../../api/app.core.html#back.core.helpers.SQLHelpers.sql_escape">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.SQLHelpers.SQLHelpers.sql_escape">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">sql_escape</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Escape a string value for safe embedding in SQL literals.</span>
@@ -130,7 +130,7 @@
 
 
 <div class="viewcode-block" id="SQLHelpers.validate_table_name">
-<a class="viewcode-back" href="../../../../api/app.core.html#back.core.helpers.SQLHelpers.validate_table_name">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.SQLHelpers.SQLHelpers.validate_table_name">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Raise :class:`~back.core.errors.ValidationError` if *table_name* is empty.</span>
@@ -143,19 +143,19 @@
 
 
 <div class="viewcode-block" id="SQLHelpers.effective_view_table">
-<a class="viewcode-back" href="../../../../api/app.core.html#back.core.helpers.SQLHelpers.effective_view_table">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.SQLHelpers.SQLHelpers.effective_view_table">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">effective_view_table</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fully-qualified VIEW name derived from project name, version, and delta location.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">effective_view_table</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fully-qualified VIEW name derived from domain name, version, and delta location.</span>
 
 <span class="sd">        When *settings* is provided and the composed name is empty, falls back</span>
 <span class="sd">        to ``settings.databricks_triplestore_table``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">delta</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;delta&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="n">delta</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;delta&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
         <span class="n">catalog</span> <span class="o">=</span> <span class="n">delta</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;catalog&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
         <span class="n">schema</span> <span class="o">=</span> <span class="n">delta</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;schema&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-        <span class="n">name</span> <span class="o">=</span> <span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;info&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-        <span class="n">version</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;current_version&#39;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_VERSION</span><span class="p">)</span> <span class="ow">or</span> <span class="n">DEFAULT_GRAPH_VERSION</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;info&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+        <span class="n">version</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;current_version&#39;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_VERSION</span><span class="p">)</span> <span class="ow">or</span> <span class="n">DEFAULT_GRAPH_VERSION</span>
         <span class="k">if</span> <span class="n">name</span><span class="p">:</span>
             <span class="n">safe</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;[^a-z0-9_]&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
             <span class="n">view_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;triplestore_</span><span class="si">{</span><span class="n">safe</span><span class="si">}</span><span class="s2">_V</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">&quot;</span>
@@ -169,12 +169,12 @@
 
 
 <div class="viewcode-block" id="SQLHelpers.effective_graph_name">
-<a class="viewcode-back" href="../../../../api/app.core.html#back.core.helpers.SQLHelpers.effective_graph_name">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.SQLHelpers.SQLHelpers.effective_graph_name">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">effective_graph_name</span><span class="p">(</span><span class="n">project</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;LadybugDB graph name derived from the project name and version.&quot;&quot;&quot;</span>
-        <span class="n">name</span> <span class="o">=</span> <span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;info&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">)</span>
-        <span class="n">version</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;current_version&#39;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_VERSION</span><span class="p">)</span> <span class="ow">or</span> <span class="n">DEFAULT_GRAPH_VERSION</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">effective_graph_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;LadybugDB graph name derived from the domain name and version.&quot;&quot;&quot;</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;info&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">)</span>
+        <span class="n">version</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;current_version&#39;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_VERSION</span><span class="p">)</span> <span class="ow">or</span> <span class="n">DEFAULT_GRAPH_VERSION</span>
         <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_V</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">&quot;</span></div>
 </div>
 

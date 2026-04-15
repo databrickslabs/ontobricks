@@ -1,6 +1,6 @@
 # OntoBricks External REST API
 
-The OntoBricks REST API provides stateless endpoints for external applications to query ontologies and retrieve project metadata.
+The OntoBricks REST API provides stateless endpoints for external applications to query ontologies and retrieve domain metadata.
 
 ## Base URL
 
@@ -68,11 +68,13 @@ Check if the API is running.
 
 ---
 
-### Project Endpoints
+### Domain endpoints
 
-#### `POST /api/v1/projects/list`
+URLs use `/api/v1/domains` and `/api/v1/domain/…` for **domain** operations (saved ontology + mappings).
 
-List available projects in a Unity Catalog volume.
+#### `POST /api/v1/domains/list`
+
+List available domains in a Unity Catalog volume.
 
 **Request:**
 ```json
@@ -88,10 +90,10 @@ List available projects in a Unity Catalog volume.
 {
     "success": true,
     "data": {
-        "projects": [
+        "domains": [
             {
-                "name": "my_project.json",
-                "path": "/Volumes/my_catalog/my_schema/my_volume/my_project.json",
+                "name": "my_domain.json",
+                "path": "/Volumes/my_catalog/my_schema/my_volume/my_domain.json",
                 "size": 15234
             }
         ],
@@ -102,14 +104,14 @@ List available projects in a Unity Catalog volume.
 
 ---
 
-#### `POST /api/v1/project/info`
+#### `POST /api/v1/domain/info`
 
-Get project information and statistics.
+Get domain information and statistics.
 
 **Request:**
 ```json
 {
-    "project_path": "/Volumes/catalog/schema/volume/project.json"
+    "project_path": "/Volumes/catalog/schema/volume/domain.json"
 }
 ```
 
@@ -118,8 +120,8 @@ Get project information and statistics.
 {
     "success": true,
     "data": {
-        "name": "My Ontology Project",
-        "description": "Project description",
+        "name": "My Ontology Domain",
+        "description": "Domain description",
         "author": "John Doe",
         "version": "1.0.0",
         "project_version": "1.0",
@@ -136,14 +138,14 @@ Get project information and statistics.
 
 ---
 
-#### `POST /api/v1/project/ontology`
+#### `POST /api/v1/domain/ontology`
 
 Get full ontology details including classes and properties.
 
 **Request:**
 ```json
 {
-    "project_path": "/Volumes/catalog/schema/volume/project.json"
+    "project_path": "/Volumes/catalog/schema/volume/domain.json"
 }
 ```
 
@@ -166,14 +168,14 @@ Get full ontology details including classes and properties.
 
 ---
 
-#### `POST /api/v1/project/ontology/classes`
+#### `POST /api/v1/domain/ontology/classes`
 
 Get list of ontology classes with their URIs.
 
 **Request:**
 ```json
 {
-    "project_path": "/Volumes/catalog/schema/volume/project.json"
+    "project_path": "/Volumes/catalog/schema/volume/domain.json"
 }
 ```
 
@@ -200,14 +202,14 @@ Get list of ontology classes with their URIs.
 
 ---
 
-#### `POST /api/v1/project/ontology/properties`
+#### `POST /api/v1/domain/ontology/properties`
 
 Get list of ontology properties (relationships) with their URIs.
 
 **Request:**
 ```json
 {
-    "project_path": "/Volumes/catalog/schema/volume/project.json"
+    "project_path": "/Volumes/catalog/schema/volume/domain.json"
 }
 ```
 
@@ -233,14 +235,14 @@ Get list of ontology properties (relationships) with their URIs.
 
 ---
 
-#### `POST /api/v1/project/mappings`
+#### `POST /api/v1/domain/mappings`
 
 Get mapping details (entity and relationship mappings).
 
 **Request:**
 ```json
 {
-    "project_path": "/Volumes/catalog/schema/volume/project.json"
+    "project_path": "/Volumes/catalog/schema/volume/domain.json"
 }
 ```
 
@@ -260,14 +262,14 @@ Get mapping details (entity and relationship mappings).
 
 ---
 
-#### `POST /api/v1/project/r2rml`
+#### `POST /api/v1/domain/r2rml`
 
-Get the R2RML mapping content from a project.
+Get the R2RML mapping content from a domain.
 
 **Request:**
 ```json
 {
-    "project_path": "/Volumes/catalog/schema/volume/project.json"
+    "project_path": "/Volumes/catalog/schema/volume/domain.json"
 }
 ```
 
@@ -288,12 +290,12 @@ Get the R2RML mapping content from a project.
 
 #### `POST /api/v1/query`
 
-Execute a SPARQL query against a project's ontology.
+Execute a SPARQL query against a domain's ontology.
 
 **Request:**
 ```json
 {
-    "project_path": "/Volumes/catalog/schema/volume/project.json",
+    "project_path": "/Volumes/catalog/schema/volume/domain.json",
     "query": "SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10",
     "limit": 100,
     "engine": "local"
@@ -301,7 +303,7 @@ Execute a SPARQL query against a project's ontology.
 ```
 
 **Parameters:**
-- `project_path` (required): Path to the project file in Unity Catalog
+- `project_path` (required): Path to the domain JSON file in Unity Catalog
 - `query` (required): SPARQL query string
 - `limit` (optional): Maximum number of results (default: 100)
 - `engine` (optional): Query engine - `local` (RDFLib) or `spark` (default: `local`)
@@ -349,12 +351,12 @@ Validate SPARQL query syntax.
 
 #### `POST /api/v1/query/samples`
 
-Get sample SPARQL queries generated for a project.
+Get sample SPARQL queries generated for a domain.
 
 **Request:**
 ```json
 {
-    "project_path": "/Volumes/catalog/schema/volume/project.json"
+    "project_path": "/Volumes/catalog/schema/volume/domain.json"
 }
 ```
 
@@ -379,7 +381,7 @@ Get sample SPARQL queries generated for a project.
 
 ## GraphQL API
 
-OntoBricks auto-generates a typed GraphQL schema from each project's ontology. Ontology classes become GraphQL types, data properties become scalar fields, and object properties become typed relationship fields with nested traversal.
+OntoBricks auto-generates a typed GraphQL schema from each domain's ontology. Ontology classes become GraphQL types, data properties become scalar fields, and object properties become typed relationship fields with nested traversal.
 
 **URL choice:** The same router is mounted twice on the main app: **in-app / browser** paths below use ``/graphql/...``. For the **mounted external API** (OpenAPI at ``/api/docs``), use ``/api/v1/graphql/...`` instead — same handlers and payloads, different prefix (see ``api.constants.EXTERNAL_GRAPHQL_PUBLIC_PREFIX``).
 
@@ -397,23 +399,23 @@ http://localhost:8000/api/v1/graphql
 
 ---
 
-### List GraphQL-Enabled Projects
+### List GraphQL-enabled domains
 
 #### `GET /graphql`
 
-Returns all projects in the configured registry that have a materialized triple store.
+Returns all domains in the configured registry that have a materialized triple store.
 
 **Response:**
 ```json
 {
-    "projects": [
+    "success": true,
+    "domains": [
         {
-            "name": "my_project",
-            "graphql_url": "/graphql/my_project",
-            "graphiql_url": "/graphql/my_project",
-            "schema_url": "/graphql/my_project/schema"
+            "name": "my_domain",
+            "description": ""
         }
-    ]
+    ],
+    "message": null
 }
 ```
 
@@ -423,10 +425,10 @@ Returns all projects in the configured registry that have a materialized triple 
 
 #### `GET /graphql/{project_name}`
 
-Opens the interactive GraphiQL IDE for a specific project. The playground provides auto-complete, documentation explorer, and query history.
+Opens the interactive GraphiQL IDE for a specific domain. The playground provides auto-complete, documentation explorer, and query history.
 
 **Parameters:**
-- `project_name` (path, required): Name of the project
+- `project_name` (path, required): Name of the domain in the registry
 
 ---
 
@@ -434,7 +436,7 @@ Opens the interactive GraphiQL IDE for a specific project. The playground provid
 
 #### `POST /graphql/{project_name}`
 
-Execute a GraphQL query against the project's auto-generated schema.
+Execute a GraphQL query against the domain's auto-generated schema.
 
 **Request:**
 ```json
@@ -447,7 +449,7 @@ Execute a GraphQL query against the project's auto-generated schema.
 ```
 
 **Parameters:**
-- `project_name` (path, required): Name of the project
+- `project_name` (path, required): Name of the domain in the registry
 - `query` (body, required): GraphQL query string
 - `variables` (body, optional): Query variables
 - `operationName` (body, optional): Operation name for multi-operation documents
@@ -475,10 +477,10 @@ Execute a GraphQL query against the project's auto-generated schema.
 
 #### `GET /graphql/{project_name}/schema`
 
-Returns the full GraphQL Schema Definition Language (SDL) for the project.
+Returns the full GraphQL Schema Definition Language (SDL) for the domain.
 
 **Parameters:**
-- `project_name` (path, required): Name of the project
+- `project_name` (path, required): Name of the domain in the registry
 
 **Response:**
 ```graphql
@@ -507,16 +509,16 @@ type Query {
 ### Notes on GraphQL API
 
 1. **Schema is auto-generated**: The schema is built dynamically from the ontology. Each ontology class becomes a GraphQL type; data properties become `String` fields; object properties become typed relationship fields.
-2. **Per-project schemas**: Different projects may have completely different schemas, reflecting their ontology.
-3. **Caching**: Schemas are cached per project and invalidated on ontology changes.
+2. **Per-domain schemas**: Different domains may have completely different schemas, reflecting their ontology.
+3. **Caching**: Schemas are cached per domain and invalidated on ontology changes.
 4. **Relationship depth**: Nested relationships are resolved to a configurable depth (default 2, max 5). The depth can be set via the `depth` field in the request body or the depth selector in the GraphiQL playground.
-5. **Triple store required**: The project must have a materialized triple store (synced via Digital Twin) for GraphQL queries to return data.
+5. **Triple store required**: The domain must have a materialized triple store (synced via Digital Twin) for GraphQL queries to return data.
 
 ---
 
 ## Digital Twin API
 
-The Digital Twin API provides stateless, programmatic access to the knowledge graph — triple store status, entity search, ontology artifacts, and build triggers. All endpoints accept an optional `project_name` query parameter to load a project from the registry instead of the browser session.
+The Digital Twin API provides stateless, programmatic access to the knowledge graph — triple store status, entity search, ontology artifacts, and build triggers. All endpoints accept an optional `project_name` query parameter to load a domain from the registry instead of the browser session.
 
 ### Base URL
 
@@ -530,37 +532,37 @@ http://localhost:8000/api/v1/digitaltwin
 
 #### `GET /api/v1/digitaltwin/registry`
 
-Returns the project registry location (catalog, schema, volume).
+Returns the domain registry location (catalog, schema, volume).
 
 ---
 
-### List Projects
+### List domains
 
-#### `GET /api/v1/projects`
+#### `GET /api/v1/domains`
 
-List all MCP-enabled projects in the registry.
+List all MCP-enabled domains in the registry.
 
 ---
 
 ### Versions
 
-#### `GET /api/v1/project/versions`
+#### `GET /api/v1/domain/versions`
 
-Returns all versions for a project in the registry, latest first.
+Returns all versions for a domain in the registry, latest first.
 
 **Parameters:**
-- `project_name` (query, required): Project name in the registry
+- `project_name` (query, required): Domain name in the registry
 
 ---
 
 ### Design Status
 
-#### `GET /api/v1/project/design-status`
+#### `GET /api/v1/domain/design-status`
 
 Returns a comprehensive readiness status including ontology, metadata, and mapping completeness.
 
 **Parameters:**
-- `project_name` (query, optional): Project name in the registry
+- `project_name` (query, optional): Domain name in the registry
 - `project_version` (query, optional): Specific version to load (latest if omitted)
 
 **Response:**
@@ -598,40 +600,40 @@ Returns a comprehensive readiness status including ontology, metadata, and mappi
 Check backend type, table name, data availability, and triple count.
 
 **Parameters:**
-- `project_name` (query, optional): Project name in the registry
+- `project_name` (query, optional): Domain name in the registry
 
 ---
 
 ### Ontology (OWL)
 
-#### `GET /api/v1/project/ontology`
+#### `GET /api/v1/domain/ontology`
 
-Return the project's OWL ontology in Turtle format.
+Return the domain's OWL ontology in Turtle format.
 
 **Parameters:**
-- `project_name` (query, optional): Project name in the registry
+- `project_name` (query, optional): Domain name in the registry
 
 ---
 
 ### R2RML Mapping
 
-#### `GET /api/v1/project/r2rml`
+#### `GET /api/v1/domain/r2rml`
 
-Return the project's R2RML mapping document in Turtle format.
+Return the domain's R2RML mapping document in Turtle format.
 
 **Parameters:**
-- `project_name` (query, optional): Project name in the registry
+- `project_name` (query, optional): Domain name in the registry
 
 ---
 
 ### Generated Spark SQL
 
-#### `GET /api/v1/project/sparksql`
+#### `GET /api/v1/domain/sparksql`
 
 Return the Spark SQL that produces triples from the source tables.
 
 **Parameters:**
-- `project_name` (query, optional): Project name in the registry
+- `project_name` (query, optional): Domain name in the registry
 
 ---
 
@@ -642,7 +644,7 @@ Return the Spark SQL that produces triples from the source tables.
 Aggregated statistics: total triples, entity types, predicates, labels.
 
 **Parameters:**
-- `project_name` (query, optional): Project name in the registry
+- `project_name` (query, optional): Domain name in the registry
 
 ---
 
@@ -661,7 +663,7 @@ Trigger a triple store build (sync). Returns a task_id for progress polling.
 BFS-based entity search with depth control.
 
 **Parameters:**
-- `project_name` (query, optional): Project name in the registry
+- `project_name` (query, optional): Domain name in the registry
 - `search` (query): Search text
 - `entity_type` (query, optional): Filter by type
 - `depth` (query, optional): BFS depth (default: 2)
@@ -683,9 +685,9 @@ HEADERS = {
     "X-Databricks-Token": "dapi..."
 }
 
-# List projects
+# List domains
 response = requests.post(
-    f"{API_BASE}/projects/list",
+    f"{API_BASE}/domains/list",
     headers=HEADERS,
     json={
         "catalog": "main",
@@ -693,14 +695,14 @@ response = requests.post(
         "volume": "ontologies"
     }
 )
-projects = response.json()
+payload = response.json()
 
 # Execute SPARQL query
 response = requests.post(
     f"{API_BASE}/query",
     headers=HEADERS,
     json={
-        "project_path": "/Volumes/main/default/ontologies/my_project.json",
+        "project_path": "/Volumes/main/default/ontologies/my_domain.json",
         "query": "SELECT ?type (COUNT(?s) as ?count) WHERE { ?s a ?type } GROUP BY ?type",
         "limit": 50
     }
@@ -715,8 +717,8 @@ print(results['data']['results'])
 # Health check
 curl http://localhost:8000/api/v1/health
 
-# List projects
-curl -X POST http://localhost:8000/api/v1/projects/list \
+# List domains
+curl -X POST http://localhost:8000/api/v1/domains/list \
   -H "Content-Type: application/json" \
   -H "X-Databricks-Host: https://your-workspace.cloud.databricks.com" \
   -H "X-Databricks-Token: dapi..." \
@@ -728,7 +730,7 @@ curl -X POST http://localhost:8000/api/v1/query \
   -H "X-Databricks-Host: https://your-workspace.cloud.databricks.com" \
   -H "X-Databricks-Token: dapi..." \
   -d '{
-    "project_path": "/Volumes/main/default/ontologies/my_project.json",
+    "project_path": "/Volumes/main/default/ontologies/my_domain.json",
     "query": "SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10"
   }'
 ```
@@ -742,16 +744,16 @@ curl -X POST http://localhost:8000/api/v1/query \
 | 200 | Success |
 | 400 | Bad Request - Missing or invalid parameters |
 | 401 | Unauthorized - Invalid or missing credentials |
-| 404 | Not Found - Project or resource not found |
+| 404 | Not Found - Domain or resource not found |
 | 500 | Internal Server Error |
 
 ---
 
 ## Notes
 
-1. **Stateless**: The API is stateless - each request loads the project fresh from Unity Catalog.
+1. **Stateless**: The API is stateless - each request loads the domain fresh from Unity Catalog.
 2. **Engine**: Currently, only the `local` engine (RDFLib) is fully supported. The `spark` engine requires additional setup.
-3. **R2RML Required**: SPARQL queries require the project to have an R2RML mapping generated. Use the web interface to generate mappings first.
+3. **R2RML Required**: SPARQL queries require the domain to have an R2RML mapping generated. Use the web interface to generate mappings first.
 4. **Security**: Never share your Databricks token. Consider using environment variables or secure credential management.
 
 
@@ -775,7 +777,7 @@ This document describes the REST API endpoints available in OntoBricks.
 
 | Module | Base Path | Purpose |
 |--------|-----------|---------|
-| Project API | `/api/v1/projects`, `/api/v1/project` | Registry list, versions, design status, OWL/R2RML/SQL artifacts |
+| Domain API | `/api/v1/domains`, `/api/v1/domain` | Registry list, versions, design status, OWL/R2RML/SQL artifacts |
 | Digital Twin API | `/api/v1/digitaltwin` | Stateless access to triple store, builds, triple search, quality, reasoning |
 | Core/Navbar | `/` | Session status, file browsing |
 | Settings | `/settings` | Databricks connection, settings |
@@ -791,7 +793,7 @@ This document describes the REST API endpoints available in OntoBricks.
 | Data Quality Execution | `/dtwin/dataquality` | Run SHACL checks against triple store |
 | Reasoning | `/dtwin/reasoning` | OWL 2 RL + SWRL inference, inferred triples |
 | GraphQL | `/graphql` (UI); `/api/v1/graphql` (external API mount) | Auto-generated typed GraphQL schema from ontology |
-| Project | `/project` | Project save/load operations |
+| Domain | `/domain` | Domain save/load operations (UI route) |
 
 ---
 
@@ -1874,7 +1876,7 @@ The `last_modified` field is retrieved from the Unity Catalog Delta table metada
 
 #### Auto-Map Entity Icons (LLM)
 
-Use the project's configured LLM serving endpoint to suggest emoji icons for entity names.
+Use the domain's configured LLM serving endpoint to suggest emoji icons for entity names.
 
 ```http
 POST /dtwin/auto-assign-icons
@@ -1900,7 +1902,7 @@ POST /dtwin/auto-assign-icons
 }
 ```
 
-> **Note**: Requires a valid LLM serving endpoint configured in Project Settings (`llm_endpoint`).
+> **Note**: Requires a valid LLM serving endpoint configured in Domain Settings (`llm_endpoint`).
 
 ---
 
@@ -2009,25 +2011,25 @@ GET /dtwin/reasoning/inferred
 
 OntoBricks auto-generates a typed GraphQL schema from the ontology. Each class becomes a GraphQL type, data properties become scalar fields, and object properties become typed relationship fields.
 
-#### List GraphQL-Enabled Projects
+#### List GraphQL-enabled domains
 
 ```http
 GET /graphql
 ```
 
-Returns all projects in the configured registry that have a materialized triple store and can be queried via GraphQL.
+Returns all domains in the configured registry that have a materialized triple store and can be queried via GraphQL.
 
 **Response:**
 ```json
 {
-  "projects": [
+  "success": true,
+  "domains": [
     {
-      "name": "my_project",
-      "graphql_url": "/graphql/my_project",
-      "graphiql_url": "/graphql/my_project",
-      "schema_url": "/graphql/my_project/schema"
+      "name": "my_domain",
+      "description": ""
     }
-  ]
+  ],
+  "message": null
 }
 ```
 
@@ -2037,7 +2039,7 @@ Returns all projects in the configured registry that have a materialized triple 
 GET /graphql/{project_name}
 ```
 
-Opens the interactive GraphiQL IDE for the project. Provides auto-complete, documentation explorer, and query history.
+Opens the interactive GraphiQL IDE for the domain. Provides auto-complete, documentation explorer, and query history.
 
 #### Get GraphQL Depth Settings
 
@@ -2092,7 +2094,7 @@ POST /graphql/{project_name}
 GET /graphql/{project_name}/schema
 ```
 
-Returns the full GraphQL Schema Definition Language (SDL) for the project.
+Returns the full GraphQL Schema Definition Language (SDL) for the domain.
 
 **Response (text/plain):**
 ```graphql
@@ -2108,13 +2110,13 @@ type Query {
 }
 ```
 
-> **Note**: The GraphQL schema is auto-generated at runtime from the project's ontology. Each project has its own schema, cached and invalidated on ontology changes.
+> **Note**: The GraphQL schema is auto-generated at runtime from the domain's ontology. Each domain has its own schema, cached and invalidated on ontology changes.
 
 ---
 
 ### External REST API (`/api/v1`)
 
-**Project** routes (`/api/v1/projects`, `/api/v1/project/...`) and **Digital Twin** routes (`/api/v1/digitaltwin/...`). Most accept an optional `project_name` (and often `project_version`) to load from the registry instead of the browser session.
+**Domain** routes (`/api/v1/domains`, `/api/v1/domain/...`) and **Digital Twin** routes (`/api/v1/digitaltwin/...`). Most accept an optional `project_name` (and often `project_version`) to load a domain from the registry instead of the browser session.
 
 **Digital Twin base URL:** `http://localhost:8000/api/v1/digitaltwin`
 
@@ -2124,30 +2126,30 @@ type Query {
 GET /api/v1/digitaltwin/registry
 ```
 
-Returns the project registry location (catalog, schema, volume).
+Returns the domain registry location (catalog, schema, volume).
 
-#### List Projects
+#### List domains
 
 ```http
-GET /api/v1/projects
+GET /api/v1/domains
 ```
 
-List all MCP-enabled projects in the registry.
+List all MCP-enabled domains in the registry.
 
 #### Versions
 
 ```http
-GET /api/v1/project/versions
+GET /api/v1/domain/versions
 ```
 
 **Query Parameters:** `project_name` (required)
 
-Returns all versions for the project, latest first.
+Returns all versions for the domain, latest first.
 
 #### Design Status
 
 ```http
-GET /api/v1/project/design-status
+GET /api/v1/domain/design-status
 ```
 
 **Query Parameters:** `project_name` (optional), `project_version` (optional)
@@ -2193,27 +2195,27 @@ Check backend type, table name, data availability, and triple count.
 #### Ontology (OWL)
 
 ```http
-GET /api/v1/project/ontology
+GET /api/v1/domain/ontology
 ```
 
 **Query Parameters:** `project_name` (optional)
 
-Return the project's OWL ontology in Turtle format.
+Return the domain's OWL ontology in Turtle format.
 
 #### R2RML Mapping
 
 ```http
-GET /api/v1/project/r2rml
+GET /api/v1/domain/r2rml
 ```
 
 **Query Parameters:** `project_name` (optional)
 
-Return the project's R2RML mapping document in Turtle format.
+Return the domain's R2RML mapping document in Turtle format.
 
 #### Generated Spark SQL
 
 ```http
-GET /api/v1/project/sparksql
+GET /api/v1/domain/sparksql
 ```
 
 **Query Parameters:** `project_name` (optional)
@@ -2245,7 +2247,7 @@ GET /api/v1/digitaltwin/triples/find
 ```
 
 **Query Parameters:**
-- `project_name` (optional): Project name in the registry
+- `project_name` (optional): Domain name in the registry
 - `search` (required): Search text
 - `entity_type` (optional): Filter by type
 - `depth` (optional): BFS depth (default: 2)
@@ -2273,7 +2275,7 @@ POST /settings/schedules
 **Request Body:**
 ```json
 {
-  "project_name": "my_project",
+  "project_name": "my_domain",
   "cron": "0 2 * * *",
   "enabled": true
 }
@@ -2441,14 +2443,14 @@ HTML routes are thin; they call **domain objects** under `back/objects/*` and **
 
 | Route module | Primary domain/core | Purpose |
 |--------------|---------------------|---------|
-| `front/routes/home.py`, `api/routers/internal/home.py` | `back/services/home.py`, `back/objects/session/project_session.py` | Home / session overview |
+| `front/routes/home.py`, `api/routers/internal/home.py` | `back/services/home.py`, `back/objects/session/domain_session.py` | Home / session overview |
 | `front/routes/home.py` (settings page served from home), `api/routers/internal/settings.py` | `back/services/settings.py`, `shared/config/settings.py`, `shared/config/constants.py` | Settings & environment UI |
 | `front/routes/ontology.py`, `api/routers/internal/ontology.py` | `back/objects/ontology/ontology.py`, `back/core/w3c/*` | Ontology design & import |
 | `front/routes/mapping.py`, `api/routers/internal/mapping.py` | `back/objects/mapping/mapping.py`, `back/core/w3c/r2rml/*` | Table mapping & R2RML |
 | `front/routes/dtwin.py`, `api/routers/internal/dtwin.py` | `back/objects/digitaltwin/digitaltwin.py`, `back/core/w3c/sparql/SparqlTranslator.py` | Digital Twin, SPARQL, query UI |
-| `front/routes/project.py`, `api/routers/internal/project.py` | `back/objects/project/project.py`, `back/objects/session/project_session.py` | Project save/load & registry UX |
+| `front/routes/domain.py`, `api/routers/internal/domain.py` | `back/objects/domain/domain.py`, `back/objects/session/domain_session.py` | Domain save/load & registry UX |
 | `api/routers/internal/tasks.py` | (handlers in routes; registry scheduler via `back/objects/registry`) | Task status / triggers |
-| `api/routers/v1.py`, `api/routers/projects.py`, `api/routers/digitaltwin.py` | `api/service.py` | External stateless REST |
+| `api/routers/v1.py`, `api/routers/domains.py`, `api/routers/digitaltwin.py` | `api/service.py` | External stateless REST |
 | `back/fastapi/graphql_routes.py` | `back/core/graphql/GraphQLSchemaBuilder.py`, `back/core/graphql/ResolverFactory.py` | GraphQL (also mounted under `/api/v1/graphql`) |
 
 This separation ensures:

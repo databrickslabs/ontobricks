@@ -6,7 +6,7 @@ served via Databricks Model Serving or evaluated with Agent Evaluation.
 
 Usage::
 
-    # From the project root
+    # From the OntoBricks repository root
     python -m agents.agent_ontology_assistant.log_model
 
     # Or with a custom experiment name

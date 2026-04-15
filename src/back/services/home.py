@@ -10,15 +10,15 @@ from back.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-def get_session_status(project) -> Dict[str, Any]:
+def get_session_status(domain) -> Dict[str, Any]:
     """Get current session status for navbar indicators.
 
-    Delegates to :meth:`ProjectSession.get_session_status`.
+    Delegates to :meth:`DomainSession.get_session_status`.
     """
-    return project.get_session_status()
+    return domain.get_session_status()
 
 
-def _active_classes_and_properties(project):
+def _active_classes_and_properties(domain):
     """Return (active_classes, active_object_properties, all_object_properties, excluded_names).
 
     Excludes entities/relationships marked as excluded.
@@ -26,10 +26,10 @@ def _active_classes_and_properties(project):
     and ``relationships``.  Relationships are also excluded
     implicitly when their domain or range class is excluded.
     """
-    all_classes = project.get_classes()
-    all_properties = project.get_properties()
-    assignment = project.assignment or {}
-    
+    all_classes = domain.get_classes()
+    all_properties = domain.get_properties()
+    assignment = domain.assignment or {}
+
     excluded_entity_uris = {
         m.get('ontology_class') for m in assignment.get('entities', [])
         if m.get('excluded')
@@ -38,7 +38,7 @@ def _active_classes_and_properties(project):
         m.get('property') for m in assignment.get('relationships', [])
         if m.get('excluded')
     }
-    
+
     active_classes = [c for c in all_classes if c.get('uri') not in excluded_entity_uris]
     excluded_names = set()
     for c in all_classes:
@@ -47,7 +47,7 @@ def _active_classes_and_properties(project):
                 excluded_names.add(c['name'])
             if c.get('localName'):
                 excluded_names.add(c['localName'])
-    
+
     object_properties = [p for p in all_properties if p.get('type') == 'ObjectProperty']
     active_props = [
         p for p in object_properties
@@ -58,16 +58,16 @@ def _active_classes_and_properties(project):
     return active_classes, active_props, object_properties, excluded_names
 
 
-def validate_status(project) -> Dict[str, Any]:
+def validate_status(domain) -> Dict[str, Any]:
     """Get validation status for navbar indicators (computed on each call).
 
     Args:
-        project: ProjectSession instance
+        domain: DomainSession instance
 
     Returns:
         dict: Complete validation status
     """
-    return _compute_validation(project)
+    return _compute_validation(domain)
 
 
 def _validate_ontology_classes(all_classes) -> tuple:
@@ -94,13 +94,13 @@ def _build_mapping_issues(active_classes, active_props, active_entity_mappings, 
     )
 
 
-def _compute_validation(project) -> Dict[str, Any]:
+def _compute_validation(domain) -> Dict[str, Any]:
     """Run the full ontology + mapping validation rules."""
-    all_classes = project.get_classes()
-    all_properties = project.get_properties()
-    active_classes, active_props, all_obj_props, _ = _active_classes_and_properties(project)
-    entity_mappings = project.get_entity_mappings()
-    relationship_mappings = project.get_relationship_mappings()
+    all_classes = domain.get_classes()
+    all_properties = domain.get_properties()
+    active_classes, active_props, all_obj_props, _ = _active_classes_and_properties(domain)
+    entity_mappings = domain.get_entity_mappings()
+    relationship_mappings = domain.get_relationship_mappings()
 
     active_entity_mappings = [m for m in entity_mappings if not m.get('excluded')]
     active_rel_mappings = [m for m in relationship_mappings if not m.get('excluded')]
@@ -133,7 +133,7 @@ def _compute_validation(project) -> Dict[str, Any]:
             'classes': len(all_classes),
             'properties': len(all_properties)
         },
-        'ontology_changed': project.ontology_changed,
+        'ontology_changed': domain.ontology_changed,
         'mapping_valid': mapping_valid,
         'mapping_issues': mapping_issues,
         'mapping_stats': {
@@ -144,41 +144,41 @@ def _compute_validation(project) -> Dict[str, Any]:
             'ignored_entities': ignored_entity_count,
             'ignored_relationships': ignored_rel_count,
         },
-        'assignment_changed': project.assignment_changed,
+        'assignment_changed': domain.assignment_changed,
     }
 
 
-def validate_ontology(project) -> Dict[str, Any]:
+def validate_ontology(domain) -> Dict[str, Any]:
     """Validate current ontology.
-    
+
     Args:
-        project: ProjectSession instance
-        
+        domain: DomainSession instance
+
     Returns:
         dict: Validation result with errors
     """
-    classes = project.get_classes()
-    properties = project.get_properties()
-    
+    classes = domain.get_classes()
+    properties = domain.get_properties()
+
     if not classes:
         return {
-            'valid': False, 
-            'message': 'No ontology loaded', 
+            'valid': False,
+            'message': 'No ontology loaded',
             'errors': ['No classes defined']
         }
-    
+
     errors = []
     for cls in classes:
         # Lenient: accept uri, name, or localName
         if not cls.get('uri') and not cls.get('name') and not cls.get('localName'):
             label = cls.get('label', cls.get('name', 'Unknown'))
             errors.append(f"Entity '{label}' has no URI")
-    
+
     for prop in properties:
         if not prop.get('uri') and not prop.get('name') and not prop.get('localName'):
             label = prop.get('label', prop.get('name', 'Unknown'))
             errors.append(f"Relationship '{label}' has no URI")
-    
+
     return {
         'valid': len(errors) == 0,
         'message': 'Valid' if not errors else f'{len(errors)} issues found',
@@ -186,7 +186,7 @@ def validate_ontology(project) -> Dict[str, Any]:
     }
 
 
-async def get_detailed_validation(project, settings, warehouse_id: str = "") -> Dict[str, Any]:
+async def get_detailed_validation(domain, settings, warehouse_id: str = "") -> Dict[str, Any]:
     """Get detailed validation status.
 
     Digital Twin graph status and artefact existence are served from the
@@ -194,7 +194,7 @@ async def get_detailed_validation(project, settings, warehouse_id: str = "") -> 
     On a cache miss the values are fetched live and then cached.
 
     Args:
-        project: ProjectSession instance
+        domain: DomainSession instance
         settings: App settings (Databricks / warehouse resolution)
         warehouse_id: resolved warehouse ID (empty string if none)
 
@@ -204,23 +204,23 @@ async def get_detailed_validation(project, settings, warehouse_id: str = "") -> 
     import asyncio
 
     from back.core.helpers import run_blocking
-    from back.objects.project import Project as ProjectDomain
+    from back.objects.domain.domain import Domain
     from back.objects.digitaltwin import DigitalTwin
 
-    dt = DigitalTwin(project)
+    dt = DigitalTwin(domain)
     await run_blocking(dt.sync_last_build_from_schedule, settings)
     ts_status, dt_exist, document_count = await asyncio.gather(
         dt.get_or_fetch_graph_status(settings),
         dt.get_or_fetch_dt_existence(settings),
-        run_blocking(ProjectDomain(project).count_documents_in_volume, settings),
+        run_blocking(Domain(domain).count_documents_in_volume, settings),
     )
 
-    all_classes = project.get_classes()
-    all_properties = project.get_properties()
-    active_classes, active_props, all_obj_props, _ = _active_classes_and_properties(project)
-    entity_mappings = project.get_entity_mappings()
-    relationship_mappings = project.get_relationship_mappings()
-    design_layout = project.design_layout
+    all_classes = domain.get_classes()
+    all_properties = domain.get_properties()
+    active_classes, active_props, all_obj_props, _ = _active_classes_and_properties(domain)
+    entity_mappings = domain.get_entity_mappings()
+    relationship_mappings = domain.get_relationship_mappings()
+    design_layout = domain.design_layout
 
     active_entity_mappings = [m for m in entity_mappings if not m.get('excluded')]
     active_relationship_mappings = [m for m in relationship_mappings if not m.get('excluded')]
@@ -250,10 +250,10 @@ async def get_detailed_validation(project, settings, warehouse_id: str = "") -> 
 
     mapped_entity_count = len(active_classes) - len(unmapped_entities)
     mapped_rel_count = len(active_props) - len(unmapped_relationships)
-    
+
     # Ontology warnings
     ontology_warnings = []
-    ontology_name = project.ontology.get('name', '')
+    ontology_name = domain.ontology.get('name', '')
     if not ontology_name or ontology_name == 'MyOntology':
         ontology_warnings.append('Ontology name is still set to default')
     object_props = [p for p in active_props if p.get('type') != 'DatatypeProperty']
@@ -263,14 +263,14 @@ async def get_detailed_validation(project, settings, warehouse_id: str = "") -> 
     if props_without_domain:
         names = ', '.join(p.get('label') or p.get('name', '(unnamed)') for p in props_without_domain)
         ontology_warnings.append(f'{len(props_without_domain)} relationship(s) without domain: {names}')
-    
-    dtwin = _compute_dtwin_indicator(project, ts_status, dt_exist)
+
+    dtwin = _compute_dtwin_indicator(domain, ts_status, dt_exist)
 
     dt_existence = dt_exist or {}
     ts_st = ts_status or {}
 
-    last_update = project.last_update
-    last_build = project.last_build
+    last_update = domain.last_update
+    last_build = domain.last_build
     needs_rebuild = bool(last_update and last_build and last_update > last_build)
 
     dtwin_detail = {
@@ -290,14 +290,15 @@ async def get_detailed_validation(project, settings, warehouse_id: str = "") -> 
     }
 
     # Metadata table count (in-session, no I/O)
-    metadata = project._data.get('project', {}).get('metadata', {})
+    _dom = domain._data.get('domain') or domain._data.get('project') or {}
+    metadata = _dom.get('metadata', {})
     metadata_table_count = len(metadata.get('tables', [])) if metadata else 0
 
-    # Document count: live list of UC documents path (same rules as /project/documents/list)
+    # Document count: live list of UC documents path (same rules as domain documents list)
 
-    project_info = project.info or {}
-    project_name = project_info.get('name', 'NewProject')
-    project_version = project_info.get('version', '1')
+    domain_info = domain.info or {}
+    dname = domain_info.get('name', 'NewDomain')
+    dversion = domain_info.get('version', '1')
 
     return {
         'success': True,
@@ -328,12 +329,10 @@ async def get_detailed_validation(project, settings, warehouse_id: str = "") -> 
         'dtwin': dtwin_detail,
         # Warehouse status
         'warehouse': {'warehouse_id': warehouse_id},
-        # Project assets
         'metadata_table_count': metadata_table_count,
         'document_count': document_count,
-        # Project identity
-        'project_name': project_name,
-        'project_version': project_version,
+        'domain_name': dname,
+        'domain_version': dversion,
         # Also include nested format for other consumers
         'ontology': {
             'valid': ontology_valid,
@@ -356,7 +355,7 @@ async def get_detailed_validation(project, settings, warehouse_id: str = "") -> 
 
 
 def _compute_dtwin_indicator(
-    project,
+    domain,
     ts_status: Dict[str, Any],
     dt_exist: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -365,28 +364,28 @@ def _compute_dtwin_indicator(
     Delegates to :meth:`DigitalTwin.compute_dtwin_indicator`.
     """
     from back.objects.digitaltwin import DigitalTwin
-    return DigitalTwin.compute_dtwin_indicator(project, ts_status, dt_exist)
+    return DigitalTwin.compute_dtwin_indicator(domain, ts_status, dt_exist)
 
 
 async def get_navbar_state(
-    project,
+    domain,
     settings,
     warehouse_id: str = "",
 ) -> Dict[str, Any]:
     """Build the navbar state in a single call.
 
-    The navbar only displays project identity and SQL Warehouse status,
+    The navbar only displays domain identity and SQL Warehouse status,
     so this intentionally skips the expensive Digital Twin and validation
     I/O that used to run here.  Those checks are available on the
-    Project Validation page (``/validate/detailed``) and the DT Sync
+    validation page (``/validate/detailed``) and the DT Sync
     page (``/dtwin/sync/info``).
     """
-    from back.objects.project import Project as ProjectDomain
+    from back.objects.domain.domain import Domain
 
     logger.debug("Building navbar state")
-    project_data = ProjectDomain(project).get_project_info()
+    domain_data = Domain(domain, settings).get_domain_info()
 
     return {
-        "project": project_data,
+        "domain": domain_data,
         "warehouse": {"warehouse_id": warehouse_id},
     }

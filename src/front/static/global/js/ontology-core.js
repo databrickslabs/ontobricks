@@ -10,7 +10,7 @@
 // Ontology configuration - THE central state object
 const OntologyState = {
     config: {
-        name: 'MyOntology',
+        name: 'myontology',
         base_uri: '',
         classes: [],
         properties: []
@@ -38,31 +38,31 @@ const OntologyState = {
 // =====================================================
 
 /**
- * Load base URI from project session (managed in Project page)
+ * Load base URI from domain session (managed on the Domain page)
  * Base URI is no longer auto-generated - it's managed in the Project Information page.
  */
 function generateBaseUri() {
     // This function is kept for backward compatibility but no longer auto-generates
     // The base URI is managed in the Project page
-    loadBaseUriFromProject();
+    loadBaseUriFromDomain();
 }
 
 /**
- * Load base URI from project session
+ * Load base URI from domain session
  */
-async function loadBaseUriFromProject() {
+async function loadBaseUriFromDomain() {
     const baseUriInput = document.getElementById('baseUri');
     if (!baseUriInput) return;
     
     try {
-        const response = await fetch('/project/info', { credentials: 'same-origin' });
+        const response = await fetch('/domain/info', { credentials: 'same-origin' });
         const result = await response.json();
         if (result.success && result.info && result.info.base_uri) {
             baseUriInput.value = result.info.base_uri;
             OntologyState.config.base_uri = result.info.base_uri;
         }
     } catch (error) {
-        console.log('Could not load base URI from project');
+        console.log('Could not load base URI from domain session');
     }
 }
 
@@ -79,8 +79,8 @@ async function loadBaseUriDomain() {
     } catch (error) {
         console.log('Using default base URI domain');
     }
-    // Load base URI from project instead of generating
-    loadBaseUriFromProject();
+    // Load base URI from domain session instead of generating
+    loadBaseUriFromDomain();
 }
 
 /**
@@ -275,8 +275,8 @@ async function autoGenerateOwl() {
     
     if (!name) {
         issues.push('Ontology name is required');
-    } else if (name === 'MyOntology') {
-        warnings.push('Ontology name is still set to default "MyOntology"');
+    } else if (name === 'myontology' || name === 'newproject' || name === 'newdomain') {
+        warnings.push('Ontology name is still set to the default. Set a Domain Name in Domain Information.');
     }
     
     if (!baseUri) {

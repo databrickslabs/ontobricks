@@ -2,9 +2,9 @@
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
 
-from front.fastapi.dependencies import templates
-from back.objects.session import SessionManager, get_session_manager, get_project
-from back.core.helpers import effective_view_table, effective_graph_name
+from front.fastapi.dependencies import templates, triplestore_page_context
+from back.objects.session import SessionManager, get_session_manager, get_domain
+from back.core.helpers import effective_view_table
 from back.objects.digitaltwin import DigitalTwin
 
 router = APIRouter(prefix="/dtwin", tags=["Query"])
@@ -16,13 +16,11 @@ async def query_page(
     session_mgr: SessionManager = Depends(get_session_manager),
 ):
     """Query page."""
-    project = get_project(session_mgr)
-    ts_cache = (project.triplestore or {}).get('stats', {})
+    domain_session = get_domain(session_mgr)
 
-    ont = project.ontology or {}
+    ont = domain_session.ontology or {}
     props = ont.get("properties", [])
-    view_table = effective_view_table(project)
-    materialize_table = f"{view_table}_inferred" if view_table else ""
+    view_table = effective_view_table(domain_session)
     reasoning_ctx = {
         "classes_count": len(ont.get("classes", [])),
         "properties_count": len(props),
@@ -34,13 +32,13 @@ async def query_page(
         "sparql_rules_count": len(ont.get("sparql_rules", [])),
         "aggregate_rules_count": len(ont.get("aggregate_rules", [])),
         "owlrl_available": DigitalTwin.is_owlrl_available(),
-        "backend_type": DigitalTwin(project).effective_backend_label(),
-        "materialize_table": materialize_table,
+        "backend_type": DigitalTwin(domain_session).effective_backend_label(),
+        "materialize_table": f"{view_table}_inferred" if view_table else "",
     }
 
     return templates.TemplateResponse(request, "dtwin.html", {
-        "view_table": view_table,
-        "graph_name": effective_graph_name(project),
-        "triplestore_cache": ts_cache,
+        **triplestore_page_context(domain_session),
         "reasoning_ctx": reasoning_ctx,
+        "domain_name": (domain_session.info or {}).get("name", "NewDomain"),
+        "current_version": domain_session.current_version or "1",
     })

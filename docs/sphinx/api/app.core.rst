@@ -35,8 +35,10 @@ Subpackages
 .. toctree::
    :maxdepth: 1
 
+   app.core.helpers
    app.core.errors
    app.core.databricks
+   app.core.graph_analysis
    app.core.graphql
    app.core.industry
    app.core.reasoning

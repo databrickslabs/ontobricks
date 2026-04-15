@@ -1311,14 +1311,9 @@
         // Icon and Description Editors
         // ==========================================
         _showIconPicker(entity) {
-            // Common emoji icons for ontology entities
-            const commonIcons = [
-                '📦', '👤', '🏢', '📄', '🔧', '💡', '📊', '🎯',
-                '🏠', '🚗', '📱', '💻', '🌐', '📁', '⚙️', '🔗',
-                '📝', '📅', '💰', '🎨', '🔒', '📧', '🛒', '🎓',
-                '🏥', '✈️', '🍕', '🎵', '📚', '🔬', '⭐', '💼',
-                '🌳', '🐕', '🎬', '🏆', '💎', '🔔', '📍', '🎁'
-            ];
+            const commonIcons = (typeof EmojiPicker !== 'undefined')
+                ? EmojiPicker.allEmojis()
+                : ['📦','👤','🏢','📄','🔧','💡','📊','🎯','🏠','🚗','📱','💻','🌐','📁','⚙️','🔗'];
 
             // Remove existing picker if any
             this._closeModal();

@@ -23,10 +23,10 @@ if TYPE_CHECKING:
 
 
 class Mapping:
-    """Centralizes mapping operations for a project session."""
+    """Centralizes mapping operations for a domain session."""
 
-    def __init__(self, project: Any) -> None:
-        self._project = project
+    def __init__(self, domain: Any) -> None:
+        self._domain = domain
 
     def auto_assign_with_agent(
         self,
@@ -46,7 +46,7 @@ class Mapping:
         """Run ``agent_auto_assignment`` (blocking).
 
         ``client`` is typically a :class:`~back.core.databricks.DatabricksClient`
-        built with the project warehouse. Call from a background thread when
+        built with the domain warehouse. Call from a background thread when
         started from HTTP.
         """
         from agents.agent_auto_assignment import run_agent
@@ -79,11 +79,11 @@ class Mapping:
         override = schema_context_override or {}
         if override.get("tables"):
             return dict(override), None
-        tables = (self._project.catalog_metadata or {}).get("tables", [])
+        tables = (self._domain.catalog_metadata or {}).get("tables", [])
         if not tables:
             return (
                 {},
-                "No metadata loaded. Please load metadata first in Project settings.",
+                "No metadata loaded. Please load metadata first in Settings.",
             )
         return {"tables": tables}, None
 
@@ -126,8 +126,8 @@ class Mapping:
         return mapping
 
     def add_or_update_entity_mapping(self, data: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
-        project = self._project
-        mappings = project.get_entity_mappings()
+        domain = self._domain
+        mappings = domain.get_entity_mappings()
         new_mapping = Mapping.build_entity_mapping(data)
 
         was_update = False
@@ -142,28 +142,28 @@ class Mapping:
         if not was_update:
             mappings.append(new_mapping)
 
-        project.assignment["entities"] = mappings
-        project.clear_generated_content()
-        project.save()
+        domain.assignment["entities"] = mappings
+        domain.clear_generated_content()
+        domain.save()
 
         return was_update, new_mapping
 
     def delete_entity_mapping(self, ontology_class: str) -> bool:
-        project = self._project
-        mappings = project.get_entity_mappings()
+        domain = self._domain
+        mappings = domain.get_entity_mappings()
         original_len = len(mappings)
         mappings = [m for m in mappings if m.get("ontology_class") != ontology_class]
 
         if len(mappings) < original_len:
-            project.assignment["entities"] = mappings
-            project.clear_generated_content()
-            project.save()
+            domain.assignment["entities"] = mappings
+            domain.clear_generated_content()
+            domain.save()
             return True
         return False
 
     def add_or_update_relationship_mapping(self, data: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
-        project = self._project
-        mappings = project.get_relationship_mappings()
+        domain = self._domain
+        mappings = domain.get_relationship_mappings()
         new_mapping = Mapping.build_relationship_mapping(data)
 
         was_update = False
@@ -178,51 +178,51 @@ class Mapping:
         if not was_update:
             mappings.append(new_mapping)
 
-        project.assignment["relationships"] = mappings
-        project.clear_generated_content()
-        project.save()
+        domain.assignment["relationships"] = mappings
+        domain.clear_generated_content()
+        domain.save()
 
         return was_update, new_mapping
 
     def delete_relationship_mapping(self, property_uri: str) -> bool:
-        project = self._project
-        mappings = project.get_relationship_mappings()
+        domain = self._domain
+        mappings = domain.get_relationship_mappings()
         original_len = len(mappings)
         mappings = [m for m in mappings if m.get("property") != property_uri]
 
         if len(mappings) < original_len:
-            project.assignment["relationships"] = mappings
-            project.clear_generated_content()
-            project.save()
+            domain.assignment["relationships"] = mappings
+            domain.clear_generated_content()
+            domain.save()
             return True
         return False
 
     def save_mapping_config(self, mapping_config: Dict[str, Any]) -> Dict[str, int]:
-        project = self._project
-        project.assignment["entities"] = mapping_config.get(
+        domain = self._domain
+        domain.assignment["entities"] = mapping_config.get(
             "entities", mapping_config.get("data_source_mappings", [])
         )
-        project.assignment["relationships"] = mapping_config.get(
+        domain.assignment["relationships"] = mapping_config.get(
             "relationships", mapping_config.get("relationship_mappings", [])
         )
         if mapping_config.get("r2rml_output"):
-            project.assignment["r2rml_output"] = mapping_config["r2rml_output"]
+            domain.assignment["r2rml_output"] = mapping_config["r2rml_output"]
 
-        project.clear_generated_content()
-        project.save()
+        domain.clear_generated_content()
+        domain.save()
 
         return {
-            "entities": len(project.get_entity_mappings()),
-            "relationships": len(project.get_relationship_mappings()),
+            "entities": len(domain.get_entity_mappings()),
+            "relationships": len(domain.get_relationship_mappings()),
         }
 
     def reset_mapping(self) -> None:
-        project = self._project
-        project.assignment["entities"] = []
-        project.assignment["relationships"] = []
-        project.assignment["r2rml_output"] = ""
-        project.clear_generated_content()
-        project.save()
+        domain = self._domain
+        domain.assignment["entities"] = []
+        domain.assignment["relationships"] = []
+        domain.assignment["r2rml_output"] = ""
+        domain.clear_generated_content()
+        domain.save()
 
     def generate_r2rml(self) -> str:
         """Generate R2RML from current mapping configuration.
@@ -237,17 +237,17 @@ class Mapping:
         from back.core.w3c import R2RMLGenerator
         from back.core.errors import ValidationError as _VE
 
-        project = self._project
-        if not project.get_entity_mappings():
+        domain = self._domain
+        if not domain.get_entity_mappings():
             raise _VE("No entity mappings configured")
 
         try:
-            base_uri = project.ontology.get("base_uri", DEFAULT_BASE_URI)
+            base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
             generator = R2RMLGenerator(base_uri)
-            r2rml_content = generator.generate_mapping(project.assignment, project.ontology)
+            r2rml_content = generator.generate_mapping(domain.assignment, domain.ontology)
 
-            project.set_r2rml(r2rml_content)
-            project.save()
+            domain.set_r2rml(r2rml_content)
+            domain.save()
 
             return r2rml_content
         except Exception as e:
@@ -260,23 +260,23 @@ class Mapping:
     def parse_r2rml(self, r2rml_content: str) -> Dict[str, Any]:
         from back.core.w3c import R2RMLParser
 
-        project = self._project
+        domain = self._domain
         parser = R2RMLParser()
         result = parser.parse(r2rml_content)
 
         if result.get("success"):
-            project.assignment["entities"] = result.get("entity_mappings", [])
-            project.assignment["relationships"] = result.get("relationship_mappings", [])
-            project.assignment["r2rml_output"] = r2rml_content
-            project.save()
+            domain.assignment["entities"] = result.get("entity_mappings", [])
+            domain.assignment["relationships"] = result.get("relationship_mappings", [])
+            domain.assignment["r2rml_output"] = r2rml_content
+            domain.save()
 
         return result
 
     def get_mapping_stats(self) -> Dict[str, int]:
-        project = self._project
+        domain = self._domain
         return {
-            "entities": len(project.get_entity_mappings()),
-            "relationships": len(project.get_relationship_mappings()),
+            "entities": len(domain.get_entity_mappings()),
+            "relationships": len(domain.get_relationship_mappings()),
         }
 
     @staticmethod
@@ -299,8 +299,10 @@ class Mapping:
         }
 
     @staticmethod
-    def fetch_documents_for_agent(project: Any, host: str, token: str) -> List[Dict[str, Any]]:
-        base_path = project.uc_project_path
+    def fetch_documents_for_agent(domain: Any, host: str, token: str) -> List[Dict[str, Any]]:
+        from back.core.helpers import effective_uc_version_path
+
+        base_path = effective_uc_version_path(domain)
         if not base_path:
             logger.debug("fetch_documents_for_agent: no registry path — skipping documents")
             return []
@@ -433,7 +435,10 @@ class Mapping:
                 logger.warning("save_mappings_to_session: session file missing — using in-memory ref")
                 data = dict(session_ref) if session_ref else {}
 
-            assignment = data.setdefault("project_data", {}).setdefault("assignment", {})
+            if "domain_data" not in data and "project_data" in data:
+                data["domain_data"] = data.pop("project_data")
+            bucket = data.setdefault("domain_data", {})
+            assignment = bucket.setdefault("assignment", {})
 
             if entity_mappings is not None:
                 if existing_entity_mappings is not None:
@@ -477,8 +482,8 @@ class Mapping:
                 else:
                     assignment["relationships"] = relationship_mappings
 
-            project_node = data.setdefault("project_data", {}).setdefault("project", {})
-            project_node["assignment_changed"] = True
+            domain_node = bucket.setdefault("domain", {})
+            domain_node["assignment_changed"] = True
 
             session_path.write_text(json.dumps(data, default=str))
             e_count = len(assignment.get("entities", []))
@@ -554,9 +559,9 @@ class Mapping:
         }
 
     def toggle_exclude_items(self, uris: List[str], excluded: bool, item_type: str) -> int:
-        project = self._project
+        domain = self._domain
         uri_set = set(uris)
-        assignment = project.assignment
+        assignment = domain.assignment
 
         changed = 0
         if item_type == "entity":
@@ -585,13 +590,13 @@ class Mapping:
                 changed += 1
 
         if item_type == "entity":
-            for cls in project.ontology.get("classes", []):
+            for cls in domain.ontology.get("classes", []):
                 cls.pop("excluded", None)
         else:
-            for prop in project.ontology.get("properties", []):
+            for prop in domain.ontology.get("properties", []):
                 prop.pop("excluded", None)
 
-        project.save()
+        domain.save()
         return changed
 
     @staticmethod
@@ -676,3 +681,258 @@ class Mapping:
         if unmapped_attr_count > 0:
             issues.append(f'{unmapped_attr_count} attribute(s) not assigned')
         return issues
+
+    # ------------------------------------------------------------------
+    # Diagnostics
+    # ------------------------------------------------------------------
+
+    def run_diagnostics(self) -> Dict[str, Any]:
+        """Run comprehensive validation on all entity and relationship mappings.
+
+        Checks column existence in source SQL, entity-relationship
+        cross-references, and ontology consistency.
+        """
+        from back.objects.digitaltwin import DigitalTwin
+
+        domain = self._domain
+        ontology = domain.ontology or {}
+        assignment = domain.assignment or {}
+
+        ont_classes = {
+            c.get('uri', ''): c for c in ontology.get('classes', []) if c.get('uri')
+        }
+        ont_class_names = {
+            c.get('name', ''): c for c in ontology.get('classes', []) if c.get('name')
+        }
+        ont_props = {
+            p.get('uri', ''): p for p in ontology.get('properties', []) if p.get('uri')
+        }
+        ont_prop_names = {
+            p.get('name', ''): p for p in ontology.get('properties', []) if p.get('name')
+        }
+
+        entities = assignment.get('entities', [])
+        relationships = assignment.get('relationships', [])
+
+        entity_lookup: Dict[str, Dict] = {}
+        for m in entities:
+            if m.get('excluded'):
+                continue
+            for key in (
+                m.get('table'),
+                m.get('ontology_class_label'),
+                (m.get('ontology_class_label') or '').lower(),
+                m.get('ontology_class'),
+            ):
+                if key:
+                    entity_lookup[key] = m
+            class_uri = m.get('ontology_class', '')
+            if class_uri:
+                local = class_uri.rsplit('#', 1)[-1] if '#' in class_uri else class_uri.rsplit('/', 1)[-1]
+                if local:
+                    entity_lookup[local] = m
+                    entity_lookup[local.lower()] = m
+
+        entity_results = []
+        for ent in entities:
+            if ent.get('excluded'):
+                continue
+            label = ent.get('ontology_class_label') or ent.get('ontology_class', 'Unknown')
+            class_uri = ent.get('ontology_class', '')
+            sql_query = (ent.get('sql_query') or '').strip()
+            table = ent.get('table') or ''
+            source = sql_query or table or ''
+            id_col = ent.get('id_column', '')
+            label_col = ent.get('label_column', '')
+            attr_map = ent.get('attribute_mappings', {})
+
+            checks: List[Dict[str, str]] = []
+            available_cols = DigitalTwin._extract_select_columns(sql_query) if sql_query else None
+
+            if not source:
+                checks.append({'check': 'source', 'status': 'error', 'detail': 'No SQL query or table defined'})
+            else:
+                checks.append({'check': 'source', 'status': 'ok', 'detail': f'Source defined'})
+
+            if not id_col:
+                checks.append({'check': 'id_column', 'status': 'error', 'detail': 'No ID column defined'})
+            elif available_cols and id_col not in available_cols:
+                checks.append({'check': 'id_column', 'status': 'error',
+                               'detail': f"Column '{id_col}' not in source output {sorted(available_cols)}"})
+            else:
+                checks.append({'check': 'id_column', 'status': 'ok', 'detail': f"Column '{id_col}' found"})
+
+            if label_col:
+                if available_cols and label_col not in available_cols:
+                    checks.append({'check': 'label_column', 'status': 'error',
+                                   'detail': f"Column '{label_col}' not in source output {sorted(available_cols)}"})
+                else:
+                    checks.append({'check': 'label_column', 'status': 'ok', 'detail': f"Column '{label_col}' found"})
+
+            for attr_name, col_name in attr_map.items():
+                if not col_name:
+                    continue
+                if available_cols and col_name not in available_cols:
+                    checks.append({'check': f'attribute:{attr_name}', 'status': 'error',
+                                   'detail': f"Column '{col_name}' not in source output {sorted(available_cols)}"})
+                elif available_cols:
+                    checks.append({'check': f'attribute:{attr_name}', 'status': 'ok',
+                                   'detail': f"Column '{col_name}' found"})
+
+            if class_uri and class_uri not in ont_classes:
+                local = class_uri.rsplit('#', 1)[-1] if '#' in class_uri else class_uri.rsplit('/', 1)[-1]
+                if local not in ont_class_names:
+                    checks.append({'check': 'ontology_class', 'status': 'warning',
+                                   'detail': f"Class '{class_uri}' not found in ontology"})
+                else:
+                    checks.append({'check': 'ontology_class', 'status': 'ok', 'detail': f"Class '{local}' found"})
+            elif class_uri:
+                checks.append({'check': 'ontology_class', 'status': 'ok',
+                               'detail': f"Class '{class_uri.rsplit('#', 1)[-1] if '#' in class_uri else class_uri.rsplit('/', 1)[-1]}' found"})
+
+            worst = 'ok'
+            for c in checks:
+                if c['status'] == 'error':
+                    worst = 'error'
+                    break
+                if c['status'] == 'warning':
+                    worst = 'warning'
+
+            entity_results.append({
+                'ontology_class': class_uri,
+                'label': label,
+                'status': worst,
+                'source': source,
+                'available_columns': sorted(available_cols) if available_cols else None,
+                'checks': checks,
+            })
+
+        rel_results = []
+        for rel in relationships:
+            if rel.get('excluded'):
+                continue
+            prop_uri = rel.get('property', '')
+            prop_label = rel.get('property_label') or prop_uri
+            sql_query = (rel.get('sql_query') or '').strip()
+            src_class = rel.get('source_class', '')
+            src_label = rel.get('source_class_label', '')
+            tgt_class = rel.get('target_class', '')
+            tgt_label = rel.get('target_class_label', '')
+            src_id_col = rel.get('source_id_column') or rel.get('source_column', '')
+            tgt_id_col = rel.get('target_id_column') or rel.get('target_column', '')
+
+            checks: List[Dict[str, str]] = []
+            available_cols = DigitalTwin._extract_select_columns(sql_query) if sql_query else None
+
+            if not sql_query:
+                checks.append({'check': 'source', 'status': 'error', 'detail': 'No SQL query defined'})
+            else:
+                checks.append({'check': 'source', 'status': 'ok', 'detail': 'SQL query defined'})
+
+            if src_id_col and available_cols and src_id_col not in available_cols:
+                checks.append({'check': 'source_id_column', 'status': 'error',
+                               'detail': f"Column '{src_id_col}' not in source output {sorted(available_cols)}"})
+            elif src_id_col:
+                checks.append({'check': 'source_id_column', 'status': 'ok',
+                               'detail': f"Column '{src_id_col}' found"})
+
+            if tgt_id_col and available_cols and tgt_id_col not in available_cols:
+                checks.append({'check': 'target_id_column', 'status': 'error',
+                               'detail': f"Column '{tgt_id_col}' not in source output {sorted(available_cols)}"})
+            elif tgt_id_col:
+                checks.append({'check': 'target_id_column', 'status': 'ok',
+                               'detail': f"Column '{tgt_id_col}' found"})
+
+            resolved_src = self._resolve_entity(entity_lookup, src_class, src_label)
+            if resolved_src:
+                checks.append({'check': 'source_entity', 'status': 'ok',
+                               'detail': f"Resolves to entity '{resolved_src.get('ontology_class_label') or resolved_src.get('ontology_class', '?')}'"})
+            else:
+                name = src_label or src_class or '(empty)'
+                checks.append({'check': 'source_entity', 'status': 'error',
+                               'detail': f"Source entity '{name}' not found in entity mappings"})
+
+            resolved_tgt = self._resolve_entity(entity_lookup, tgt_class, tgt_label)
+            if resolved_tgt:
+                checks.append({'check': 'target_entity', 'status': 'ok',
+                               'detail': f"Resolves to entity '{resolved_tgt.get('ontology_class_label') or resolved_tgt.get('ontology_class', '?')}'"})
+            else:
+                name = tgt_label or tgt_class or '(empty)'
+                checks.append({'check': 'target_entity', 'status': 'error',
+                               'detail': f"Target entity '{name}' not found in entity mappings"})
+
+            ont_prop = ont_props.get(prop_uri) or ont_prop_names.get(prop_label)
+            if ont_prop:
+                checks.append({'check': 'ontology_property', 'status': 'ok',
+                               'detail': f"Property '{ont_prop.get('name', prop_uri)}' found"})
+                ont_domain = ont_prop.get('domain', '')
+                ont_range = ont_prop.get('range', '')
+                if ont_domain and resolved_src:
+                    src_name = (resolved_src.get('ontology_class_label') or '').lower()
+                    src_uri = resolved_src.get('ontology_class', '')
+                    if ont_domain.lower() != src_name and ont_domain != src_uri:
+                        local_src = src_uri.rsplit('#', 1)[-1] if '#' in src_uri else src_uri.rsplit('/', 1)[-1]
+                        if ont_domain.lower() != local_src.lower():
+                            checks.append({'check': 'domain_match', 'status': 'warning',
+                                           'detail': f"Ontology domain is '{ont_domain}' but source entity is '{src_name or local_src}'"})
+                if ont_range and resolved_tgt:
+                    tgt_name = (resolved_tgt.get('ontology_class_label') or '').lower()
+                    tgt_uri = resolved_tgt.get('ontology_class', '')
+                    if ont_range.lower() != tgt_name and ont_range != tgt_uri:
+                        local_tgt = tgt_uri.rsplit('#', 1)[-1] if '#' in tgt_uri else tgt_uri.rsplit('/', 1)[-1]
+                        if ont_range.lower() != local_tgt.lower():
+                            checks.append({'check': 'range_match', 'status': 'warning',
+                                           'detail': f"Ontology range is '{ont_range}' but target entity is '{tgt_name or local_tgt}'"})
+            elif prop_uri:
+                checks.append({'check': 'ontology_property', 'status': 'warning',
+                               'detail': f"Property '{prop_uri}' not found in ontology"})
+
+            worst = 'ok'
+            for c in checks:
+                if c['status'] == 'error':
+                    worst = 'error'
+                    break
+                if c['status'] == 'warning':
+                    worst = 'warning'
+
+            rel_results.append({
+                'property': prop_uri,
+                'label': prop_label,
+                'source_class': src_label or src_class,
+                'target_class': tgt_label or tgt_class,
+                'status': worst,
+                'checks': checks,
+            })
+
+        ok = sum(1 for e in entity_results if e['status'] == 'ok') + sum(1 for r in rel_results if r['status'] == 'ok')
+        warnings = sum(1 for e in entity_results if e['status'] == 'warning') + sum(1 for r in rel_results if r['status'] == 'warning')
+        errors = sum(1 for e in entity_results if e['status'] == 'error') + sum(1 for r in rel_results if r['status'] == 'error')
+
+        return {
+            'success': True,
+            'entities': entity_results,
+            'relationships': rel_results,
+            'summary': {
+                'total': len(entity_results) + len(rel_results),
+                'ok': ok,
+                'warnings': warnings,
+                'errors': errors,
+            },
+        }
+
+    @staticmethod
+    def _resolve_entity(
+        entity_lookup: Dict[str, Dict],
+        class_ref: str,
+        label_ref: str,
+    ) -> Optional[Dict]:
+        """Resolve a class reference to an entity mapping using multiple keys."""
+        for key in (class_ref, label_ref, (label_ref or '').lower()):
+            if key and key in entity_lookup:
+                return entity_lookup[key]
+        if class_ref:
+            local = class_ref.rsplit('#', 1)[-1] if '#' in class_ref else class_ref.rsplit('/', 1)[-1]
+            for key in (local, local.lower()):
+                if key in entity_lookup:
+                    return entity_lookup[key]
+        return None

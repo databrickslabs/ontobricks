@@ -5,10 +5,10 @@ This dataset provides sample data for testing OntoBricks ontology mapping capabi
 ## Overview
 
 The dataset models an organizational structure with **3 entities** and **3 types of relationships**:
-- **Entities**: Person, Department, Project
+- **Entities**: Person, Department, Domain
 - **Relationships**: 
   - Person → Department (one-directional, many-to-one)
-  - Department → Project (one-directional, many-to-many)
+  - Department → Domain (one-directional, many-to-many)
   - Person ↔ Person (bi-directional, many-to-many)
 
 ---
@@ -32,15 +32,15 @@ The dataset models an organizational structure with **3 entities** and **3 types
                     │    └──────────┬───────────┘          │
                     │               │                       │
                     │               │                       │
-         manages    │               │ sponsors             │
+         manages                        │               │ sponsors             │
                     │               │ (N:M)                │
                     │               │                       │
                     │               ▼                       │
                     │    ┌──────────────────────┐          │
-                    │    │ department_project   │          │
+                    │    │ department_domain    │          │
                     │    ├──────────────────────┤          │
                     │    │ department_id (FK)   │──────────┘
-                    │    │ project_id (FK)      │──────────┐
+                    │    │ domain_id (FK)       │──────────┐
                     │    │ sponsorship_type     │          │
                     │    │ funding_amount       │          │
                     │    │ start_date           │          │
@@ -48,10 +48,10 @@ The dataset models an organizational structure with **3 entities** and **3 types
                     │                                       │
                     │                                       ▼
                     │                            ┌──────────────────────┐
-                    │                            │       Project        │
+                    │                            │       Domain         │
                     │                            ├──────────────────────┤
-                    │                            │ project_id (PK)      │
-                    │                            │ project_name         │
+                    │                            │ domain_id (PK)       │
+                    │                            │ domain_name          │
                     │                            │ start_date           │
                     │                            │ end_date             │
                     │                            │ budget               │
@@ -99,7 +99,7 @@ The dataset models an organizational structure with **3 entities** and **3 types
    ┌──────────┤ person_id_1 (FK)                            │
    │          │ person_id_2 (FK)                            │───────┐
    │          │ collaboration_type                           │       │
-   │          │ project_id (FK)                              │       │
+              │          │ domain_id (FK)                               │       │
    │          │ start_date                                   │       │
    │          │ hours_per_week                               │       │
    │          └──────────────────────────────────────────────┘       │
@@ -145,18 +145,18 @@ Represents organizational departments.
 
 ---
 
-### 3. Project (`project.csv`)
-Represents company projects.
+### 3. Domain (`domain.csv`)
+Represents organizational domains (e.g. programs or initiatives).
 
 | Column       | Type    | Description                    |
 |--------------|---------|--------------------------------|
-| project_id   | STRING  | Primary Key (e.g., PR001)      |
-| project_name | STRING  | Project name                   |
-| start_date   | DATE    | Project start date             |
-| end_date     | DATE    | Project end date               |
-| budget       | DECIMAL | Project budget                 |
+| domain_id    | STRING  | Primary Key (e.g., PR001)      |
+| domain_name  | STRING  | Domain name                    |
+| start_date   | DATE    | Domain start date              |
+| end_date     | DATE    | Domain end date                |
+| budget       | DECIMAL | Domain budget                  |
 | status       | STRING  | Status (Active, Completed, etc.)|
-| description  | STRING  | Project description            |
+| description  | STRING  | Domain description             |
 
 **Rows:** 7
 
@@ -182,21 +182,21 @@ Defines which department each person belongs to. Many persons can belong to one 
 
 ---
 
-### 2. Department → Project (One-Directional, Many-to-Many)
-**File:** `department_project.csv`
+### 2. Department → Domain (One-Directional, Many-to-Many)
+**File:** `department_domain.csv`
 
-Defines which departments sponsor which projects. A department can sponsor multiple projects, and a project can have multiple department sponsors.
+Defines which departments sponsor which domains. A department can sponsor multiple domains, and a domain can have multiple department sponsors.
 
 | Column           | Type    | Description                           |
 |------------------|---------|---------------------------------------|
 | department_id    | STRING  | Foreign Key → Department              |
-| project_id       | STRING  | Foreign Key → Project                 |
+| domain_id        | STRING  | Foreign Key → Domain                  |
 | sponsorship_type | STRING  | Type (Primary, Supporting)            |
 | funding_amount   | DECIMAL | Amount of funding provided            |
 | start_date       | DATE    | Sponsorship start date                |
 
 **Rows:** 10  
-**Direction:** Department → Project (forward in OntoBricks)  
+**Direction:** Department → Domain (forward in OntoBricks)  
 **Cardinality:** Many-to-Many (N:M)
 
 ---
@@ -211,7 +211,7 @@ Defines collaboration relationships between employees. This is a **symmetric, bi
 | person_id_1        | STRING  | Foreign Key → Person                  |
 | person_id_2        | STRING  | Foreign Key → Person                  |
 | collaboration_type | STRING  | Type of collaboration                 |
-| project_id         | STRING  | Foreign Key → Project (context)       |
+| domain_id          | STRING  | Foreign Key → Domain (context)        |
 | start_date         | DATE    | Collaboration start date              |
 | hours_per_week     | DECIMAL | Time commitment per week              |
 
@@ -230,10 +230,10 @@ Defines collaboration relationships between employees. This is a **symmetric, bi
 2. Create entities:
    - **Person** (👤): Add attributes `email`, `job_title`, `salary`
    - **Department** (🏢): Add attributes `departmentName`, `location`, `budget`
-   - **Project** (📋): Add attributes `projectName`, `budget`, `status`
+   - **Domain** (📋): Add attributes `domainName`, `budget`, `status`
 3. Create relationships:
    - Drag from Person to Department → name "worksIn" → set direction to **Forward** (→)
-   - Drag from Department to Project → name "sponsors" → set direction to **Forward** (→)
+   - Drag from Department to Domain → name "sponsors" → set direction to **Forward** (→)
    - Drag from Person to Person → name "collaboratesWith" → set direction to **Bidirectional** (↔)
 4. Click **Auto Layout** to organize
 5. Click **Center** to fit the view
@@ -243,7 +243,7 @@ Defines collaboration relationships between employees. This is a **symmetric, bi
 | Relationship | Source | Target | Direction Setting |
 |--------------|--------|--------|-------------------|
 | worksIn | Person | Department | Forward (→) |
-| sponsors | Department | Project | Forward (→) |
+| sponsors | Department | Domain | Forward (→) |
 | collaboratesWith | Person | Person | Bidirectional (↔) |
 
 ---
@@ -281,13 +281,13 @@ JOIN department d ON pd.department_id = d.department_id
 WHERE d.department_name = 'Data Engineering';
 ```
 
-### Find all projects with their sponsors
+### Find all domains with their sponsors
 ```sql
-SELECT p.project_name, d.department_name, dp.sponsorship_type, dp.funding_amount
-FROM project p
-JOIN department_project dp ON p.project_id = dp.project_id
-JOIN department d ON dp.department_id = d.department_id
-ORDER BY p.project_name;
+SELECT dom.domain_name, d.department_name, dd.sponsorship_type, dd.funding_amount
+FROM domain dom
+JOIN department_domain dd ON dom.domain_id = dd.domain_id
+JOIN department d ON dd.department_id = d.department_id
+ORDER BY dom.domain_name;
 ```
 
 ### Find collaboration partners
@@ -307,8 +307,8 @@ JOIN person p2 ON pc.person_id_2 = p2.person_id;
 ## Use Cases for OntoBricks
 
 This dataset is ideal for testing:
-- ✅ **Class Mapping**: Map tables to OWL classes (Person, Department, Project)
-- ✅ **Forward Object Properties**: worksIn (Person → Department), sponsors (Department → Project)
+- ✅ **Class Mapping**: Map tables to OWL classes (Person, Department, Domain)
+- ✅ **Forward Object Properties**: worksIn (Person → Department), sponsors (Department → Domain)
 - ✅ **Bi-Directional Object Properties**: collaboratesWith (Person ↔ Person)
 - ✅ **Relationship Attributes**: Properties on relationships (role, funding_amount)
 - ✅ **Data Properties**: Scalar values (name, email, salary, budget, etc.)
@@ -324,9 +324,9 @@ This dataset is ideal for testing:
 |-------------------------|------|--------------|-----------------|
 | person                  | 12   | Entity       | -               |
 | department              | 5    | Entity       | -               |
-| project                 | 7    | Entity       | -               |
+| domain                  | 7    | Entity       | -               |
 | person_department       | 12   | Relationship | Forward (→)     |
-| department_project      | 10   | Relationship | Forward (→)     |
+| department_domain       | 10   | Relationship | Forward (→)     |
 | person_collaboration    | 12   | Relationship | Bidirectional (↔) |
 
 **Total:** 6 tables, 58 rows

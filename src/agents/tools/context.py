@@ -20,8 +20,9 @@ class ToolContext:
 
     # OWL generator fields — registry-based document path
     registry: Optional[dict] = None
-    project_name: Optional[str] = None
-    project_folder: Optional[str] = None
+    domain_name: Optional[str] = None
+    domain_folder: Optional[str] = None
+    domain_version: Optional[str] = None
 
     # Auto-mapping fields
     client: Any = None

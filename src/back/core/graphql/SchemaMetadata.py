@@ -56,7 +56,7 @@ class SchemaMetadata:
         if not uris:
             logger.warning(
                 "GraphQL resolve_list: no subjects found for type=%s (cls_uri=%s, search=%s). "
-                "Try the /graphql/{project}/debug?type_name=%s endpoint to diagnose.",
+                "Try the /graphql/{domain}/debug?type_name=%s endpoint to diagnose.",
                 type_name, info.cls_uri, search, type_name,
             )
             return []

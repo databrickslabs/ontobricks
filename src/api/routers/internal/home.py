@@ -8,9 +8,8 @@ from back.core.errors import ValidationError, InfrastructureError
 from back.objects.session import SessionManager, get_session_manager
 
 from shared.config.settings import get_settings, Settings
-from shared.config.constants import APP_VERSION
 from back.core.databricks import DatabricksClient
-from back.objects.session import get_project
+from back.objects.session import get_domain
 from back.core.helpers import get_databricks_client, resolve_warehouse_id
 from back.services import home as home_service
 
@@ -26,30 +25,30 @@ async def navbar_state(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Consolidated navbar state: project info, validation, dtwin cache, warehouse.
+    """Consolidated navbar state: domain info, validation, dtwin cache, warehouse.
 
     Returns everything the navbar needs in a single round-trip so the
     client avoids issuing four or five separate requests on every page load.
     """
-    project = get_project(session_mgr)
-    warehouse_id = resolve_warehouse_id(project, settings)
+    domain = get_domain(session_mgr)
+    warehouse_id = resolve_warehouse_id(domain, settings)
     return await home_service.get_navbar_state(
-        project, settings, warehouse_id=warehouse_id
+        domain, settings, warehouse_id=warehouse_id
     )
 
 
 @router.get("/session-status")
 async def session_status(session_mgr: SessionManager = Depends(get_session_manager)):
     """Get current session status for navbar indicators."""
-    project = get_project(session_mgr)
-    return home_service.get_session_status(project)
+    domain = get_domain(session_mgr)
+    return home_service.get_session_status(domain)
 
 
 @router.post("/reset-session")
 async def reset_session(session_mgr: SessionManager = Depends(get_session_manager)):
     """Reset entire session."""
-    project = get_project(session_mgr)
-    project.reset()
+    domain = get_domain(session_mgr)
+    domain.reset()
     return {'success': True, 'message': 'Session reset'}
 
 
@@ -60,8 +59,8 @@ async def reset_session(session_mgr: SessionManager = Depends(get_session_manage
 @router.get("/validate/ontology")
 async def validate_ontology_endpoint(session_mgr: SessionManager = Depends(get_session_manager)):
     """Validate current ontology."""
-    project = get_project(session_mgr)
-    return home_service.validate_ontology(project)
+    domain = get_domain(session_mgr)
+    return home_service.validate_ontology(domain)
 
 
 @router.get("/validate/detailed")
@@ -71,10 +70,10 @@ async def validate_detailed(
     settings: Settings = Depends(get_settings),
 ):
     """Get detailed validation status including Digital Twin and warehouse."""
-    project = get_project(session_mgr)
-    warehouse_id = resolve_warehouse_id(project, settings)
+    domain = get_domain(session_mgr)
+    warehouse_id = resolve_warehouse_id(domain, settings)
     return await home_service.get_detailed_validation(
-        project, settings, warehouse_id=warehouse_id
+        domain, settings, warehouse_id=warehouse_id
     )
 
 
@@ -130,9 +129,9 @@ async def read_volume_file(
         raise ValidationError("File path is required")
 
     from back.core.databricks import VolumeFileService
-    project = get_project(session_mgr)
-    host = project.databricks.get('host') or settings.databricks_host
-    token = project.databricks.get('token') or settings.databricks_token
+    domain = get_domain(session_mgr)
+    host = domain.databricks.get('host') or settings.databricks_host
+    token = domain.databricks.get('token') or settings.databricks_token
 
     uc_service = VolumeFileService(host=host, token=token)
     success, content, message = uc_service.read_file(path)
@@ -159,9 +158,9 @@ async def write_volume_file(
         raise ValidationError("Path and content are required")
 
     from back.core.databricks import VolumeFileService
-    project = get_project(session_mgr)
-    host = project.databricks.get('host') or settings.databricks_host
-    token = project.databricks.get('token') or settings.databricks_token
+    domain = get_domain(session_mgr)
+    host = domain.databricks.get('host') or settings.databricks_host
+    token = domain.databricks.get('token') or settings.databricks_token
 
     uc_service = VolumeFileService(host=host, token=token)
     success, message = uc_service.write_file(path, content)
@@ -179,8 +178,8 @@ async def write_volume_file(
 @router.post("/clear-ontology")
 async def clear_ontology(session_mgr: SessionManager = Depends(get_session_manager)):
     """Clear ontology, associated mappings, and design layout from session."""
-    project = get_project(session_mgr)
-    project.reset_ontology()
+    domain = get_domain(session_mgr)
+    domain.reset_ontology()
     return {'success': True, 'message': 'Ontology, mappings, and layout cleared'}
 
 
@@ -195,26 +194,27 @@ async def parse_ontology(request: Request, session_mgr: SessionManager = Depends
 
     from back.objects.ontology import Ontology
     result = Ontology.parse_owl(owl_content, extract_advanced=True)
-    ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions = result
+    ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions, groups = result
 
-    project = get_project(session_mgr)
-    project.ontology.update({
+    domain = get_domain(session_mgr)
+    domain.ontology.update({
         'name': ontology_info.get('name', ''),
         'base_uri': ontology_info.get('base_uri', ''),
         'description': ontology_info.get('description', ''),
         'classes': classes,
         'properties': properties,
     })
-    project.constraints = constraints
-    project.swrl_rules = swrl_rules
-    project.axioms = axioms
-    project.expressions = expressions
-    project.save()
+    domain.constraints = constraints
+    domain.swrl_rules = swrl_rules
+    domain.axioms = axioms
+    domain.expressions = expressions
+    domain.groups = groups
+    domain.save()
 
     return {
         'success': True,
         'config': {
-            'ontology': project.ontology,
+            'ontology': domain.ontology,
             'classes': classes,
             'properties': properties,
         },
@@ -232,5 +232,5 @@ async def parse_ontology(request: Request, session_mgr: SessionManager = Depends
 
 def _get_client(session_mgr: SessionManager, settings: Settings) -> DatabricksClient:
     """Get Databricks client using centralized helper."""
-    project = get_project(session_mgr)
-    return get_databricks_client(project, settings)
+    domain = get_domain(session_mgr)
+    return get_databricks_client(domain, settings)

@@ -129,11 +129,14 @@ class DatabricksClient:
     def list_app_principals(self, app_name):
         return self.workspace.list_app_principals(app_name)
 
-    def _get_oauth_token(self):
+    def get_oauth_token(self):
+        """Return an OAuth token from the Databricks auth layer."""
         return self.auth.get_oauth_token()
 
-    def _get_auth_headers(self):
+    def get_auth_headers(self):
+        """Return authorization headers for REST API calls."""
         return self.auth.get_auth_headers()
 
-    def _get_sql_connection_params(self):
+    def get_sql_connection_params(self):
+        """Return connection parameters for SQL Warehouse connections."""
         return self.auth.get_sql_connection_params()

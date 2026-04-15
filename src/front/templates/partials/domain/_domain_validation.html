@@ -1,0 +1,316 @@
+<!-- JS: /static/domain/js/domain-validation.js -->
+<!-- CSS: /static/domain/css/domain-validation.css -->
+<!-- Domain validation section -->
+<div class="content-section" style="position: relative;">
+
+    <!-- Loading overlay (shown until validation check completes) -->
+    <div id="validationLoadingOverlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(248, 249, 250, 0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;">
+        <div class="ob-loading-spinner">
+            <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
+                <g class="ob-ring">
+                    <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
+                        <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
+                        <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
+                        <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
+                        <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
+                    </g>
+                    <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
+                    <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
+                    <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
+                    <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
+                </g>
+                <g transform="translate(40,40)">
+                    <g class="ob-center">
+                        <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
+                        <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
+                        <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
+                    </g>
+                </g>
+            </svg>
+            <span class="ob-spinner-label">Checking validation status...</span>
+        </div>
+    </div>
+
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-shield-check me-2"></i>Domain Status</h4>
+            <p class="text-muted mb-0 small">Overall health and readiness of your domain</p>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadValidationDetails()">
+            <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+        </button>
+    </div>
+
+    <!-- Overall Project Health Banner -->
+    <div id="domainHealthBanner" class="validation-health-banner mb-4" style="display: none;"></div>
+
+    <!-- Project Assets Row -->
+    <div class="row g-3 mb-3">
+        <!-- Data Sources -->
+        <div class="col-md-6">
+            <div class="validation-tile" id="metadataTile">
+                <div class="validation-tile-icon" id="metadataTileIcon">
+                    <i class="bi bi-database"></i>
+                </div>
+                <div class="validation-tile-body">
+                    <div class="validation-tile-label">Data Sources</div>
+                    <div class="validation-tile-status" id="metadataTileStatus">Checking...</div>
+                </div>
+            </div>
+        </div>
+        <!-- Documents -->
+        <div class="col-md-6">
+            <div class="validation-tile" id="documentsTile">
+                <div class="validation-tile-icon" id="documentsTileIcon">
+                    <i class="bi bi-file-earmark-text"></i>
+                </div>
+                <div class="validation-tile-body">
+                    <div class="validation-tile-label">Documents</div>
+                    <div class="validation-tile-status" id="documentsTileStatus">Checking...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Versions Row -->
+    <div class="row g-3 mb-4">
+        <!-- Versions -->
+        <div class="col-md-4">
+            <div class="validation-tile" id="versionsTile">
+                <div class="validation-tile-icon">
+                    <i class="bi bi-clock-history"></i>
+                </div>
+                <div class="validation-tile-body">
+                    <div class="validation-tile-label">Versions</div>
+                    <div class="validation-tile-status" id="versionsTileStatus">Checking...</div>
+                </div>
+            </div>
+        </div>
+        <!-- Current Version -->
+        <div class="col-md-4">
+            <div class="validation-tile" id="currentVersionTile">
+                <div class="validation-tile-icon">
+                    <i class="bi bi-tag"></i>
+                </div>
+                <div class="validation-tile-body">
+                    <div class="validation-tile-label">Current Version</div>
+                    <div class="validation-tile-status" id="currentVersionTileStatus">Checking...</div>
+                </div>
+            </div>
+        </div>
+        <!-- Active Version -->
+        <div class="col-md-4">
+            <div class="validation-tile" id="activeVersionTile">
+                <div class="validation-tile-icon">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+                <div class="validation-tile-body">
+                    <div class="validation-tile-label">Active Version</div>
+                    <div class="validation-tile-status" id="activeVersionTileStatus">Checking...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Cards (1-column) -->
+    <div class="row g-3 mb-4">
+        <!-- Ontology Detail Cards (split) -->
+        <div class="col-md-6" id="ontologyValidationCard">
+            <div class="card validation-detail-card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span><i class="bi bi-diagram-3 me-1"></i> Ontology — Entities</span>
+                    <span id="ontologyValidationBadge" class="badge bg-secondary">Checking...</span>
+                </div>
+                <div class="card-body py-2 px-3">
+                    <div class="text-center mb-2" id="ontologyStats">
+                        <div class="validation-metric compact">
+                            <div class="validation-metric-value" id="ontologyClassCount">-</div>
+                            <div class="validation-metric-label">Entities</div>
+                        </div>
+                    </div>
+                    <div id="ontologyIssues" class="mb-1"></div>
+                    <div id="ontologyWarnings"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card validation-detail-card h-100" id="ontologyRelCard">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span><i class="bi bi-diagram-3 me-1"></i> Ontology — Relationships</span>
+                    <span id="ontologyRelValidationBadge" class="badge bg-secondary">Checking...</span>
+                </div>
+                <div class="card-body py-2 px-3">
+                    <div class="text-center mb-2">
+                        <div class="validation-metric compact">
+                            <div class="validation-metric-value" id="ontologyPropertyCount">-</div>
+                            <div class="validation-metric-label">Relationships</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mapping Detail Cards (split: entities, relationships, completion) -->
+        <div class="col-md-4" id="mappingValidationCard">
+            <div class="card validation-detail-card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span><i class="bi bi-link-45deg me-1"></i> Mapping — Entities</span>
+                    <span id="mappingValidationBadge" class="badge bg-secondary">Checking...</span>
+                </div>
+                <div class="card-body py-2 px-3">
+                    <div class="text-center mb-2" id="mappingStats">
+                        <div class="validation-metric compact">
+                            <div class="validation-metric-value"><span id="mappedEntitiesCount">-</span><span class="validation-metric-total"> / <span id="totalEntitiesCount">-</span></span></div>
+                            <div class="validation-metric-label">Entities Mapped</div>
+                            <span id="ignoredEntitiesLabel" class="badge bg-secondary bg-opacity-25 text-secondary mt-1" style="display:none; font-size:.7rem;"><i class="bi bi-eye-slash me-1"></i></span>
+                        </div>
+                    </div>
+                    <div id="mappingIssues" class="mb-1"></div>
+                    <div id="mappingWarnings"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card validation-detail-card h-100" id="mappingRelCard">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span><i class="bi bi-link-45deg me-1"></i> Mapping — Relationships</span>
+                    <span id="mappingRelValidationBadge" class="badge bg-secondary">Checking...</span>
+                </div>
+                <div class="card-body py-2 px-3">
+                    <div class="text-center mb-2">
+                        <div class="validation-metric compact">
+                            <div class="validation-metric-value"><span id="mappedRelationshipsCount">-</span><span class="validation-metric-total"> / <span id="totalRelationshipsCount">-</span></span></div>
+                            <div class="validation-metric-label">Rel. Mapped</div>
+                            <span id="ignoredRelationshipsLabel" class="badge bg-secondary bg-opacity-25 text-secondary mt-1" style="display:none; font-size:.7rem;"><i class="bi bi-eye-slash me-1"></i></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card validation-detail-card h-100" id="mappingCompletionCard">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span><i class="bi bi-check2-circle me-1"></i> Mapping — Completion</span>
+                    <small class="fw-semibold" id="mappingCompletionPercent">0%</small>
+                </div>
+                <div class="card-body py-2 px-3">
+                    <div class="progress mt-2" style="height: 6px;">
+                        <div id="mappingProgressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Digital Twin + Missing Items (1-column) -->
+    <div class="row g-3 mb-4">
+    <div class="col-12">
+    <div class="card validation-detail-card h-100" id="dtwinValidationCard">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-box-fill me-1"></i> Digital Twin</span>
+            <div class="d-flex align-items-center gap-2">
+                <span id="dtwinValidationBadge" class="badge bg-secondary">Checking...</span>
+                <a href="/dtwin/" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:.78rem;">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>Open
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Rebuild warning -->
+            <div id="psDtRebuildWarning" class="alert alert-warning d-none align-items-start gap-2 mb-3 py-2 small">
+                <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+                <div>
+                    <strong>Ontology or assignments have changed</strong> since the last build.
+                    <span class="d-block text-muted">Open Digital Twin to rebuild.</span>
+                </div>
+            </div>
+
+            <!-- Global info: last built / last updated -->
+            <div class="small mb-3">
+                <div class="d-flex align-items-center gap-1 mb-1">
+                    <i class="bi bi-clock-history text-muted"></i>
+                    <strong class="text-muted">Last Built</strong>
+                    <span id="psDtLastBuilt" class="ms-1 text-muted">&mdash;</span>
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                    <i class="bi bi-pencil-square text-muted"></i>
+                    <strong class="text-muted">Last Updated</strong>
+                    <span id="psDtLastUpdate" class="ms-1 text-muted">&mdash;</span>
+                </div>
+            </div>
+
+            <!-- Two-column layout: Zero-Copy | Graph DB (same as DT page) -->
+            <div class="row g-3">
+                <!-- Zero-Copy Digital Twin -->
+                <div class="col-md-6">
+                    <div class="border rounded p-3 h-100" id="psDtZeroCopyCard">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-eye fs-5 me-2 text-primary"></i>
+                            <strong>Zero-Copy Digital Twin</strong>
+                            <span id="psDtExistView" class="ms-auto"></span>
+                        </div>
+                        <div class="small">
+                            <div class="text-muted mb-1">Unity Catalog VIEW</div>
+                            <code id="psDtViewName" class="d-block text-break">N/A</code>
+                        </div>
+                        <div class="small mt-2" id="psDtSnapshotArea" style="display:none;">
+                            <div class="text-muted mb-1">Incremental Snapshot</div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <code id="psDtSnapshotName" class="text-break" style="font-size:.75em;"></code>
+                                <span id="psDtExistSnapshot"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Graph DB Digital Twin -->
+                <div class="col-md-6">
+                    <div class="border rounded p-3 h-100" id="psDtGraphCard">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-diagram-3-fill fs-5 me-2 text-primary"></i>
+                            <strong>Graph DB Digital Twin</strong>
+                            <span id="psDtExistLocal" class="ms-auto"></span>
+                        </div>
+                        <div class="small">
+                            <div class="text-muted mb-1">Local graph database</div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted">Registry archive</span>
+                                <span id="psDtExistRegistry"></span>
+                            </div>
+                        </div>
+                        <div class="small mt-2" id="psDtTripleArea" style="display:none;">
+                            <i class="bi bi-database me-1 text-muted"></i>
+                            <span id="psDtTripleValue">0</span> triples
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- Missing Items Detail -->
+    <div class="col-12">
+    <div class="card validation-detail-card h-100" id="missingItemsCard" style="display: none;">
+        <div class="card-header">
+            <i class="bi bi-exclamation-triangle text-warning me-1"></i> Missing Assignments
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-2"><i class="bi bi-box me-1"></i> Unassigned Entities</h6>
+                    <ul id="unmappedEntitiesList" class="list-group list-group-flush small">
+                        <li class="list-group-item text-muted">Loading...</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-2"><i class="bi bi-arrow-left-right me-1"></i> Unassigned Relationships</h6>
+                    <ul id="unmappedRelationshipsList" class="list-group list-group-flush small">
+                        <li class="list-group-item text-muted">Loading...</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+    </div>
+</div>

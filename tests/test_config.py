@@ -88,8 +88,11 @@ class TestSettings:
     def test_defaults(self, monkeypatch):
         monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
         monkeypatch.delenv("SECRET_KEY", raising=False)
+        monkeypatch.delenv("REGISTRY_VOLUME", raising=False)
+        monkeypatch.delenv("REGISTRY_CATALOG", raising=False)
+        monkeypatch.delenv("REGISTRY_SCHEMA", raising=False)
         from shared.config.settings import Settings
-        s = Settings()
+        s = Settings(_env_file=None)
         assert s.secret_key == "dev-secret-key-change-in-prod"
         assert s.databricks_catalog == "main"
         assert s.registry_volume == "OntoBricksRegistry"

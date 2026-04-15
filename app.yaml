@@ -26,10 +26,10 @@ env:
   - name: DATABRICKS_SCHEMA
     value: "default"
   # Default fully-qualified Delta triple store table (catalog.schema.table)
-  # Used as fallback when no project session is active (e.g. MCP API calls)
+  # Used as fallback when no domain session is active (e.g. MCP API calls)
   - name: DATABRICKS_TRIPLESTORE_TABLE
-    value: "benoit_cayla.ontobricks.cust360auto_triplestore"
-  # Project Registry — injected from the configured Volume resource.
+    value: "benoit_cayla.ontobricks.default_triplestore"
+  # Domain Registry — injected from the configured Volume resource.
   # The path looks like /Volumes/<catalog>/<schema>/<volume>.
   - name: REGISTRY_VOLUME_PATH
     valueFrom: volume
@@ -55,6 +55,6 @@ resources:
     sql_warehouse:
       permission: CAN_USE
   - name: volume
-    description: "Unity Catalog Volume for the OntoBricks project registry"
+    description: "Unity Catalog Volume for the OntoBricks domain registry"
     volume:
       permission: CAN_READ_WRITE

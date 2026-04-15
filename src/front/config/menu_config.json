@@ -6,36 +6,112 @@
 
     "menus": [
         {
-            "id": "project",
-            "label": "Project",
-            "icon": "bi-folder2",
-            "route": "/project/",
-            "requires_project_saved": false,
+            "id": "registry",
+            "label": "Registry",
+            "icon": "bi-archive",
+            "route": "/registry/",
+            "requires_domain_saved": false,
             "status_indicator": null,
             "navbar_actions": [
                 {
-                    "label": "New Project",
+                    "label": "New Domain",
                     "icon": "bi-file-earmark-plus",
-                    "action": "projectNew",
+                    "action": "domainNew",
                     "element_id": null
                 },
                 {
-                    "label": "Load Project",
+                    "label": "Load Domain",
                     "icon": "bi-cloud-download",
-                    "action": "projectLoad",
+                    "action": "domainLoad",
                     "element_id": null
-                },
-                {
-                    "label": "Save Project",
-                    "icon": "bi-cloud-upload",
-                    "action": "projectSave",
-                    "element_id": "menuSaveProject"
                 }
             ],
             "groups": [
                 {
-                    "id": "project-main",
-                    "title": "Project",
+                    "id": "registry-domains",
+                    "title": "Domains",
+                    "icon": "bi-folder2-open",
+                    "items": [
+                        {
+                            "id": "domains",
+                            "label": "Browse",
+                            "icon": "bi-search",
+                            "default": true,
+                            "requires": null
+                        },
+                        {
+                            "id": "bridges",
+                            "label": "Bridges",
+                            "icon": "bi-signpost-split",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
+                    "id": "registry-automation",
+                    "title": "Automation",
+                    "icon": "bi-clock-history",
+                    "items": [
+                        {
+                            "id": "schedule",
+                            "label": "Schedule",
+                            "icon": "bi-clock-history",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
+                    "id": "registry-developer",
+                    "title": "Developer",
+                    "icon": "bi-code-square",
+                    "items": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "icon": "bi-braces",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
+                    "id": "registry-config",
+                    "title": "Configuration",
+                    "icon": "bi-gear",
+                    "items": [
+                        {
+                            "id": "configuration",
+                            "label": "Registry Location",
+                            "icon": "bi-archive",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                }
+            ]
+        },
+
+        {
+            "id": "domain",
+            "label": "Domain",
+            "icon": "bi-folder2",
+            "route": "/domain/",
+            "requires_domain_saved": false,
+            "status_indicator": null,
+            "navbar_actions": [
+                {
+                    "label": "Save Domain",
+                    "icon": "bi-cloud-upload",
+                    "action": "domainSave",
+                    "element_id": "menuSaveDomain"
+                }
+            ],
+            "groups": [
+                {
+                    "id": "domain-main",
+                    "title": "Domain details",
                     "icon": "bi-folder2-open",
                     "items": [
                         {
@@ -50,33 +126,68 @@
                             "label": "Versions",
                             "icon": "bi-clock-history",
                             "default": false,
-                            "requires": "project_saved"
+                            "requires": "domain_saved"
                         },
                         {
                             "id": "validation",
                             "label": "Status",
                             "icon": "bi-shield-check",
                             "default": false,
-                            "requires": "project_saved"
+                            "requires": "domain_saved"
                         },
                         {
                             "id": "metadata",
-                            "label": "Metadata",
+                            "label": "Data Sources",
                             "icon": "bi-database",
                             "default": false,
-                            "requires": "project_saved"
+                            "requires": "domain_saved"
                         },
                         {
                             "id": "documents",
                             "label": "Documents",
                             "icon": "bi-file-earmark-text",
                             "default": false,
-                            "requires": "project_saved"
+                            "requires": "domain_saved"
                         }
                     ]
                 },
                 {
-                    "id": "project-w3c",
+                    "id": "domain-design",
+                    "title": "Design",
+                    "icon": "bi-pencil-square",
+                    "items": [
+                        {
+                            "id": "ontology-link",
+                            "label": "Ontology",
+                            "icon": "bi-bezier2",
+                            "route": "/ontology/",
+                            "requires": "domain_saved"
+                        },
+                        {
+                            "id": "mapping-link",
+                            "label": "Mapping",
+                            "icon": "bi-shuffle",
+                            "route": "/mapping/",
+                            "requires": "domain_saved"
+                        }
+                    ]
+                },
+                {
+                    "id": "domain-management",
+                    "title": "Management",
+                    "icon": "bi-gear",
+                    "items": [
+                        {
+                            "id": "sync",
+                            "label": "Build",
+                            "icon": "bi-arrow-repeat",
+                            "default": false,
+                            "requires": "domain_saved"
+                        }
+                    ]
+                },
+                {
+                    "id": "domain-w3c",
                     "title": "W3C Standards",
                     "icon": "bi-filetype-xml",
                     "sidebar_only": true,
@@ -86,14 +197,14 @@
                             "label": "OWL",
                             "icon": "bi-file-earmark-code",
                             "default": false,
-                            "requires": "project_saved"
+                            "requires": "domain_saved"
                         },
                         {
                             "id": "r2rml",
                             "label": "R2RML",
                             "icon": "bi-diagram-3",
                             "default": false,
-                            "requires": "project_saved"
+                            "requires": "domain_saved"
                         }
                     ]
                 }
@@ -105,7 +216,8 @@
             "label": "Ontology",
             "icon": "bi-bezier2",
             "route": "/ontology/",
-            "requires_project_saved": true,
+            "requires_domain_saved": true,
+            "navbar_hidden": true,
             "status_indicator": null,
             "navbar_actions": [],
             "groups": [
@@ -141,6 +253,13 @@
                             "id": "map",
                             "label": "Model",
                             "icon": "bi-diagram-3",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "groups",
+                            "label": "Groups",
+                            "icon": "bi-collection",
                             "default": false,
                             "requires": null
                         },
@@ -217,7 +336,8 @@
             "label": "Mapping",
             "icon": "bi-shuffle",
             "route": "/mapping/",
-            "requires_project_saved": true,
+            "requires_domain_saved": true,
+            "navbar_hidden": true,
             "status_indicator": null,
             "navbar_actions": [],
             "groups": [
@@ -257,6 +377,12 @@
                             "default": false,
                             "requires": null,
                             "hidden_in_view_mode": true
+                        },
+                        {
+                            "id": "diagnostics",
+                            "label": "Diagnostics",
+                            "icon": "bi-shield-check",
+                            "default": false
                         }
                     ]
                 },
@@ -291,42 +417,28 @@
             "label": "Digital Twin",
             "icon": "bi-box-fill",
             "route": "/dtwin/",
-            "requires_project_saved": true,
+            "requires_domain_saved": true,
             "status_indicator": null,
             "navbar_actions": [],
             "groups": [
                 {
-                    "id": "digitaltwin-management",
-                    "title": "Management",
-                    "icon": "bi-gear",
-                    "items": [
-                        {
-                            "id": "sync",
-                            "label": "Build",
-                            "icon": "bi-info-circle",
-                            "default": true,
-                            "requires": null
-                        }
-                    ]
-                },
-                {
                     "id": "digitaltwin-data",
-                    "title": "Graph",
+                    "title": "Navigation",
                     "icon": "bi-database",
                     "items": [
                         {
                             "id": "sigmagraph",
                             "label": "Knowledge Graph",
                             "icon": "bi-layers-half",
-                            "default": false,
-                            "requires": "sync_ready"
+                            "default": true,
+                            "requires": null
                         },
                         {
                             "id": "graphql",
                             "label": "GraphQL",
                             "icon": "bi-braces-asterisk",
                             "default": false,
-                            "requires": "sync_ready"
+                            "requires": null
                         }
                     ]
                 },
@@ -340,14 +452,14 @@
                             "label": "Data Quality",
                             "icon": "bi-shield-check",
                             "default": false,
-                            "requires": "sync_ready"
+                            "requires": null
                         },
                         {
                             "id": "reasoning",
                             "label": "Inference",
                             "icon": "bi-lightning",
                             "default": false,
-                            "requires": "sync_ready"
+                            "requires": null
                         }
                     ]
                 }

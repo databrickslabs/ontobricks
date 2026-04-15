@@ -1,6 +1,6 @@
 /**
  * OntoBricks - schedule.js
- * Schedule tab: CRUD for per-project scheduled Digital Twin builds
+ * Schedule tab: CRUD for per-domain scheduled Digital Twin builds
  */
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -32,33 +32,31 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     let schedulesLoaded = false;
-    let editingProject = null;
+    let editingDomain = null;
 
-    document.getElementById('tab-schedule')?.addEventListener('shown.bs.tab', () => {
-        if (!schedulesLoaded) loadSchedules();
-    });
+    loadSchedules();
 
     document.getElementById('btnRefreshSchedules')?.addEventListener('click', () => loadSchedules());
 
     document.getElementById('btnAddSchedule')?.addEventListener('click', () => {
-        editingProject = null;
+        editingDomain = null;
         document.getElementById('scheduleModalLabel').innerHTML =
             '<i class="bi bi-clock-history me-2"></i>Add Schedule';
-        const projSelect = document.getElementById('scheduleProject');
+        const projSelect = document.getElementById('scheduleDomain');
         projSelect.disabled = false;
         document.getElementById('scheduleIntervalValue').value = '1';
         document.getElementById('scheduleIntervalUnit').value = 'hours';
         document.getElementById('scheduleBuildMode').value = 'full';
         document.getElementById('scheduleEnabled').checked = true;
         resetVersionSelect();
-        loadProjectsForModal();
+        loadDomainsForModal();
         new bootstrap.Modal(document.getElementById('scheduleModal')).show();
     });
 
-    document.getElementById('scheduleProject')?.addEventListener('change', function () {
-        var projectName = this.value;
-        if (projectName) {
-            loadVersionsForProject(projectName);
+    document.getElementById('scheduleDomain')?.addEventListener('change', function () {
+        var domainName = this.value;
+        if (domainName) {
+            loadVersionsForDomain(domainName);
         } else {
             resetVersionSelect();
         }
@@ -95,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function () {
             let html = '<div class="table-responsive">' +
                 '<table class="table table-sm table-hover align-middle mb-0">' +
                 '<thead><tr>' +
-                    '<th class="ps-3">Project</th>' +
+                    '<th class="ps-3">Domain</th>' +
                     '<th>Version</th>' +
                     '<th>Mode</th>' +
                     '<th>Frequency</th>' +
@@ -128,8 +126,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 const lastRun = s.last_run ? formatRelativeTime(s.last_run) : '--';
                 const nextRun = s.next_run ? formatAbsoluteTime(s.next_run) : '--';
 
+                const schedDomain = s.domain_name || s.project_name || '';
                 html += '<tr>' +
-                    '<td class="ps-3 fw-semibold"><i class="bi bi-folder2 me-1 text-primary"></i>' + escapeHtml(s.project_name) + '</td>' +
+                    '<td class="ps-3 fw-semibold"><i class="bi bi-folder2 me-1 text-primary"></i>' + escapeHtml(schedDomain) + '</td>' +
                     '<td>' + versionLabel + '</td>' +
                     '<td>' + modeLabel + '</td>' +
                     '<td class="small">' + freqLabel + '</td>' +
@@ -138,17 +137,17 @@ document.addEventListener('DOMContentLoaded', function () {
                     '<td class="small text-muted">' + nextRun + '</td>' +
                     '<td class="text-end pe-3">' +
                         '<button type="button" class="btn btn-sm btn-outline-info border-0 schedule-history-btn" ' +
-                            'data-project="' + escapeHtml(s.project_name) + '" ' +
+                            'data-domain="' + escapeHtml(schedDomain) + '" ' +
                             'title="Run history"><i class="bi bi-journal-text"></i></button>' +
                         '<button type="button" class="btn btn-sm btn-outline-secondary border-0 schedule-edit-btn" ' +
-                            'data-project="' + escapeHtml(s.project_name) + '" ' +
+                            'data-domain="' + escapeHtml(schedDomain) + '" ' +
                             'data-interval="' + s.interval_minutes + '" ' +
                             'data-drop="' + (s.drop_existing ? '1' : '0') + '" ' +
                             'data-enabled="' + (s.enabled ? '1' : '0') + '" ' +
                             'data-version="' + escapeHtml(s.version || 'latest') + '" ' +
                             'title="Edit"><i class="bi bi-pencil"></i></button>' +
                         '<button type="button" class="btn btn-sm btn-outline-danger border-0 schedule-delete-btn" ' +
-                            'data-project="' + escapeHtml(s.project_name) + '" ' +
+                            'data-domain="' + escapeHtml(schedDomain) + '" ' +
                             'title="Remove schedule"><i class="bi bi-trash"></i></button>' +
                     '</td>' +
                 '</tr>';
@@ -158,13 +157,13 @@ document.addEventListener('DOMContentLoaded', function () {
             container.innerHTML = html;
 
             container.querySelectorAll('.schedule-history-btn').forEach(btn => {
-                btn.addEventListener('click', () => openHistoryModal(btn.dataset.project));
+                btn.addEventListener('click', () => openHistoryModal(btn.dataset.domain));
             });
             container.querySelectorAll('.schedule-edit-btn').forEach(btn => {
                 btn.addEventListener('click', () => openEditModal(btn));
             });
             container.querySelectorAll('.schedule-delete-btn').forEach(btn => {
-                btn.addEventListener('click', () => deleteSchedule(btn.dataset.project));
+                btn.addEventListener('click', () => deleteSchedule(btn.dataset.domain));
             });
 
         } catch (e) {
@@ -176,12 +175,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function openEditModal(btn) {
-        editingProject = btn.dataset.project;
+        editingDomain = btn.dataset.domain;
         document.getElementById('scheduleModalLabel').innerHTML =
             '<i class="bi bi-clock-history me-2"></i>Edit Schedule';
-        const projSelect = document.getElementById('scheduleProject');
-        projSelect.innerHTML = '<option value="' + escapeHtml(editingProject) + '" selected>' +
-            escapeHtml(editingProject) + '</option>';
+        const projSelect = document.getElementById('scheduleDomain');
+        projSelect.innerHTML = '<option value="' + escapeHtml(editingDomain) + '" selected>' +
+            escapeHtml(editingDomain) + '</option>';
         projSelect.disabled = true;
         var uv = minutesToUnitValue(parseInt(btn.dataset.interval, 10));
         document.getElementById('scheduleIntervalValue').value = uv.value;
@@ -189,7 +188,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('scheduleBuildMode').value = btn.dataset.drop === '1' ? 'full' : 'incremental';
         document.getElementById('scheduleEnabled').checked = btn.dataset.enabled === '1';
         var savedVersion = btn.dataset.version || 'latest';
-        loadVersionsForProject(editingProject, savedVersion);
+        loadVersionsForDomain(editingDomain, savedVersion);
         new bootstrap.Modal(document.getElementById('scheduleModal')).show();
     }
 
@@ -202,12 +201,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function loadVersionsForProject(projectName, selectedValue) {
+    async function loadVersionsForDomain(domainName, selectedValue) {
         var vSelect = document.getElementById('scheduleVersion');
         if (!vSelect) return;
         vSelect.innerHTML = '<option value="latest">Loading...</option>';
         try {
-            var resp = await fetch('/project/list-versions?project_name=' + encodeURIComponent(projectName),
+            var resp = await fetch('/domain/list-versions?domain_name=' + encodeURIComponent(domainName),
                 { credentials: 'same-origin' });
             var data = await resp.json();
             vSelect.innerHTML = '<option value="latest">Latest</option>';
@@ -225,15 +224,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function loadProjectsForModal() {
-        const select = document.getElementById('scheduleProject');
-        select.innerHTML = '<option value="">Loading projects...</option>';
+    async function loadDomainsForModal() {
+        const select = document.getElementById('scheduleDomain');
+        select.innerHTML = '<option value="">Loading domains...</option>';
         try {
-            const resp = await fetch('/settings/registry/projects', { credentials: 'same-origin' });
+            const resp = await fetch('/settings/registry/domains', { credentials: 'same-origin' });
             const data = await resp.json();
-            select.innerHTML = '<option value="">-- Select a project --</option>';
-            if (data.success && data.projects) {
-                data.projects.forEach(p => {
+            select.innerHTML = '<option value="">-- Select a domain --</option>';
+            const schedRows = data.domains || data.projects || [];
+            if (data.success && schedRows.length) {
+                schedRows.forEach(p => {
                     const opt = document.createElement('option');
                     opt.value = p.name;
                     opt.textContent = p.name;
@@ -241,19 +241,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             }
         } catch (e) {
-            select.innerHTML = '<option value="">Error loading projects</option>';
+            select.innerHTML = '<option value="">Error loading domains</option>';
         }
     }
 
     async function saveSchedule() {
-        const projectName = document.getElementById('scheduleProject').value;
+        const domainName = document.getElementById('scheduleDomain').value;
         const intervalMinutes = unitValueToMinutes();
         const dropExisting = document.getElementById('scheduleBuildMode').value === 'full';
         const enabled = document.getElementById('scheduleEnabled').checked;
         const version = (document.getElementById('scheduleVersion') || {}).value || 'latest';
 
-        if (!projectName) {
-            showNotification('Please select a project', 'warning');
+        if (!domainName) {
+            showNotification('Please select a domain', 'warning');
             return;
         }
 
@@ -272,7 +272,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
                 body: JSON.stringify({
-                    project_name: projectName,
+                    domain_name: domainName,
                     interval_minutes: intervalMinutes,
                     drop_existing: dropExisting,
                     enabled: enabled,
@@ -302,10 +302,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function deleteSchedule(projectName) {
+    async function deleteSchedule(domainName) {
         const confirmed = await showConfirmDialog({
             title: 'Remove Schedule',
-            message: 'Remove the scheduled build for "' + projectName + '"?',
+            message: 'Remove the scheduled build for "' + domainName + '"?',
             confirmText: 'Remove',
             confirmClass: 'btn-danger',
             icon: 'trash',
@@ -313,7 +313,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!confirmed) return;
 
         try {
-            const resp = await fetch('/settings/schedules/' + encodeURIComponent(projectName), {
+            const resp = await fetch('/settings/schedules/' + encodeURIComponent(domainName), {
                 method: 'DELETE',
                 credentials: 'same-origin',
             });
@@ -329,17 +329,17 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function openHistoryModal(projectName) {
+    async function openHistoryModal(domainName) {
         const body = document.getElementById('scheduleHistoryBody');
         const label = document.getElementById('scheduleHistoryModalLabel');
-        label.innerHTML = '<i class="bi bi-clock-history me-2"></i>Run History &mdash; ' + escapeHtml(projectName);
+        label.innerHTML = '<i class="bi bi-clock-history me-2"></i>Run History &mdash; ' + escapeHtml(domainName);
         body.innerHTML = '<div class="text-center text-muted small py-4">' +
             '<span class="spinner-border spinner-border-sm me-1"></span> Loading history...</div>';
 
         new bootstrap.Modal(document.getElementById('scheduleHistoryModal')).show();
 
         try {
-            const resp = await fetch('/settings/schedules/' + encodeURIComponent(projectName) + '/history',
+            const resp = await fetch('/settings/schedules/' + encodeURIComponent(domainName) + '/history',
                 { credentials: 'same-origin' });
             const data = await resp.json();
 

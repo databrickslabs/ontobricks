@@ -1,0 +1,306 @@
+/* Registry page styles */
+
+.registry-domain-table-wrapper {
+    overflow-y: auto;
+    width: 100%;
+}
+
+.registry-domain-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bs-body-bg, #fff);
+    z-index: 1;
+    border-bottom: 2px solid var(--bs-border-color);
+}
+
+.registry-version-badge {
+    font-size: 0.78rem;
+    padding: 0.3em 0.55em;
+}
+
+.registry-version-list {
+    border-top: 1px solid var(--bs-border-color);
+    background: var(--bs-tertiary-bg, #f8f9fa);
+}
+
+.registry-version-row {
+    border-bottom: 1px solid var(--bs-border-color-translucent, rgba(0,0,0,.07));
+    min-height: 2.2rem;
+    transition: background .12s;
+}
+
+.registry-version-row:last-child {
+    border-bottom: none;
+}
+
+.registry-version-row:hover {
+    background: rgba(var(--bs-primary-rgb), .04);
+}
+
+.registry-version-loaded {
+    background: rgba(var(--bs-primary-rgb), .06);
+}
+
+.registry-version-num {
+    min-width: 2.8rem;
+    text-align: center;
+    font-size: 0.78rem;
+}
+
+.registry-version-dates {
+    font-size: 0.72rem;
+    white-space: nowrap;
+    line-height: 1.5;
+}
+
+.registry-date-label {
+    font-weight: 600;
+    opacity: 0.7;
+}
+
+/* --- Bridges section --- */
+
+.bridges-domain-card {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.bridges-domain-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 1rem;
+    background: var(--bs-tertiary-bg, #f8f9fa);
+    cursor: pointer;
+    user-select: none;
+}
+
+.bridges-domain-header:hover {
+    background: var(--bs-secondary-bg, #eee);
+}
+
+.bridges-domain-header .domain-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.bridges-domain-header .bridge-count {
+    font-size: 0.75rem;
+}
+
+.bridges-domain-body {
+    padding: 0;
+}
+
+.bridges-table {
+    margin-bottom: 0;
+    font-size: 0.85rem;
+}
+
+.bridges-table thead th {
+    background: var(--bs-body-bg, #fff);
+    border-bottom: 1px solid var(--bs-border-color);
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--bs-secondary-color, #6c757d);
+    padding: 0.5rem 0.75rem;
+}
+
+.bridges-table td {
+    padding: 0.45rem 0.75rem;
+    vertical-align: middle;
+}
+
+.bridge-arrow {
+    color: var(--bs-primary, #0d6efd);
+    font-size: 1rem;
+}
+
+.bridge-no-bridges {
+    color: var(--bs-secondary-color, #6c757d);
+    font-style: italic;
+    font-size: 0.85rem;
+    padding: 0.5rem 1rem;
+}
+
+.bridges-summary-bar {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+    padding: 0.6rem 1rem;
+    background: var(--bs-tertiary-bg, #f8f9fa);
+    border-radius: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.bridges-summary-bar .summary-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.bridges-summary-bar .summary-value {
+    font-weight: 600;
+}
+
+/* --- Bridges graph --- */
+
+/* When bridges graph is visible, prevent the sidebar-content from scrolling
+   so the graph fills the full viewport height (same pattern as Knowledge Graph). */
+.sidebar-content:has(#bridges-section.active) {
+    overflow: hidden;
+    padding: 0.5rem;
+}
+
+#bridges-section.active {
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+}
+
+#bridges-section > .content-section {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#bridges-section .section-header,
+#bridgesSummary {
+    flex-shrink: 0;
+}
+
+#bridgesGraphContainer {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#bridgesContent {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+#bridgesGraph {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--bs-body-bg, #fff) 0%, var(--bs-tertiary-bg, #f8f9fa) 100%);
+}
+
+#bridgesGraph svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.bridges-graph-edge {
+    fill: none;
+    stroke: var(--bs-primary, #0d6efd);
+    stroke-opacity: 0.45;
+    transition: stroke-opacity 0.15s;
+}
+
+.bridges-graph-edge:hover {
+    stroke-opacity: 1;
+}
+
+.bridges-graph-edge.dimmed {
+    stroke-opacity: 0.08;
+}
+
+.bridges-graph-edge.highlighted {
+    stroke-opacity: 1;
+}
+
+.bridges-graph-edge-count {
+    font-size: 10px;
+    fill: var(--bs-body-color, #212529);
+    font-weight: 600;
+    pointer-events: none;
+}
+
+.bridges-graph-node {
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.bridges-graph-node.dimmed {
+    opacity: 0.15;
+}
+
+.bridges-graph-node.highlighted {
+    opacity: 1;
+}
+
+.bridges-graph-label {
+    font-size: 11px;
+    text-anchor: middle;
+    fill: var(--bs-body-color, #212529);
+    pointer-events: none;
+    font-weight: 500;
+}
+
+.bridges-graph-label.dimmed {
+    opacity: 0.15;
+}
+
+.bridges-graph-badge {
+    font-size: 9px;
+    text-anchor: middle;
+    fill: #fff;
+    pointer-events: none;
+    font-weight: 700;
+}
+
+.bridges-graph-tooltip {
+    position: absolute;
+    z-index: 1080;
+    max-width: 340px;
+    padding: 0.5rem 0.75rem;
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.375rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+.bridges-graph-tooltip .tooltip-title {
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+    font-size: 0.82rem;
+}
+
+.bridges-graph-tooltip .tooltip-bridge {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+.bridges-graph-tooltip .tooltip-bridge .bridge-src {
+    font-weight: 500;
+    color: var(--bs-body-color, #212529);
+}
+
+.bridges-graph-tooltip .tooltip-bridge .bridge-arrow {
+    color: var(--bs-primary, #0d6efd);
+}
+
+.bridges-graph-tooltip .tooltip-bridge .bridge-tgt {
+    font-weight: 500;
+    color: var(--bs-body-color, #212529);
+}

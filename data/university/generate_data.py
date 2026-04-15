@@ -217,37 +217,37 @@ def generate_course_assignments(courses, faculty, count=120):
     return assignments
 
 
-def generate_research_projects(departments, count=40):
-    """Generate research project records."""
-    projects = []
+def generate_research_domains(departments, count=40):
+    """Generate research domain records (research programs / grants units)."""
+    domains = []
     for i in range(1, count + 1):
         dept = random.choice(departments)
         start = random_date(2018, 2023)
         end_dt = datetime.strptime(start, "%Y-%m-%d") + timedelta(days=random.randint(365, 1825))
         end = end_dt.strftime("%Y-%m-%d")
-        projects.append({
-            "project_id": f"PRJ{i:05d}",
+        domains.append({
+            "domain_id": f"PRJ{i:05d}",
             "department_id": dept["department_id"],
-            "project_name": f"Research in {random.choice(RESEARCH_AREAS)} - {dept['department_name']}",
+            "domain_name": f"Research in {random.choice(RESEARCH_AREAS)} - {dept['department_name']}",
             "start_date": start,
             "end_date": end,
             "status": random.choice(PROJECT_STATUS),
             "funding_amount": round(random.uniform(50000, 2000000), 2),
             "funding_source": random.choice(GRANT_AGENCIES),
         })
-    return projects
+    return domains
 
 
-def generate_publications(projects, count=200):
+def generate_publications(domains, count=200):
     """Generate publication records."""
     publications = []
     for i in range(1, count + 1):
-        project = random.choice(projects)
+        domain = random.choice(domains)
         pub_date = random_date(2019, 2025)
         publications.append({
             "publication_id": f"PUB{i:05d}",
-            "project_id": project["project_id"],
-            "title": f"Findings from {project['project_name'][:30]}...",
+            "domain_id": domain["domain_id"],
+            "title": f"Findings from {domain['domain_name'][:30]}...",
             "journal": random.choice(JOURNALS),
             "publication_date": pub_date,
             "doi": f"10.1234/uni.{i:05d}",
@@ -256,19 +256,19 @@ def generate_publications(projects, count=200):
     return publications
 
 
-def generate_grant_awards(projects, faculty, count=50):
+def generate_grant_awards(domains, faculty, count=50):
     """Generate grant award records."""
     grants = []
     for i in range(1, count + 1):
-        project = random.choice(projects)
+        domain = random.choice(domains)
         fac = random.choice(faculty)
         start = random_date(2019, 2024)
         end_dt = datetime.strptime(start, "%Y-%m-%d") + timedelta(days=random.randint(365, 1460))
         grants.append({
             "grant_id": f"GRT{i:05d}",
-            "project_id": project["project_id"],
+            "domain_id": domain["domain_id"],
             "faculty_id": fac["faculty_id"],
-            "grant_name": f"{random.choice(GRANT_AGENCIES)} Grant - {project['project_name'][:25]}",
+            "grant_name": f"{random.choice(GRANT_AGENCIES)} Grant - {domain['domain_name'][:25]}",
             "agency": random.choice(GRANT_AGENCIES),
             "amount": round(random.uniform(50000, 1500000), 2),
             "start_date": start,
@@ -278,15 +278,15 @@ def generate_grant_awards(projects, faculty, count=50):
     return grants
 
 
-def generate_project_collaborations(projects, faculty, count=80):
-    """Generate project collaboration records."""
+def generate_domain_collaborations(domains, faculty, count=80):
+    """Generate domain collaboration records (faculty on research domains)."""
     collabs = []
     for i in range(1, count + 1):
-        project = random.choice(projects)
+        domain = random.choice(domains)
         fac = random.choice(faculty)
         collabs.append({
             "collab_id": f"COL{i:05d}",
-            "project_id": project["project_id"],
+            "domain_id": domain["domain_id"],
             "faculty_id": fac["faculty_id"],
             "role": random.choice(COLLAB_ROLES),
             "start_date": random_date(2019, 2024),
@@ -355,10 +355,10 @@ def main():
     courses = generate_courses(departments, 80)
     enrollments = generate_enrollments(students, courses, 2000)
     course_assignments = generate_course_assignments(courses, faculty, 120)
-    research_projects = generate_research_projects(departments, 40)
-    publications = generate_publications(research_projects, 200)
-    grant_awards = generate_grant_awards(research_projects, faculty, 50)
-    project_collaborations = generate_project_collaborations(research_projects, faculty, 80)
+    research_domains = generate_research_domains(departments, 40)
+    publications = generate_publications(research_domains, 200)
+    grant_awards = generate_grant_awards(research_domains, faculty, 50)
+    domain_collaborations = generate_domain_collaborations(research_domains, faculty, 80)
     course_prerequisites = generate_course_prerequisites(courses, 60)
     department_affiliations = generate_department_affiliations(faculty, departments, 80)
 
@@ -386,20 +386,20 @@ def main():
     write_csv("course_assignment.csv", course_assignments, [
         "assignment_id", "course_id", "faculty_id", "semester", "year", "role"
     ])
-    write_csv("research_project.csv", research_projects, [
-        "project_id", "department_id", "project_name", "start_date", "end_date",
+    write_csv("research_domain.csv", research_domains, [
+        "domain_id", "department_id", "domain_name", "start_date", "end_date",
         "status", "funding_amount", "funding_source"
     ])
     write_csv("publication.csv", publications, [
-        "publication_id", "project_id", "title", "journal", "publication_date",
+        "publication_id", "domain_id", "title", "journal", "publication_date",
         "doi", "citation_count"
     ])
     write_csv("grant_award.csv", grant_awards, [
-        "grant_id", "project_id", "faculty_id", "grant_name", "agency",
+        "grant_id", "domain_id", "faculty_id", "grant_name", "agency",
         "amount", "start_date", "end_date", "status"
     ])
-    write_csv("project_collaboration.csv", project_collaborations, [
-        "collab_id", "project_id", "faculty_id", "role", "start_date", "hours_per_week"
+    write_csv("domain_collaboration.csv", domain_collaborations, [
+        "collab_id", "domain_id", "faculty_id", "role", "start_date", "hours_per_week"
     ])
     write_csv("course_prerequisite.csv", course_prerequisites, [
         "course_id", "prerequisite_id", "requirement_type"
@@ -414,7 +414,7 @@ def main():
     print("=" * 60)
 
     all_data = [students, faculty, departments, courses, enrollments, course_assignments,
-                research_projects, publications, grant_awards, project_collaborations,
+                research_domains, publications, grant_awards, domain_collaborations,
                 course_prerequisites, department_affiliations]
     total = sum(len(d) for d in all_data)
     print(f"\n📊 Summary:")
@@ -424,10 +424,10 @@ def main():
     print(f"   • course.csv:             {len(courses):5d} records")
     print(f"   • enrollment.csv:         {len(enrollments):5d} records")
     print(f"   • course_assignment.csv:  {len(course_assignments):5d} records")
-    print(f"   • research_project.csv:   {len(research_projects):5d} records")
+    print(f"   • research_domain.csv:    {len(research_domains):5d} records")
     print(f"   • publication.csv:        {len(publications):5d} records")
     print(f"   • grant_award.csv:        {len(grant_awards):5d} records")
-    print(f"   • project_collaboration.csv: {len(project_collaborations):5d} records")
+    print(f"   • domain_collaboration.csv: {len(domain_collaborations):5d} records")
     print(f"   • course_prerequisite.csv: {len(course_prerequisites):5d} records")
     print(f"   • department_affiliation.csv: {len(department_affiliations):5d} records")
     print(f"   ─────────────────────────────────")

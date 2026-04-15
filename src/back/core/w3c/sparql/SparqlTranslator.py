@@ -1,10 +1,8 @@
 """SPARQL query translation to Spark SQL (via R2RML mappings)."""
 import re
-from rdflib import Graph, Namespace
-from rdflib.namespace import RDF, RDFS
 
 from back.core.logging import get_logger
-from back.core.helpers import sql_escape as _escape_sql
+from back.core.helpers import sql_escape as _escape_sql, extract_local_name as _extract_local
 from back.core.w3c.sparql.constants import DIALECT_SPARK
 
 logger = get_logger(__name__)
@@ -602,14 +600,10 @@ class SparqlTranslator:
         3. Relationships: Only relationships where at least one end is a filtered entity
         """
         logger.debug("Building CTE-based filtered query with relationships")
-        
+
         def get_local_name(uri):
-            if '#' in uri:
-                return uri.split('#')[-1].lower()
-            elif '/' in uri:
-                return uri.rstrip('/').split('/')[-1].lower()
-            return uri.lower()
-        
+            return _extract_local(uri).lower()
+
         # Build filter set for classes
         filter_local_names = set(get_local_name(uri) for uri in filter_class_uris) if filter_class_uris else None
         
@@ -815,14 +809,9 @@ class SparqlTranslator:
         
         table_queries = []
         
-        # Helper to extract local name from URI
         def get_local_name(uri):
-            if '#' in uri:
-                return uri.split('#')[-1].lower()
-            elif '/' in uri:
-                return uri.rstrip('/').split('/')[-1].lower()
-            return uri.lower()
-        
+            return _extract_local(uri).lower()
+
         # Helper to extract class name from URI template (e.g., "http://example.org/Person/{id}" -> "person")
         def get_class_from_template(template):
             if not template:

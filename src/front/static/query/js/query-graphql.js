@@ -10,7 +10,7 @@
 
 const GraphQLPlayground = (() => {
     let _mounted = false;
-    let _projectName = null;
+    let _graphqlFolderSlug = null;
     let _root = null;
     let _resizeHandler = null;
     let _libsRequested = false;
@@ -42,12 +42,14 @@ const GraphQLPlayground = (() => {
         await _loadScript('https://unpkg.com/graphiql@3/graphiql.min.js');
     }
 
-    async function _resolveProjectName() {
+    async function _resolveGraphqlFolderSlug() {
         try {
-            const resp = await fetch('/project/info', { credentials: 'same-origin' });
+            const resp = await fetch('/domain/info', { credentials: 'same-origin' });
             const data = await resp.json();
             if (!data.success) return '';
-            if (data.project_folder) return data.project_folder;
+            if (data.domain_folder || data.project_folder) {
+                return data.domain_folder || data.project_folder;
+            }
             const name = data?.info?.name || '';
             return name ? name.toLowerCase().replace(/\s+/g, '_') : '';
         } catch {
@@ -96,29 +98,27 @@ const GraphQLPlayground = (() => {
             return;
         }
 
-        _projectName = await _resolveProjectName();
-        if (!_projectName) {
+        _graphqlFolderSlug = await _resolveGraphqlFolderSlug();
+        if (!_graphqlFolderSlug) {
             _hideAll();
             const msg = _el('graphqlErrorMsg');
             if (msg) msg.textContent =
-                'Could not resolve the project name. Make sure a project is loaded.';
+                'Could not resolve the domain name. Make sure a domain is loaded.';
             _show('graphqlError');
             return;
         }
 
-        _el('graphqlProjectBadge').textContent = _projectName;
-        _show('graphqlProjectBadge');
         const openBtn = _el('graphqlOpenNewTab');
         _show('graphqlOpenNewTab');
         if (openBtn) {
             openBtn.onclick = () => {
-                window.open('/graphql/' + encodeURIComponent(_projectName), '_blank');
+                window.open('/graphql/' + encodeURIComponent(_graphqlFolderSlug), '_blank');
             };
         }
 
         try {
             const schemaResp = await fetch(
-                '/graphql/' + encodeURIComponent(_projectName) + '/schema',
+                '/graphql/' + encodeURIComponent(_graphqlFolderSlug) + '/schema',
                 { credentials: 'same-origin' }
             );
             if (!schemaResp.ok) {
@@ -161,7 +161,7 @@ const GraphQLPlayground = (() => {
         }
 
         const endpointUrl = window.location.origin +
-            '/graphql/' + encodeURIComponent(_projectName);
+            '/graphql/' + encodeURIComponent(_graphqlFolderSlug);
 
         function depthFetcher(graphQLParams, fetcherOpts) {
             var depth = parseInt((_el('graphqlDepthSelect') || {}).value || _depthDefault, 10);
@@ -198,7 +198,7 @@ const GraphQLPlayground = (() => {
             _resizeHandler = null;
         }
         _mounted = false;
-        _projectName = null;
+        _graphqlFolderSlug = null;
     }
 
     return { init, reset };

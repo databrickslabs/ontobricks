@@ -24,41 +24,41 @@ from back.core.triplestore import TripleStoreBackend
 
 class TestEffectiveViewTable:
     def test_fully_qualified(self):
-        project = MagicMock()
-        project.delta = {'catalog': 'cat', 'schema': 'sch', 'table_name': 'triples'}
-        project.info = {'name': ''}
-        project.current_version = '1'
-        assert effective_view_table(project) == 'cat.sch.triples'
+        domain = MagicMock()
+        domain.delta = {'catalog': 'cat', 'schema': 'sch', 'table_name': 'triples'}
+        domain.info = {'name': ''}
+        domain.current_version = '1'
+        assert effective_view_table(domain) == 'cat.sch.triples'
 
     def test_partial_with_fallback(self):
-        project = MagicMock()
-        project.delta = {'catalog': '', 'schema': '', 'table_name': ''}
-        project.info = {'name': ''}
-        project.current_version = '1'
+        domain = MagicMock()
+        domain.delta = {'catalog': '', 'schema': '', 'table_name': ''}
+        domain.info = {'name': ''}
+        domain.current_version = '1'
         settings = MagicMock()
         settings.databricks_triplestore_table = 'fallback.table'
-        assert effective_view_table(project, settings) == 'fallback.table'
+        assert effective_view_table(domain, settings) == 'fallback.table'
 
     def test_no_settings(self):
-        project = MagicMock()
-        project.delta = {'catalog': 'c', 'schema': 's', 'table_name': 't'}
-        project.info = {'name': ''}
-        project.current_version = '1'
-        assert effective_view_table(project) == 'c.s.t'
+        domain = MagicMock()
+        domain.delta = {'catalog': 'c', 'schema': 's', 'table_name': 't'}
+        domain.info = {'name': ''}
+        domain.current_version = '1'
+        assert effective_view_table(domain) == 'c.s.t'
 
 
 class TestEffectiveGraphName:
-    def test_from_project_name(self):
-        project = MagicMock()
-        project.info = {'name': 'MyProject'}
-        project.current_version = '1'
-        assert effective_graph_name(project) == 'MyProject_V1'
+    def test_from_domain_name(self):
+        domain = MagicMock()
+        domain.info = {'name': 'MyDomain'}
+        domain.current_version = '1'
+        assert effective_graph_name(domain) == 'MyDomain_V1'
 
     def test_default(self):
-        project = MagicMock()
-        project.info = {}
-        project.current_version = '1'
-        assert effective_graph_name(project) == 'ontobricks_V1'
+        domain = MagicMock()
+        domain.info = {}
+        domain.current_version = '1'
+        assert effective_graph_name(domain) == 'ontobricks_V1'
 
 
 # ---------------------------------------------------------------------------
@@ -255,13 +255,13 @@ class TestPydanticModels:
         assert r.total_triples == 0
         assert r.entity_types == []
 
-    def test_projects_response(self):
-        from api.routers.projects import ProjectInfo, ProjectsResponse
-        r = ProjectsResponse(success=True, projects=[
-            ProjectInfo(name='proj1', description='desc1'),
+    def test_domains_response(self):
+        from api.routers.domains import DomainInfo, DomainsResponse
+        r = DomainsResponse(success=True, domains=[
+            DomainInfo(name='d1', description='desc1'),
         ])
-        assert len(r.projects) == 1
-        assert r.projects[0].name == 'proj1'
+        assert len(r.domains) == 1
+        assert r.domains[0].name == 'd1'
 
     def test_find_response_defaults(self):
         from api.routers.digitaltwin import FindResponse

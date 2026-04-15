@@ -124,7 +124,7 @@
             
   <section id="ontobricks-external-rest-api">
 <h1>OntoBricks External REST API<a class="headerlink" href="#ontobricks-external-rest-api" title="Link to this heading">¶</a></h1>
-<p>The OntoBricks REST API provides stateless endpoints for external applications to query ontologies and retrieve project metadata.</p>
+<p>The OntoBricks REST API provides stateless endpoints for external applications to query ontologies and retrieve domain metadata.</p>
 <section id="base-url">
 <h2>Base URL<a class="headerlink" href="#base-url" title="Link to this heading">¶</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">8000</span><span class="o">/</span><span class="n">api</span><span class="o">/</span><span class="n">v1</span>
@@ -193,11 +193,12 @@
 </section>
 </section>
 <hr class="docutils" />
-<section id="project-endpoints">
-<h3>Project Endpoints<a class="headerlink" href="#project-endpoints" title="Link to this heading">¶</a></h3>
-<section id="post-api-v1-projects-list">
-<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/projects/list</span></code><a class="headerlink" href="#post-api-v1-projects-list" title="Link to this heading">¶</a></h4>
-<p>List available projects in a Unity Catalog volume.</p>
+<section id="domain-endpoints">
+<h3>Domain endpoints<a class="headerlink" href="#domain-endpoints" title="Link to this heading">¶</a></h3>
+<p>URLs use <code class="docutils literal notranslate"><span class="pre">/api/v1/domains</span></code> and <code class="docutils literal notranslate"><span class="pre">/api/v1/domain/…</span></code> for <strong>domain</strong> operations (saved ontology + mappings).</p>
+<section id="post-api-v1-domains-list">
+<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/domains/list</span></code><a class="headerlink" href="#post-api-v1-domains-list" title="Link to this heading">¶</a></h4>
+<p>List available domains in a Unity Catalog volume.</p>
 <p><strong>Request:</strong></p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;catalog&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my_catalog&quot;</span><span class="p">,</span>
@@ -210,10 +211,10 @@
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;success&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nt">&quot;projects&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="nt">&quot;domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
 <span class="w">            </span><span class="p">{</span>
-<span class="w">                </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my_project.json&quot;</span><span class="p">,</span>
-<span class="w">                </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/my_catalog/my_schema/my_volume/my_project.json&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my_domain.json&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/my_catalog/my_schema/my_volume/my_domain.json&quot;</span><span class="p">,</span>
 <span class="w">                </span><span class="nt">&quot;size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">15234</span>
 <span class="w">            </span><span class="p">}</span>
 <span class="w">        </span><span class="p">],</span>
@@ -224,12 +225,12 @@
 </div>
 </section>
 <hr class="docutils" />
-<section id="post-api-v1-project-info">
-<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/project/info</span></code><a class="headerlink" href="#post-api-v1-project-info" title="Link to this heading">¶</a></h4>
-<p>Get project information and statistics.</p>
+<section id="post-api-v1-domain-info">
+<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/domain/info</span></code><a class="headerlink" href="#post-api-v1-domain-info" title="Link to this heading">¶</a></h4>
+<p>Get domain information and statistics.</p>
 <p><strong>Request:</strong></p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/project.json&quot;</span>
+<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/domain.json&quot;</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -237,8 +238,8 @@
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;success&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;My Ontology Project&quot;</span><span class="p">,</span>
-<span class="w">        </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Project description&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;My Ontology Domain&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Domain description&quot;</span><span class="p">,</span>
 <span class="w">        </span><span class="nt">&quot;author&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;John Doe&quot;</span><span class="p">,</span>
 <span class="w">        </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1.0.0&quot;</span><span class="p">,</span>
 <span class="w">        </span><span class="nt">&quot;project_version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1.0&quot;</span><span class="p">,</span>
@@ -255,12 +256,12 @@
 </div>
 </section>
 <hr class="docutils" />
-<section id="post-api-v1-project-ontology">
-<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/project/ontology</span></code><a class="headerlink" href="#post-api-v1-project-ontology" title="Link to this heading">¶</a></h4>
+<section id="post-api-v1-domain-ontology">
+<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/domain/ontology</span></code><a class="headerlink" href="#post-api-v1-domain-ontology" title="Link to this heading">¶</a></h4>
 <p>Get full ontology details including classes and properties.</p>
 <p><strong>Request:</strong></p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/project.json&quot;</span>
+<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/domain.json&quot;</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -282,12 +283,12 @@
 </div>
 </section>
 <hr class="docutils" />
-<section id="post-api-v1-project-ontology-classes">
-<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/project/ontology/classes</span></code><a class="headerlink" href="#post-api-v1-project-ontology-classes" title="Link to this heading">¶</a></h4>
+<section id="post-api-v1-domain-ontology-classes">
+<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/domain/ontology/classes</span></code><a class="headerlink" href="#post-api-v1-domain-ontology-classes" title="Link to this heading">¶</a></h4>
 <p>Get list of ontology classes with their URIs.</p>
 <p><strong>Request:</strong></p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/project.json&quot;</span>
+<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/domain.json&quot;</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -313,12 +314,12 @@
 </div>
 </section>
 <hr class="docutils" />
-<section id="post-api-v1-project-ontology-properties">
-<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/project/ontology/properties</span></code><a class="headerlink" href="#post-api-v1-project-ontology-properties" title="Link to this heading">¶</a></h4>
+<section id="post-api-v1-domain-ontology-properties">
+<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/domain/ontology/properties</span></code><a class="headerlink" href="#post-api-v1-domain-ontology-properties" title="Link to this heading">¶</a></h4>
 <p>Get list of ontology properties (relationships) with their URIs.</p>
 <p><strong>Request:</strong></p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/project.json&quot;</span>
+<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/domain.json&quot;</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -343,12 +344,12 @@
 </div>
 </section>
 <hr class="docutils" />
-<section id="post-api-v1-project-mappings">
-<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/project/mappings</span></code><a class="headerlink" href="#post-api-v1-project-mappings" title="Link to this heading">¶</a></h4>
+<section id="post-api-v1-domain-mappings">
+<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/domain/mappings</span></code><a class="headerlink" href="#post-api-v1-domain-mappings" title="Link to this heading">¶</a></h4>
 <p>Get mapping details (entity and relationship mappings).</p>
 <p><strong>Request:</strong></p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/project.json&quot;</span>
+<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/domain.json&quot;</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -367,12 +368,12 @@
 </div>
 </section>
 <hr class="docutils" />
-<section id="post-api-v1-project-r2rml">
-<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/project/r2rml</span></code><a class="headerlink" href="#post-api-v1-project-r2rml" title="Link to this heading">¶</a></h4>
-<p>Get the R2RML mapping content from a project.</p>
+<section id="post-api-v1-domain-r2rml">
+<h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/domain/r2rml</span></code><a class="headerlink" href="#post-api-v1-domain-r2rml" title="Link to this heading">¶</a></h4>
+<p>Get the R2RML mapping content from a domain.</p>
 <p><strong>Request:</strong></p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/project.json&quot;</span>
+<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/domain.json&quot;</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -393,10 +394,10 @@
 <h3>Query Endpoints<a class="headerlink" href="#query-endpoints" title="Link to this heading">¶</a></h3>
 <section id="post-api-v1-query">
 <h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/query</span></code><a class="headerlink" href="#post-api-v1-query" title="Link to this heading">¶</a></h4>
-<p>Execute a SPARQL query against a project’s ontology.</p>
+<p>Execute a SPARQL query against a domain’s ontology.</p>
 <p><strong>Request:</strong></p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/project.json&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/domain.json&quot;</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">&quot;query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10&quot;</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">&quot;limit&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">&quot;engine&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;local&quot;</span>
@@ -405,7 +406,7 @@
 </div>
 <p><strong>Parameters:</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">project_path</span></code> (required): Path to the project file in Unity Catalog</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project_path</span></code> (required): Path to the domain JSON file in Unity Catalog</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">query</span></code> (required): SPARQL query string</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">limit</span></code> (optional): Maximum number of results (default: 100)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">engine</span></code> (optional): Query engine - <code class="docutils literal notranslate"><span class="pre">local</span></code> (RDFLib) or <code class="docutils literal notranslate"><span class="pre">spark</span></code> (default: <code class="docutils literal notranslate"><span class="pre">local</span></code>)</p></li>
@@ -449,10 +450,10 @@
 <hr class="docutils" />
 <section id="post-api-v1-query-samples">
 <h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/query/samples</span></code><a class="headerlink" href="#post-api-v1-query-samples" title="Link to this heading">¶</a></h4>
-<p>Get sample SPARQL queries generated for a project.</p>
+<p>Get sample SPARQL queries generated for a domain.</p>
 <p><strong>Request:</strong></p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/project.json&quot;</span>
+<span class="w">    </span><span class="nt">&quot;project_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/Volumes/catalog/schema/volume/domain.json&quot;</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -478,7 +479,7 @@
 <hr class="docutils" />
 <section id="graphql-api">
 <h2>GraphQL API<a class="headerlink" href="#graphql-api" title="Link to this heading">¶</a></h2>
-<p>OntoBricks auto-generates a typed GraphQL schema from each project’s ontology. Ontology classes become GraphQL types, data properties become scalar fields, and object properties become typed relationship fields with nested traversal.</p>
+<p>OntoBricks auto-generates a typed GraphQL schema from each domain’s ontology. Ontology classes become GraphQL types, data properties become scalar fields, and object properties become typed relationship fields with nested traversal.</p>
 <p><strong>URL choice:</strong> The same router is mounted twice on the main app: <strong>in-app / browser</strong> paths below use <code class="docutils literal notranslate"><span class="pre">/graphql/...</span></code>. For the <strong>mounted external API</strong> (OpenAPI at <code class="docutils literal notranslate"><span class="pre">/api/docs</span></code>), use <code class="docutils literal notranslate"><span class="pre">/api/v1/graphql/...</span></code> instead — same handlers and payloads, different prefix (see <code class="docutils literal notranslate"><span class="pre">api.constants.EXTERNAL_GRAPHQL_PUBLIC_PREFIX</span></code>).</p>
 <section id="base-url-main-ui-server">
 <h3>Base URL (main UI server)<a class="headerlink" href="#base-url-main-ui-server" title="Link to this heading">¶</a></h3>
@@ -491,21 +492,21 @@
 </div>
 </section>
 <hr class="docutils" />
-<section id="list-graphql-enabled-projects">
-<h3>List GraphQL-Enabled Projects<a class="headerlink" href="#list-graphql-enabled-projects" title="Link to this heading">¶</a></h3>
+<section id="list-graphql-enabled-domains">
+<h3>List GraphQL-enabled domains<a class="headerlink" href="#list-graphql-enabled-domains" title="Link to this heading">¶</a></h3>
 <section id="get-graphql">
 <h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/graphql</span></code><a class="headerlink" href="#get-graphql" title="Link to this heading">¶</a></h4>
-<p>Returns all projects in the configured registry that have a materialized triple store.</p>
+<p>Returns all domains in the configured registry that have a materialized triple store.</p>
 <p><strong>Response:</strong></p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">    </span><span class="nt">&quot;projects&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="nt">&quot;success&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
 <span class="w">        </span><span class="p">{</span>
-<span class="w">            </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span><span class="p">,</span>
-<span class="w">            </span><span class="nt">&quot;graphql_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/graphql/my_project&quot;</span><span class="p">,</span>
-<span class="w">            </span><span class="nt">&quot;graphiql_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/graphql/my_project&quot;</span><span class="p">,</span>
-<span class="w">            </span><span class="nt">&quot;schema_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/graphql/my_project/schema&quot;</span>
+<span class="w">            </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my_domain&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&quot;</span>
 <span class="w">        </span><span class="p">}</span>
-<span class="w">    </span><span class="p">]</span>
+<span class="w">    </span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -516,10 +517,10 @@
 <h3>GraphiQL Playground<a class="headerlink" href="#graphiql-playground" title="Link to this heading">¶</a></h3>
 <section id="get-graphql-project-name">
 <h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/graphql/{project_name}</span></code><a class="headerlink" href="#get-graphql-project-name" title="Link to this heading">¶</a></h4>
-<p>Opens the interactive GraphiQL IDE for a specific project. The playground provides auto-complete, documentation explorer, and query history.</p>
+<p>Opens the interactive GraphiQL IDE for a specific domain. The playground provides auto-complete, documentation explorer, and query history.</p>
 <p><strong>Parameters:</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (path, required): Name of the project</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (path, required): Name of the domain in the registry</p></li>
 </ul>
 </section>
 </section>
@@ -528,7 +529,7 @@
 <h3>Execute GraphQL Query<a class="headerlink" href="#execute-graphql-query" title="Link to this heading">¶</a></h3>
 <section id="post-graphql-project-name">
 <h4><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/graphql/{project_name}</span></code><a class="headerlink" href="#post-graphql-project-name" title="Link to this heading">¶</a></h4>
-<p>Execute a GraphQL query against the project’s auto-generated schema.</p>
+<p>Execute a GraphQL query against the domain’s auto-generated schema.</p>
 <p><strong>Request:</strong></p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;query&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;{ allCustomer(limit: 5) { id label hasInteraction { label } } }&quot;</span><span class="p">,</span>
@@ -540,7 +541,7 @@
 </div>
 <p><strong>Parameters:</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (path, required): Name of the project</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (path, required): Name of the domain in the registry</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">query</span></code> (body, required): GraphQL query string</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">variables</span></code> (body, optional): Query variables</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">operationName</span></code> (body, optional): Operation name for multi-operation documents</p></li>
@@ -568,10 +569,10 @@
 <h3>Schema Introspection (SDL)<a class="headerlink" href="#schema-introspection-sdl" title="Link to this heading">¶</a></h3>
 <section id="get-graphql-project-name-schema">
 <h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/graphql/{project_name}/schema</span></code><a class="headerlink" href="#get-graphql-project-name-schema" title="Link to this heading">¶</a></h4>
-<p>Returns the full GraphQL Schema Definition Language (SDL) for the project.</p>
+<p>Returns the full GraphQL Schema Definition Language (SDL) for the domain.</p>
 <p><strong>Parameters:</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (path, required): Name of the project</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (path, required): Name of the domain in the registry</p></li>
 </ul>
 <p><strong>Response:</strong></p>
 <div class="highlight-graphql notranslate"><div class="highlight"><pre><span></span><span class="k">type</span><span class="w"> </span><span class="err">Customer</span><span class="w"> </span><span class="p">{</span>
@@ -601,17 +602,17 @@
 <h3>Notes on GraphQL API<a class="headerlink" href="#notes-on-graphql-api" title="Link to this heading">¶</a></h3>
 <ol class="arabic simple">
 <li><p><strong>Schema is auto-generated</strong>: The schema is built dynamically from the ontology. Each ontology class becomes a GraphQL type; data properties become <code class="docutils literal notranslate"><span class="pre">String</span></code> fields; object properties become typed relationship fields.</p></li>
-<li><p><strong>Per-project schemas</strong>: Different projects may have completely different schemas, reflecting their ontology.</p></li>
-<li><p><strong>Caching</strong>: Schemas are cached per project and invalidated on ontology changes.</p></li>
+<li><p><strong>Per-domain schemas</strong>: Different domains may have completely different schemas, reflecting their ontology.</p></li>
+<li><p><strong>Caching</strong>: Schemas are cached per domain and invalidated on ontology changes.</p></li>
 <li><p><strong>Relationship depth</strong>: Nested relationships are resolved to a configurable depth (default 2, max 5). The depth can be set via the <code class="docutils literal notranslate"><span class="pre">depth</span></code> field in the request body or the depth selector in the GraphiQL playground.</p></li>
-<li><p><strong>Triple store required</strong>: The project must have a materialized triple store (synced via Digital Twin) for GraphQL queries to return data.</p></li>
+<li><p><strong>Triple store required</strong>: The domain must have a materialized triple store (synced via Digital Twin) for GraphQL queries to return data.</p></li>
 </ol>
 </section>
 </section>
 <hr class="docutils" />
 <section id="digital-twin-api">
 <h2>Digital Twin API<a class="headerlink" href="#digital-twin-api" title="Link to this heading">¶</a></h2>
-<p>The Digital Twin API provides stateless, programmatic access to the knowledge graph — triple store status, entity search, ontology artifacts, and build triggers. All endpoints accept an optional <code class="docutils literal notranslate"><span class="pre">project_name</span></code> query parameter to load a project from the registry instead of the browser session.</p>
+<p>The Digital Twin API provides stateless, programmatic access to the knowledge graph — triple store status, entity search, ontology artifacts, and build triggers. All endpoints accept an optional <code class="docutils literal notranslate"><span class="pre">project_name</span></code> query parameter to load a domain from the registry instead of the browser session.</p>
 <section id="id1">
 <h3>Base URL<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h3>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">8000</span><span class="o">/</span><span class="n">api</span><span class="o">/</span><span class="n">v1</span><span class="o">/</span><span class="n">digitaltwin</span>
@@ -623,38 +624,38 @@
 <h3>Registry<a class="headerlink" href="#registry" title="Link to this heading">¶</a></h3>
 <section id="get-api-v1-digitaltwin-registry">
 <h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/digitaltwin/registry</span></code><a class="headerlink" href="#get-api-v1-digitaltwin-registry" title="Link to this heading">¶</a></h4>
-<p>Returns the project registry location (catalog, schema, volume).</p>
+<p>Returns the domain registry location (catalog, schema, volume).</p>
 </section>
 </section>
 <hr class="docutils" />
-<section id="list-projects">
-<h3>List Projects<a class="headerlink" href="#list-projects" title="Link to this heading">¶</a></h3>
-<section id="get-api-v1-projects">
-<h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/projects</span></code><a class="headerlink" href="#get-api-v1-projects" title="Link to this heading">¶</a></h4>
-<p>List all MCP-enabled projects in the registry.</p>
+<section id="list-domains">
+<h3>List domains<a class="headerlink" href="#list-domains" title="Link to this heading">¶</a></h3>
+<section id="get-api-v1-domains">
+<h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/domains</span></code><a class="headerlink" href="#get-api-v1-domains" title="Link to this heading">¶</a></h4>
+<p>List all MCP-enabled domains in the registry.</p>
 </section>
 </section>
 <hr class="docutils" />
 <section id="versions">
 <h3>Versions<a class="headerlink" href="#versions" title="Link to this heading">¶</a></h3>
-<section id="get-api-v1-project-versions">
-<h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/project/versions</span></code><a class="headerlink" href="#get-api-v1-project-versions" title="Link to this heading">¶</a></h4>
-<p>Returns all versions for a project in the registry, latest first.</p>
+<section id="get-api-v1-domain-versions">
+<h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/domain/versions</span></code><a class="headerlink" href="#get-api-v1-domain-versions" title="Link to this heading">¶</a></h4>
+<p>Returns all versions for a domain in the registry, latest first.</p>
 <p><strong>Parameters:</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, required): Project name in the registry</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, required): Domain name in the registry</p></li>
 </ul>
 </section>
 </section>
 <hr class="docutils" />
 <section id="design-status">
 <h3>Design Status<a class="headerlink" href="#design-status" title="Link to this heading">¶</a></h3>
-<section id="get-api-v1-project-design-status">
-<h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/project/design-status</span></code><a class="headerlink" href="#get-api-v1-project-design-status" title="Link to this heading">¶</a></h4>
+<section id="get-api-v1-domain-design-status">
+<h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/domain/design-status</span></code><a class="headerlink" href="#get-api-v1-domain-design-status" title="Link to this heading">¶</a></h4>
 <p>Returns a comprehensive readiness status including ontology, metadata, and mapping completeness.</p>
 <p><strong>Parameters:</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Project name in the registry</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Domain name in the registry</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">project_version</span></code> (query, optional): Specific version to load (latest if omitted)</p></li>
 </ul>
 <p><strong>Response:</strong></p>
@@ -692,43 +693,43 @@
 <p>Check backend type, table name, data availability, and triple count.</p>
 <p><strong>Parameters:</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Project name in the registry</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Domain name in the registry</p></li>
 </ul>
 </section>
 </section>
 <hr class="docutils" />
 <section id="ontology-owl">
 <h3>Ontology (OWL)<a class="headerlink" href="#ontology-owl" title="Link to this heading">¶</a></h3>
-<section id="get-api-v1-project-ontology">
-<h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/project/ontology</span></code><a class="headerlink" href="#get-api-v1-project-ontology" title="Link to this heading">¶</a></h4>
-<p>Return the project’s OWL ontology in Turtle format.</p>
+<section id="get-api-v1-domain-ontology">
+<h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/domain/ontology</span></code><a class="headerlink" href="#get-api-v1-domain-ontology" title="Link to this heading">¶</a></h4>
+<p>Return the domain’s OWL ontology in Turtle format.</p>
 <p><strong>Parameters:</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Project name in the registry</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Domain name in the registry</p></li>
 </ul>
 </section>
 </section>
 <hr class="docutils" />
 <section id="r2rml-mapping">
 <h3>R2RML Mapping<a class="headerlink" href="#r2rml-mapping" title="Link to this heading">¶</a></h3>
-<section id="get-api-v1-project-r2rml">
-<h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/project/r2rml</span></code><a class="headerlink" href="#get-api-v1-project-r2rml" title="Link to this heading">¶</a></h4>
-<p>Return the project’s R2RML mapping document in Turtle format.</p>
+<section id="get-api-v1-domain-r2rml">
+<h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/domain/r2rml</span></code><a class="headerlink" href="#get-api-v1-domain-r2rml" title="Link to this heading">¶</a></h4>
+<p>Return the domain’s R2RML mapping document in Turtle format.</p>
 <p><strong>Parameters:</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Project name in the registry</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Domain name in the registry</p></li>
 </ul>
 </section>
 </section>
 <hr class="docutils" />
 <section id="generated-spark-sql">
 <h3>Generated Spark SQL<a class="headerlink" href="#generated-spark-sql" title="Link to this heading">¶</a></h3>
-<section id="get-api-v1-project-sparksql">
-<h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/project/sparksql</span></code><a class="headerlink" href="#get-api-v1-project-sparksql" title="Link to this heading">¶</a></h4>
+<section id="get-api-v1-domain-sparksql">
+<h4><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/domain/sparksql</span></code><a class="headerlink" href="#get-api-v1-domain-sparksql" title="Link to this heading">¶</a></h4>
 <p>Return the Spark SQL that produces triples from the source tables.</p>
 <p><strong>Parameters:</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Project name in the registry</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Domain name in the registry</p></li>
 </ul>
 </section>
 </section>
@@ -740,7 +741,7 @@
 <p>Aggregated statistics: total triples, entity types, predicates, labels.</p>
 <p><strong>Parameters:</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Project name in the registry</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Domain name in the registry</p></li>
 </ul>
 </section>
 </section>
@@ -760,7 +761,7 @@
 <p>BFS-based entity search with depth control.</p>
 <p><strong>Parameters:</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Project name in the registry</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (query, optional): Domain name in the registry</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">search</span></code> (query): Search text</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">entity_type</span></code> (query, optional): Filter by type</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">depth</span></code> (query, optional): BFS depth (default: 2)</p></li>
@@ -783,9 +784,9 @@
     <span class="s2">&quot;X-Databricks-Token&quot;</span><span class="p">:</span> <span class="s2">&quot;dapi...&quot;</span>
 <span class="p">}</span>
 
-<span class="c1"># List projects</span>
+<span class="c1"># List domains</span>
 <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span>
-    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">API_BASE</span><span class="si">}</span><span class="s2">/projects/list&quot;</span><span class="p">,</span>
+    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">API_BASE</span><span class="si">}</span><span class="s2">/domains/list&quot;</span><span class="p">,</span>
     <span class="n">headers</span><span class="o">=</span><span class="n">HEADERS</span><span class="p">,</span>
     <span class="n">json</span><span class="o">=</span><span class="p">{</span>
         <span class="s2">&quot;catalog&quot;</span><span class="p">:</span> <span class="s2">&quot;main&quot;</span><span class="p">,</span>
@@ -793,14 +794,14 @@
         <span class="s2">&quot;volume&quot;</span><span class="p">:</span> <span class="s2">&quot;ontologies&quot;</span>
     <span class="p">}</span>
 <span class="p">)</span>
-<span class="n">projects</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+<span class="n">payload</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
 
 <span class="c1"># Execute SPARQL query</span>
 <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span>
     <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">API_BASE</span><span class="si">}</span><span class="s2">/query&quot;</span><span class="p">,</span>
     <span class="n">headers</span><span class="o">=</span><span class="n">HEADERS</span><span class="p">,</span>
     <span class="n">json</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;project_path&quot;</span><span class="p">:</span> <span class="s2">&quot;/Volumes/main/default/ontologies/my_project.json&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;project_path&quot;</span><span class="p">:</span> <span class="s2">&quot;/Volumes/main/default/ontologies/my_domain.json&quot;</span><span class="p">,</span>
         <span class="s2">&quot;query&quot;</span><span class="p">:</span> <span class="s2">&quot;SELECT ?type (COUNT(?s) as ?count) WHERE { ?s a ?type } GROUP BY ?type&quot;</span><span class="p">,</span>
         <span class="s2">&quot;limit&quot;</span><span class="p">:</span> <span class="mi">50</span>
     <span class="p">}</span>
@@ -815,8 +816,8 @@
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Health check</span>
 curl<span class="w"> </span>http://localhost:8000/api/v1/health
 
-<span class="c1"># List projects</span>
-curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/projects/list<span class="w"> </span><span class="se">\</span>
+<span class="c1"># List domains</span>
+curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/v1/domains/list<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;X-Databricks-Host: https://your-workspace.cloud.databricks.com&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;X-Databricks-Token: dapi...&quot;</span><span class="w"> </span><span class="se">\</span>
@@ -828,7 +829,7 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 <span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;X-Databricks-Host: https://your-workspace.cloud.databricks.com&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;X-Databricks-Token: dapi...&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
-<span class="s1">    &quot;project_path&quot;: &quot;/Volumes/main/default/ontologies/my_project.json&quot;,</span>
+<span class="s1">    &quot;project_path&quot;: &quot;/Volumes/main/default/ontologies/my_domain.json&quot;,</span>
 <span class="s1">    &quot;query&quot;: &quot;SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10&quot;</span>
 <span class="s1">  }&#39;</span>
 </pre></div>
@@ -855,7 +856,7 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 <td><p>Unauthorized - Invalid or missing credentials</p></td>
 </tr>
 <tr class="row-odd"><td><p>404</p></td>
-<td><p>Not Found - Project or resource not found</p></td>
+<td><p>Not Found - Domain or resource not found</p></td>
 </tr>
 <tr class="row-even"><td><p>500</p></td>
 <td><p>Internal Server Error</p></td>
@@ -867,9 +868,9 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 <section id="notes">
 <h2>Notes<a class="headerlink" href="#notes" title="Link to this heading">¶</a></h2>
 <ol class="arabic simple">
-<li><p><strong>Stateless</strong>: The API is stateless - each request loads the project fresh from Unity Catalog.</p></li>
+<li><p><strong>Stateless</strong>: The API is stateless - each request loads the domain fresh from Unity Catalog.</p></li>
 <li><p><strong>Engine</strong>: Currently, only the <code class="docutils literal notranslate"><span class="pre">local</span></code> engine (RDFLib) is fully supported. The <code class="docutils literal notranslate"><span class="pre">spark</span></code> engine requires additional setup.</p></li>
-<li><p><strong>R2RML Required</strong>: SPARQL queries require the project to have an R2RML mapping generated. Use the web interface to generate mappings first.</p></li>
+<li><p><strong>R2RML Required</strong>: SPARQL queries require the domain to have an R2RML mapping generated. Use the web interface to generate mappings first.</p></li>
 <li><p><strong>Security</strong>: Never share your Databricks token. Consider using environment variables or secure credential management.</p></li>
 </ol>
 </section>
@@ -898,8 +899,8 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>Project API</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/projects</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/v1/project</span></code></p></td>
+<tr class="row-even"><td><p>Domain API</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domains</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/v1/domain</span></code></p></td>
 <td><p>Registry list, versions, design status, OWL/R2RML/SQL artifacts</p></td>
 </tr>
 <tr class="row-odd"><td><p>Digital Twin API</p></td>
@@ -962,9 +963,9 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 <td><p><code class="docutils literal notranslate"><span class="pre">/graphql</span></code> (UI); <code class="docutils literal notranslate"><span class="pre">/api/v1/graphql</span></code> (external API mount)</p></td>
 <td><p>Auto-generated typed GraphQL schema from ontology</p></td>
 </tr>
-<tr class="row-even"><td><p>Project</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">/project</span></code></p></td>
-<td><p>Project save/load operations</p></td>
+<tr class="row-even"><td><p>Domain</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/domain</span></code></p></td>
+<td><p>Domain save/load operations (UI route)</p></td>
 </tr>
 </tbody>
 </table>
@@ -1998,7 +1999,7 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 </section>
 <section id="auto-map-entity-icons-llm">
 <h4>Auto-Map Entity Icons (LLM)<a class="headerlink" href="#auto-map-entity-icons-llm" title="Link to this heading">¶</a></h4>
-<p>Use the project’s configured LLM serving endpoint to suggest emoji icons for entity names.</p>
+<p>Use the domain’s configured LLM serving endpoint to suggest emoji icons for entity names.</p>
 <div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">POST /dtwin/auto-assign-icons</span>
 </pre></div>
 </div>
@@ -2021,7 +2022,7 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 </pre></div>
 </div>
 <blockquote>
-<div><p><strong>Note</strong>: Requires a valid LLM serving endpoint configured in Project Settings (<code class="docutils literal notranslate"><span class="pre">llm_endpoint</span></code>).</p>
+<div><p><strong>Note</strong>: Requires a valid LLM serving endpoint configured in Domain Settings (<code class="docutils literal notranslate"><span class="pre">llm_endpoint</span></code>).</p>
 </div></blockquote>
 </section>
 </section>
@@ -2124,21 +2125,21 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 <h3>GraphQL Endpoints<a class="headerlink" href="#graphql-endpoints" title="Link to this heading">¶</a></h3>
 <p>OntoBricks auto-generates a typed GraphQL schema from the ontology. Each class becomes a GraphQL type, data properties become scalar fields, and object properties become typed relationship fields.</p>
 <section id="id4">
-<h4>List GraphQL-Enabled Projects<a class="headerlink" href="#id4" title="Link to this heading">¶</a></h4>
+<h4>List GraphQL-enabled domains<a class="headerlink" href="#id4" title="Link to this heading">¶</a></h4>
 <div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /graphql</span>
 </pre></div>
 </div>
-<p>Returns all projects in the configured registry that have a materialized triple store and can be queried via GraphQL.</p>
+<p>Returns all domains in the configured registry that have a materialized triple store and can be queried via GraphQL.</p>
 <p><strong>Response:</strong></p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">  </span><span class="nt">&quot;projects&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">  </span><span class="nt">&quot;success&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
 <span class="w">    </span><span class="p">{</span>
-<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;graphql_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/graphql/my_project&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;graphiql_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/graphql/my_project&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;schema_url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/graphql/my_project/schema&quot;</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my_domain&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&quot;</span>
 <span class="w">    </span><span class="p">}</span>
-<span class="w">  </span><span class="p">]</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -2148,7 +2149,7 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 <div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /graphql/{project_name}</span>
 </pre></div>
 </div>
-<p>Opens the interactive GraphiQL IDE for the project. Provides auto-complete, documentation explorer, and query history.</p>
+<p>Opens the interactive GraphiQL IDE for the domain. Provides auto-complete, documentation explorer, and query history.</p>
 </section>
 <section id="get-graphql-depth-settings">
 <h4>Get GraphQL Depth Settings<a class="headerlink" href="#get-graphql-depth-settings" title="Link to this heading">¶</a></h4>
@@ -2199,7 +2200,7 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 <div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /graphql/{project_name}/schema</span>
 </pre></div>
 </div>
-<p>Returns the full GraphQL Schema Definition Language (SDL) for the project.</p>
+<p>Returns the full GraphQL Schema Definition Language (SDL) for the domain.</p>
 <p><strong>Response (text/plain):</strong></p>
 <div class="highlight-graphql notranslate"><div class="highlight"><pre><span></span><span class="k">type</span><span class="w"> </span><span class="err">Customer</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="nl">id</span><span class="p">:</span><span class="w"> </span><span class="n">String</span><span class="err">!</span>
@@ -2214,40 +2215,40 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 </pre></div>
 </div>
 <blockquote>
-<div><p><strong>Note</strong>: The GraphQL schema is auto-generated at runtime from the project’s ontology. Each project has its own schema, cached and invalidated on ontology changes.</p>
+<div><p><strong>Note</strong>: The GraphQL schema is auto-generated at runtime from the domain’s ontology. Each domain has its own schema, cached and invalidated on ontology changes.</p>
 </div></blockquote>
 </section>
 </section>
 <hr class="docutils" />
 <section id="external-rest-api-api-v1">
 <h3>External REST API (<code class="docutils literal notranslate"><span class="pre">/api/v1</span></code>)<a class="headerlink" href="#external-rest-api-api-v1" title="Link to this heading">¶</a></h3>
-<p><strong>Project</strong> routes (<code class="docutils literal notranslate"><span class="pre">/api/v1/projects</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/v1/project/...</span></code>) and <strong>Digital Twin</strong> routes (<code class="docutils literal notranslate"><span class="pre">/api/v1/digitaltwin/...</span></code>). Most accept an optional <code class="docutils literal notranslate"><span class="pre">project_name</span></code> (and often <code class="docutils literal notranslate"><span class="pre">project_version</span></code>) to load from the registry instead of the browser session.</p>
+<p><strong>Domain</strong> routes (<code class="docutils literal notranslate"><span class="pre">/api/v1/domains</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/v1/domain/...</span></code>) and <strong>Digital Twin</strong> routes (<code class="docutils literal notranslate"><span class="pre">/api/v1/digitaltwin/...</span></code>). Most accept an optional <code class="docutils literal notranslate"><span class="pre">project_name</span></code> (and often <code class="docutils literal notranslate"><span class="pre">project_version</span></code>) to load a domain from the registry instead of the browser session.</p>
 <p><strong>Digital Twin base URL:</strong> <code class="docutils literal notranslate"><span class="pre">http://localhost:8000/api/v1/digitaltwin</span></code></p>
 <section id="id8">
 <h4>Registry<a class="headerlink" href="#id8" title="Link to this heading">¶</a></h4>
 <div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /api/v1/digitaltwin/registry</span>
 </pre></div>
 </div>
-<p>Returns the project registry location (catalog, schema, volume).</p>
+<p>Returns the domain registry location (catalog, schema, volume).</p>
 </section>
 <section id="id9">
-<h4>List Projects<a class="headerlink" href="#id9" title="Link to this heading">¶</a></h4>
-<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /api/v1/projects</span>
+<h4>List domains<a class="headerlink" href="#id9" title="Link to this heading">¶</a></h4>
+<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /api/v1/domains</span>
 </pre></div>
 </div>
-<p>List all MCP-enabled projects in the registry.</p>
+<p>List all MCP-enabled domains in the registry.</p>
 </section>
 <section id="id10">
 <h4>Versions<a class="headerlink" href="#id10" title="Link to this heading">¶</a></h4>
-<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /api/v1/project/versions</span>
+<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /api/v1/domain/versions</span>
 </pre></div>
 </div>
 <p><strong>Query Parameters:</strong> <code class="docutils literal notranslate"><span class="pre">project_name</span></code> (required)</p>
-<p>Returns all versions for the project, latest first.</p>
+<p>Returns all versions for the domain, latest first.</p>
 </section>
 <section id="id11">
 <h4>Design Status<a class="headerlink" href="#id11" title="Link to this heading">¶</a></h4>
-<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /api/v1/project/design-status</span>
+<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /api/v1/domain/design-status</span>
 </pre></div>
 </div>
 <p><strong>Query Parameters:</strong> <code class="docutils literal notranslate"><span class="pre">project_name</span></code> (optional), <code class="docutils literal notranslate"><span class="pre">project_version</span></code> (optional)</p>
@@ -2288,23 +2289,23 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 </section>
 <section id="id13">
 <h4>Ontology (OWL)<a class="headerlink" href="#id13" title="Link to this heading">¶</a></h4>
-<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /api/v1/project/ontology</span>
+<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /api/v1/domain/ontology</span>
 </pre></div>
 </div>
 <p><strong>Query Parameters:</strong> <code class="docutils literal notranslate"><span class="pre">project_name</span></code> (optional)</p>
-<p>Return the project’s OWL ontology in Turtle format.</p>
+<p>Return the domain’s OWL ontology in Turtle format.</p>
 </section>
 <section id="id14">
 <h4>R2RML Mapping<a class="headerlink" href="#id14" title="Link to this heading">¶</a></h4>
-<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /api/v1/project/r2rml</span>
+<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /api/v1/domain/r2rml</span>
 </pre></div>
 </div>
 <p><strong>Query Parameters:</strong> <code class="docutils literal notranslate"><span class="pre">project_name</span></code> (optional)</p>
-<p>Return the project’s R2RML mapping document in Turtle format.</p>
+<p>Return the domain’s R2RML mapping document in Turtle format.</p>
 </section>
 <section id="id15">
 <h4>Generated Spark SQL<a class="headerlink" href="#id15" title="Link to this heading">¶</a></h4>
-<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /api/v1/project/sparksql</span>
+<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /api/v1/domain/sparksql</span>
 </pre></div>
 </div>
 <p><strong>Query Parameters:</strong> <code class="docutils literal notranslate"><span class="pre">project_name</span></code> (optional)</p>
@@ -2332,7 +2333,7 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 </div>
 <p><strong>Query Parameters:</strong></p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (optional): Project name in the registry</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project_name</span></code> (optional): Domain name in the registry</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">search</span></code> (required): Search text</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">entity_type</span></code> (optional): Filter by type</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">depth</span></code> (optional): BFS depth (default: 2)</p></li>
@@ -2357,7 +2358,7 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 </div>
 <p><strong>Request Body:</strong></p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">  </span><span class="nt">&quot;project_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;project_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my_domain&quot;</span><span class="p">,</span>
 <span class="w">  </span><span class="nt">&quot;cron&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0 2 * * *&quot;</span><span class="p">,</span>
 <span class="w">  </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
 <span class="p">}</span>
@@ -2556,7 +2557,7 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">front/routes/home.py</span></code>, <code class="docutils literal notranslate"><span class="pre">api/routers/internal/home.py</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">back/services/home.py</span></code>, <code class="docutils literal notranslate"><span class="pre">back/objects/session/project_session.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back/services/home.py</span></code>, <code class="docutils literal notranslate"><span class="pre">back/objects/session/domain_session.py</span></code></p></td>
 <td><p>Home / session overview</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">front/routes/home.py</span></code> (settings page served from home), <code class="docutils literal notranslate"><span class="pre">api/routers/internal/settings.py</span></code></p></td>
@@ -2575,15 +2576,15 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 <td><p><code class="docutils literal notranslate"><span class="pre">back/objects/digitaltwin/digitaltwin.py</span></code>, <code class="docutils literal notranslate"><span class="pre">back/core/w3c/sparql/SparqlTranslator.py</span></code></p></td>
 <td><p>Digital Twin, SPARQL, query UI</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">front/routes/project.py</span></code>, <code class="docutils literal notranslate"><span class="pre">api/routers/internal/project.py</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">back/objects/project/project.py</span></code>, <code class="docutils literal notranslate"><span class="pre">back/objects/session/project_session.py</span></code></p></td>
-<td><p>Project save/load &amp; registry UX</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">front/routes/domain.py</span></code>, <code class="docutils literal notranslate"><span class="pre">api/routers/internal/domain.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back/objects/domain/domain.py</span></code>, <code class="docutils literal notranslate"><span class="pre">back/objects/session/domain_session.py</span></code></p></td>
+<td><p>Domain save/load &amp; registry UX</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api/routers/internal/tasks.py</span></code></p></td>
 <td><p>(handlers in routes; registry scheduler via <code class="docutils literal notranslate"><span class="pre">back/objects/registry</span></code>)</p></td>
 <td><p>Task status / triggers</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api/routers/v1.py</span></code>, <code class="docutils literal notranslate"><span class="pre">api/routers/projects.py</span></code>, <code class="docutils literal notranslate"><span class="pre">api/routers/digitaltwin.py</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api/routers/v1.py</span></code>, <code class="docutils literal notranslate"><span class="pre">api/routers/domains.py</span></code>, <code class="docutils literal notranslate"><span class="pre">api/routers/digitaltwin.py</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">api/service.py</span></code></p></td>
 <td><p>External stateless REST</p></td>
 </tr>

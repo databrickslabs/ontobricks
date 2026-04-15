@@ -520,8 +520,8 @@ class TestRuleViolationModel:
 # ===========================================================================
 
 class TestReasoningServiceNewPhases:
-    def _project_session(self, **overrides):
-        proj = MagicMock()
+    def _domain_session(self, **overrides):
+        domain = MagicMock()
         ontology = {
             "name": "TestOntology",
             "base_uri": "http://test.org/ontology#",
@@ -535,49 +535,49 @@ class TestReasoningServiceNewPhases:
             "aggregate_rules": [],
         }
         ontology.update(overrides.get("ontology_extras", {}))
-        proj.ontology = ontology
-        proj.generated_owl = overrides.get("owl", "")
-        proj.swrl_rules = ontology.get("swrl_rules", [])
-        proj.info = {"name": "test_graph"}
-        proj.current_version = "1"
-        return proj
+        domain.ontology = ontology
+        domain.generated_owl = overrides.get("owl", "")
+        domain.swrl_rules = ontology.get("swrl_rules", [])
+        domain.info = {"name": "test_graph"}
+        domain.current_version = "1"
+        return domain
 
     def test_decision_tables_skipped_when_empty(self):
-        svc = ReasoningService(self._project_session())
+        svc = ReasoningService(self._domain_session())
         result = svc.run_decision_tables()
         assert result.stats.get("skipped") is True
 
     def test_sparql_rules_skipped_when_empty(self):
-        svc = ReasoningService(self._project_session())
+        svc = ReasoningService(self._domain_session())
         result = svc.run_sparql_rules()
         assert result.stats.get("skipped") is True
 
     def test_aggregate_rules_skipped_when_empty(self):
-        svc = ReasoningService(self._project_session())
+        svc = ReasoningService(self._domain_session())
         result = svc.run_aggregate_rules()
         assert result.stats.get("skipped") is True
 
     def test_decision_tables_skipped_no_store(self):
-        proj = self._project_session(
+        domain = self._domain_session(
             ontology_extras={
                 "decision_tables": [{"id": "dt1", "name": "Test", "rows": [{}]}],
             },
         )
-        svc = ReasoningService(proj, triplestore_backend=None)
+        svc = ReasoningService(domain, triplestore_backend=None)
         result = svc.run_decision_tables()
         assert result.stats.get("skipped") is True
 
     def test_full_reasoning_new_phases_disabled_by_default(self):
-        proj = self._project_session()
-        svc = ReasoningService(proj)
+        domain = self._domain_session()
+        svc = ReasoningService(domain)
         result = svc.run_full_reasoning({"tbox": False, "swrl": False, "graph": False})
         assert result.stats.get("decision_tables_skipped") is True
         assert result.stats.get("sparql_rules_skipped") is True
         assert result.stats.get("aggregate_rules_skipped") is True
 
     def test_full_reasoning_enables_new_phases(self):
-        proj = self._project_session()
-        svc = ReasoningService(proj)
+        domain = self._domain_session()
+        svc = ReasoningService(domain)
         result = svc.run_full_reasoning({
             "tbox": False, "swrl": False, "graph": False,
             "constraints": False,

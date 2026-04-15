@@ -368,7 +368,7 @@ function saveDesignLayoutBeacon() {
             [JSON.stringify(cleanedDesign)],
             { type: 'application/json' }
         );
-        navigator.sendBeacon('/project/design-views/save-current', blob);
+        navigator.sendBeacon('/domain/design-views/save-current', blob);
         layoutDirty = false;
         console.log('[BEACON] Layout saved via sendBeacon');
     } catch (error) {
@@ -495,7 +495,7 @@ async function syncDesignToOntology(showFeedback = false) {
         // Save to session (await to ensure it completes)
         await saveOntologyToSession(showFeedback);
         
-        // Also save the design layout for project persistence
+        // Also save the design layout for domain persistence
         await saveDesignLayout(design);
         
         // Regenerate OWL content to reflect changes
@@ -532,7 +532,7 @@ async function saveDesignLayout(design) {
             visibility: design.visibility
         };
         
-        await fetch('/project/design-views/save-current', {
+        await fetch('/domain/design-views/save-current', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(cleanedDesign),
@@ -579,7 +579,7 @@ async function initViewManagement() {
  */
 async function refreshViewList() {
     try {
-        const response = await fetch('/project/design-views', { credentials: 'same-origin' });
+        const response = await fetch('/domain/design-views', { credentials: 'same-origin' });
         const data = await response.json();
         
         if (data.success) {
@@ -599,14 +599,19 @@ async function refreshViewList() {
             }
             currentDesignView = hasViews ? data.current_view : null;
             
-            // Update delete/rename button state
+            // Update delete/rename/create button state
             const deleteBtn = document.getElementById('deleteViewBtn');
             const renameBtn = document.getElementById('renameViewBtn');
-            if (deleteBtn) {
-                deleteBtn.disabled = !hasViews || data.views.length <= 1;
-            }
-            if (renameBtn) {
-                renameBtn.disabled = !hasViews;
+            const createBtn = document.getElementById('createViewBtn');
+            const createGroupBtn = document.getElementById('createGroupFromViewBtn');
+            if (window.isActiveVersion === false) {
+                if (deleteBtn) deleteBtn.disabled = true;
+                if (renameBtn) renameBtn.disabled = true;
+                if (createBtn) createBtn.disabled = true;
+                if (createGroupBtn) createGroupBtn.disabled = true;
+            } else {
+                if (deleteBtn) deleteBtn.disabled = !hasViews || data.views.length <= 1;
+                if (renameBtn) renameBtn.disabled = !hasViews;
             }
             
             // Show/hide empty state
@@ -630,7 +635,7 @@ async function switchToView(viewName) {
     await flushDesignLayout();
     
     try {
-        const response = await fetch('/project/design-views/switch', {
+        const response = await fetch('/domain/design-views/switch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: viewName }),
@@ -796,6 +801,7 @@ async function loadFromOntologyFresh() {
  * Show create view dialog
  */
 function showCreateViewDialog() {
+    if (window.isActiveVersion === false) return;
     const existingModal = document.getElementById('createViewModal');
     if (existingModal) existingModal.remove();
     
@@ -847,7 +853,7 @@ function showCreateViewDialog() {
         }
         
         try {
-            const response = await fetch('/project/design-views/create', {
+            const response = await fetch('/domain/design-views/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, copy_from: copyFrom }),
@@ -887,6 +893,7 @@ function showCreateViewDialog() {
  * Show rename view dialog
  */
 function showRenameViewDialog() {
+    if (window.isActiveVersion === false) return;
     const existingModal = document.getElementById('renameViewModal');
     if (existingModal) existingModal.remove();
     
@@ -929,7 +936,7 @@ function showRenameViewDialog() {
         }
         
         try {
-            const response = await fetch('/project/design-views/rename', {
+            const response = await fetch('/domain/design-views/rename', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ old_name: currentDesignView, new_name: newName }),
@@ -958,6 +965,7 @@ function showRenameViewDialog() {
  * Show delete view dialog
  */
 function showDeleteViewDialog() {
+    if (window.isActiveVersion === false) return;
     const existingModal = document.getElementById('deleteViewModal');
     if (existingModal) existingModal.remove();
     
@@ -987,7 +995,7 @@ function showDeleteViewDialog() {
     
     document.getElementById('confirmDeleteView').addEventListener('click', async () => {
         try {
-            const response = await fetch('/project/design-views/delete', {
+            const response = await fetch('/domain/design-views/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: currentDesignView }),
@@ -1022,7 +1030,7 @@ document.addEventListener('DOMContentLoaded', initViewManagement);
  */
 async function loadDesignLayoutFromProject() {
     try {
-        const response = await fetch('/project/design-views/current', { credentials: 'same-origin' });
+        const response = await fetch('/domain/design-views/current', { credentials: 'same-origin' });
         const data = await response.json();
         
         // Update current view name
@@ -1085,7 +1093,7 @@ async function loadOntologyIntoDesigner(showAlert = true) {
     isLoadingData = true;
     console.log('[LOAD] Starting data load - auto-save disabled');
     
-    // First, try to load from saved design layout (project persistence)
+    // First, try to load from saved design layout (domain persistence)
     const savedLayout = await loadDesignLayoutFromProject();
     
     // If we have a saved layout AND ontology data, merge them
@@ -1458,4 +1466,113 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         isLoadingData = false;
         return false;
     }
+}
+
+/**
+ * Create a Knowledge Graph group from the current business view's entities.
+ */
+function createGroupFromView() {
+    if (window.isActiveVersion === false) return;
+    if (!ontologyDesigner) {
+        showNotification('No view is loaded.', 'warning');
+        return;
+    }
+
+    const design = ontologyDesigner.toJSON();
+    const entities = design.entities || [];
+    if (entities.length === 0) {
+        showNotification('This view has no entities to group.', 'warning');
+        return;
+    }
+
+    const memberNames = entities.map(e => e.name).filter(Boolean);
+    const viewName = currentDesignView || 'default';
+    const defaultGroupName = viewName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+
+    const existingModal = document.getElementById('createGroupFromViewModal');
+    if (existingModal) existingModal.remove();
+
+    const entityListHtml = memberNames.map(
+        n => '<span class="badge bg-secondary me-1 mb-1">' + n + '</span>'
+    ).join('');
+
+    const modalHtml = `
+        <div class="modal fade" id="createGroupFromViewModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-collection me-2"></i>Create Group from View</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Group Name</label>
+                            <input type="text" class="form-control" id="groupFromViewName"
+                                   value="${defaultGroupName}" placeholder="URI-safe identifier">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Label</label>
+                            <input type="text" class="form-control" id="groupFromViewLabel"
+                                   value="${viewName}" placeholder="Display label">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Color</label>
+                            <input type="color" class="form-control form-control-color" id="groupFromViewColor" value="#4A90D9">
+                        </div>
+                        <div>
+                            <label class="form-label">Members (${memberNames.length} entities from this view)</label>
+                            <div class="border rounded p-2" style="max-height:180px;overflow-y:auto;">
+                                ${entityListHtml}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-warning" id="confirmCreateGroupFromView">
+                            <i class="bi bi-collection me-1"></i>Create Group
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('createGroupFromViewModal'));
+
+    document.getElementById('confirmCreateGroupFromView').addEventListener('click', async () => {
+        const name = document.getElementById('groupFromViewName').value.trim();
+        const label = document.getElementById('groupFromViewLabel').value.trim();
+        const color = document.getElementById('groupFromViewColor').value;
+
+        if (!name) {
+            showNotification('Group name is required.', 'warning');
+            return;
+        }
+
+        try {
+            const response = await fetch('/ontology/groups/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    group: { name, label: label || name, description: 'Created from business view: ' + viewName, color, icon: '', members: memberNames },
+                    index: -1
+                }),
+                credentials: 'same-origin'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                modal.hide();
+                showNotification('Group "' + name + '" created with ' + memberNames.length + ' members.', 'success', 4000);
+            } else {
+                showNotification(data.message || 'Failed to create group.', 'error');
+            }
+        } catch (err) {
+            console.error('[Design] create group error:', err);
+            showNotification('Error creating group: ' + err.message, 'error');
+        }
+    });
+
+    modal.show();
+    document.getElementById('groupFromViewName').select();
 }

@@ -237,7 +237,7 @@ Alternatively, use the traditional form interface:
 1. Click **Manual** in the sidebar for advanced mapping options
 
 #### R2RML Output
-1. Navigate to **Project** → **Export**
+1. Navigate to **Domain** → **Export**
 2. View the auto-generated R2RML mapping
 3. Copy or download as needed
 
@@ -352,7 +352,7 @@ rm -rf .venv
 ### Sync or Knowledge Graph Fails
 
 - Ensure both Ontology and Mapping have green checkmarks in the navbar
-- Check that the R2RML mapping is generated (visible in Project → Export)
+- Check that the R2RML mapping is generated (visible in Domain → Export)
 - Verify the SQL Warehouse is running and accessible
 - Check browser console for any errors
 
@@ -402,9 +402,9 @@ OntoBricks uses environment variables for configuration, making it easy to deplo
 | `SECRET_KEY` | Secret key for session encryption | Random (dev only) |
 | `DATABRICKS_APP_PORT` | Port the application listens on | `8000` |
 | `REGISTRY_VOLUME_PATH` | Full volume path injected by the Databricks App `volume` resource (`/Volumes/<catalog>/<schema>/<volume>`). When set, overrides the three `REGISTRY_*` variables below. | *(from volume resource)* |
-| `REGISTRY_CATALOG` | Unity Catalog catalog for the project registry (local dev fallback) | *(from session or Settings)* |
-| `REGISTRY_SCHEMA` | Schema for the project registry (local dev fallback) | *(from session or Settings)* |
-| `REGISTRY_VOLUME` | Volume name for project storage (local dev fallback) | `OntoBricksRegistry` |
+| `REGISTRY_CATALOG` | Unity Catalog catalog for the domain registry (local dev fallback) | *(from session or Settings)* |
+| `REGISTRY_SCHEMA` | Schema for the domain registry (local dev fallback) | *(from session or Settings)* |
+| `REGISTRY_VOLUME` | Volume name for domain storage (local dev fallback) | `OntoBricksRegistry` |
 | `DATABRICKS_TRIPLESTORE_TABLE` | Default triple store table (catalog.schema.table) | *(none)* |
 | `DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT` | Fallback SQL Warehouse ID for MCP/API calls | *(none)* |
 

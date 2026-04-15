@@ -5,7 +5,6 @@
 {% block extra_css %}
 <!-- Settings page specific styles -->
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-api.css') }}?v={{ asset_version }}">
 {% endblock %}
 
 {% block content %}
@@ -17,7 +16,7 @@
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="mb-1"><i class="bi bi-gear me-2"></i>Settings</h4>
-        <p class="text-muted mb-0 small">Configure Databricks connection, project registry and global preferences</p>
+        <p class="text-muted mb-0 small">Configure Databricks connection, permissions, and global preferences</p>
     </div>
     <button type="button" class="btn btn-primary" id="btnSaveAllSettings">
         <i class="bi bi-check-circle me-1"></i> Save
@@ -30,12 +29,6 @@
         <button class="nav-link active" id="tab-databricks" data-bs-toggle="tab" data-bs-target="#pane-databricks"
                 type="button" role="tab" aria-controls="pane-databricks" aria-selected="true">
             <i class="bi bi-database me-1"></i> Databricks
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tab-registry" data-bs-toggle="tab" data-bs-target="#pane-registry"
-                type="button" role="tab" aria-controls="pane-registry" aria-selected="false">
-            <i class="bi bi-archive me-1"></i> Registry
         </button>
     </li>
     {% if user_role == 'admin' %}
@@ -53,21 +46,9 @@
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tab-schedule" data-bs-toggle="tab" data-bs-target="#pane-schedule"
-                type="button" role="tab" aria-controls="pane-schedule" aria-selected="false">
-            <i class="bi bi-clock-history me-1"></i> Schedule
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-global" data-bs-toggle="tab" data-bs-target="#pane-global"
                 type="button" role="tab" aria-controls="pane-global" aria-selected="false">
             <i class="bi bi-sliders me-1"></i> Global
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tab-api" data-bs-toggle="tab" data-bs-target="#pane-api"
-                type="button" role="tab" aria-controls="pane-api" aria-selected="false">
-            <i class="bi bi-braces me-1"></i> API
         </button>
     </li>
 </ul>
@@ -127,93 +108,12 @@
                 </div>
             </div>
 
-            <!-- ==================== REGISTRY TAB ==================== -->
-            <div class="tab-pane fade" id="pane-registry" role="tabpanel" aria-labelledby="tab-registry">
-                <p class="text-muted small mb-3">All projects are stored in a single Unity Catalog Volume (the registry).</p>
-
-                <!-- Registry location label + change button -->
-                <div class="d-flex align-items-center gap-3 mb-3">
-                    <div>
-                        <label class="form-label fw-semibold small mb-1">Registry Location</label>
-                        <div class="d-flex align-items-center gap-2">
-                            <span id="registryLocationLabel" class="font-monospace bg-light px-3 py-2 rounded border">
-                                <i class="bi bi-hourglass-split text-muted"></i> <span class="text-muted">Loading...</span>
-                            </span>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnChangeRegistry" title="Change registry location">
-                                <i class="bi bi-pencil me-1"></i> Change
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-success" id="btnInitRegistry" style="display:none;" title="Create volume and /projects folder">
-                                <i class="bi bi-plus-circle me-1"></i> Initialize
-                            </button>
-                        </div>
-                        <small class="text-muted d-block mt-1" id="registryHelp"></small>
-                    </div>
-                </div>
-
-                <div id="registryStatus" class="mb-3" style="display:none;"></div>
-
-                <hr>
-
-                <!-- Registry Projects List -->
-                <div id="registryProjectsSection" style="display:none;">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0"><i class="bi bi-folder2-open me-1"></i> Projects in Registry</h6>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshProjects" title="Refresh project list">
-                            <i class="bi bi-arrow-clockwise"></i>
-                        </button>
-                    </div>
-                    <div id="registryProjectsList">
-                        <div class="text-center text-muted small py-3">
-                            <i class="bi bi-hourglass-split"></i> Loading projects...
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Registry Change Modal -->
-            <div class="modal fade" id="registryChangeModal" tabindex="-1" aria-labelledby="registryChangeModalLabel" aria-hidden="true">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h6 class="modal-title" id="registryChangeModalLabel">
-                                <i class="bi bi-archive me-2"></i>Change Registry Location
-                            </h6>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold small mb-1">Catalog</label>
-                                <select class="form-select form-select-sm" id="registryCatalog">
-                                    <option value="">Loading catalogs...</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold small mb-1">Schema</label>
-                                <select class="form-select form-select-sm" id="registrySchema" disabled>
-                                    <option value="">Select catalog first</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold small mb-1">Volume</label>
-                                <input type="text" class="form-control form-control-sm" id="registryVolume" value="OntoBricksRegistry" placeholder="OntoBricksRegistry">
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="button" class="btn btn-sm btn-primary" id="btnApplyRegistry">
-                                <i class="bi bi-check-circle me-1"></i> Apply
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {% if user_role == 'admin' %}
             <!-- ==================== PERMISSIONS TAB ==================== -->
             <div class="tab-pane fade" id="pane-permissions" role="tabpanel" aria-labelledby="tab-permissions">
                 <p class="text-muted small mb-3">
                     Manage who can access OntoBricks and what they can do.
-                    <strong>Viewers</strong> have read-only access; <strong>Editors</strong> can create and modify projects.
+                    <strong>Viewers</strong> have read-only access; <strong>Editors</strong> can create and modify domains.
                 </p>
 
                 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -296,7 +196,7 @@
             <div class="tab-pane fade" id="pane-ladybugdb" role="tabpanel" aria-labelledby="tab-ladybugdb">
                 <p class="text-muted small mb-3">
                     Local LadybugDB graph files stored in <code>/tmp/ontobricks</code>.
-                    These files are automatically synced to the registry Volume when saving a project.
+                    These files are automatically synced to the registry Volume when saving a domain.
                 </p>
 
                 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -313,119 +213,6 @@
                 </div>
             </div>
 
-            <!-- ==================== SCHEDULE TAB ==================== -->
-            <div class="tab-pane fade" id="pane-schedule" role="tabpanel" aria-labelledby="tab-schedule">
-                <p class="text-muted small mb-3">
-                    Schedule automatic Digital Twin builds per project.
-                    Builds run in the background, creating the View and populating the Graph.
-                </p>
-
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0"><i class="bi bi-clock-history me-1"></i> Scheduled Builds</h6>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshSchedules" title="Refresh">
-                            <i class="bi bi-arrow-clockwise"></i>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-primary" id="btnAddSchedule">
-                            <i class="bi bi-plus-lg me-1"></i> Add Schedule
-                        </button>
-                    </div>
-                </div>
-
-                <div id="schedulesTableContainer">
-                    <div class="text-center text-muted small py-4">
-                        <span class="spinner-border spinner-border-sm me-1"></span> Loading schedules...
-                    </div>
-                </div>
-            </div>
-
-            <!-- Add / Edit Schedule Modal -->
-            <div class="modal fade" id="scheduleModal" tabindex="-1" aria-labelledby="scheduleModalLabel" aria-hidden="true">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h6 class="modal-title" id="scheduleModalLabel">
-                                <i class="bi bi-clock-history me-2"></i>Schedule Build
-                            </h6>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold small mb-1">Project</label>
-                                <select class="form-select form-select-sm" id="scheduleProject">
-                                    <option value="">Loading projects...</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold small mb-1">Version</label>
-                                <select class="form-select form-select-sm" id="scheduleVersion">
-                                    <option value="latest">Latest</option>
-                                </select>
-                                <small class="text-muted">Choose a specific version or <em>Latest</em> to always build the newest</small>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold small mb-1">Frequency</label>
-                                <div class="input-group input-group-sm">
-                                    <span class="input-group-text">Every</span>
-                                    <input type="number" class="form-control" id="scheduleIntervalValue" min="1" max="999" value="1">
-                                    <select class="form-select" id="scheduleIntervalUnit" style="max-width: 120px;">
-                                        <option value="minutes">minute(s)</option>
-                                        <option value="hours" selected>hour(s)</option>
-                                        <option value="days">day(s)</option>
-                                    </select>
-                                </div>
-                                <small class="text-muted">Minimum interval is 10 minutes</small>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold small mb-1">Build Mode</label>
-                                <select class="form-select form-select-sm" id="scheduleBuildMode">
-                                    <option value="full">Full Refresh</option>
-                                    <option value="incremental">Incremental</option>
-                                </select>
-                                <small class="text-muted">
-                                    <strong>Full Refresh</strong> drops and rebuilds the entire graph.
-                                    <strong>Incremental</strong> computes a diff and applies only additions/removals.
-                                </small>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="scheduleEnabled" checked>
-                                <label class="form-check-label small" for="scheduleEnabled">
-                                    Enabled
-                                </label>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="button" class="btn btn-sm btn-primary" id="btnApplySchedule">
-                                <i class="bi bi-check-circle me-1"></i> Save
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Schedule History Modal -->
-            <div class="modal fade" id="scheduleHistoryModal" tabindex="-1" aria-labelledby="scheduleHistoryModalLabel" aria-hidden="true">
-                <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h6 class="modal-title" id="scheduleHistoryModalLabel">
-                                <i class="bi bi-clock-history me-2"></i>Run History
-                            </h6>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body p-0" id="scheduleHistoryBody">
-                            <div class="text-center text-muted small py-4">
-                                <span class="spinner-border spinner-border-sm me-1"></span> Loading history...
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- ==================== GLOBAL TAB ==================== -->
             <div class="tab-pane fade" id="pane-global" role="tabpanel" aria-labelledby="tab-global">
                 <div class="mb-4">
@@ -438,7 +225,7 @@
                     <input type="text" class="form-control" id="baseUriDefault"
                            placeholder="https://databricks-ontology.com" value="https://databricks-ontology.com">
                     <small class="text-muted">
-                        <i class="bi bi-info-circle"></i> This domain is used as the default Base URI when creating new projects. Stored globally for all users.
+                        <i class="bi bi-info-circle"></i> This domain is used as the default Base URI when creating new domains. Stored globally for all users.
                     </small>
                 </div>
 
@@ -457,26 +244,28 @@
                     </div>
                     <small class="text-muted">Default icon used for new classes in the ontology. Stored globally for all users.</small>
 
-                    <div id="defaultEmojiPickerContainer" class="hidden-initial mt-2">
-                        <div class="card border-primary">
-                            <div class="card-header py-2 bg-light">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <small class="fw-bold">Select Default Icon</small>
-                                    <button type="button" class="btn-close btn-sm" id="closeDefaultEmojiPicker"></button>
-                                </div>
-                            </div>
-                            <div class="card-body p-2">
-                                <div id="defaultEmojiGrid" class="emoji-picker-grid emoji-grid-container"></div>
-                            </div>
-                        </div>
-                    </div>
+                    <div id="defaultEmojiPickerMount"></div>
+                </div>
+
+                <div class="mb-4">
+                    <label for="registryCacheTtl" class="form-label fw-semibold">
+                        Registry Cache TTL (seconds)
+                        <span class="badge bg-warning-subtle text-warning-emphasis border ms-2" style="font-size:0.65rem;">
+                            <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
+                        </span>
+                    </label>
+                    <input type="number" class="form-control" id="registryCacheTtl"
+                           min="10" step="10" value="300" style="max-width:200px;">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i> How long the registry domain list is cached before refreshing from Databricks (minimum 10s).
+                    </small>
                 </div>
 
                 <hr>
 
                 <div class="mb-0">
                     <label class="form-label fw-semibold"><i class="bi bi-code-square me-1"></i> API Documentation</label>
-                    <p class="small text-muted mb-2">External API: REST <code>/api/v1/*</code>, projects <code>/api/v1/projects</code> and <code>/api/v1/project/*</code> (versions, design status, OWL, R2RML, Spark SQL), Digital Twin <code>/api/v1/digitaltwin/*</code>, GraphQL <code>/api/v1/graphql/*</code>. In-app GraphQL also lives under <code>/graphql</code>. Other JSON routes are documented under <a href="/docs" target="_blank">/docs</a>.</p>
+                    <p class="small text-muted mb-2">External API: REST <code>/api/v1/*</code>, domains <code>/api/v1/domains</code> and <code>/api/v1/domain/*</code> (versions, design status, OWL, R2RML, Spark SQL), Digital Twin <code>/api/v1/digitaltwin/*</code>, GraphQL <code>/api/v1/graphql/*</code>. In-app GraphQL also lives under <code>/graphql</code>. Other JSON routes are documented under <a href="/docs" target="_blank">/docs</a>.</p>
                     <div class="d-flex gap-2 flex-wrap">
                         <a href="/api/docs" target="_blank" class="btn btn-sm btn-outline-primary">
                             <i class="bi bi-file-earmark-code me-1"></i> Swagger UI
@@ -486,11 +275,6 @@
                         </a>
                     </div>
                 </div>
-            </div>
-
-            <!-- ==================== API TAB ==================== -->
-            <div class="tab-pane fade" id="pane-api" role="tabpanel" aria-labelledby="tab-api">
-                {% include "partials/dtwin/_query_api.html" %}
             </div>
 
         </div>
@@ -506,8 +290,6 @@
 {% block extra_js %}
 <!-- Settings page JavaScript (extracted from template) -->
 <script src="{{ url_for('static', filename='config/js/settings.js') }}?v={{ asset_version }}"></script>
-<script src="{{ url_for('static', filename='config/js/schedule.js') }}?v={{ asset_version }}"></script>
-<script src="{{ url_for('static', filename='query/js/query-api.js') }}?v={{ asset_version }}"></script>
 {% if user_role == 'admin' %}
 <script src="{{ url_for('static', filename='config/js/permissions.js') }}?v={{ asset_version }}"></script>
 {% endif %}

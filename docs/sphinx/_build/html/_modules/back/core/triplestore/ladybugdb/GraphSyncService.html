@@ -112,9 +112,12 @@
 <span class="sd">The graph database (``/tmp/ontobricks/&lt;name&gt;.lbug`` — may be a single file</span>
 <span class="sd">or a directory depending on the LadybugDB version) is archived into a</span>
 <span class="sd">``tar.gz`` and transferred via the UC Files API.  The archive is stored</span>
-<span class="sd">alongside the project version files in the registry:</span>
+<span class="sd">alongside the domain version files in the registry:</span>
 
-<span class="sd">    /Volumes/{cat}/{sch}/{vol}/projects/{folder}/ontobricks_{name}.lbug.tar.gz</span>
+<span class="sd">    /Volumes/{cat}/{sch}/{vol}/domains/{folder}/ontobricks_{name}.lbug.tar.gz</span>
+
+<span class="sd">Legacy registries may still use ``projects/`` instead of ``domains/``;</span>
+<span class="sd">the path is resolved by :class:`RegistryService` at I/O time.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">io</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
@@ -163,15 +166,15 @@
 
 <div class="viewcode-block" id="GraphSyncService.volume_path">
 <a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.volume_path">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">volume_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">uc_project_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">volume_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">uc_domain_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Build the archive path inside the registry Volume.&quot;&quot;&quot;</span>
         <span class="n">safe</span> <span class="o">=</span> <span class="n">GraphSyncService</span><span class="o">.</span><span class="n">sanitize_db_name</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_db_name</span><span class="p">)</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">uc_project_path</span><span class="si">}</span><span class="s2">/ontobricks_</span><span class="si">{</span><span class="n">safe</span><span class="si">}</span><span class="s2">.lbug.tar.gz&quot;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">uc_domain_path</span><span class="si">}</span><span class="s2">/ontobricks_</span><span class="si">{</span><span class="n">safe</span><span class="si">}</span><span class="s2">.lbug.tar.gz&quot;</span></div>
 
 
 <div class="viewcode-block" id="GraphSyncService.sync_to_volume">
 <a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.sync_to_volume">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">sync_to_volume</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">uc_project_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">sync_to_volume</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">uc_domain_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Archive the local ``.lbug`` directory and upload it to the registry.&quot;&quot;&quot;</span>
         <span class="n">local_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">local_db_path</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">local_path</span><span class="p">):</span>
@@ -179,7 +182,7 @@
             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">msg</span>
 
-        <span class="n">vol_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume_path</span><span class="p">(</span><span class="n">uc_project_path</span><span class="p">)</span>
+        <span class="n">vol_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume_path</span><span class="p">(</span><span class="n">uc_domain_path</span><span class="p">)</span>
 
         <span class="k">try</span><span class="p">:</span>
             <span class="n">buf</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">()</span>
@@ -205,9 +208,9 @@
 
 <div class="viewcode-block" id="GraphSyncService.sync_from_volume">
 <a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.sync_from_volume">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">sync_from_volume</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">uc_project_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">sync_from_volume</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">uc_domain_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Download the graph archive from the registry and extract locally.&quot;&quot;&quot;</span>
-        <span class="n">vol_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume_path</span><span class="p">(</span><span class="n">uc_project_path</span><span class="p">)</span>
+        <span class="n">vol_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume_path</span><span class="p">(</span><span class="n">uc_domain_path</span><span class="p">)</span>
 
         <span class="n">ok</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">read_binary_file</span><span class="p">(</span><span class="n">vol_path</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
@@ -216,7 +219,7 @@
                     <span class="s2">&quot;No graph archive in registry yet (</span><span class="si">%s</span><span class="s2">) — nothing to restore&quot;</span><span class="p">,</span>
                     <span class="n">vol_path</span><span class="p">,</span>
                 <span class="p">)</span>
-                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;No graph archive in registry (new project)&quot;</span>
+                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;No graph archive in registry (new domain)&quot;</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Failed to download graph archive: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">msg</span>
 
@@ -266,10 +269,10 @@
 <div class="viewcode-block" id="GraphSyncService.volume_archive_path">
 <a class="viewcode-back" href="../../../../../api/app.core.triplestore.html#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.volume_archive_path">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">volume_archive_path</span><span class="p">(</span><span class="n">uc_project_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">db_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">volume_archive_path</span><span class="p">(</span><span class="n">uc_domain_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">db_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Build the archive path inside the registry Volume.&quot;&quot;&quot;</span>
         <span class="n">safe</span> <span class="o">=</span> <span class="n">GraphSyncService</span><span class="o">.</span><span class="n">sanitize_db_name</span><span class="p">(</span><span class="n">db_name</span><span class="p">)</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">uc_project_path</span><span class="si">}</span><span class="s2">/ontobricks_</span><span class="si">{</span><span class="n">safe</span><span class="si">}</span><span class="s2">.lbug.tar.gz&quot;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">uc_domain_path</span><span class="si">}</span><span class="s2">/ontobricks_</span><span class="si">{</span><span class="n">safe</span><span class="si">}</span><span class="s2">.lbug.tar.gz&quot;</span></div>
 
 
 <div class="viewcode-block" id="GraphSyncService.upload_to_volume">
@@ -277,12 +280,12 @@
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">upload_to_volume</span><span class="p">(</span>
         <span class="n">uc_service</span><span class="p">,</span>
-        <span class="n">uc_project_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">uc_domain_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">db_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">local_base</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;/tmp/ontobricks&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
         <span class="k">return</span> <span class="n">GraphSyncService</span><span class="p">(</span><span class="n">uc_service</span><span class="p">,</span> <span class="n">db_name</span><span class="p">,</span> <span class="n">local_base</span><span class="p">)</span><span class="o">.</span><span class="n">sync_to_volume</span><span class="p">(</span>
-            <span class="n">uc_project_path</span><span class="p">,</span>
+            <span class="n">uc_domain_path</span><span class="p">,</span>
         <span class="p">)</span></div>
 
 
@@ -291,12 +294,12 @@
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">download_from_volume</span><span class="p">(</span>
         <span class="n">uc_service</span><span class="p">,</span>
-        <span class="n">uc_project_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">uc_domain_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">db_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">local_base</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;/tmp/ontobricks&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
         <span class="k">return</span> <span class="n">GraphSyncService</span><span class="p">(</span><span class="n">uc_service</span><span class="p">,</span> <span class="n">db_name</span><span class="p">,</span> <span class="n">local_base</span><span class="p">)</span><span class="o">.</span><span class="n">sync_from_volume</span><span class="p">(</span>
-            <span class="n">uc_project_path</span><span class="p">,</span>
+            <span class="n">uc_domain_path</span><span class="p">,</span>
         <span class="p">)</span></div>
 </div>
 

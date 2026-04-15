@@ -13,13 +13,13 @@
     <div class="card-body">
         <div class="mb-3">
             <label for="ontologyName" class="form-label">Ontology Name <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="ontologyName" value="MyOntology" required>
-            <small class="text-muted">The ontology name will be used in the URI</small>
+            <input type="text" class="form-control" id="ontologyName" value="MyOntology" readonly disabled style="background-color: #e9ecef;">
+            <small class="text-muted"><i class="bi bi-info-circle"></i> Derived from the <a href="/domain/">Domain Name</a> (lowercase). Change it in Domain Information.</small>
         </div>
         <div class="mb-3">
             <label for="baseUri" class="form-label">Base URI</label>
             <input type="text" class="form-control" id="baseUri" value="" readonly disabled style="background-color: #e9ecef;">
-            <small class="text-muted"><i class="bi bi-info-circle"></i> Managed in <a href="/project/">Project Information</a>. This URI is the namespace for all ontology entities.</small>
+            <small class="text-muted"><i class="bi bi-info-circle"></i> Managed in <a href="/domain/">Domain Information</a>. This URI is the namespace for all ontology entities.</small>
         </div>
         
         <!-- Validation Status (auto-updated) -->
@@ -27,6 +27,6 @@
             <span class="badge bg-secondary"><i class="bi bi-hourglass-split"></i> Checking...</span>
         </div>
         
-        <p class="text-muted small mt-3">Use <a href="/project/?section=import">Project &gt; Import</a> to load OWL/RDFS ontologies.</p>
+        <p class="text-muted small mt-3">Use <a href="/domain/?section=import">Domain &gt; Import</a> to load OWL/RDFS ontologies.</p>
     </div>
 </div>

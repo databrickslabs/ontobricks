@@ -72,8 +72,8 @@ EXTERNAL_OPENAPI_TAGS: List[Dict[str, str]] = [
         "Authentication via request body or headers.",
     },
     {
-        "name": "Project",
-        "description": "**Project API** — Registry project list and project design artifacts "
+        "name": "Domain",
+        "description": "**Domain API** — Registry domain list and domain design artifacts "
         "(OWL ontology, R2RML, generated Spark SQL).",
     },
     {
@@ -83,7 +83,7 @@ EXTERNAL_OPENAPI_TAGS: List[Dict[str, str]] = [
     },
     {
         "name": "GraphQL",
-        "description": "**GraphQL API** — List projects, GraphiQL playground, execute queries, and SDL "
+        "description": "**GraphQL API** — List domains, GraphiQL playground, execute queries, and SDL "
         "for the auto-generated ontology-backed schema.",
     },
 ]

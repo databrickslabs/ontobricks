@@ -156,7 +156,7 @@ class TestParseOwl:
 <http://test.org/ontology> a owl:Ontology ; rdfs:label "Test" .
 :Foo a owl:Class ; rdfs:label "Foo" .
 """
-        info, classes, props, constraints, swrl, axioms, expressions = Ontology.parse_owl(owl)
+        info, classes, props, constraints, swrl, axioms, expressions, groups = Ontology.parse_owl(owl)
         assert info['label'] == 'Test'
         assert len(classes) == 1
         assert classes[0]['name'] == 'Foo'
@@ -208,9 +208,9 @@ class TestNormalizePropertyDomainRange:
 
 class TestPruneMappingsToOntologyUris:
     def test_removes_stale_entity_and_rel_mappings(
-        self, project_session, sample_ontology_config, sample_mapping_config
+        self, domain_session, sample_ontology_config, sample_mapping_config
     ):
-        ps = project_session
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         ps._data["assignment"]["entities"] = copy.deepcopy(sample_mapping_config["entities"])
         ps._data["assignment"]["relationships"] = copy.deepcopy(
@@ -228,9 +228,9 @@ class TestPruneMappingsToOntologyUris:
 
 class TestSaveOntologyConfigFromEditor:
     def test_save_and_prune_orphans(
-        self, project_session, sample_ontology_config, sample_mapping_config
+        self, domain_session, sample_ontology_config, sample_mapping_config
     ):
-        ps = project_session
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         ps._data["assignment"]["entities"] = copy.deepcopy(sample_mapping_config["entities"])
         ps._data["assignment"]["relationships"] = copy.deepcopy(
@@ -246,9 +246,9 @@ class TestSaveOntologyConfigFromEditor:
 
 class TestDeleteClassAndPropertyByUri:
     def test_delete_class_cascades_entity_mapping(
-        self, project_session, sample_ontology_config, sample_mapping_config
+        self, domain_session, sample_ontology_config, sample_mapping_config
     ):
-        ps = project_session
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         ps._data["assignment"]["entities"] = copy.deepcopy(sample_mapping_config["entities"])
         r = Ontology(ps).delete_class_by_uri("http://test.org/ontology#Customer")
@@ -256,13 +256,13 @@ class TestDeleteClassAndPropertyByUri:
         assert r["mapping_removed"] is True
         assert len(ps.get_classes()) == 1
 
-    def test_delete_class_missing_uri(self, project_session):
-        assert Ontology(project_session).delete_class_by_uri(None)["success"] is False
+    def test_delete_class_missing_uri(self, domain_session):
+        assert Ontology(domain_session).delete_class_by_uri(None)["success"] is False
 
     def test_delete_property_cascades_rel_mapping(
-        self, project_session, sample_ontology_config, sample_mapping_config
+        self, domain_session, sample_ontology_config, sample_mapping_config
     ):
-        ps = project_session
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         ps._data["assignment"]["relationships"] = copy.deepcopy(
             sample_mapping_config["relationships"]
@@ -272,53 +272,53 @@ class TestDeleteClassAndPropertyByUri:
         assert r["mapping_removed"] is True
         assert all(p.get("uri") != "http://test.org/ontology#hasOrder" for p in ps.get_properties())
 
-    def test_delete_property_missing_uri(self, project_session):
-        assert Ontology(project_session).delete_property_by_uri("")["success"] is False
+    def test_delete_property_missing_uri(self, domain_session):
+        assert Ontology(domain_session).delete_property_by_uri("")["success"] is False
 
 
 class TestAddUpdateClassProperty:
-    def test_add_class(self, project_session, sample_ontology_config):
-        ps = project_session
+    def test_add_class(self, domain_session, sample_ontology_config):
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         r = Ontology(ps).add_class({"name": "Product", "uri": "http://test.org/ontology#Product"})
         assert r["success"]
         assert r["class"]["name"] == "Product"
         assert len(ps.get_classes()) == 3
 
-    def test_add_class_duplicate(self, project_session, sample_ontology_config):
-        ps = project_session
+    def test_add_class_duplicate(self, domain_session, sample_ontology_config):
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         r = Ontology(ps).add_class({"name": "Customer", "uri": "http://test.org/ontology#Customer"})
         assert r["success"] is False
 
-    def test_update_class(self, project_session, sample_ontology_config):
-        ps = project_session
+    def test_update_class(self, domain_session, sample_ontology_config):
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         r = Ontology(ps).update_class({"uri": "http://test.org/ontology#Customer", "name": "Client"})
         assert r["success"]
         assert r["class"]["name"] == "Client"
 
-    def test_update_class_not_found(self, project_session, sample_ontology_config):
-        ps = project_session
+    def test_update_class_not_found(self, domain_session, sample_ontology_config):
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         r = Ontology(ps).update_class({"uri": "http://test.org/ontology#Missing"})
         assert r["success"] is False
 
-    def test_add_property(self, project_session, sample_ontology_config):
-        ps = project_session
+    def test_add_property(self, domain_session, sample_ontology_config):
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         r = Ontology(ps).add_property({"name": "hasPart", "uri": "http://test.org/ontology#hasPart"})
         assert r["success"]
         assert len(ps.get_properties()) == 2
 
-    def test_add_property_duplicate(self, project_session, sample_ontology_config):
-        ps = project_session
+    def test_add_property_duplicate(self, domain_session, sample_ontology_config):
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         r = Ontology(ps).add_property({"name": "hasOrder", "uri": "http://test.org/ontology#hasOrder"})
         assert r["success"] is False
 
-    def test_update_property(self, project_session, sample_ontology_config):
-        ps = project_session
+    def test_update_property(self, domain_session, sample_ontology_config):
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         r = Ontology(ps).update_property({"uri": "http://test.org/ontology#hasOrder", "name": "placeOrder"})
         assert r["success"]
@@ -326,25 +326,25 @@ class TestAddUpdateClassProperty:
 
 
 class TestIngestOwl:
-    def test_ingest_owl_import(self, project_session, sample_owl_content):
-        r = Ontology(project_session).ingest_owl(sample_owl_content, outcome="import")
+    def test_ingest_owl_import(self, domain_session, sample_owl_content):
+        r = Ontology(domain_session).ingest_owl(sample_owl_content, outcome="import")
         assert r["success"]
         assert r["stats"]["classes"] >= 1
 
-    def test_ingest_owl_parse(self, project_session, sample_owl_content):
-        r = Ontology(project_session).ingest_owl(sample_owl_content, outcome="parse")
+    def test_ingest_owl_parse(self, domain_session, sample_owl_content):
+        r = Ontology(domain_session).ingest_owl(sample_owl_content, outcome="parse")
         assert r["success"]
         assert "ontology" in r
 
-    def test_ingest_owl_load_file(self, project_session, sample_owl_content):
-        r = Ontology(project_session).ingest_owl(
-            sample_owl_content, name_fallback_to_project=False, outcome="load_file",
+    def test_ingest_owl_load_file(self, domain_session, sample_owl_content):
+        r = Ontology(domain_session).ingest_owl(
+            sample_owl_content, name_fallback_to_domain=False, outcome="load_file",
         )
         assert r["success"]
 
 
 class TestApplyParsedRdfs:
-    def test_basic(self, project_session):
+    def test_basic(self, domain_session):
         rdfs = """@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix : <http://example.org/> .
@@ -352,16 +352,16 @@ class TestApplyParsedRdfs:
 <http://example.org/> a owl:Ontology ; rdfs:label "MyVocab" .
 :Foo a owl:Class ; rdfs:label "Foo" .
 """
-        r = Ontology(project_session).apply_parsed_rdfs_to_project(rdfs)
+        r = Ontology(domain_session).apply_parsed_rdfs_to_domain(rdfs)
         assert r["success"]
         assert r["stats"]["classes"] >= 1
 
 
 class TestRenameRelationshipReferences:
     def test_renames_across_mappings_and_constraints(
-        self, project_session, sample_ontology_config, sample_mapping_config
+        self, domain_session, sample_ontology_config, sample_mapping_config
     ):
-        ps = project_session
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         ps._data["ontology"]["constraints"] = [{"property": "hasOrder", "type": "functional"}]
         ps._data["ontology"]["axioms"] = [{"property": "hasOrder", "type": "reflexive"}]
@@ -375,8 +375,8 @@ class TestRenameRelationshipReferences:
 
 
 class TestApplyAgentOntologyChanges:
-    def test_with_prune(self, project_session, sample_ontology_config, sample_mapping_config):
-        ps = project_session
+    def test_with_prune(self, domain_session, sample_ontology_config, sample_mapping_config):
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         ps._data["assignment"]["entities"] = copy.deepcopy(sample_mapping_config["entities"])
         config = Ontology(ps).apply_agent_ontology_changes(
@@ -387,8 +387,8 @@ class TestApplyAgentOntologyChanges:
         assert config["classes"][0]["name"] == "Customer"
         assert len(ps.get_entity_mappings()) == 1
 
-    def test_without_prune(self, project_session, sample_ontology_config, sample_mapping_config):
-        ps = project_session
+    def test_without_prune(self, domain_session, sample_ontology_config, sample_mapping_config):
+        ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         ps._data["assignment"]["entities"] = copy.deepcopy(sample_mapping_config["entities"])
         Ontology(ps).apply_agent_ontology_changes(

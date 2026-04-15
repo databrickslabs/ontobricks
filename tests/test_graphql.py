@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 from back.core.graphql.GraphQLSchemaBuilder import (
     GraphQLSchemaBuilder,
-    build_schema_for_project,
+    build_schema_for_domain,
     invalidate_cache,
     _safe_name,
     _extract_local,
@@ -121,8 +121,8 @@ class TestGraphQLSchemaBuilder:
         h2 = GraphQLSchemaBuilder.ontology_hash(CLASSES, [])
         assert h1 != h2
 
-    def test_build_for_project(self):
-        result = self.builder.build_for_project(CLASSES, PROPERTIES, BASE_URI, "test_builder")
+    def test_build_for_domain(self):
+        result = self.builder.build_for_domain(CLASSES, PROPERTIES, BASE_URI, "test_builder")
         assert result is not None
         schema, metadata = result
         assert schema is not None
@@ -130,27 +130,27 @@ class TestGraphQLSchemaBuilder:
         assert "Order" in metadata.types
 
     def test_empty_classes_returns_none(self):
-        result = self.builder.build_for_project([], PROPERTIES, BASE_URI, "empty_builder")
+        result = self.builder.build_for_domain([], PROPERTIES, BASE_URI, "empty_builder")
         assert result is None
 
     def test_cache_hit(self):
-        self.builder.build_for_project(CLASSES, PROPERTIES, BASE_URI, "cached_builder")
-        result = self.builder.build_for_project(CLASSES, PROPERTIES, BASE_URI, "cached_builder")
+        self.builder.build_for_domain(CLASSES, PROPERTIES, BASE_URI, "cached_builder")
+        result = self.builder.build_for_domain(CLASSES, PROPERTIES, BASE_URI, "cached_builder")
         assert result is not None
 
     def test_cache_invalidation(self):
-        self.builder.build_for_project(CLASSES, PROPERTIES, BASE_URI, "inv_builder")
+        self.builder.build_for_domain(CLASSES, PROPERTIES, BASE_URI, "inv_builder")
         self.builder.invalidate_cache("inv_builder")
         assert "inv_builder" not in self.builder._cache
 
     def test_metadata_has_type_info(self):
-        _, metadata = self.builder.build_for_project(CLASSES, PROPERTIES, BASE_URI, "meta_builder")
+        _, metadata = self.builder.build_for_domain(CLASSES, PROPERTIES, BASE_URI, "meta_builder")
         ti = metadata.types["Customer"]
         assert ti.name == "Customer"
         assert ti.cls_uri == f"{BASE_URI}Customer"
 
     def test_relationship_registered(self):
-        _, metadata = self.builder.build_for_project(CLASSES, PROPERTIES, BASE_URI, "rel_builder")
+        _, metadata = self.builder.build_for_domain(CLASSES, PROPERTIES, BASE_URI, "rel_builder")
         ti = metadata.types["Customer"]
         assert "hasOrder" in ti.relationships
 
@@ -167,7 +167,7 @@ class TestGraphQLSchemaBuilder:
 
 class TestBuildSchema:
     def test_basic_build(self):
-        result = build_schema_for_project(CLASSES, PROPERTIES, BASE_URI, "test_project")
+        result = build_schema_for_domain(CLASSES, PROPERTIES, BASE_URI, "test_domain_graphql")
         assert result is not None
         schema, metadata = result
         assert schema is not None
@@ -175,29 +175,29 @@ class TestBuildSchema:
         assert "Order" in metadata.types
 
     def test_empty_classes_returns_none(self):
-        result = build_schema_for_project([], PROPERTIES, BASE_URI, "empty")
+        result = build_schema_for_domain([], PROPERTIES, BASE_URI, "empty")
         assert result is None
 
     def test_cache_hit(self):
-        build_schema_for_project(CLASSES, PROPERTIES, BASE_URI, "cached_proj")
-        result = build_schema_for_project(CLASSES, PROPERTIES, BASE_URI, "cached_proj")
+        build_schema_for_domain(CLASSES, PROPERTIES, BASE_URI, "cached_domain")
+        result = build_schema_for_domain(CLASSES, PROPERTIES, BASE_URI, "cached_domain")
         assert result is not None
 
     def test_cache_invalidation(self):
-        build_schema_for_project(CLASSES, PROPERTIES, BASE_URI, "inv_proj")
-        invalidate_cache("inv_proj")
-        result = build_schema_for_project(CLASSES, PROPERTIES, BASE_URI, "inv_proj")
+        build_schema_for_domain(CLASSES, PROPERTIES, BASE_URI, "inv_domain")
+        invalidate_cache("inv_domain")
+        result = build_schema_for_domain(CLASSES, PROPERTIES, BASE_URI, "inv_domain")
         assert result is not None
 
     def test_metadata_has_type_info(self):
-        _, metadata = build_schema_for_project(CLASSES, PROPERTIES, BASE_URI, "meta_proj")
+        _, metadata = build_schema_for_domain(CLASSES, PROPERTIES, BASE_URI, "meta_domain")
         ti = metadata.types["Customer"]
         assert ti.name == "Customer"
         assert ti.cls_uri == f"{BASE_URI}Customer"
         assert "firstName" in [GraphQLSchemaBuilder.safe_name(k) for k in ti.predicate_to_field.values()]
 
     def test_relationship_registered(self):
-        _, metadata = build_schema_for_project(CLASSES, PROPERTIES, BASE_URI, "rel_proj")
+        _, metadata = build_schema_for_domain(CLASSES, PROPERTIES, BASE_URI, "rel_domain")
         ti = metadata.types["Customer"]
         assert "hasOrder" in ti.relationships
 

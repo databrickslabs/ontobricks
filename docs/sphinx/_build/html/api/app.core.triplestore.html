@@ -595,7 +595,7 @@ instances, not class or property URIs).</p>
 </section>
 <section id="module-back.core.triplestore.TripleStoreFactory">
 <span id="factory"></span><h2>Factory<a class="headerlink" href="#module-back.core.triplestore.TripleStoreFactory" title="Link to this heading">¶</a></h2>
-<p>Factory for creating triple store backends from project configuration.</p>
+<p>Factory for creating triple store backends from domain session configuration.</p>
 <p>Supports two backend types:
 - <code class="docutils literal notranslate"><span class="pre">&quot;view&quot;</span></code>  – DeltaTripleStore (SQL against a Unity Catalog VIEW via warehouse)
 - <code class="docutils literal notranslate"><span class="pre">&quot;graph&quot;</span></code> – LadybugTripleStore (embedded graph database)</p>
@@ -603,7 +603,7 @@ instances, not class or property URIs).</p>
 <dt class="sig sig-object py" id="back.core.triplestore.TripleStoreFactory.TripleStoreFactory">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.triplestore.TripleStoreFactory.</span></span><span class="sig-name descname"><span class="pre">TripleStoreFactory</span></span><a class="reference internal" href="../_modules/back/core/triplestore/TripleStoreFactory.html#TripleStoreFactory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.TripleStoreFactory.TripleStoreFactory" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
-<p>Construct triple-store backend instances from project configuration.</p>
+<p>Construct triple-store backend instances from domain session configuration.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="back.core.triplestore.TripleStoreFactory.TripleStoreFactory.LADYBUG_AVAILABLE">
 <span class="sig-name descname"><span class="pre">LADYBUG_AVAILABLE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></span><a class="headerlink" href="#back.core.triplestore.TripleStoreFactory.TripleStoreFactory.LADYBUG_AVAILABLE" title="Link to this definition">¶</a></dt>
@@ -611,12 +611,12 @@ instances, not class or property URIs).</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.triplestore.TripleStoreFactory.TripleStoreFactory.create">
-<span class="sig-name descname"><span class="pre">create</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/TripleStoreFactory.html#TripleStoreFactory.create"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.TripleStoreFactory.TripleStoreFactory.create" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">create</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/TripleStoreFactory.html#TripleStoreFactory.create"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.TripleStoreFactory.TripleStoreFactory.create" title="Link to this definition">¶</a></dt>
 <dd><p>Create a triple store backend.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>project</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Project session with info and databricks config.</p></li>
+<li><p><strong>domain</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Domain session with info and databricks config.</p></li>
 <li><p><strong>settings</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>) – Optional application settings (for sql_warehouse_id fallback).</p></li>
 <li><p><strong>backend</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – <code class="docutils literal notranslate"><span class="pre">&quot;view&quot;</span></code> for DeltaTripleStore, <code class="docutils literal notranslate"><span class="pre">&quot;graph&quot;</span></code> for LadybugDB.
 Defaults to <code class="docutils literal notranslate"><span class="pre">&quot;graph&quot;</span></code> when <em>None</em>.</p></li>
@@ -633,12 +633,12 @@ Defaults to <code class="docutils literal notranslate"><span class="pre">&quot;g
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.triplestore.TripleStoreFactory.TripleStoreFactory.get_triplestore">
-<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_triplestore</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/TripleStoreFactory.html#TripleStoreFactory.get_triplestore"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.TripleStoreFactory.TripleStoreFactory.get_triplestore" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_triplestore</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/TripleStoreFactory.html#TripleStoreFactory.get_triplestore"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.TripleStoreFactory.TripleStoreFactory.get_triplestore" title="Link to this definition">¶</a></dt>
 <dd><p>Convenience wrapper using the package singleton factory instance.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>project</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>domain</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>backend</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 </ul>
@@ -706,12 +706,12 @@ when at least one table has a different version (or is new).</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.triplestore.IncrementalBuildService.IncrementalBuildService.snapshot_table_name">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">snapshot_table_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'1'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/IncrementalBuildService.html#IncrementalBuildService.snapshot_table_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.IncrementalBuildService.IncrementalBuildService.snapshot_table_name" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">snapshot_table_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'1'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/IncrementalBuildService.html#IncrementalBuildService.snapshot_table_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.IncrementalBuildService.IncrementalBuildService.snapshot_table_name" title="Link to this definition">¶</a></dt>
 <dd><p>Derive the fully-qualified snapshot table name (versioned).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>project_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>delta_cfg</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
 <li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
@@ -1519,7 +1519,7 @@ instances, not class or property URIs).</p>
 </dd></dl>
 
 <p id="module-back.core.triplestore.ladybugdb.LadybugGraphStore">LadybugDB graph-model triple store backend.</p>
-<p>Uses typed node tables and relationship tables derived from the project
+<p>Uses typed node tables and relationship tables derived from the domain
 ontology.  Falls back to the flat-model base class for operations that
 do not have a graph-specific implementation.</p>
 <dl class="py class">
@@ -2092,10 +2092,12 @@ datatype-property updates.</p>
 <p>The graph database (<code class="docutils literal notranslate"><span class="pre">/tmp/ontobricks/&lt;name&gt;.lbug</span></code> — may be a single file
 or a directory depending on the LadybugDB version) is archived into a
 <code class="docutils literal notranslate"><span class="pre">tar.gz</span></code> and transferred via the UC Files API.  The archive is stored
-alongside the project version files in the registry:</p>
+alongside the domain version files in the registry:</p>
 <blockquote>
-<div><p>/Volumes/{cat}/{sch}/{vol}/projects/{folder}/ontobricks_{name}.lbug.tar.gz</p>
+<div><p>/Volumes/{cat}/{sch}/{vol}/domains/{folder}/ontobricks_{name}.lbug.tar.gz</p>
 </div></blockquote>
+<p>Legacy registries may still use <code class="docutils literal notranslate"><span class="pre">projects/</span></code> instead of <code class="docutils literal notranslate"><span class="pre">domains/</span></code>;
+the path is resolved by <code class="xref py py-class docutils literal notranslate"><span class="pre">RegistryService</span></code> at I/O time.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.triplestore.ladybugdb.GraphSyncService.</span></span><span class="sig-name descname"><span class="pre">GraphSyncService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_service</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_base</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/ontobricks'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/ladybugdb/GraphSyncService.html#GraphSyncService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService" title="Link to this definition">¶</a></dt>
@@ -2133,11 +2135,11 @@ that the previous free functions required on every call.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.volume_path">
-<span class="sig-name descname"><span class="pre">volume_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_project_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/ladybugdb/GraphSyncService.html#GraphSyncService.volume_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.volume_path" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">volume_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_domain_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/ladybugdb/GraphSyncService.html#GraphSyncService.volume_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.volume_path" title="Link to this definition">¶</a></dt>
 <dd><p>Build the archive path inside the registry Volume.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>uc_project_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+<dd class="field-odd"><p><strong>uc_domain_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
@@ -2147,11 +2149,11 @@ that the previous free functions required on every call.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.sync_to_volume">
-<span class="sig-name descname"><span class="pre">sync_to_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_project_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/ladybugdb/GraphSyncService.html#GraphSyncService.sync_to_volume"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.sync_to_volume" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">sync_to_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_domain_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/ladybugdb/GraphSyncService.html#GraphSyncService.sync_to_volume"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.sync_to_volume" title="Link to this definition">¶</a></dt>
 <dd><p>Archive the local <code class="docutils literal notranslate"><span class="pre">.lbug</span></code> directory and upload it to the registry.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>uc_project_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+<dd class="field-odd"><p><strong>uc_domain_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
@@ -2161,11 +2163,11 @@ that the previous free functions required on every call.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.sync_from_volume">
-<span class="sig-name descname"><span class="pre">sync_from_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_project_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/ladybugdb/GraphSyncService.html#GraphSyncService.sync_from_volume"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.sync_from_volume" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">sync_from_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_domain_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/ladybugdb/GraphSyncService.html#GraphSyncService.sync_from_volume"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.sync_from_volume" title="Link to this definition">¶</a></dt>
 <dd><p>Download the graph archive from the registry and extract locally.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>uc_project_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+<dd class="field-odd"><p><strong>uc_domain_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
@@ -2192,12 +2194,12 @@ that the previous free functions required on every call.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.volume_archive_path">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">volume_archive_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_project_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/ladybugdb/GraphSyncService.html#GraphSyncService.volume_archive_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.volume_archive_path" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">volume_archive_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_domain_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/ladybugdb/GraphSyncService.html#GraphSyncService.volume_archive_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.volume_archive_path" title="Link to this definition">¶</a></dt>
 <dd><p>Build the archive path inside the registry Volume.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>uc_project_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>uc_domain_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>db_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
 </dd>
@@ -2209,11 +2211,11 @@ that the previous free functions required on every call.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.upload_to_volume">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">upload_to_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_service</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uc_project_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_base</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/ontobricks'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/ladybugdb/GraphSyncService.html#GraphSyncService.upload_to_volume"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.upload_to_volume" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">upload_to_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_service</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uc_domain_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_base</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/ontobricks'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/ladybugdb/GraphSyncService.html#GraphSyncService.upload_to_volume"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.upload_to_volume" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>uc_project_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>uc_domain_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>db_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>local_base</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
@@ -2226,11 +2228,11 @@ that the previous free functions required on every call.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.download_from_volume">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">download_from_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_service</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uc_project_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_base</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/ontobricks'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/ladybugdb/GraphSyncService.html#GraphSyncService.download_from_volume"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.download_from_volume" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">download_from_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_service</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uc_domain_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_base</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/ontobricks'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/triplestore/ladybugdb/GraphSyncService.html#GraphSyncService.download_from_volume"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.triplestore.ladybugdb.GraphSyncService.GraphSyncService.download_from_volume" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>uc_project_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>uc_domain_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>db_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>local_base</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>

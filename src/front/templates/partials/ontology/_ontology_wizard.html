@@ -4,7 +4,7 @@
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="mb-1"><i class="bi bi-magic me-2"></i>Generate Ontology</h4>
-        <p class="text-muted mb-0 small">Auto-generate an ontology from your project metadata using AI</p>
+        <p class="text-muted mb-0 small">Auto-generate an ontology from your data sources using AI</p>
     </div>
     <button type="button" class="btn btn-sm btn-outline-primary" id="wizardTopGenerateBtn" onclick="generateOntologyFromWizard()">
         <i class="bi bi-magic me-1"></i> Generate Ontology
@@ -16,7 +16,7 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="wizard-tab-metadata" data-bs-toggle="tab" data-bs-target="#wizard-pane-metadata"
                         type="button" role="tab" aria-controls="wizard-pane-metadata" aria-selected="true">
-                    <i class="bi bi-database"></i> Metadata
+                    <i class="bi bi-database"></i> Data Sources
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -42,16 +42,16 @@
         <!-- Tab Content -->
         <div class="tab-content ob-tab-content" id="wizardTabContent">
 
-            <!-- Metadata Tab -->
+            <!-- Data Sources Tab -->
             <div class="tab-pane fade show active" id="wizard-pane-metadata" role="tabpanel" aria-labelledby="wizard-tab-metadata">
-                <h6 class="mb-2"><i class="bi bi-database"></i> Project Metadata</h6>
+                <h6 class="mb-2"><i class="bi bi-database"></i> Data Sources</h6>
                 <p class="text-muted small mb-3">Select the tables whose schema will be sent to the AI model for ontology generation.</p>
                 <div id="wizardMetadataStatus">
                     <div class="d-flex align-items-center text-muted">
                         <div class="spinner-border spinner-border-sm me-2" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                        Checking metadata...
+                        Checking data sources...
                     </div>
                 </div>
                 <div id="wizardMetadataPreview" class="mt-3" style="display: none;">
@@ -88,14 +88,14 @@
                 </div>
                 <div id="wizardNoMetadata" class="alert alert-info mt-3" style="display: none;">
                     <i class="bi bi-info-circle me-2"></i>
-                    No metadata loaded. You can still generate an ontology from documents or guidelines alone, or load metadata in <a href="/project/#metadata">Project Metadata</a>.
+                    No data sources loaded. You can still generate an ontology from documents or guidelines alone, or load data sources in <a href="/domain/#metadata">Data Sources</a>.
                 </div>
             </div>
 
             <!-- Documents Tab -->
             <div class="tab-pane fade" id="wizard-pane-documents" role="tabpanel" aria-labelledby="wizard-tab-documents">
-                <h6 class="mb-2"><i class="bi bi-file-earmark-text"></i> Project Documents</h6>
-                <p class="text-muted small mb-3">Select documents from the project volume to include as additional context for ontology generation.</p>
+                <h6 class="mb-2"><i class="bi bi-file-earmark-text"></i> Domain Documents</h6>
+                <p class="text-muted small mb-3">Select documents from the domain volume to include as additional context for ontology generation.</p>
                 <div id="wizardDocsStatus">
                     <div class="d-flex align-items-center text-muted">
                         <div class="spinner-border spinner-border-sm me-2" role="status">
@@ -123,7 +123,7 @@
                 </div>
                 <div id="wizardNoDocs" class="mt-3" style="display: none;">
                     <div class="text-muted small fst-italic">
-                        <i class="bi bi-info-circle me-1"></i>No documents uploaded. You can upload documents in <a href="/project/?section=documents">Project &gt; Documents</a>.
+                        <i class="bi bi-info-circle me-1"></i>No documents uploaded. You can upload documents in <a href="/domain/?section=documents">Domain &gt; Documents</a>.
                     </div>
                 </div>
             </div>

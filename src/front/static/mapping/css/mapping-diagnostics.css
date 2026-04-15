@@ -1,0 +1,143 @@
+/**
+ * OntoBricks - Mapping Diagnostics CSS
+ */
+
+/* Summary bar */
+.diag-summary-bar {
+    display: flex;
+    gap: 1.5rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+    border-radius: 0.5rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+.diag-summary-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+}
+
+.diag-summary-count {
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.diag-summary-label {
+    color: #6c757d;
+}
+
+.diag-summary-ok .diag-summary-count { color: #198754; }
+.diag-summary-warn .diag-summary-count { color: #ffc107; }
+.diag-summary-error .diag-summary-count { color: #dc3545; }
+
+/* Group titles */
+.diag-group-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid #e9ecef;
+}
+
+/* Collapsible item rows */
+.diag-item {
+    border: 1px solid #e9ecef;
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+    transition: border-color 0.15s;
+}
+
+.diag-item-ok     { border-left: 3px solid #198754; }
+.diag-item-warning { border-left: 3px solid #ffc107; }
+.diag-item-error   { border-left: 3px solid #dc3545; }
+
+.diag-item-header {
+    display: flex;
+    align-items: center;
+    padding: 0.6rem 0.85rem;
+    cursor: pointer;
+    user-select: none;
+    background: #fff;
+    transition: background 0.1s;
+}
+
+.diag-item-header:hover {
+    background: #f8f9fa;
+}
+
+.diag-item-status {
+    margin-right: 0.6rem;
+    font-size: 1rem;
+}
+
+.diag-item-label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.diag-item-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.diag-chevron {
+    font-size: 0.75rem;
+    transition: transform 0.2s;
+    color: #adb5bd;
+    flex-shrink: 0;
+}
+
+.diag-item-header[aria-expanded="true"] .diag-chevron {
+    transform: rotate(180deg);
+}
+
+/* Body (expanded content) */
+.diag-item-body {
+    padding: 0.75rem 1rem;
+    background: #fafbfc;
+    border-top: 1px solid #e9ecef;
+}
+
+.diag-detail-row {
+    margin-bottom: 0.35rem;
+    font-size: 0.85rem;
+    word-break: break-all;
+}
+
+.diag-detail-row code {
+    font-size: 0.8rem;
+    background: #e9ecef;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.25rem;
+}
+
+/* Check rows table */
+.diag-checks-table {
+    width: 100%;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    border-collapse: collapse;
+}
+
+.diag-check-row td {
+    padding: 0.3rem 0.5rem;
+    vertical-align: top;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.diag-check-icon { width: 1.5rem; text-align: center; }
+.diag-check-name { width: 10rem; font-weight: 500; color: #495057; }
+.diag-check-detail { color: #6c757d; }
+
+.diag-check-ok .diag-check-detail { color: #198754; }
+.diag-check-warning .diag-check-detail { color: #856404; }
+.diag-check-error .diag-check-detail { color: #dc3545; font-weight: 500; }

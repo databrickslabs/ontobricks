@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
-  <img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python">
+  <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/fastapi-0.109+-green.svg" alt="FastAPI">
 </p>
 
@@ -45,7 +45,7 @@ uv sync
 - Python 3.10 or higher
 - Databricks workspace access with a Personal Access Token
 - A SQL Warehouse ID
-- A Unity Catalog Volume for the project registry
+- A Unity Catalog Volume for the domain registry
 
 ## Deploying / Installing the Project
 
@@ -97,7 +97,7 @@ git push origin main --tags
 
 | Step | Action | What Happens |
 |------|--------|--------------|
-| **1** | **Import Metadata** (Project > Metadata) | Fetches table and column metadata from Unity Catalog |
+| **1** | **Import Metadata** (Domain > Metadata) | Fetches table and column metadata from Unity Catalog |
 | **2** | **Generate Ontology** (Ontology > Wizard) | LLM designs entities, relationships, and attributes from your metadata |
 | **3** | **Auto-Map** (Mapping > Auto-Map) | LLM generates SQL mappings for every entity and relationship |
 | **4** | **Synchronize** (Digital Twin > Status) | Executes mappings and populates the triple store |
@@ -109,6 +109,15 @@ git push origin main --tags
 3. **Build** the Digital Twin — materializes triples into the triple store (incremental by default)
 4. **Query** through the GraphQL playground or explore the interactive knowledge graph
 5. **Reason** over the graph — run OWL 2 RL inference, SWRL rules, SHACL validation, and constraint checks
+
+### Knowledge Graph Features
+
+- **Two-phase search** — preview matching entities in a flat list, then select specific ones to expand into the full graph with relationships and neighbors
+- **Configurable search depth** — control the maximum traversal depth and entity cap for graph expansion
+- **Bridge navigation** — follow cross-domain bridges to automatically switch domains and focus on the target entity in the knowledge graph
+- **Data cluster detection** — detect communities in the knowledge graph using Louvain, Label Propagation, or Greedy Modularity algorithms; available client-side (Graphology) for the visible subgraph and server-side (NetworkX) for the full graph; cluster results can be visualized with color-by-cluster mode and collapsed into super-nodes
+- **Data quality violation limits** — cap the number of violations displayed per rule (configurable via dropdown, default 10) for faster quality checks
+- **Per-rule progress tracking** — SWRL inference and data quality checks report progress for each individual rule
 
 ### MCP Integration
 

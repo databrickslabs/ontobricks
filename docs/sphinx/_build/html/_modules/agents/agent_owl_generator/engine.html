@@ -174,7 +174,7 @@
 
 <span class="s2"># TOOLS</span>
 <span class="s2">You have four tools:</span>
-<span class="s2">  • list_documents  – discover documents in the project volume</span>
+<span class="s2">  • list_documents  – discover documents in the domain volume</span>
 <span class="s2">  • read_document   – read a document&#39;s text content</span>
 <span class="s2">  • get_metadata    – get all table schemas (names, columns, types)</span>
 <span class="s2">  • get_table_detail – get detailed info for one table</span>
@@ -361,8 +361,9 @@
     <span class="n">guidelines</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">options</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
     <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">project_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">project_folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">domain_folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">domain_version</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">selected_tables</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">selected_docs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">on_step</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -387,8 +388,9 @@
         <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">),</span>
         <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
         <span class="n">registry</span><span class="o">=</span><span class="n">registry</span> <span class="ow">or</span> <span class="p">{},</span>
-        <span class="n">project_name</span><span class="o">=</span><span class="n">project_name</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-        <span class="n">project_folder</span><span class="o">=</span><span class="n">project_folder</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">domain_name</span><span class="o">=</span><span class="n">domain_name</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">domain_folder</span><span class="o">=</span><span class="n">domain_folder</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">domain_version</span><span class="o">=</span><span class="n">domain_version</span> <span class="ow">or</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span>
         <span class="n">metadata</span><span class="o">=</span><span class="n">metadata</span> <span class="ow">or</span> <span class="p">{},</span>
     <span class="p">)</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Agent context created — host=</span><span class="si">%s</span><span class="s2">, registry=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>

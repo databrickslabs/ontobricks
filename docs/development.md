@@ -33,6 +33,7 @@ This document describes all external dependencies used by OntoBricks, including 
 | **APScheduler** | ≥3.10.0 | Advanced Python Scheduler for background jobs (used by BuildScheduler for scheduled triple store builds) | MIT | [pypi.org/project/APScheduler](https://pypi.org/project/APScheduler/) |
 | **owlrl** | ≥7.0.0 | OWL 2 RL forward-chaining reasoner — performs deductive closure on RDFLib graphs for ontology-level inference | W3C | [owl-rl.readthedocs.io](https://owl-rl.readthedocs.io/) |
 | **pyshacl** | ≥0.26.0 | W3C SHACL validator for RDFLib graphs — validates RDF data against SHACL shapes for data quality checks | Apache-2.0 | [github.com/RDFLib/pySHACL](https://github.com/RDFLib/pySHACL) |
+| **NetworkX** | ≥3.0 | Graph analysis library — server-side community detection (Louvain, Label Propagation, Greedy Modularity) on the full knowledge graph | BSD-3-Clause | [networkx.org](https://networkx.org/) |
 | **strawberry-graphql[fastapi]** | ≥0.220.0 | GraphQL library for Python — auto-generates typed schema from ontology and integrates with FastAPI | MIT | [strawberry.rocks](https://strawberry.rocks/) |
 | **MLflow** | ≥2.19.0 | ML lifecycle platform — used for agent tracing, evaluation, and the Databricks Agent Framework (ResponsesAgent) | Apache-2.0 | [mlflow.org](https://mlflow.org/) |
 
@@ -78,7 +79,7 @@ These packages are used by the MCP server (`src/mcp-server/`) which runs as a se
 | **D3.js** | 7.x | Data-driven document manipulation and graph data processing | ISC | [d3js.org/d3.v7.min.js](https://d3js.org/d3.v7.min.js) |
 | **Sigma.js** | 3.0.2 | WebGL-powered graph visualization library for large-scale networks | MIT | [cdnjs.com/libraries/sigma.js](https://cdnjs.com/libraries/sigma.js/) |
 | **Graphology** | 0.26.0 | Robust graph data model and algorithm library (used with Sigma.js) | MIT | [graphology.github.io](https://graphology.github.io/) |
-| **Graphology Library** | 0.8.0 | Standard library bundle for Graphology (includes ForceAtlas2 layout) | MIT | [cdn.jsdelivr.net/npm/graphology-library](https://cdn.jsdelivr.net/npm/graphology-library@0.8.0/) |
+| **Graphology Library** | 0.8.0 | Standard library bundle for Graphology (includes ForceAtlas2 layout and Louvain community detection) | MIT | [cdn.jsdelivr.net/npm/graphology-library](https://cdn.jsdelivr.net/npm/graphology-library@0.8.0/) |
 | **Grid.js** | latest | Advanced table plugin with sorting, searching, and pagination | MIT | [unpkg.com/gridjs](https://unpkg.com/gridjs/dist/gridjs.umd.js) |
 
 ---
@@ -259,7 +260,7 @@ new gridjs.Grid({
 | License | Packages |
 |---------|----------|
 | **MIT** | FastAPI, pydantic, pydantic-settings, Bootstrap, Bootstrap Icons, Sigma.js, Graphology, Grid.js, OntoViz, strawberry-graphql, real_ladybug, pytest, pytest-asyncio, pytest-cov, black, flake8 |
-| **BSD-3-Clause** | Uvicorn, Starlette, Jinja2, itsdangerous, RDFLib, python-dotenv, httpx |
+| **BSD-3-Clause** | Uvicorn, Starlette, Jinja2, itsdangerous, RDFLib, python-dotenv, httpx, NetworkX |
 | **Apache-2.0** | databricks-sql-connector, databricks-sdk, pyarrow, python-multipart, aiofiles, requests, fastmcp, MLflow, pyshacl, responses, playwright |
 | **LGPL-3.0** | psycopg |
 | **ISC** | D3.js |
@@ -351,7 +352,7 @@ tests/
   conftest.py                       # Shared fixtures and test configuration
   fixtures/
     sample_ontology.owl             # Sample OWL/Turtle content for parsing tests
-    sample_project.json             # Sample project export for import/export tests
+    sample_domain.json              # Sample domain export for import/export tests
   test_owl_parser.py                # OWL parser unit tests
   test_owl_generator.py             # OWL generator unit tests
   test_r2rml_parser.py              # R2RML parser unit tests
@@ -361,8 +362,8 @@ tests/
   test_home_service.py              # Home/dashboard service layer
   test_dtwin_service.py             # Digital Twin domain class (back.objects.digitaltwin)
   test_mapping_service.py           # Mapping domain class (back.objects.mapping.Mapping)
-  test_project_service.py           # Project domain class (back.objects.project.Project)
-  test_project_session.py           # ProjectSession state management
+  test_domain_service.py            # Domain class (back.objects.domain.Domain)
+  test_domain_session.py            # DomainSession state management
   test_databricks_client.py         # Databricks client (mocked)
   test_llm_utils.py                 # LLM retry logic
   test_triplestore_factory.py       # Triplestore factory
@@ -375,7 +376,20 @@ tests/
   test_workflow_owl_roundtrip.py    # Integration: OWL generate -> parse cycle
   test_workflow_mapping.py          # Integration: ontology -> R2RML pipeline
   test_workflow_sparql.py           # Integration: SPARQL-to-SQL translation pipeline
-  test_workflow_project.py          # Integration: project export/import cycle
+  test_workflow_domain.py           # Integration: domain export/import cycle
+  test_registry.py                  # Registry service and cache tests
+  test_permissions.py               # Permission service tests
+  test_reasoning.py                 # Reasoning engine tests
+  test_reasoning_service.py         # Reasoning service orchestration
+  test_swrl_engine.py               # SWRL rule compilation and execution
+  test_business_rules.py            # Business rules engine tests
+  test_dataquality.py               # SHACL data quality shapes and SQL generation
+  test_errors.py                    # Centralized error hierarchy
+  test_config.py                    # Configuration / settings tests
+  test_middleware_session.py         # Session middleware tests
+  test_helpers.py                   # Helper function unit tests
+  test_rdfs_parser.py               # RDFS parser tests
+  test_ladybug_reasoning.py         # LadybugDB reasoning integration
   e2e/
     conftest.py                     # Uvicorn server + Playwright browser fixtures
     test_e2e_flows.py               # UI Layer 2: end-to-end browser tests (Playwright)
@@ -396,8 +410,8 @@ The `conftest.py` file provides reusable fixtures available to all test files:
 |---------|-------|-------------|
 | `setup_test_env` | session | Sets `TESTING=1`, removes Databricks env vars to isolate tests from production |
 | `client` | function | Starlette `TestClient` wrapping the FastAPI app |
-| `mock_session_mgr` | function | Mocked `SessionManager` returning a fresh `ProjectSession` |
-| `project_session` | function | A clean `ProjectSession` with a temp directory |
+| `mock_session_mgr` | function | Mocked `SessionManager` returning a fresh `DomainSession` |
+| `domain_session` | function | A clean `DomainSession` with a mock session manager |
 | `sample_ontology_config` | function | Dict with base URI, classes (Person, Organization), properties, constraints |
 | `sample_mapping_config` | function | Dict with entity and relationship mapping definitions |
 | `sample_owl_content` | function | Raw OWL/Turtle string loaded from `tests/fixtures/sample_ontology.owl` |
@@ -436,9 +450,9 @@ These use `unittest.mock` to isolate modules that depend on external systems (Da
 | Test File | Tests | Module Under Test | What Is Verified |
 |-----------|-------|-------------------|------------------|
 | `test_databricks_client.py` | 20 | `back.core.databricks.DatabricksClient` | `is_databricks_app`, `normalize_host`, `get_workspace_host`, `DatabricksClient` init, `has_valid_auth`, `test_connection`, `get_catalogs`, `get_schemas`, `get_tables`, `get_table_columns` |
-| `test_project_session.py` | 21 | `back.objects.session.project_session` | `get_empty_project`, `ProjectSession` properties (info, version, ontology, assignment, generated, R2RML), save/reset, export/import, legacy migration |
+| `test_domain_session.py` | 21 | `back.objects.session.domain_session` | `get_empty_domain`, `DomainSession` properties (info, version, ontology, assignment, generated, R2RML), save/reset, export/import, legacy migration |
 | `test_mapping_service.py` | 14 | `back.objects.mapping.Mapping` | `build_entity_mapping`, `build_relationship_mapping`, add/update/delete entities and relationships, `get_mapping_stats`, `save_mapping_config`, `reset_mapping` |
-| `test_project_service.py` | 8 | `back.objects.project.Project` | `get_project_info`, `get_project_stats`, `save_project_info`, `get_session_debug_data` (secret masking, value truncation), `get_project_template_data` |
+| `test_domain_service.py` | 8 | `back.objects.domain.Domain` | `get_domain_info`, `get_domain_stats`, `save_domain_info`, `get_domain_template_data` |
 | `test_llm_utils.py` | 5 | `agents.llm_utils` | `call_llm_with_retry` -- success, retry on 429/503 HTTP errors, retry on timeout, retry exhaustion |
 | `test_triplestore_factory.py` | 4 | `back.core.triplestore.TripleStoreFactory` | Unknown backend handling, missing Delta config, successful Delta instantiation (mocked) |
 
@@ -467,7 +481,7 @@ End-to-end HTTP tests using Starlette's `TestClient`. These verify that routes a
 | `TestQueryRoutes` | `GET /dtwin/` |
 | `TestDigitalTwinAPI` | `GET /api/v1/digitaltwin/status`, `/ontology`, `/r2rml`, `/sparksql`, `/design-status` |
 | `TestTasksRoutes` | `GET /tasks/`, `GET /tasks/active` |
-| `TestAPIv1Routes` | `GET /api/v1/health`, `POST /api/v1/query/validate`, project endpoints (validation and auth-required behavior) |
+| `TestAPIv1Routes` | `GET /api/v1/health`, `POST /api/v1/query/validate`, domain endpoints (validation and auth-required behavior) |
 
 #### P3 -- Workflow / Integration Tests (12 tests)
 
@@ -478,7 +492,7 @@ These exercise multi-module pipelines to verify that components work together co
 | `test_workflow_owl_roundtrip.py` | 4 | Parse OWL -> Regenerate -> Re-parse | Classes, properties, constraints, SWRL rules, axioms survive a full roundtrip |
 | `test_workflow_mapping.py` | 3 | Ontology config -> Build mappings -> Generate R2RML -> Parse R2RML | Entity exclusion, relationship direction, and overall pipeline integrity |
 | `test_workflow_sparql.py` | 2 | Ontology + Mapping -> R2RML -> Extraction -> SPARQL-to-SQL | End-to-end translation of SPARQL queries to Spark SQL via R2RML mappings |
-| `test_workflow_project.py` | 3 | Create project -> Set data -> Export -> Import -> Verify | Full project roundtrip data integrity, secret exclusion from exports |
+| `test_workflow_domain.py` | 3 | Create domain -> Set data -> Export -> Import -> Verify | Full domain roundtrip data integrity, secret exclusion from exports |
 
 #### Pre-Existing Tests
 
@@ -515,7 +529,7 @@ open htmlcov/index.html
 | `back/services/home.py` | 76% | Good coverage |
 | `api/routers/v1.py` | 70% | Auth-required paths lower coverage |
 | `back/objects/digitaltwin/DigitalTwin.py` | 67% | Good coverage |
-| `back/objects/session/project_session.py` | 66% | Legacy migration paths less covered |
+| `back/objects/session/domain_session.py` | 66% | Legacy migration paths less covered |
 | `back/core/w3c/owl/OntologyParser.py` | 63% | Complex helper methods partially covered |
 | `back/core/w3c/owl/OntologyGenerator.py` | 50% | Advanced OWL features (annotations, complex axioms) less covered |
 | `back/core/w3c/sparql/SparqlTranslator.py` | 41% | Large module; advanced translation paths need Databricks |
@@ -558,7 +572,7 @@ Use them to selectively run subsets:
 #### Writing New Tests
 
 1. **Place the file** in `tests/` with the `test_` prefix.
-2. **Use fixtures** from `conftest.py` when possible (`client`, `project_session`, `sample_ontology_config`, etc.).
+2. **Use fixtures** from `conftest.py` when possible (`client`, `domain_session`, `sample_ontology_config`, etc.).
 3. **Mock external calls** -- never call real Databricks APIs, LLMs, or network services in tests. Use `unittest.mock.patch` or the `responses` library for HTTP mocking.
 4. **Keep tests fast** -- the full suite runs in under 3 seconds. Avoid `time.sleep` or expensive setup.
 5. **Test one thing per test function** -- each test should verify a single behavior or edge case.
@@ -628,13 +642,14 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 
 | Page | What Is Verified |
 |------|-----------------|
-| All pages | Navbar present, brand link, notification container, Bootstrap/utils.js scripts, nav dropdowns (Project, Ontology, Mapping, Digital Twin), Settings link, warehouse dropdown, task tracker |
-| Home `/` | Hero section, project panel, stat items (Entities, Relationships, Mappings), quick links (Settings, About) |
+| All pages | Navbar present, brand link, notification container, Bootstrap/utils.js scripts, nav dropdowns (Registry, Domain, Digital Twin), Ontology/Mapping links under Domain dropdown, Settings link, warehouse status, task tracker |
+| Home `/` | Hero section, domain panel, stat items (Entities, Relationships, Mappings), quick links (Settings, About) |
 | Settings `/settings` | Connection form, host/token/warehouse displays, Test Connection button, base URI field, Save button |
+| Registry `/registry/` | Registry domains section, schedules table, API endpoint cards |
 | Ontology `/ontology` | Sidebar section groups: Ontology Editor (Information, Import, Generate, Model, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Expr. & Axioms), W3C Standards (OWL); section divs, OntoViz script |
 | Mapping `/mapping` | Sidebar with 6 section links (Information, Designer, Manual, Auto-Map, R2RML, Spark SQL), mapping-core.js |
-| Project `/project` | Sidebar with 6 section links (Information, Metadata, Documents, Validation, OWL, R2RML), section divs |
-| Digital Twin `/dtwin/` | Sidebar section groups: Management (Build information, API), Graph (Knowledge Graph, GraphQL), Advanced (Data Quality, Reasoning); sync section, Sigma.js script |
+| Domain `/domain` | Sidebar with 6 section links (Information, Metadata, Documents, Validation, OWL, R2RML), section divs |
+| Digital Twin `/dtwin/` | Sidebar section groups: Navigation (Knowledge Graph, GraphQL), Advanced (Data Quality, Reasoning); Sigma.js script |
 | About `/about` | Page renders, contains "OntoBricks" |
 
 **Run:**
@@ -654,12 +669,12 @@ Browser-based tests using Playwright against a live Uvicorn server. Verifies nav
 | Test Class | What Is Verified |
 |------------|-----------------|
 | `TestNavigation` | All pages load with correct titles, navbar brand navigates home, Settings link works |
-| `TestHomePage` | Hero visible, project panel visible, 3 workflow cards, stat items present |
+| `TestHomePage` | Hero visible, domain panel visible, 3 workflow cards, stat items present |
 | `TestSettingsPage` | Connection form visible, host display, base URI field populated, Save button enabled |
 | `TestOntologySidebar` | All 11 sidebar items switch to correct section, wizard select-all checkbox exists |
 | `TestMappingSidebar` | All 6 sidebar items switch to correct section |
 | `TestProjectSidebar` | All 6 sidebar items switch to correct section |
-| `TestDigitalTwinSidebar` | Sync section visible by default, Build link present |
+| `TestDigitalTwinSidebar` | Knowledge Graph section visible by default, sidebar navigation links present |
 | `TestAboutPage` | Page content and R2RML reference present |
 
 **Prerequisites:**
@@ -743,8 +758,8 @@ A user's effective role is determined by combining both layers.
 | Role | Source | Capabilities |
 |------|--------|--------------|
 | **Admin** | Databricks App `CAN_MANAGE` permission | Full access. Can view, edit, and manage the Settings page including the permission list. |
-| **Editor** | In-app permission list | Can view all pages, create and modify projects, ontologies, mappings, and run syncs. Cannot access Settings. |
-| **Viewer** | In-app permission list | Read-only access. Can browse projects, ontologies, and query results. All write operations (POST, PUT, PATCH, DELETE) are blocked. Cannot access Settings. |
+| **Editor** | In-app permission list | Can view all pages, create and modify domains, ontologies, mappings, and run syncs. Cannot access Settings. |
+| **Viewer** | In-app permission list | Read-only access. Can browse domains, ontologies, and query results. All write operations (POST, PUT, PATCH, DELETE) are blocked. Cannot access Settings. |
 | **None** | Default when not matched | Completely blocked. Redirected to the Access Denied page. |
 
 ---
@@ -824,7 +839,7 @@ The in-app permission list is stored as a JSON file in the configured
 Unity Catalog Registry Volume:
 
 ```
-/Volumes/{catalog}/{schema}/{volume}/projects/.permissions.json
+/Volumes/{catalog}/{schema}/{volume}/.permissions.json
 ```
 
 #### File Format
@@ -1010,7 +1025,7 @@ user has no access to any part of the application.
 #### Permission File Location
 
 ```
-/Volumes/{REGISTRY_CATALOG}/{REGISTRY_SCHEMA}/{REGISTRY_VOLUME}/projects/.permissions.json
+/Volumes/{REGISTRY_CATALOG}/{REGISTRY_SCHEMA}/{REGISTRY_VOLUME}/.permissions.json
 ```
 
 #### API Endpoints

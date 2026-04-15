@@ -24,11 +24,6 @@
         
         <!-- Right Content Area -->
         <div class="sidebar-content">
-            <!-- Sync Section -->
-            <div id="sync-section" class="sidebar-section active">
-                {% include "partials/dtwin/_query_sync.html" %}
-            </div>
-            
             <!-- Data Quality Section (SHACL) -->
             <div id="dataquality-section" class="sidebar-section">
                 {% include "partials/dtwin/_query_dataquality.html" %}
@@ -40,7 +35,7 @@
             </div>
             
             <!-- Knowledge Graph Section -->
-            <div id="sigmagraph-section" class="sidebar-section">
+            <div id="sigmagraph-section" class="sidebar-section active">
                 {% include "partials/dtwin/_query_sigmagraph.html" %}
             </div>
             

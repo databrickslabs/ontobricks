@@ -11,19 +11,19 @@
         </p>
     </div>
 
-    <!-- ========== Project ========== -->
+    <!-- ========== Domain ========== -->
     <div class="mb-4 pb-4 border-bottom">
         <h5 class="fw-semibold mb-2 d-flex align-items-center gap-2">
-            <i class="bi bi-folder2 text-primary"></i> Project
+            <i class="bi bi-folder2 text-primary"></i> Domain
         </h5>
         <p class="text-muted small mb-2">
-            List registry projects, discover versions, inspect design readiness (ontology, metadata, mappings),
+            List registry domains, discover versions, inspect design readiness (ontology, data sources, mappings),
             and export artifacts (OWL, R2RML, generated Spark SQL).
             Optional registry overrides: <code>registry_catalog</code>, <code>registry_schema</code>, <code>registry_volume</code>.
         </p>
         <p class="small mb-3">
             <a href="/api/docs#/Project" target="_blank" class="text-decoration-none">
-                <i class="bi bi-journal-code me-1"></i>OpenAPI: Project
+                <i class="bi bi-journal-code me-1"></i>OpenAPI: Domain
             </a>
         </p>
 
@@ -35,32 +35,32 @@
             </button>
         </div>
         <div class="d-flex flex-wrap align-items-center gap-2 mb-0">
-            <span class="fw-semibold small" style="color:#475569; white-space:nowrap">Project</span>
-            <select class="form-select form-select-sm" id="apiProjectName" style="max-width:280px; font-size:.85rem;">
-                <option value="">Loading projects...</option>
+            <span class="fw-semibold small" style="color:#475569; white-space:nowrap">Domain</span>
+            <select class="form-select form-select-sm" id="apiDomainName" style="max-width:280px; font-size:.85rem;">
+                <option value="">Loading domains...</option>
             </select>
             <span class="fw-semibold small" style="color:#475569; white-space:nowrap">Version</span>
-            <select class="form-select form-select-sm" id="apiProjectVersion" style="max-width:140px; font-size:.85rem;">
+            <select class="form-select form-select-sm" id="apiDomainVersion" style="max-width:140px; font-size:.85rem;">
                 <option value="">latest</option>
             </select>
-            <small class="text-muted">Used as <code>project_name</code> / <code>project_version</code> for <strong>Try it</strong> requests below</small>
+            <small class="text-muted">Used as <code>domain_name</code> / <code>domain_version</code> for <strong>Try it</strong> requests below</small>
         </div>
     </div>
 
     <div class="d-flex flex-column gap-3" id="apiEndpointCards">
 
-        <!-- GET /projects -->
+        <!-- GET /domains -->
         <div class="card ob-api-card">
             <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
                  onclick="toggleApiCard(this)">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/projects</code>
-                <small class="text-muted">List registry projects</small>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/domains</code>
+                <small class="text-muted">List registry domains</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2" style="display:none">
                 <p class="small mb-2">
-                    Returns all projects stored in the registry with their name and description.
+                    Returns all domains stored in the registry with their name and description.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
                 <p class="small mb-2" style="color:#64748b">None</p>
@@ -68,44 +68,44 @@
                 <h6 class="small fw-semibold mb-1">Sample Response</h6>
 <pre class="small mb-2"><code>{
   "success": true,
-  "projects": [
+  "domains": [
     { "name": "customer_360", "description": "Customer 360 ontology" },
     { "name": "supply_chain", "description": "Supply chain knowledge graph" }
   ]
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/projects', this)">
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/domains', this)">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
                 <div class="ob-api-response mt-2" style="display:none"></div>
             </div>
         </div>
 
-        <!-- GET /project/versions -->
+        <!-- GET /domain/versions -->
         <div class="card ob-api-card">
             <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
                  onclick="toggleApiCard(this)">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/project/versions</code>
-                <small class="text-muted">List project versions</small>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/domain/versions</code>
+                <small class="text-muted">List domain versions</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2" style="display:none">
                 <p class="small mb-2">
-                    Returns all versions available for a given project in the registry,
+                    Returns all versions available for a given domain in the registry,
                     sorted from latest to oldest.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td><em>required</em></td><td>Project name in the registry</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td><em>required</em></td><td>Domain name in the registry</td></tr>
                     </tbody>
                 </table>
 
                 <h6 class="small fw-semibold mb-1">Sample Response</h6>
 <pre class="small mb-2"><code>{
   "success": true,
-  "project_name": "customer_360",
+  "domain_name": "customer_360",
   "versions": [
     { "version": "3", "is_latest": true },
     { "version": "2", "is_latest": false },
@@ -113,41 +113,41 @@
   ],
   "latest_version": "3"
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/project/versions', this)">
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/domain/versions', this)">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
                 <div class="ob-api-response mt-2" style="display:none"></div>
             </div>
         </div>
 
-        <!-- GET /project/design-status -->
+        <!-- GET /domain/design-status -->
         <div class="card ob-api-card">
             <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
                  onclick="toggleApiCard(this)">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/project/design-status</code>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/domain/design-status</code>
                 <small class="text-muted">Design readiness status</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2" style="display:none">
                 <p class="small mb-2">
-                    Returns the readiness status of the project's <strong>ontology</strong>,
-                    <strong>metadata</strong>, and <strong>mapping</strong> (entity, relationship,
-                    and attribute mapping progress). Indicates whether the project is ready to build.
+                    Returns the readiness status of the domain's <strong>ontology</strong>,
+                    <strong>data sources</strong>, and <strong>mapping</strong> (entity, relationship,
+                    and attribute mapping progress). Indicates whether the domain is ready to build.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
-                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
 
                 <h6 class="small fw-semibold mb-1">Sample Response</h6>
 <pre class="small mb-2"><code>{
   "success": true,
-  "project_name": "Cust360Auto",
+  "domain_name": "Cust360Auto",
   "ontology": {
     "ready": true,
     "base_uri": "https://ontobricks.com/ontology/",
@@ -174,33 +174,33 @@
   },
   "build_ready": true
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/project/design-status', this)">
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/domain/design-status', this)">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
                 <div class="ob-api-response mt-2" style="display:none"></div>
             </div>
         </div>
 
-        <!-- GET /project/ontology -->
+        <!-- GET /domain/ontology -->
         <div class="card ob-api-card">
             <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
                  onclick="toggleApiCard(this)">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/project/ontology</code>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/domain/ontology</code>
                 <small class="text-muted">Get ontology (OWL/Turtle)</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2" style="display:none">
                 <p class="small mb-2">
-                    Returns the project's ontology serialized as OWL in Turtle format.
+                    Returns the domain's ontology serialized as OWL in Turtle format.
                     Includes the full OWL document, base URI, and class/property counts.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
-                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
 
@@ -213,25 +213,25 @@
   "class_count": 5,
   "property_count": 12
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/project/ontology', this)">
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/domain/ontology', this)">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
                 <div class="ob-api-response mt-2" style="display:none"></div>
             </div>
         </div>
 
-        <!-- GET /project/r2rml -->
+        <!-- GET /domain/r2rml -->
         <div class="card ob-api-card">
             <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
                  onclick="toggleApiCard(this)">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/project/r2rml</code>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/domain/r2rml</code>
                 <small class="text-muted">Get R2RML mapping</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2" style="display:none">
                 <p class="small mb-2">
-                    Returns the project's R2RML mapping document in Turtle format.
+                    Returns the domain's R2RML mapping document in Turtle format.
                     R2RML defines how relational tables map to RDF triples &mdash;
                     each TriplesMap specifies a source table, subject template, and predicate-object mappings.
                 </p>
@@ -239,8 +239,8 @@
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
-                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
 
@@ -253,25 +253,25 @@
   "entity_count": 5,
   "relationship_count": 4
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/project/r2rml', this)">
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/domain/r2rml', this)">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
                 <div class="ob-api-response mt-2" style="display:none"></div>
             </div>
         </div>
 
-        <!-- GET /project/sparksql -->
+        <!-- GET /domain/sparksql -->
         <div class="card ob-api-card">
             <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
                  onclick="toggleApiCard(this)">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/project/sparksql</code>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/domain/sparksql</code>
                 <small class="text-muted">Get generated Spark SQL</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2" style="display:none">
                 <p class="small mb-2">
-                    Returns the Spark SQL query generated from the project's R2RML mappings.
+                    Returns the Spark SQL query generated from the domain's R2RML mappings.
                     This is the SQL that produces <code>(subject, predicate, object)</code> triples
                     when executed against the source tables. The dialect adapts to the triple store backend
                     (Spark SQL for Delta).
@@ -280,8 +280,8 @@
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
-                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
 
@@ -292,7 +292,7 @@
   "base_uri": "https://ontobricks.com/ontology/",
   "dialect": "spark"
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/project/sparksql', this)">
+                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/domain/sparksql', this)">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
                 <div class="ob-api-response mt-2" style="display:none"></div>
@@ -325,7 +325,7 @@
             </div>
             <div class="card-body px-3 py-2" style="display:none">
                 <p class="small mb-2">
-                    Returns the project registry location (catalog, schema, volume).
+                    Returns the registry location (catalog, schema, volume) for the domain.
                     Reads from the current session if available, otherwise from environment variables.
                     Used by external clients (e.g. MCP server) for registry discovery.
                 </p>
@@ -364,8 +364,8 @@
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
-                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
 
@@ -373,7 +373,7 @@
 <pre class="small mb-2"><code>{
   "success": true,
   "view_table": "catalog.schema.triples",
-  "graph_name": "MyProject",
+  "graph_name": "MyDomain",
   "has_data": true,
   "count": 4230,
   "last_modified": "2026-02-25T10:30:00"
@@ -403,8 +403,8 @@
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
-                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
 
@@ -451,8 +451,8 @@
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
-                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
 
@@ -470,7 +470,7 @@
                 </table>
 
                 <h6 class="small fw-semibold mb-1">Sample Request</h6>
-<pre class="small mb-1"><code>POST /api/v1/digitaltwin/build?project_name=my_project
+<pre class="small mb-1"><code>POST /api/v1/digitaltwin/build?domain_name=my_domain
 Content-Type: application/json
 
 { "build_mode": "incremental" }</code></pre>
@@ -520,7 +520,7 @@ Content-Type: application/json
   "result": {
     "triple_count": 4230,
     "view_table": "catalog.schema.triples",
-    "graph_name": "MyProject",
+    "graph_name": "MyDomain",
     "duration_seconds": 12.5
   },
   "error": null
@@ -547,8 +547,8 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
-                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                         <tr><td><code>entity_type</code></td><td>string</td><td>&mdash;</td><td>Filter by <code>rdf:type</code> local name (exact, case-insensitive)</td></tr>
                         <tr><td><code>search</code></td><td>string</td><td>&mdash;</td><td>Text search on entity labels (<code>rdfs:label</code>) or URI local name</td></tr>
                         <tr><td><code>depth</code></td><td>integer</td><td>1</td><td>Traversal depth (1 = direct neighbors, max 10)</td></tr>
@@ -632,8 +632,8 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
-                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                         <tr><td><code>subject</code></td><td>string</td><td>&mdash;</td><td>Filter by subject (partial match)</td></tr>
                         <tr><td><code>predicate</code></td><td>string</td><td>&mdash;</td><td>Filter by predicate URI (exact match)</td></tr>
                         <tr><td><code>object</code></td><td>string</td><td>&mdash;</td><td>Filter by object (partial match)</td></tr>
@@ -714,8 +714,8 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
-                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
 
@@ -735,7 +735,7 @@ Content-Type: application/json
                 </table>
 
                 <h6 class="small fw-semibold mb-1">Sample Request</h6>
-<pre class="small mb-1"><code>POST /api/v1/digitaltwin/dataquality/start?project_name=my_project
+<pre class="small mb-1"><code>POST /api/v1/digitaltwin/dataquality/start?domain_name=my_domain
 Content-Type: application/json
 
 { "category": null, "backend": "graph" }</code></pre>
@@ -810,8 +810,8 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
-                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
 
@@ -830,7 +830,7 @@ Content-Type: application/json
                 </table>
 
                 <h6 class="small fw-semibold mb-1">Sample Request</h6>
-<pre class="small mb-1"><code>POST /api/v1/digitaltwin/inference/start?project_name=my_project
+<pre class="small mb-1"><code>POST /api/v1/digitaltwin/inference/start?domain_name=my_domain
 Content-Type: application/json
 
 {
@@ -912,8 +912,8 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>&mdash;</td><td>Project name in the registry (uses current session if omitted)</td></tr>
-                        <tr><td><code>project_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
                     </tbody>
                 </table>
 
@@ -943,8 +943,8 @@ Content-Type: application/json
     <div class="card border-0 ob-api-note mt-4">
         <div class="card-body py-2 px-3 small" style="color:#475569">
             <i class="bi bi-info-circle me-1"></i>
-            All endpoints accept a <code>project_name</code> query parameter to select a project
-            from the registry. If omitted, the current session's project is used. When called from
+            All endpoints accept a <code>domain_name</code> query parameter to select a domain
+            from the registry. If omitted, the current session's domain is used. When called from
             external clients, ensure the Databricks workspace URL and token are configured.
         </div>
     </div>
@@ -955,7 +955,7 @@ Content-Type: application/json
     <div class="section-header mb-4 mt-5">
         <h4 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>GraphQL API</h4>
         <p class="text-muted mb-0 small">
-            Auto-generated typed GraphQL schema from the project's ontology.
+            Auto-generated typed GraphQL schema from the domain's ontology.
             External base path: <code>/api/v1/graphql</code> (same endpoints also exist at <code>/graphql</code> for the in-app UI).
             <a href="/api/docs#/GraphQL" target="_blank" class="ms-2">
                 <i class="bi bi-box-arrow-up-right"></i> OpenAPI (GraphQL)
@@ -965,18 +965,18 @@ Content-Type: application/json
 
     <div class="d-flex flex-column gap-3" id="apiGraphqlCards">
 
-        <!-- GET /graphql — List projects -->
+        <!-- GET /graphql — List domains -->
         <div class="card ob-api-card">
             <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
                  onclick="toggleApiCard(this)">
                 <span class="badge bg-success">GET</span>
                 <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql</code>
-                <small class="text-muted">List GraphQL-enabled projects</small>
+                <small class="text-muted">List GraphQL-enabled domains</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2" style="display:none">
                 <p class="small mb-2">
-                    Returns projects that have both MCP/API enabled and a populated ontology &mdash;
+                    Returns domains that are marked <em>Active</em> and have a populated ontology &mdash;
                     the prerequisites for auto-generating a GraphQL schema.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
@@ -985,7 +985,7 @@ Content-Type: application/json
                 <h6 class="small fw-semibold mb-1">Sample Response</h6>
 <pre class="small mb-2"><code>{
   "success": true,
-  "projects": [
+  "domains": [
     { "name": "customer_360", "description": "Customer 360 knowledge graph" }
   ]
 }</code></pre>
@@ -996,18 +996,18 @@ Content-Type: application/json
             </div>
         </div>
 
-        <!-- GET /graphql/{project_name} — GraphiQL Playground -->
+        <!-- GET /graphql/{domain_name} — GraphiQL Playground -->
         <div class="card ob-api-card">
             <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
                  onclick="toggleApiCard(this)">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql/{project_name}</code>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql/{domain_name}</code>
                 <small class="text-muted">GraphiQL playground</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2" style="display:none">
                 <p class="small mb-2">
-                    Opens the interactive GraphiQL IDE for the selected project.
+                    Opens the interactive GraphiQL IDE for the selected domain.
                     The schema is auto-generated from the ontology &mdash; every class becomes a
                     GraphQL type, every data property a field, and every object property a relationship.
                 </p>
@@ -1015,7 +1015,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>Project name in the registry</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>Domain name in the registry</td></tr>
                     </tbody>
                 </table>
 
@@ -1025,18 +1025,18 @@ Content-Type: application/json
             </div>
         </div>
 
-        <!-- POST /graphql/{project_name} — Execute query -->
+        <!-- POST /graphql/{domain_name} — Execute query -->
         <div class="card ob-api-card">
             <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
                  onclick="toggleApiCard(this)">
                 <span class="badge bg-primary">POST</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql/{project_name}</code>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql/{domain_name}</code>
                 <small class="text-muted">Execute GraphQL query</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2" style="display:none">
                 <p class="small mb-2">
-                    Execute a GraphQL query against the project's knowledge graph.
+                    Execute a GraphQL query against the domain's knowledge graph.
                     The schema is derived from the ontology; clients request exactly the fields
                     they need, and relationships are resolved as nested objects.
                 </p>
@@ -1044,7 +1044,7 @@ Content-Type: application/json
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>Project name in the registry</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>Domain name in the registry</td></tr>
                     </tbody>
                 </table>
 
@@ -1104,26 +1104,26 @@ Content-Type: application/json
             </div>
         </div>
 
-        <!-- GET /graphql/{project_name}/schema — SDL introspection -->
+        <!-- GET /graphql/{domain_name}/schema — SDL introspection -->
         <div class="card ob-api-card">
             <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
                  onclick="toggleApiCard(this)">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql/{project_name}/schema</code>
+                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql/{domain_name}/schema</code>
                 <small class="text-muted">Schema introspection (SDL)</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
             <div class="card-body px-3 py-2" style="display:none">
                 <p class="small mb-2">
                     Returns the auto-generated GraphQL schema in SDL (Schema Definition Language) format.
-                    The schema reflects the project's ontology: each class is a type, each data property
+                    The schema reflects the domain's ontology: each class is a type, each data property
                     a field, and each object property a typed relationship.
                 </p>
                 <h6 class="small fw-semibold mb-1">Path Parameters</h6>
                 <table class="table table-sm table-borderless small mb-2">
                     <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><code>project_name</code></td><td>string</td><td>Project name in the registry</td></tr>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>Domain name in the registry</td></tr>
                     </tbody>
                 </table>
 
@@ -1144,9 +1144,9 @@ Content-Type: application/json
     <div class="card border-0 ob-api-note mt-4">
         <div class="card-body py-2 px-3 small" style="color:#475569">
             <i class="bi bi-info-circle me-1"></i>
-            The GraphQL schema is <strong>auto-generated</strong> from the project's ontology.
+            The GraphQL schema is <strong>auto-generated</strong> from the domain's ontology.
             Change the ontology and the schema updates automatically &mdash; no hand-written types needed.
-            Only projects with <em>MCP/API enabled</em> and a populated ontology expose a GraphQL endpoint.
+            Only domains marked <em>Active</em> with a populated ontology expose a GraphQL endpoint.
         </div>
     </div>
 </div>

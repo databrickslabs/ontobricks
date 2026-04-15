@@ -189,7 +189,7 @@ LIMIT 100
    - **Delta**: SQL Warehouse executes Spark SQL
    - **LadybugDB** (7b): Bypasses SQL translation entirely; uses native Cypher against the ontology-derived graph schema
 8. **RDF-style Results** - Uniform (subject, predicate, object) triples from all backends
-9. **Knowledge Graph** - Sigma.js WebGL-powered graph with entity details panel, search, and filtering
+9. **Knowledge Graph** - Sigma.js WebGL-powered graph with entity details panel, search, filtering, and data cluster detection (Louvain/Label Propagation/Greedy Modularity)
 
 **Generated Spark SQL Example** (for generic triple query):
 ```sql
@@ -240,7 +240,7 @@ The ASGI app is built in **`src/shared/fastapi/main.py`** (`create_app()`), whic
 |---------|----------|------|
 | **shared** | `shared/fastapi/main.py`, `shared/fastapi/health.py` | Application factory, CORS / session / permission middleware, `/static` mount, health and root endpoints; includes routers from `front.routes`, `api.routers.internal`, and mounts the external API |
 | **front** | `front/fastapi/dependencies.py` | Jinja2 templates and shared FastAPI/Starlette dependencies for HTML routes |
-| **back** | `back/fastapi/graphql_routes.py` | GraphQL router (per-project auto-generated schema) |
+| **back** | `back/fastapi/graphql_routes.py` | GraphQL router (per-domain auto-generated schema) |
 
 **Uvicorn entry point:** `shared.fastapi.main:app` (see `run.py`, which imports `create_app()` from `shared.fastapi.main`).
 
@@ -278,7 +278,7 @@ To add a new generation template, add an entry to `WIZARD_TEMPLATES` in `src/sha
 | `default_base_uri` | Default ontology base URI domain | Admin only |
 | `default_emoji` | Default class icon emoji (e.g. `📦`) | Admin only |
 
-The service caches the JSON file in memory with a TTL to minimize UC Volume reads. Settings are resolved via `resolve_warehouse_id()`, `resolve_default_base_uri()`, and `resolve_default_emoji()` helper functions in `src/back/core/helpers/`.
+The service caches the JSON file in memory with a TTL to minimize UC Volume reads. Settings are resolved via `resolve_warehouse_id()`, `resolve_default_base_uri()`, and `resolve_default_emoji()` helper functions in `src/back/core/helpers/`. For version-scoped UC paths and LadybugDB local layout, `DatabricksHelpers.py` also provides `effective_uc_version_path` and `resolve_ladybug_local_path`.
 
 **UC Volume file layout** (root of the configured registry volume):
 
@@ -287,10 +287,16 @@ The service caches the JSON file in memory with a TTL to minimize UC Volume read
 ├── .registry                  # Marker file (presence = initialized)
 ├── .global_config.json        # Instance-level admin settings (includes build schedules)
 ├── .permissions.json          # Per-user permission levels
-└── projects/                  # Project version files
-    └── {project_name}/
-        ├── v1.json
-        ├── v2.json
+└── domains/                   # Domain version files (legacy registries may use `projects/`)
+    └── {domain_name}/
+        ├── V1/
+        │   ├── V1.json                                    # Domain version payload
+        │   ├── documents/                                 # Version-scoped documents
+        │   └── ontobricks_{name}_V1.lbug.tar.gz           # LadybugDB archive
+        ├── V2/
+        │   ├── V2.json
+        │   ├── documents/
+        │   └── ontobricks_{name}_V2.lbug.tar.gz
         └── ...
 ```
 
@@ -303,7 +309,7 @@ The service caches the JSON file in memory with a TTL to minimize UC Volume read
 5. **Visual-First Design**: OntoViz enables drag-and-drop ontology creation
 6. **Agentic Automation**: LLM-powered agents with MCP-style tools handle complex tasks autonomously (see [Agentic Architecture](architecture.md#agentic-architecture))
 7. **Observability**: MLflow tracing captures every agent → LLM → tool span for debugging, cost tracking, and evaluation
-8. **MCP Integration**: The MCP server exposes knowledge-graph tools (entity search, GraphQL queries, project selection) to LLM clients via the Model Context Protocol (see [MCP Server](mcp.md))
+8. **MCP Integration**: The MCP server exposes knowledge-graph tools (entity search, GraphQL queries, domain selection) to LLM clients via the Model Context Protocol (see [MCP Server](mcp.md))
 
 ---
 
@@ -338,7 +344,7 @@ src/
 │
 ├── back/                               # Backend: domain, core infra, GraphQL
 │   ├── fastapi/
-│   │   └── graphql_routes.py           # GraphQL API (auto-generated schema per project)
+│   │   └── graphql_routes.py           # GraphQL API (auto-generated schema per domain)
 │   ├── services/                       # Optional page-level services (e.g. home.py)
 │   ├── core/                           # Core infrastructure
 │   │   ├── helpers/                    # Centralized helper functions
@@ -363,7 +369,7 @@ src/
 │   │   │   ├── DatabricksClient.py     # Thin facade
 │   │   │   ├── SQLWarehouse.py         # Query execution, DDL
 │   │   │   ├── UnityCatalog.py         # Catalogs, schemas, tables, volumes
-│   │   │   ├── UCProjectIO.py          # Project I/O on UC Volumes
+│   │   │   ├── UCDomainIO.py           # Domain I/O on UC Volumes
 │   │   │   ├── VolumeFileService.py    # File I/O on UC Volumes
 │   │   │   ├── WorkspaceService.py     # SCIM users/groups
 │   │   │   ├── DashboardService.py     # Lakeview + legacy dashboards
@@ -373,7 +379,7 @@ src/
 │   │   │   ├── owl/                    # OntologyGenerator, OntologyParser
 │   │   │   ├── r2rml/                  # R2RMLGenerator, R2RMLParser
 │   │   │   ├── rdfs/                   # RDFSParser
-│   │   │   ├── sparql/                 # SparqlTranslator, SparqlQueryRunner, ProjectQueryService
+│   │   │   ├── sparql/                 # SparqlTranslator, SparqlQueryRunner, DomainQueryService
 │   │   │   └── shacl/                  # SHACLGenerator, SHACLParser, SHACLService
 │   │   │
 │   │   ├── graphql/                    # GraphQLSchemaBuilder, ResolverFactory, SchemaMetadata
@@ -403,18 +409,22 @@ src/
 │   │   │   ├── cdisc/                  # CdiscImportService
 │   │   │   └── iof/                    # IofImportService
 │   │   │
+│   │   ├── graph_analysis/             # Community detection & clustering
+│   │   │   ├── CommunityDetector.py    # CommunityDetector (NetworkX backend)
+│   │   │   └── models.py              # ClusterRequest, ClusterResult, DetectionResult, DetectionStats
+│   │   │
 │   │   └── sqlwizard/                  # SQL generation helpers for entity mapping
 │   │       └── SQLWizardService.py
 │   │
 │   └── objects/                        # Domain objects (business logic layer)
 │       ├── ontology/                   # Ontology domain (ontology.py, json_views.py)
 │       ├── mapping/                    # Mapping domain (mapping.py, json_views.py)
-│       ├── project/                    # Project domain (project.py, payload.py, version_status.py)
+│       ├── domain/                     # Saved domain / UC I/O (domain.py, payload.py, version_status.py)
 │       ├── digitaltwin/                # Digital Twin domain (DigitalTwin.py, models.py)
 │       ├── session/                    # Session management
 │       │   ├── middleware.py           # File-based session middleware (cookie + ASGI)
 │       │   ├── manager.py              # Request-scoped session get/set/delete wrapper
-│       │   ├── project_session.py      # ProjectSession (domain-level project data)
+│       │   ├── domain_session.py       # DomainSession (current OntoBricks domain payload)
 │       │   └── global_config.py        # Instance-level GlobalConfigService
 │       └── registry/                   # Registry, permissions & scheduled builds
 │           ├── service.py              # RegistryService + RegistryCfg
@@ -426,10 +436,10 @@ src/
 │   ├── service.py                      # API business logic
 │   └── routers/
 │       ├── v1.py                       # /api/v1/* endpoints
-│       ├── projects.py                 # Project endpoints
+│       ├── domains.py                  # Domain registry & artifact endpoints (`/api/v1/domains`, `/api/v1/domain/...`)
 │       ├── digitaltwin.py              # Digital Twin REST API
 │       └── internal/                   # Session-aware JSON routes for the web UI
-│           ├── home.py, settings.py, project.py, ontology.py, mapping.py, dtwin.py, tasks.py, …
+│           ├── home.py, settings.py, domain.py, ontology.py, mapping.py, dtwin.py, tasks.py, …
 │
 ├── agents/                             # LLM Agents
 │   ├── llm_utils.py                    # Shared LLM call with retry (429/503 backoff)
@@ -446,7 +456,7 @@ src/
     ├── deploy-mcp-server.sh            # Deployment script
     ├── pyproject.toml                  # Python dependencies
     └── server/
-        ├── app.py                      # MCP tools, project selection, text formatting
+        ├── app.py                      # MCP tools, domain selection, text formatting
         └── main.py                     # Entry point
 
 tests/                                  # Test suite (at project root)
@@ -573,8 +583,8 @@ page.html
 | **Design** | Visual design → Auto-save → Session storage | `OntoViz`, Session middleware |
 | **Ontology** | Design/Configure → Save → Generate OWL | `OntologyGenerator`, Session middleware |
 | **Mapping** | Load ontology → Map/Auto-Map → Validate attributes → Generate R2RML | `R2RMLGenerator`, `SQLWizardService`, `TaskManager` |
-| **Digital Twin** | Sync → Quality Check (async) → Auto-load Triples → Explore Knowledge Graph | `sparql_service`, `TaskManager`, Sigma.js graph |
-| **API/MCP** | REST → resolve project → triple store query → formatted response | Digital Twin API, MCP Server, GraphQL |
+| **Digital Twin** | Build → Quality Check (async) → Auto-load Triples → Explore Knowledge Graph | `sparql_service`, `TaskManager`, Sigma.js graph |
+| **API/MCP** | REST → resolve domain → triple store query → formatted response | Digital Twin API, MCP Server, GraphQL |
 
 ### Asynchronous Task Processing
 
@@ -595,7 +605,7 @@ Long-running operations use the **TaskManager** pattern (`src/back/core/task_man
 
 ### Scheduled Builds (BuildScheduler)
 
-The **BuildScheduler** (`src/back/objects/registry/scheduler.py`) provides per-project scheduled triple store builds using APScheduler's `BackgroundScheduler`. Schedule definitions are persisted in `.global_config.json` on the UC Volume alongside other instance-level settings.
+The **BuildScheduler** (`src/back/objects/registry/scheduler.py`) provides per-domain scheduled triple store builds using APScheduler's `BackgroundScheduler`. Schedule definitions are persisted in `.global_config.json` on the UC Volume alongside other instance-level settings.
 
 Each schedule entry contains:
 
@@ -612,11 +622,11 @@ Jobs are restored at startup from environment-variable credentials when availabl
 
 ### Session State
 
-The session middleware maintains state using a **unified project session** pattern:
+The session middleware maintains state using a **unified domain session** pattern (implemented by `DomainSession`):
 
 | Key | Contents | Set By |
 |-----|----------|--------|
-| `project_data` | Complete project: info, ontology, mapping, design_layout, databricks, preferences, generated | ProjectSession |
+| `project_data` | Complete domain: info, ontology, mapping, design_layout, databricks, preferences, generated | DomainSession |
 
 **Unified Session Structure:**
 
@@ -641,8 +651,8 @@ The session middleware maintains state using a **unified project session** patte
 
 **Session Service Pattern:**
 
-The `ProjectSession` class (`src/back/objects/session/project_session.py`) provides:
-- Unified access to all project data
+The `DomainSession` class (`src/back/objects/session/domain_session.py`) provides:
+- Unified access to all domain data
 - Automatic migration from legacy session keys
 - Export/import for file persistence
 - Version management support
@@ -651,7 +661,7 @@ The `ProjectSession` class (`src/back/objects/session/project_session.py`) provi
 
 ## Unity Catalog Versioning
 
-OntoBricks uses Unity Catalog Volumes for project storage with built-in version control.
+OntoBricks uses Unity Catalog Volumes for domain storage with built-in version control.
 
 ### Storage Structure
 
@@ -659,20 +669,31 @@ OntoBricks uses Unity Catalog Volumes for project storage with built-in version 
 Unity Catalog
 └── catalog (e.g., main)
     └── schema (e.g., ontobricks)
-        └── volume (= project name)
-            ├── v1.json    (version 1)
-            ├── v2.json    (version 2)
-            └── v3.json    (version 3)
+        └── volume (e.g., OntoBricksRegistry)
+            └── domains/
+                └── {domain_name}/
+                    ├── V1/
+                    │   ├── V1.json                                # Version 1 payload
+                    │   ├── documents/                             # Version-scoped documents
+                    │   └── ontobricks_{name}_V1.lbug.tar.gz       # LadybugDB archive
+                    ├── V2/
+                    │   ├── V2.json                                # Version 2 payload
+                    │   ├── documents/
+                    │   └── ontobricks_{name}_V2.lbug.tar.gz
+                    └── V3/
+                        ├── V3.json                                # Version 3 payload
+                        ├── documents/
+                        └── ontobricks_{name}_V3.lbug.tar.gz
 ```
 
 ### Export Format (Versioned)
 
-Projects are exported in a versioned JSON format:
+Domains are exported in a versioned JSON format:
 
 ```json
 {
     "info": { 
-        "name": "My Project", 
+        "name": "My Domain", 
         "description": "...", 
         "author": "..." 
     },
@@ -700,18 +721,18 @@ For security and regeneration reasons, these are excluded from exports:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/project/list-versions` | GET | List all versions of a project |
-| `/project/save-to-uc` | POST | Save project to Unity Catalog |
-| `/project/load-from-uc` | POST | Load specific version from UC |
-| `/project/create-version` | POST | Create new version (increment) |
-| `/project/version-status` | GET | Get current version status |
+| `/domain/list-versions` | GET | List all versions of a domain |
+| `/domain/save-to-uc` | POST | Save domain to Unity Catalog |
+| `/domain/load-from-uc` | POST | Load specific version from UC |
+| `/domain/create-version` | POST | Create new version (increment) |
+| `/domain/version-status` | GET | Get current version status |
 
 ### Version Workflow
 
-1. **First Save**: Creates volume with name derived from project name, saves as `v1.json`
-2. **Update Save**: Overwrites current version file
-3. **Create Version**: Increments version number, saves new file (preserves history)
-4. **Load Version**: Loads specific version, regenerates R2RML and OWL
+1. **First Save**: Creates `domains/{name}/V1/V1.json`
+2. **Update Save**: Overwrites `domains/{name}/V{ver}/V{ver}.json`
+3. **Create Version**: Increments the version number, copies documents from the previous version directory
+4. **Load Version**: Loads the requested version from `V{ver}/V{ver}.json`, regenerates R2RML and OWL
 
 ### Auto-Save Flow (Design View)
 
@@ -723,7 +744,7 @@ User Action → OntoViz Event → Debounce → syncDesignToOntology → /ontolog
 
 ## Triple Store Backends
 
-OntoBricks supports two interchangeable triple store backends, selectable per project in the **Project → Information → Triple Store** tab:
+OntoBricks supports two interchangeable triple store backends, selectable per domain in the **Domain → Information → Triple Store** tab:
 
 | Backend | Key | Storage | Query Language | Use Case |
 |---------|-----|---------|----------------|----------|
@@ -737,7 +758,7 @@ All backends implement the `TripleStoreBackend` abstract base class (`src/back/c
 - Triple operations: `insert_triples`, `query_triples`, `count_triples`
 - Named queries: `get_aggregate_stats`, `find_subjects_by_type`, `bfs_traversal`, etc.
 
-The factory (`src/back/core/triplestore/TripleStoreFactory.py`) reads `project.triplestore.backend` and returns the appropriate implementation.
+The factory (`src/back/core/triplestore/TripleStoreFactory.py`) reads `domain.triplestore.backend` and returns the appropriate implementation.
 
 ### LadybugDB Architecture
 
@@ -747,7 +768,7 @@ LadybugDB (`real_ladybug`) is an embedded graph database with Cypher query suppo
 - Data lives on local disk at `/tmp/ontobricks_<project_name>.lbug`
 - Supports two internal models:
   - **Flat model**: A single `Triple` node table with `(id, subject, predicate, object)` columns — used when no ontology is provided
-  - **Graph model**: Ontology classes become node tables, object properties become relationship tables — used when the project has a loaded ontology
+  - **Graph model**: Ontology classes become node tables, object properties become relationship tables — used when the domain has a loaded ontology
 
 **Graph Schema Generation** (`src/back/core/triplestore/ladybugdb/GraphSchema.py`, `GraphSchemaBuilder.py`):
 - Maps each OWL class to a LadybugDB node table (`CREATE NODE TABLE`)
@@ -756,9 +777,9 @@ LadybugDB (`real_ladybug`) is an embedded graph database with Cypher query suppo
 - DDL is generated as Cypher statements and executed at table creation time
 
 **UC Volume Sync** (`src/back/core/triplestore/ladybugdb/GraphSyncService.py`):
-- On **project save**: the local `.lbug` directory is archived into a `tar.gz` and uploaded to the project's registry folder in the UC Volume
-- On **project load**: the archive is downloaded and extracted to `/tmp`, restoring the graph
-- Archive path: `/Volumes/{cat}/{sch}/{vol}/projects/{folder}/ontobricks_{name}.lbug.tar.gz`
+- **After the Digital Twin build**: the local `.lbug` directory is archived into a `tar.gz` and uploaded to the UC Volume at `domains/{folder}/V{version}/ontobricks_{name}_V{version}.lbug.tar.gz`
+- On **domain load**: the archive is downloaded and extracted to `/tmp`, restoring the graph
+- Archive path: `/Volumes/{cat}/{sch}/{vol}/domains/{folder}/V{version}/ontobricks_{name}_V{version}.lbug.tar.gz`
 
 **Query Translation:**
 - All named query methods (stats, type distribution, BFS traversal, etc.) are implemented natively in Cypher instead of SQL
@@ -812,7 +833,7 @@ OntoBricks includes a **multi-phase reasoning engine** (`src/back/core/reasoning
 
 The `OWLRLReasoner` class uses the [`owlrl`](https://owl-rl.readthedocs.io/) Python library to perform deductive closure:
 
-1. Parses the project's generated OWL Turtle into an RDFLib `Graph`
+1. Parses the domain's generated OWL Turtle into an RDFLib `Graph`
 2. Snapshots the original triple set
 3. Runs `DeductiveClosure(OWLRL_Semantics).expand(graph)` — applying all OWL 2 RL entailment rules via forward chaining
 4. Computes the delta (new triples minus original triples)
@@ -923,6 +944,48 @@ Inferred triples from any phase can be **materialized** (written back) to the tr
 | `src/back/core/reasoning/SWRLCypherTranslator.py` | `SWRLCypherTranslator` / `SWRLFlatCypherTranslator` — SWRL → Cypher compilation |
 | `src/back/core/reasoning/models.py` | `InferredTriple`, `RuleViolation`, `ReasoningResult` dataclasses |
 | `src/back/core/triplestore/TripleStoreBackend.py` | Graph reasoning primitives: `transitive_closure()`, `symmetric_expand()`, `shortest_path()` |
+
+---
+
+## Graph Analysis — Community Detection
+
+OntoBricks provides **data cluster detection** on the knowledge graph, allowing users to discover communities of densely connected entities. Detection is available at two levels:
+
+### Client-Side (Graphology)
+
+The frontend uses the `graphology-communities-louvain` algorithm (bundled with `graphology-library`) to run Louvain community detection directly in the browser on the currently displayed subgraph. This is instant and requires no backend call.
+
+### Server-Side (NetworkX)
+
+For full-graph analysis, the backend `CommunityDetector` service (`src/back/core/graph_analysis/CommunityDetector.py`) loads all triples from the triple store, builds an undirected NetworkX graph (filtering out RDF type/label predicates), and runs one of three algorithms:
+
+| Algorithm | NetworkX Function | Description |
+|-----------|-------------------|-------------|
+| **Louvain** | `community.louvain_communities()` | Modularity-maximizing hierarchical clustering (default) |
+| **Label Propagation** | `community.label_propagation_communities()` | Fast, near-linear-time detection |
+| **Greedy Modularity** | `community.greedy_modularity_communities()` | Greedy agglomerative approach |
+
+The result includes cluster membership, modularity score, and per-cluster member lists. It is returned to the frontend via `POST /dtwin/clusters/detect`.
+
+### Visualization
+
+Detected clusters can be visualized in several ways:
+
+- **Color by cluster** — nodes are recolored by community assignment instead of entity type
+- **Resolution slider** — controls Louvain granularity (higher resolution = more clusters)
+- **Collapse/expand** — clusters can be collapsed into super-nodes showing size and member count; clicking a super-node shows its members in the detail panel
+
+### File Reference
+
+| File | Purpose |
+|------|---------|
+| `src/back/core/graph_analysis/CommunityDetector.py` | `CommunityDetector` — loads triples, builds NetworkX graph, runs algorithm |
+| `src/back/core/graph_analysis/models.py` | `ClusterRequest`, `ClusterResult`, `DetectionResult`, `DetectionStats` dataclasses |
+| `src/api/routers/internal/dtwin.py` | `POST /dtwin/clusters/detect` endpoint |
+| `src/back/objects/digitaltwin/digitaltwin.py` | `DigitalTwin.detect_clusters()` method |
+| `src/front/static/query/js/query-sigmagraph.js` | Client-side Louvain detection, cluster UI logic, super-node rendering |
+| `src/front/templates/partials/dtwin/_query_sigmagraph.html` | Data Clusters sidebar panel |
+| `src/front/static/query/css/query-sigmagraph.css` | Cluster panel and chip styles |
 
 ---
 
@@ -1189,16 +1252,16 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 
 ### Available Endpoints
 
-**Project API** (`/api/v1/projects`, `/api/v1/project/...`):
+**Domain API** (`/api/v1/domains`, `/api/v1/domain/...`):
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/projects` | GET | List registry projects (MCP-enabled only) |
-| `/api/v1/project/versions` | GET | List versions for a named project |
-| `/api/v1/project/design-status` | GET | Design status (ontology, metadata, mapping readiness) |
-| `/api/v1/project/ontology` | GET | Get project OWL ontology (Turtle) |
-| `/api/v1/project/r2rml` | GET | Get R2RML mapping (Turtle) |
-| `/api/v1/project/sparksql` | GET | Get generated Spark SQL |
+| `/api/v1/domains` | GET | List registry domains (MCP-enabled only) |
+| `/api/v1/domain/versions` | GET | List versions for a named domain |
+| `/api/v1/domain/design-status` | GET | Design status (ontology, metadata, mapping readiness) |
+| `/api/v1/domain/ontology` | GET | Get domain OWL ontology (Turtle) |
+| `/api/v1/domain/r2rml` | GET | Get R2RML mapping (Turtle) |
+| `/api/v1/domain/sparksql` | GET | Get generated Spark SQL |
 
 **Digital Twin API** (`/api/v1/digitaltwin/`):
 
@@ -1215,13 +1278,13 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/v1/health` | GET | Health check |
-| `/api/v1/projects/list` | POST | List projects in Unity Catalog |
-| `/api/v1/project/info` | POST | Get project metadata |
-| `/api/v1/project/ontology` | POST | Get ontology details |
-| `/api/v1/project/ontology/classes` | POST | Get ontology classes |
-| `/api/v1/project/ontology/properties` | POST | Get ontology properties |
-| `/api/v1/project/mappings` | POST | Get mapping details |
-| `/api/v1/project/r2rml` | POST | Get R2RML content |
+| `/api/v1/domains/list` | POST | List domains in Unity Catalog |
+| `/api/v1/domain/info` | POST | Get domain metadata |
+| `/api/v1/domain/ontology` | POST | Get ontology details |
+| `/api/v1/domain/ontology/classes` | POST | Get ontology classes |
+| `/api/v1/domain/ontology/properties` | POST | Get ontology properties |
+| `/api/v1/domain/mappings` | POST | Get mapping details |
+| `/api/v1/domain/r2rml` | POST | Get R2RML content |
 | `/api/v1/query` | POST | Execute SPARQL query |
 | `/api/v1/query/validate` | POST | Validate SPARQL syntax |
 | `/api/v1/query/samples` | POST | Get sample queries |
@@ -1230,7 +1293,7 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/graphql` | GET | List GraphQL-enabled projects |
+| `/graphql` | GET | List GraphQL-enabled domains |
 | `/graphql/settings/depth` | GET | GraphQL depth settings |
 | `/graphql/{project_name}` | GET | GraphiQL playground |
 | `/graphql/{project_name}` | POST | Execute GraphQL query |
@@ -1353,7 +1416,7 @@ In addition to the UI-driven agents, OntoBricks provides an **MCP server** (`mcp
 
 #### 1. OWL Generator Agent (`agent_owl_generator`)
 
-**Purpose**: Autonomously generate a complete OWL ontology (Turtle format) from project metadata and uploaded documents.
+**Purpose**: Autonomously generate a complete OWL ontology (Turtle format) from domain metadata and uploaded documents.
 
 | Parameter | Value |
 |-----------|-------|
@@ -1376,7 +1439,7 @@ In addition to the UI-driven agents, OntoBricks provides an **MCP server** (`mcp
 
 #### 2. Auto-Mapping Agent (`agent_auto_assignment`)
 
-**Purpose**: Autonomously map ontology entities and relationships to SQL queries against the project's Databricks tables. The agent writes SQL, validates it by executing queries, and submits the finalized mappings.
+**Purpose**: Autonomously map ontology entities and relationships to SQL queries against the domain's Databricks tables. The agent writes SQL, validates it by executing queries, and submits the finalized mappings.
 
 | Parameter | Value |
 |-----------|-------|
@@ -1431,7 +1494,7 @@ In addition to the UI-driven agents, OntoBricks provides an **MCP server** (`mcp
 
 #### 4. Ontology Assistant (`agent_ontology_assistant`)
 
-**Purpose**: Interactive conversational agent that can modify the project ontology based on natural language instructions — add/remove entities, adjust relationships, clean orphans, and answer questions about the ontology.
+**Purpose**: Interactive conversational agent that can modify the domain ontology based on natural language instructions — add/remove entities, adjust relationships, clean orphans, and answer questions about the ontology.
 
 | Parameter | Value |
 |-----------|-------|
@@ -1466,9 +1529,9 @@ All tools live in `src/agents/tools/` and follow a consistent pattern:
 
 | Tool | Module | Description | Used By |
 |------|--------|-------------|---------|
-| `get_metadata` | `metadata.py` | Returns project table schemas (names, columns, types) | All agents |
+| `get_metadata` | `metadata.py` | Returns domain table schemas (names, columns, types) | All agents |
 | `get_table_detail` | `metadata.py` | Returns detailed schema for a specific table | OWL Generator |
-| `list_documents` | `documents.py` | Lists uploaded project documents from Unity Catalog | OWL Generator |
+| `list_documents` | `documents.py` | Lists uploaded domain documents from Unity Catalog | OWL Generator |
 | `read_document` | `documents.py` | Reads content of a specific document | OWL Generator |
 | `get_ontology` | `ontology.py` | Returns current ontology (entities, relationships, attributes) | Auto-Mapping, Icon Mapping, Ontology Assistant |
 | `execute_sql` | `sql.py` | Executes a SQL query via Databricks SQL Warehouse | Auto-Mapping |
@@ -1486,7 +1549,7 @@ class ToolContext:
     # Common (all agents)
     host: str                # Databricks workspace URL
     token: str               # Databricks access token
-    metadata: dict           # Project table metadata
+    metadata: dict           # Domain table metadata
 
     # OWL Generator
     uc_location: dict        # Unity Catalog file location
@@ -1668,7 +1731,7 @@ Content-Type: application/json
 }
 ```
 
-The route automatically fills `custom_inputs` (host, token, endpoint, ontology) from the active session. If the ontology is modified, the project is saved.
+The route automatically fills `custom_inputs` (host, token, endpoint, ontology) from the active session. If the ontology is modified, the domain is saved.
 
 ##### Usage — Log to MLflow
 
@@ -2302,7 +2365,7 @@ A managed Delta table in the same catalog/schema as the VIEW:
 
 - **Name:** `_ob_snapshot_{project_name}`
 - **Schema:** `(subject STRING, predicate STRING, object STRING)`
-- **Lifecycle:** Created on first incremental build; dropped on project delete
+- **Lifecycle:** Created on first incremental build; dropped on domain delete
   or forced full rebuild.
 
 Diff queries (executed server-side on SQL Warehouse):
@@ -2342,7 +2405,7 @@ DESCRIBE HISTORY {table} LIMIT 1
 Returns the latest `version` number (monotonically increasing). Stored as:
 
 ```json
-"project.triplestore.source_versions": {
+"domain.triplestore.source_versions": {
   "catalog.schema.table_a": 42,
   "catalog.schema.table_b": 17
 }
@@ -2351,7 +2414,7 @@ Returns the latest `version` number (monotonically increasing). Stored as:
 Also store the snapshot table name:
 
 ```json
-"project.triplestore.snapshot_table": "catalog.schema._ob_snapshot_my_project"
+"domain.triplestore.snapshot_table": "catalog.schema._ob_snapshot_my_domain"
 ```
 
 #### 3. New Components
@@ -2388,8 +2451,8 @@ def delete_triples(self, table_name, triples, batch_size=500, on_progress=None) 
 
 #### 4. Modified Files
 
-- **`src/back/objects/session/project_session.py`** — add `source_versions` and `snapshot_table` to
-  `project.triplestore` in the empty project template and properties.
+- **`src/back/objects/session/domain_session.py`** — add `source_versions` and `snapshot_table` to
+  `domain.triplestore` in the empty domain template and properties.
 - **`TripleStoreBackend.py`** — add abstract `delete_triples` method.
 - **`LadybugFlatStore.py`** — implement `delete_triples` for flat model.
 - **`LadybugGraphStore.py`** — implement `delete_triples` for graph model.

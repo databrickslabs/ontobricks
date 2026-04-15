@@ -108,7 +108,8 @@
             
   <h1>Source code for back.core.w3c.owl.OntologyParser</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;OWL ontology parser.&quot;&quot;&quot;</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">RDF</span><span class="p">,</span> <span class="n">RDFS</span><span class="p">,</span> <span class="n">OWL</span><span class="p">,</span> <span class="n">Namespace</span><span class="p">,</span> <span class="n">BNode</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">RDF</span><span class="p">,</span> <span class="n">RDFS</span><span class="p">,</span> <span class="n">OWL</span><span class="p">,</span> <span class="n">BNode</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
@@ -204,15 +205,114 @@
         <span class="n">raw_name</span> <span class="o">=</span> <span class="n">uri</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_camel_case</span><span class="p">(</span><span class="n">raw_name</span><span class="p">)</span>
         
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_group_class_uris</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the set of class URI strings that are marked as groups.&quot;&quot;&quot;</span>
+        <span class="n">group_uris</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">isGroup</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">BNode</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">isGroup</span><span class="p">):</span>
+                <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;true&#39;</span><span class="p">:</span>
+                    <span class="n">group_uris</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">cls</span><span class="p">))</span>
+                    <span class="k">break</span>
+        <span class="k">return</span> <span class="n">group_uris</span>
+
+<div class="viewcode-block" id="OntologyParser.get_groups">
+<a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.owl.OntologyParser.OntologyParser.get_groups">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_groups</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract entity groups from the ontology.</span>
+
+<span class="sd">        Groups are OWL classes annotated with ``ontobricks:isGroup true`` whose</span>
+<span class="sd">        ``owl:equivalentClass`` points to an anonymous ``owl:unionOf`` list.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            List of group dicts with name, label, description, color, icon, members.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">groups</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">group_uris</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_group_class_uris</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">group_uri_str</span> <span class="ow">in</span> <span class="n">group_uris</span><span class="p">:</span>
+            <span class="n">group_ref</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">Class</span><span class="p">):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">BNode</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">str</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="o">==</span> <span class="n">group_uri_str</span><span class="p">:</span>
+                    <span class="n">group_ref</span> <span class="o">=</span> <span class="n">s</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="n">group_ref</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_local_name</span><span class="p">(</span><span class="n">group_uri_str</span><span class="p">)</span>
+
+            <span class="n">label</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">group_ref</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">label</span><span class="p">):</span>
+                <span class="n">label</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">lbl</span><span class="p">)</span>
+                <span class="k">break</span>
+
+            <span class="n">description</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">for</span> <span class="n">cmt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">group_ref</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">comment</span><span class="p">):</span>
+                <span class="n">description</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">cmt</span><span class="p">)</span>
+                <span class="k">break</span>
+
+            <span class="n">color</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">group_ref</span><span class="p">,</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">groupColor</span><span class="p">):</span>
+                <span class="n">color</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+                <span class="k">break</span>
+
+            <span class="n">icon</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">group_ref</span><span class="p">,</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">icon</span><span class="p">):</span>
+                <span class="n">icon</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+                <span class="k">break</span>
+
+            <span class="n">members</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">eq</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">group_ref</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">equivalentClass</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">union_node</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">eq</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">unionOf</span><span class="p">):</span>
+                    <span class="n">member_uris</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_rdf_list</span><span class="p">(</span><span class="n">union_node</span><span class="p">)</span>
+                    <span class="n">members</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_extract_local_name</span><span class="p">(</span><span class="n">u</span><span class="p">)</span> <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">member_uris</span><span class="p">]</span>
+                    <span class="k">break</span>
+                <span class="k">if</span> <span class="n">members</span><span class="p">:</span>
+                    <span class="k">break</span>
+
+            <span class="n">groups</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+                <span class="s1">&#39;label&#39;</span><span class="p">:</span> <span class="n">label</span> <span class="ow">or</span> <span class="n">name</span><span class="p">,</span>
+                <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="n">description</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;color&#39;</span><span class="p">:</span> <span class="n">color</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;icon&#39;</span><span class="p">:</span> <span class="n">icon</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;members&#39;</span><span class="p">:</span> <span class="n">members</span><span class="p">,</span>
+            <span class="p">})</span>
+
+        <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">groups</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">])</span></div>
+
+
 <div class="viewcode-block" id="OntologyParser.get_classes">
 <a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.owl.OntologyParser.OntologyParser.get_classes">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_classes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract all OWL classes from the ontology.</span>
+
+<span class="sd">        Classes annotated with ``ontobricks:isGroup true`` are excluded (they</span>
+<span class="sd">        are returned by :meth:`get_groups` instead).</span>
 <span class="sd">        </span>
 <span class="sd">        Returns:</span>
-<span class="sd">            List of dicts with &#39;uri&#39;, &#39;name&#39;, &#39;label&#39;, &#39;comment&#39;, &#39;emoji&#39;, &#39;parent&#39;, &#39;dashboard&#39;, &#39;dashboardParams&#39;, &#39;dataProperties&#39;</span>
+<span class="sd">            List of dicts with &#39;uri&#39;, &#39;name&#39;, &#39;label&#39;, &#39;comment&#39;, &#39;emoji&#39;, &#39;parent&#39;, &#39;group&#39;, &#39;dashboard&#39;, &#39;dashboardParams&#39;, &#39;dataProperties&#39;</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">classes</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">group_uris</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_group_class_uris</span><span class="p">()</span>
+
+        <span class="c1"># Build a reverse lookup: class URI → group name</span>
+        <span class="n">class_to_group</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">g_uri</span> <span class="ow">in</span> <span class="n">group_uris</span><span class="p">:</span>
+            <span class="n">g_ref</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">Class</span><span class="p">):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">BNode</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">str</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="o">==</span> <span class="n">g_uri</span><span class="p">:</span>
+                    <span class="n">g_ref</span> <span class="o">=</span> <span class="n">s</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="n">g_ref</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">g_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_local_name</span><span class="p">(</span><span class="n">g_uri</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">eq</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">g_ref</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">equivalentClass</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">union_node</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">eq</span><span class="p">,</span> <span class="n">OWL</span><span class="o">.</span><span class="n">unionOf</span><span class="p">):</span>
+                    <span class="k">for</span> <span class="n">member_uri</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_rdf_list</span><span class="p">(</span><span class="n">union_node</span><span class="p">):</span>
+                        <span class="n">class_to_group</span><span class="p">[</span><span class="n">member_uri</span><span class="p">]</span> <span class="o">=</span> <span class="n">g_name</span>
+                    <span class="k">break</span>
         
         <span class="c1"># First, collect all DatatypeProperties with their domains</span>
         <span class="c1"># to reconstruct class attributes (dataProperties)</span>
@@ -252,8 +352,12 @@
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">BNode</span><span class="p">):</span>
                 <span class="k">continue</span>
             
-            <span class="c1"># Get local name</span>
             <span class="n">uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
+
+            <span class="c1"># Skip group classes</span>
+            <span class="k">if</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">group_uris</span><span class="p">:</span>
+                <span class="k">continue</span>
+            
             <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_local_name</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
             
             <span class="c1"># Get label</span>
@@ -270,8 +374,8 @@
             
             <span class="c1"># Get emoji/icon from OntoBricks custom property</span>
             <span class="n">emoji</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="k">for</span> <span class="n">icon</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">icon</span><span class="p">):</span>
-                <span class="n">emoji</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">icon</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">icon_val</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">icon</span><span class="p">):</span>
+                <span class="n">emoji</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">icon_val</span><span class="p">)</span>
                 <span class="k">break</span>
             
             <span class="c1"># Get dashboard URL from OntoBricks custom property</span>
@@ -284,8 +388,16 @@
             <span class="n">dashboard_params</span> <span class="o">=</span> <span class="p">{}</span>
             <span class="k">for</span> <span class="n">params</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">dashboardParams</span><span class="p">):</span>
                 <span class="k">try</span><span class="p">:</span>
-                    <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
                     <span class="n">dashboard_params</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">params</span><span class="p">))</span>
+                <span class="k">except</span> <span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+                    <span class="k">pass</span>
+                <span class="k">break</span>
+
+            <span class="c1"># Get cross-project bridges from OntoBricks custom property</span>
+            <span class="n">bridges</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">ONTOBRICKS_NS</span><span class="o">.</span><span class="n">bridges</span><span class="p">):</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">bridges</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">b</span><span class="p">))</span>
                 <span class="k">except</span> <span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
                     <span class="k">pass</span>
                 <span class="k">break</span>
@@ -301,6 +413,9 @@
             
             <span class="c1"># Get dataProperties (attributes) for this class</span>
             <span class="n">data_properties</span> <span class="o">=</span> <span class="n">domain_to_dataprops</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">uri</span><span class="p">,</span> <span class="p">[])</span>
+
+            <span class="c1"># Determine group membership</span>
+            <span class="n">group</span> <span class="o">=</span> <span class="n">class_to_group</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">uri</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
             
             <span class="n">classes</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
                 <span class="s1">&#39;uri&#39;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span>
@@ -309,8 +424,10 @@
                 <span class="s1">&#39;comment&#39;</span><span class="p">:</span> <span class="n">comment</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
                 <span class="s1">&#39;emoji&#39;</span><span class="p">:</span> <span class="n">emoji</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
                 <span class="s1">&#39;parent&#39;</span><span class="p">:</span> <span class="n">parent</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;group&#39;</span><span class="p">:</span> <span class="n">group</span><span class="p">,</span>
                 <span class="s1">&#39;dashboard&#39;</span><span class="p">:</span> <span class="n">dashboard</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
                 <span class="s1">&#39;dashboardParams&#39;</span><span class="p">:</span> <span class="n">dashboard_params</span><span class="p">,</span>
+                <span class="s1">&#39;bridges&#39;</span><span class="p">:</span> <span class="n">bridges</span><span class="p">,</span>
                 <span class="s1">&#39;dataProperties&#39;</span><span class="p">:</span> <span class="n">data_properties</span>
             <span class="p">})</span>
         
@@ -613,14 +730,36 @@
         <span class="k">return</span> <span class="n">rules</span></div>
 
     
+    <span class="n">_EXPRESSION_TYPES</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="s1">&#39;unionOf&#39;</span><span class="p">,</span> <span class="s1">&#39;intersectionOf&#39;</span><span class="p">,</span> <span class="s1">&#39;complementOf&#39;</span><span class="p">,</span> <span class="s1">&#39;oneOf&#39;</span><span class="p">})</span>
+
+<div class="viewcode-block" id="OntologyParser.get_axioms_and_expressions">
+<a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.owl.OntologyParser.OntologyParser.get_axioms_and_expressions">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_axioms_and_expressions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract OWL axioms and class expressions as two separate lists.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Dict with ``&#39;axioms&#39;`` (logical assertions) and ``&#39;expressions&#39;``</span>
+<span class="sd">            (class compositions: unionOf, intersectionOf, complementOf, oneOf).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">all_items</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_all_axiom_items</span><span class="p">()</span>
+        <span class="n">axioms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">all_items</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_EXPRESSION_TYPES</span><span class="p">]</span>
+        <span class="n">expressions</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">all_items</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_EXPRESSION_TYPES</span><span class="p">]</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;axioms&#39;</span><span class="p">:</span> <span class="n">axioms</span><span class="p">,</span> <span class="s1">&#39;expressions&#39;</span><span class="p">:</span> <span class="n">expressions</span><span class="p">}</span></div>
+
+
 <div class="viewcode-block" id="OntologyParser.get_axioms">
 <a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.owl.OntologyParser.OntologyParser.get_axioms">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_axioms</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract OWL axioms from the ontology.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract OWL axioms from the ontology (backward-compat: returns all items).</span>
 <span class="sd">        </span>
 <span class="sd">        Returns:</span>
 <span class="sd">            List of axiom dicts with &#39;type&#39;, &#39;subject&#39;, &#39;objects&#39;, etc.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_all_axiom_items</span><span class="p">()</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_all_axiom_items</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Internal: extract all axiom-like items (axioms + expressions) from the graph.&quot;&quot;&quot;</span>
         <span class="n">axioms</span> <span class="o">=</span> <span class="p">[]</span>
         
         <span class="c1"># Extract equivalentClass axioms</span>
@@ -784,8 +923,7 @@
                         <span class="s1">&#39;individuals&#39;</span><span class="p">:</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_extract_local_name</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">individuals</span><span class="p">]</span>
                     <span class="p">})</span>
         
-        <span class="k">return</span> <span class="n">axioms</span></div>
-
+        <span class="k">return</span> <span class="n">axioms</span>
     
     <span class="k">def</span><span class="w"> </span><span class="nf">_parse_rdf_list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse an RDF list (collection) and return its items as URIs.</span>

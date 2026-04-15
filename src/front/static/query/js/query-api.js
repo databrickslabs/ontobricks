@@ -19,37 +19,38 @@ document.addEventListener('DOMContentLoaded', () => {
     if (baseEl) {
         baseEl.textContent = window.location.origin + '/api/v1';
     }
-    loadApiProjects();
+    loadApiDomains();
 
-    const select = document.getElementById('apiProjectName');
+    const select = document.getElementById('apiDomainName');
     if (select) {
         select.addEventListener('change', () => loadApiVersions(select.value));
     }
 });
 
-async function loadApiProjects() {
-    const select = document.getElementById('apiProjectName');
+async function loadApiDomains() {
+    const select = document.getElementById('apiDomainName');
     if (!select) return;
 
-    let currentProject = '';
+    let currentDomainSlug = '';
     try {
-        const infoResp = await fetch('/project/info', { credentials: 'same-origin' });
+        const infoResp = await fetch('/domain/info', { credentials: 'same-origin' });
         const infoData = await infoResp.json();
         const name = infoData?.info?.name || '';
-        currentProject = name ? name.toLowerCase().replace(/\s+/g, '_') : '';
+        currentDomainSlug = name ? name.toLowerCase().replace(/\s+/g, '_') : '';
     } catch (_) { /* ignore */ }
 
     try {
-        const resp = await fetch('/settings/registry/projects', { credentials: 'same-origin' });
+        const resp = await fetch('/settings/registry/domains', { credentials: 'same-origin' });
         const data = await resp.json();
 
-        select.innerHTML = '<option value="">Select a project...</option>';
-        if (data.success && data.projects) {
-            for (const p of data.projects) {
+        select.innerHTML = '<option value="">Select a domain...</option>';
+        const domainRows = data.domains || data.projects || [];
+        if (data.success && domainRows.length) {
+            for (const p of domainRows) {
                 const opt = document.createElement('option');
                 opt.value = p.name;
                 opt.textContent = p.name;
-                if (p.name === currentProject) opt.selected = true;
+                if (p.name === currentDomainSlug) opt.selected = true;
                 select.appendChild(opt);
             }
         }
@@ -59,20 +60,20 @@ async function loadApiProjects() {
             await loadApiVersions(chosen);
         }
     } catch (_) {
-        select.innerHTML = '<option value="">Could not load projects</option>';
+        select.innerHTML = '<option value="">Could not load domains</option>';
     }
 }
 
-async function loadApiVersions(projectName) {
-    const select = document.getElementById('apiProjectVersion');
+async function loadApiVersions(domainSlug) {
+    const select = document.getElementById('apiDomainVersion');
     if (!select) return;
 
     select.innerHTML = '<option value="">latest</option>';
-    if (!projectName) return;
+    if (!domainSlug) return;
 
     try {
         const resp = await fetch(
-            '/api/v1/project/versions?project_name=' + encodeURIComponent(projectName),
+            '/api/v1/domain/versions?domain_name=' + encodeURIComponent(domainSlug),
             { credentials: 'same-origin' }
         );
         const data = await resp.json();
@@ -90,18 +91,18 @@ async function loadApiVersions(projectName) {
     }
 }
 
-function getApiProjectParam() {
-    const val = document.getElementById('apiProjectName')?.value?.trim();
-    return val ? 'project_name=' + encodeURIComponent(val) : '';
+function getApiDomainParam() {
+    const val = document.getElementById('apiDomainName')?.value?.trim();
+    return val ? 'domain_name=' + encodeURIComponent(val) : '';
 }
 
 function getApiVersionParam() {
-    const val = document.getElementById('apiProjectVersion')?.value;
-    return val ? 'project_version=' + encodeURIComponent(val) : '';
+    const val = document.getElementById('apiDomainVersion')?.value;
+    return val ? 'domain_version=' + encodeURIComponent(val) : '';
 }
 
-function appendProjectParam(path) {
-    const parts = [getApiProjectParam(), getApiVersionParam()].filter(Boolean);
+function appendDomainParam(path) {
+    const parts = [getApiDomainParam(), getApiVersionParam()].filter(Boolean);
     if (!parts.length) return path;
     const sep = path.includes('?') ? '&' : '?';
     return path + sep + parts.join('&');
@@ -149,7 +150,7 @@ async function tryApiEndpoint(path, btnEl) {
     responseDiv.style.display = 'block';
     responseDiv.innerHTML = '';
 
-    const fullPath = appendProjectParam(path);
+    const fullPath = appendDomainParam(path);
 
     try {
         const t0 = performance.now();
@@ -270,24 +271,24 @@ function clearTriplesForm() {
 /* GraphQL endpoints                                                   */
 /* ------------------------------------------------------------------ */
 
-function getGraphqlProjectName() {
-    const val = document.getElementById('apiProjectName')?.value?.trim();
+function getGraphqlDomainSlug() {
+    const val = document.getElementById('apiDomainName')?.value?.trim();
     return val || '';
 }
 
 function openGraphiQL() {
-    const project = getGraphqlProjectName();
-    if (!project) {
-        alert('Enter a project name first.');
+    const domainSlug = getGraphqlDomainSlug();
+    if (!domainSlug) {
+        alert('Enter a domain name first.');
         return;
     }
-    window.open(GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(project), '_blank');
+    window.open(GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(domainSlug), '_blank');
 }
 
 async function tryGraphqlQuery(btnEl) {
-    const project = getGraphqlProjectName();
-    if (!project) {
-        alert('Enter a project name first.');
+    const domainSlug = getGraphqlDomainSlug();
+    if (!domainSlug) {
+        alert('Enter a domain name first.');
         return;
     }
 
@@ -306,7 +307,7 @@ async function tryGraphqlQuery(btnEl) {
     responseDiv.style.display = 'block';
     responseDiv.innerHTML = '';
 
-    const url = GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(project);
+    const url = GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(domainSlug);
 
     try {
         const t0 = performance.now();
@@ -343,12 +344,12 @@ async function tryGraphqlQuery(btnEl) {
 }
 
 async function tryGraphqlSchema(btnEl) {
-    const project = getGraphqlProjectName();
-    if (!project) {
-        alert('Enter a project name first.');
+    const domainSlug = getGraphqlDomainSlug();
+    if (!domainSlug) {
+        alert('Enter a domain name first.');
         return;
     }
-    const path = GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(project) + '/schema';
+    const path = GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(domainSlug) + '/schema';
 
     const card = btnEl.closest('.card-body');
     const responseDiv = card.querySelector('.ob-api-response');

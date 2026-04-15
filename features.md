@@ -35,6 +35,7 @@
 - **SHACL Validation**: Run SHACL shapes against the triple store — shapes are compiled to SQL for execution with violation reporting, or validated in-memory via PySHACL for small datasets.
 - **Triples Grid**: Interactive data grid with sorting, filtering, and grouping capabilities to browse triple store contents.
 - **Knowledge Graph**: Interactive sigma.js WebGL-powered graph to explore entities and relationships visually with search, filtering, depth control, and entity detail panels.
+- **Data Cluster Detection**: Detect communities in the knowledge graph using Louvain, Label Propagation, or Greedy Modularity algorithms — client-side (Graphology) for the visible subgraph and server-side (NetworkX) for the full graph; color-by-cluster mode, adjustable resolution slider, cluster collapse/expand into super-nodes, and cluster member details on click.
 - **Dashboard Embedding**: View assigned Databricks dashboards with entity-specific parameters directly in the Knowledge Graph.
 - **Violation Details**: View quality check violations in a detailed modal with entity information.
 

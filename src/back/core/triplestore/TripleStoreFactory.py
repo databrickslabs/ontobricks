@@ -1,4 +1,4 @@
-"""Factory for creating triple store backends from project configuration.
+"""Factory for creating triple store backends from domain session configuration.
 
 Supports two backend types:
 - ``"view"``  -- DeltaTripleStore (SQL against a Unity Catalog VIEW via warehouse)
@@ -7,7 +7,11 @@ Supports two backend types:
 from typing import Any, Callable, Optional, Tuple
 
 from back.core.databricks import is_databricks_app
-from back.core.helpers import get_databricks_host_and_token, resolve_warehouse_id
+from back.core.helpers import (
+    effective_uc_version_path,
+    get_databricks_host_and_token,
+    resolve_warehouse_id,
+)
 from back.core.logging import get_logger
 from shared.config.constants import DEFAULT_GRAPH_NAME
 
@@ -15,20 +19,20 @@ logger = get_logger(__name__)
 
 
 class TripleStoreFactory:
-    """Construct triple-store backend instances from project configuration."""
+    """Construct triple-store backend instances from domain session configuration."""
 
     LADYBUG_AVAILABLE = False
 
     def create(
         self,
-        project: Any,
+        domain: Any,
         settings: Optional[Any] = None,
         backend: Optional[str] = None,
     ) -> Optional[Any]:
         """Create a triple store backend.
 
         Args:
-            project: Project session with info and databricks config.
+            domain: Domain session with info and databricks config.
             settings: Optional application settings (for sql_warehouse_id fallback).
             backend: ``"view"`` for DeltaTripleStore, ``"graph"`` for LadybugDB.
                      Defaults to ``"graph"`` when *None*.
@@ -40,25 +44,25 @@ class TripleStoreFactory:
             backend = "graph"
 
         if backend == "view":
-            return self._create_delta(project, settings)
+            return self._create_delta(domain, settings)
 
         if backend == "graph":
-            return self._create_ladybug(project, settings)
+            return self._create_ladybug(domain, settings)
 
         logger.warning("Unknown triplestore backend: %s", backend)
         return None
 
-    def _create_delta(self, project: Any, settings: Optional[Any]) -> Optional[Any]:
+    def _create_delta(self, domain: Any, settings: Optional[Any]) -> Optional[Any]:
         """Instantiate a DeltaTripleStore backed by a Databricks SQL warehouse."""
         try:
             from back.core.databricks import DatabricksClient
             from back.core.triplestore.delta.DeltaTripleStore import DeltaTripleStore
 
             if settings is not None:
-                host, token = get_databricks_host_and_token(project, settings)
-                warehouse_id = resolve_warehouse_id(project, settings)
+                host, token = get_databricks_host_and_token(domain, settings)
+                warehouse_id = resolve_warehouse_id(domain, settings)
             else:
-                db = project.databricks or {}
+                db = domain.databricks or {}
                 host = db.get("host", "")
                 token = db.get("token", "")
                 warehouse_id = ""
@@ -83,7 +87,7 @@ class TripleStoreFactory:
 
     @staticmethod
     def _build_auto_restore(
-        project: Any,
+        domain: Any,
         settings: Optional[Any],
         db_name: str,
         db_path: str,
@@ -93,14 +97,14 @@ class TripleStoreFactory:
         Returns *None* when the registry or Databricks credentials are
         not configured — in that case auto-restore is simply disabled.
         """
-        uc_project_path = getattr(project, 'uc_project_path', '') or ''
-        if not uc_project_path:
+        uc_domain_path = effective_uc_version_path(domain)
+        if not uc_domain_path:
             return None
 
         if settings is not None:
-            host, token = get_databricks_host_and_token(project, settings)
+            host, token = get_databricks_host_and_token(domain, settings)
         else:
-            db_cfg = getattr(project, 'databricks', None) or {}
+            db_cfg = getattr(domain, 'databricks', None) or {}
             host = db_cfg.get('host', '')
             token = db_cfg.get('token', '')
 
@@ -115,28 +119,28 @@ class TripleStoreFactory:
 
             uc = VolumeFileService(host=host, token=token)
             svc = GraphSyncService(uc, db_name, local_base=db_path)
-            return svc.sync_from_volume(uc_project_path)
+            return svc.sync_from_volume(uc_domain_path)
 
         return _restore
 
     def _create_ladybug(
-        self, project: Any, settings: Optional[Any] = None,
+        self, domain: Any, settings: Optional[Any] = None,
     ) -> Optional[Any]:
         """Instantiate a LadybugDB store, choosing graph or flat model."""
         try:
-            lb_cfg = getattr(project, 'ladybug', None) or {}
-            if not lb_cfg and hasattr(project, 'triplestore'):
-                lb_cfg = (project.triplestore or {}).get('ladybug', {})
+            lb_cfg = getattr(domain, 'ladybug', None) or {}
+            if not lb_cfg and hasattr(domain, 'triplestore'):
+                lb_cfg = (domain.triplestore or {}).get('ladybug', {})
             db_path = lb_cfg.get("db_path", "/tmp/ontobricks")
-            base_name = (project.info or {}).get("name", DEFAULT_GRAPH_NAME)
-            version = getattr(project, 'current_version', '1') or '1'
+            base_name = (domain.info or {}).get("name", DEFAULT_GRAPH_NAME)
+            version = getattr(domain, 'current_version', '1') or '1'
             db_name = f"{base_name}_V{version}"
-            ontology = getattr(project, 'ontology', None)
+            ontology = getattr(domain, 'ontology', None)
             if callable(ontology):
                 ontology = None
 
             auto_restore = self._build_auto_restore(
-                project, settings, db_name, db_path,
+                domain, settings, db_name, db_path,
             )
 
             if ontology:
@@ -161,13 +165,13 @@ class TripleStoreFactory:
     @classmethod
     def get_triplestore(
         cls,
-        project: Any,
+        domain: Any,
         settings: Optional[Any] = None,
         backend: Optional[str] = None,
     ) -> Optional[Any]:
         """Convenience wrapper using the package singleton factory instance."""
         return _get_factory_singleton().create(
-            project, settings=settings, backend=backend,
+            domain, settings=settings, backend=backend,
         )
 
 

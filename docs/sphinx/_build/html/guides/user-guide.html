@@ -64,7 +64,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#step-1-design-ontology">Step 1: Design Ontology</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#step-2-map-data-sources-mapping">Step 2: Map Data Sources (Mapping)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#step-3-digital-twin-sync-explore">Step 3: Digital Twin (Sync &amp; Explore)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#project-management-version-control">Project Management &amp; Version Control</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#domain-management-version-control">Domain Management &amp; Version Control</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#best-practices">Best Practices</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#graphql-api">GraphQL API</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mcp-server-databricks-playground">MCP Server (Databricks Playground)</a></li>
@@ -174,7 +174,7 @@
 <p>Each entity supports:</p>
 <ul class="simple">
 <li><p><strong>Icon</strong>: Click the icon button (🎨) to select an emoji</p></li>
-<li><p><strong>Auto-Map Icons</strong>: In the <strong>Model</strong> view, click the smiley face button (😊) in the toolbar to automatically assign emoji icons to all entities that still have the default icon. This feature uses the project’s configured LLM serving endpoint to pick the most appropriate emoji for each entity name.</p></li>
+<li><p><strong>Auto-Map Icons</strong>: In the <strong>Model</strong> view, click the smiley face button (😊) in the toolbar to automatically assign emoji icons to all entities that still have the default icon. This feature uses the domain’s configured LLM serving endpoint to pick the most appropriate emoji for each entity name.</p></li>
 <li><p><strong>Description</strong>: Click the description button (📝) to add notes</p></li>
 <li><p><strong>Attributes</strong>: Add data properties directly on the entity</p></li>
 </ul>
@@ -243,10 +243,10 @@
 <li><p>The <strong>Base URI</strong> is auto-generated from:</p>
 <ul class="simple">
 <li><p>The Default Base URI Domain (from Settings)</p></li>
-<li><p>The project name</p></li>
-<li><p>Format: <code class="docutils literal notranslate"><span class="pre">{domain}/{ProjectName}#</span></code></p></li>
+<li><p>The domain name</p></li>
+<li><p>Format: <code class="docutils literal notranslate"><span class="pre">{domain}/{DomainName}#</span></code></p></li>
 <li><p>Example: <code class="docutils literal notranslate"><span class="pre">https://databricks-ontology.com/MyOrganization#</span></code></p></li>
-<li><p>Toggle the <strong>Custom</strong> switch on the Project page to enter a custom URI</p></li>
+<li><p>Toggle the <strong>Custom</strong> switch on the Domain page to enter a custom URI</p></li>
 </ul>
 </li>
 </ol>
@@ -525,7 +525,7 @@ When a dashboard has filter parameters (e.g., customer_id, meter_id), you can ma
 <section id="quick-templates">
 <h4>Quick Templates<a class="headerlink" href="#quick-templates" title="Link to this heading">¶</a></h4>
 <p>The Wizard provides predefined guideline templates for common domains (CRM, E-Commerce, IoT, Healthcare, Energy, etc.). Click a template button to pre-fill the guidelines textarea.</p>
-<p>Templates are defined in <code class="docutils literal notranslate"><span class="pre">src/app/config/constants.py</span></code> under <code class="docutils literal notranslate"><span class="pre">WIZARD_TEMPLATES</span></code> and served to the frontend via the <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/ontology/wizard/templates</span></code> endpoint. To add a new template, add an entry to the dictionary:</p>
+<p>Templates are defined in <code class="docutils literal notranslate"><span class="pre">src/shared/config/constants.py</span></code> under <code class="docutils literal notranslate"><span class="pre">WIZARD_TEMPLATES</span></code> and served to the frontend via the <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/ontology/wizard/templates</span></code> endpoint. To add a new template, add an entry to the dictionary:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">WIZARD_TEMPLATES</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s2">&quot;my_domain&quot;</span><span class="p">:</span> <span class="p">{</span>
         <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;My Domain&quot;</span><span class="p">,</span>
@@ -678,7 +678,7 @@ When a dashboard has filter parameters (e.g., customer_id, meter_id), you can ma
 </section>
 <section id="r2rml-output">
 <h3>R2RML Output<a class="headerlink" href="#r2rml-output" title="Link to this heading">¶</a></h3>
-<p>The R2RML mapping output is available in the <strong>Project</strong> section under <strong>R2RML</strong>. Navigate to Project → R2RML to:</p>
+<p>The R2RML mapping output is available in the <strong>Domain</strong> section under <strong>R2RML</strong>. Navigate to Domain → R2RML to:</p>
 <ul class="simple">
 <li><p>View the automatically generated R2RML mapping in Turtle format</p></li>
 <li><p>Copy to clipboard</p></li>
@@ -841,23 +841,23 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 </section>
 </section>
 <hr class="docutils" />
-<section id="project-management-version-control">
-<h2>Project Management &amp; Version Control<a class="headerlink" href="#project-management-version-control" title="Link to this heading">¶</a></h2>
-<p>OntoBricks stores projects in <strong>Unity Catalog Volumes</strong> with built-in version control. Navigate to the <strong>Project</strong> page by clicking “Project” in the navigation bar.</p>
-<section id="project-structure">
-<h3>Project Structure<a class="headerlink" href="#project-structure" title="Link to this heading">¶</a></h3>
-<p>Each project is stored as a separate Unity Catalog Volume:</p>
+<section id="domain-management-version-control">
+<h2>Domain Management &amp; Version Control<a class="headerlink" href="#domain-management-version-control" title="Link to this heading">¶</a></h2>
+<p>OntoBricks stores domains in <strong>Unity Catalog Volumes</strong> with built-in version control. Navigate to the <strong>Domain</strong> page by clicking “Domain” in the navigation bar.</p>
+<section id="domain-structure">
+<h3>Domain Structure<a class="headerlink" href="#domain-structure" title="Link to this heading">¶</a></h3>
+<p>Each domain is stored as a separate Unity Catalog Volume:</p>
 <ul class="simple">
-<li><p><strong>Volume Name</strong>: Same as the project name (sanitized: lowercase, underscores)</p></li>
+<li><p><strong>Volume Name</strong>: Same as the domain name (sanitized: lowercase, underscores)</p></li>
 <li><p><strong>File Names</strong>: Version numbers (e.g., <code class="docutils literal notranslate"><span class="pre">v1.json</span></code>, <code class="docutils literal notranslate"><span class="pre">v2.json</span></code>, <code class="docutils literal notranslate"><span class="pre">v3.json</span></code>)</p></li>
-<li><p><strong>Contents</strong>: Ontology, mappings, design layout, and project metadata</p></li>
+<li><p><strong>Contents</strong>: Ontology, mappings, design layout, and domain metadata</p></li>
 </ul>
 <p><strong>What is Saved:</strong></p>
 <ul class="simple">
 <li><p>✅ Ontology (classes, properties, constraints, rules, axioms)</p></li>
 <li><p>✅ Mappings (entity and relationship mappings)</p></li>
 <li><p>✅ Design layout (OntoViz positions and visual configuration)</p></li>
-<li><p>✅ Project metadata (name, description, author)</p></li>
+<li><p>✅ Domain metadata (name, description, author)</p></li>
 </ul>
 <p><strong>What is NOT Saved (Security):</strong></p>
 <ul class="simple">
@@ -867,9 +867,9 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <li><p>❌ Generated OWL (regenerated on load)</p></li>
 </ul>
 </section>
-<section id="project-information-global-tab">
-<h3>Project Information (Global Tab)<a class="headerlink" href="#project-information-global-tab" title="Link to this heading">¶</a></h3>
-<p>The <strong>Global</strong> tab in the Project Information section contains the main project settings:</p>
+<section id="domain-information-global-tab">
+<h3>Domain Information (Global Tab)<a class="headerlink" href="#domain-information-global-tab" title="Link to this heading">¶</a></h3>
+<p>The <strong>Global</strong> tab in the Domain Information section contains the main domain settings:</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Field</p></th>
@@ -877,23 +877,23 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><strong>Project Name</strong></p></td>
-<td><p>CamelCase, alphanumeric only (e.g. <code class="docutils literal notranslate"><span class="pre">MyOntologyProject</span></code>). Defaults to <code class="docutils literal notranslate"><span class="pre">NewProject</span></code>. Non-alphanumeric characters are stripped automatically and words are capitalized as you type.</p></td>
+<tr class="row-even"><td><p><strong>Domain Name</strong></p></td>
+<td><p>CamelCase, alphanumeric only (e.g. <code class="docutils literal notranslate"><span class="pre">MyOntologyDomain</span></code>). Defaults to <code class="docutils literal notranslate"><span class="pre">NewDomain</span></code>. Non-alphanumeric characters are stripped automatically and words are capitalized as you type.</p></td>
 </tr>
 <tr class="row-odd"><td><p><strong>Version</strong></p></td>
 <td><p>Current version number with version selector.</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>Base URI</strong></p></td>
-<td><p>The base namespace for all ontology entities. By default, auto-generated from <code class="docutils literal notranslate"><span class="pre">Settings</span> <span class="pre">→</span> <span class="pre">Default</span> <span class="pre">Base</span> <span class="pre">URI</span> <span class="pre">Domain</span> <span class="pre">/</span> <span class="pre">ProjectName#</span></code>. Toggle the <strong>Custom</strong> switch to enter a custom URI.</p></td>
+<td><p>The base namespace for all ontology entities. By default, auto-generated from <code class="docutils literal notranslate"><span class="pre">Settings</span> <span class="pre">→</span> <span class="pre">Default</span> <span class="pre">Base</span> <span class="pre">URI</span> <span class="pre">Domain</span> <span class="pre">/</span> <span class="pre">DomainName#</span></code>. Toggle the <strong>Custom</strong> switch to enter a custom URI.</p></td>
 </tr>
 <tr class="row-odd"><td><p><strong>Description</strong></p></td>
-<td><p>Free-text description of the project.</p></td>
+<td><p>Free-text description of the domain.</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>Author</strong></p></td>
 <td><p>Automatically pre-filled with the current Databricks user email. Editable.</p></td>
 </tr>
 <tr class="row-odd"><td><p><strong>API / MCP</strong></p></td>
-<td><p>Toggle <strong>Expose via API &amp; MCP</strong> to make this project visible through the REST API (<code class="docutils literal notranslate"><span class="pre">/api/v1/projects</span></code>) and the MCP server. Disabled by default.</p></td>
+<td><p>Toggle <strong>Expose via API &amp; MCP</strong> to make this domain visible through the REST API (<code class="docutils literal notranslate"><span class="pre">/api/v1/domains</span></code>) and the MCP server. Disabled by default.</p></td>
 </tr>
 </tbody>
 </table>
@@ -910,13 +910,13 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <td><p>Select the triple store engine: <strong>Delta</strong> (Databricks SQL Warehouse) or <strong>LadybugDB</strong> (embedded graph database).</p></td>
 </tr>
 <tr class="row-odd"><td><p><strong>Catalog.Schema</strong></p></td>
-<td><p><em>(Delta only)</em> Defaults to the same catalog and schema as the project’s registry location. Click the pencil icon to change.</p></td>
+<td><p><em>(Delta only)</em> Defaults to the same catalog and schema as the domain’s registry location. Click the pencil icon to change.</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>Table Name</strong></p></td>
-<td><p><em>(Delta only)</em> Defaults to <code class="docutils literal notranslate"><span class="pre">triplestore_&lt;project_name&gt;</span></code> (sanitized lowercase). Updated automatically when the project name changes.</p></td>
+<td><p><em>(Delta only)</em> Defaults to <code class="docutils literal notranslate"><span class="pre">triplestore_&lt;domain_name&gt;</span></code> (sanitized lowercase). Updated automatically when the domain name changes.</p></td>
 </tr>
 <tr class="row-odd"><td><p><strong>Graph Name</strong></p></td>
-<td><p><em>(LadybugDB)</em> Logical name for the embedded graph database (defaults to project name).</p></td>
+<td><p><em>(LadybugDB)</em> Logical name for the embedded graph database (defaults to domain name).</p></td>
 </tr>
 </tbody>
 </table>
@@ -937,7 +937,7 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 </tr>
 <tr class="row-odd"><td><p><strong>LadybugDB</strong></p></td>
 <td><p>Local disk (<code class="docutils literal notranslate"><span class="pre">/tmp</span></code>) with automatic UC Volume sync</p></td>
-<td><p>On project save/load</p></td>
+<td><p>Automatic after Digital Twin build</p></td>
 <td><p>Lightweight demos and local development without a SQL Warehouse</p></td>
 </tr>
 </tbody>
@@ -945,19 +945,19 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <p><strong>Performance:</strong></p>
 <ul class="simple">
 <li><p><strong>Delta</strong> tables are created with <strong>Liquid Clustering</strong> (<code class="docutils literal notranslate"><span class="pre">CLUSTER</span> <span class="pre">BY</span> <span class="pre">(predicate,</span> <span class="pre">subject)</span></code>), which co-locates rows by predicate and subject for faster query filtering. After each build, an <code class="docutils literal notranslate"><span class="pre">OPTIMIZE</span></code> command is automatically executed to compact data files and apply the clustering layout.</p></li>
-<li><p><strong>LadybugDB</strong> stores data in an embedded graph database using Cypher. When the project has an ontology loaded, LadybugDB uses a <strong>true graph model</strong> where each OWL class becomes a node table and each object property becomes a relationship table. Graph data is stored locally at <code class="docutils literal notranslate"><span class="pre">/tmp</span></code> and automatically archived to your registry UC Volume when saving a project (and restored on load).</p></li>
+<li><p><strong>LadybugDB</strong> stores data in an embedded graph database using Cypher. When the domain has an ontology loaded, LadybugDB uses a <strong>true graph model</strong> where each OWL class becomes a node table and each object property becomes a relationship table. Graph data is stored locally at <code class="docutils literal notranslate"><span class="pre">/tmp</span></code> and automatically archived to your registry UC Volume after each Digital Twin build (and restored on domain load).</p></li>
 </ul>
 </section>
 </section>
-<section id="saving-projects">
-<h3>Saving Projects<a class="headerlink" href="#saving-projects" title="Link to this heading">¶</a></h3>
+<section id="saving-domains">
+<h3>Saving Domains<a class="headerlink" href="#saving-domains" title="Link to this heading">¶</a></h3>
 <section id="first-save">
 <h4>First Save<a class="headerlink" href="#first-save" title="Link to this heading">¶</a></h4>
 <ol class="arabic simple">
-<li><p>Go to <strong>Project</strong> page</p></li>
-<li><p>Fill in project details:</p>
+<li><p>Go to <strong>Domain</strong> page</p></li>
+<li><p>Fill in domain details:</p>
 <ul class="simple">
-<li><p><strong>Name</strong>: Project name in CamelCase (becomes the volume folder name)</p></li>
+<li><p><strong>Name</strong>: Domain name in CamelCase (becomes the volume folder name)</p></li>
 <li><p><strong>Description</strong>: Optional description</p></li>
 <li><p><strong>Author</strong>: Your name (auto-filled from Databricks)</p></li>
 </ul>
@@ -967,13 +967,13 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 </ol>
 <p>OntoBricks will:</p>
 <ol class="arabic simple">
-<li><p>Create a volume named after your project (if it doesn’t exist)</p></li>
-<li><p>Save the project as <code class="docutils literal notranslate"><span class="pre">v{version}.json</span></code></p></li>
+<li><p>Create a volume named after your domain (if it doesn’t exist)</p></li>
+<li><p>Save the domain as <code class="docutils literal notranslate"><span class="pre">v{version}.json</span></code></p></li>
 </ol>
 </section>
 <section id="subsequent-saves">
 <h4>Subsequent Saves<a class="headerlink" href="#subsequent-saves" title="Link to this heading">¶</a></h4>
-<p>When you save an existing project:</p>
+<p>When you save an existing domain:</p>
 <ul class="simple">
 <li><p>The current version file is <strong>overwritten</strong></p></li>
 <li><p>Use <strong>Create New Version</strong> to preserve history</p></li>
@@ -985,8 +985,8 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <section id="listing-versions">
 <h4>Listing Versions<a class="headerlink" href="#listing-versions" title="Link to this heading">¶</a></h4>
 <ol class="arabic simple">
-<li><p>Go to <strong>Project</strong> → <strong>Actions</strong> tab</p></li>
-<li><p>Select catalog/schema containing your project</p></li>
+<li><p>Go to <strong>Domain</strong> → <strong>Actions</strong> tab</p></li>
+<li><p>Select catalog/schema containing your domain</p></li>
 <li><p>Click <strong>Load versions</strong> to see all saved versions</p></li>
 </ol>
 <p>The version list shows:</p>
@@ -1000,7 +1000,7 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <h4>Creating a New Version<a class="headerlink" href="#creating-a-new-version" title="Link to this heading">¶</a></h4>
 <p>To create a new version (preserving the current state):</p>
 <ol class="arabic simple">
-<li><p>Go to <strong>Project</strong> → <strong>Actions</strong> tab</p></li>
+<li><p>Go to <strong>Domain</strong> → <strong>Actions</strong> tab</p></li>
 <li><p>Click <strong>Create New Version</strong></p></li>
 <li><p>OntoBricks will:</p>
 <ul class="simple">
@@ -1011,18 +1011,18 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 </li>
 </ol>
 <p><strong>Example version progression:</strong></p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>my_project/
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>my_domain/
 ├── v1.json    (initial version)
 ├── v2.json    (after first &quot;Create New Version&quot;)
 └── v3.json    (after second &quot;Create New Version&quot;)
 </pre></div>
 </div>
 </section>
-<section id="loading-a-project-from-registry">
-<h4>Loading a Project from Registry<a class="headerlink" href="#loading-a-project-from-registry" title="Link to this heading">¶</a></h4>
+<section id="loading-a-domain-from-registry">
+<h4>Loading a Domain from Registry<a class="headerlink" href="#loading-a-domain-from-registry" title="Link to this heading">¶</a></h4>
 <ol class="arabic simple">
-<li><p>Click <strong>Load Project</strong> in the top menu</p></li>
-<li><p>Select a project from the dropdown</p></li>
+<li><p>Click <strong>Load Domain</strong> in the top menu</p></li>
+<li><p>Select a domain from the dropdown</p></li>
 <li><p>The <strong>active (latest) version</strong> is automatically selected</p></li>
 <li><p>Change the version if needed, then click <strong>Load</strong></p></li>
 </ol>
@@ -1031,21 +1031,21 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 </section>
 <section id="version-status">
 <h3>Version Status<a class="headerlink" href="#version-status" title="Link to this heading">¶</a></h3>
-<p>The Project page shows the current version status:</p>
+<p>The Domain page shows the current version status:</p>
 <ul class="simple">
 <li><p><strong>Active Version</strong>: You’re working on the latest version</p></li>
 <li><p><strong>Historical Version</strong>: You’ve loaded an older version (read-only for new versions)</p></li>
 </ul>
 </section>
-<section id="project-save-load">
-<h3>Project Save/Load<a class="headerlink" href="#project-save-load" title="Link to this heading">¶</a></h3>
-<p>Projects are saved in a versioned JSON format and can be stored in Unity Catalog Volumes. Use the <strong>Save Project</strong> and <strong>Load Project</strong> options in the top menu to persist and restore your work.</p>
+<section id="domain-save-load">
+<h3>Domain Save/Load<a class="headerlink" href="#domain-save-load" title="Link to this heading">¶</a></h3>
+<p>Domains are saved in a versioned JSON format and can be stored in Unity Catalog Volumes. Use the <strong>Save Domain</strong> and <strong>Load Domain</strong> options in the top menu to persist and restore your work.</p>
 </section>
 <section id="best-practices-for-version-control">
 <h3>Best Practices for Version Control<a class="headerlink" href="#best-practices-for-version-control" title="Link to this heading">¶</a></h3>
 <ol class="arabic simple">
 <li><p><strong>Version Before Major Changes</strong>: Create a new version before significant ontology modifications</p></li>
-<li><p><strong>Use Descriptive Names</strong>: Project names should clearly identify the domain</p></li>
+<li><p><strong>Use Descriptive Names</strong>: Choose domain names that clearly identify the subject area</p></li>
 <li><p><strong>Document Versions</strong>: Use the description field to note changes between versions</p></li>
 <li><p><strong>Regular Saves</strong>: Save frequently to avoid losing work</p></li>
 <li><p><strong>Test After Loading</strong>: Verify R2RML regeneration after loading older versions</p></li>
@@ -1092,12 +1092,12 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <hr class="docutils" />
 <section id="graphql-api">
 <h2>GraphQL API<a class="headerlink" href="#graphql-api" title="Link to this heading">¶</a></h2>
-<p>Once your triple store is materialized (synced via Digital Twin), OntoBricks automatically provides a <strong>typed GraphQL API</strong> for each project. The schema is auto-generated from the ontology — no manual configuration required.</p>
+<p>Once your triple store is materialized (synced via Digital Twin), OntoBricks automatically provides a <strong>typed GraphQL API</strong> for each domain. The schema is auto-generated from the ontology — no manual configuration required.</p>
 <section id="accessing-graphql">
 <h3>Accessing GraphQL<a class="headerlink" href="#accessing-graphql" title="Link to this heading">¶</a></h3>
 <ol class="arabic simple">
 <li><p>Navigate to <strong>Digital Twin</strong> → <strong>API</strong> and scroll to the <strong>GraphQL API</strong> section</p></li>
-<li><p>Alternatively, visit <code class="docutils literal notranslate"><span class="pre">/graphql/{project_name}</span></code> to open the <strong>GraphiQL Playground</strong> directly</p></li>
+<li><p>Alternatively, visit <code class="docutils literal notranslate"><span class="pre">/graphql/{domain_name}</span></code> to open the <strong>GraphiQL Playground</strong> directly</p></li>
 </ol>
 </section>
 <section id="available-endpoints">
@@ -1112,17 +1112,17 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/graphql</span></code></p></td>
 <td><p>GET</p></td>
-<td><p>List all GraphQL-enabled projects</p></td>
+<td><p>List all GraphQL-enabled domains</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/graphql/{project_name}</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/graphql/{domain_name}</span></code></p></td>
 <td><p>GET</p></td>
-<td><p>Open GraphiQL playground for a project</p></td>
+<td><p>Open GraphiQL playground for a domain</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/graphql/{project_name}</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/graphql/{domain_name}</span></code></p></td>
 <td><p>POST</p></td>
 <td><p>Execute a GraphQL query</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/graphql/{project_name}/schema</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/graphql/{domain_name}/schema</span></code></p></td>
 <td><p>GET</p></td>
 <td><p>Get the SDL (Schema Definition Language)</p></td>
 </tr>
@@ -1154,7 +1154,7 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <section id="schema-introspection">
 <h3>Schema Introspection<a class="headerlink" href="#schema-introspection" title="Link to this heading">¶</a></h3>
 <p>Use the SDL endpoint to inspect the full schema:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:8000/graphql/my_project/schema
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:8000/graphql/my_domain/schema
 </pre></div>
 </div>
 <p>This returns the complete type definitions, which is useful for integrating with external tools or for LLM agents to discover the data model programmatically.</p>
@@ -1191,11 +1191,17 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">list_projects</span></code></p></td>
-<td><p>List all MCP-enabled projects in the registry</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">list_domains</span></code></p></td>
+<td><p>List all MCP-enabled domains in the registry</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">select_project</span></code></p></td>
-<td><p>Activate a project for subsequent queries</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">select_domain</span></code></p></td>
+<td><p>Activate a domain for subsequent queries</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">list_domain_versions</span></code></p></td>
+<td><p>List registry versions for a domain</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_design_status</span></code></p></td>
+<td><p>Ontology / metadata / assignment readiness for a domain</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">list_entity_types</span></code></p></td>
 <td><p>Overview of entity types, counts, and predicates</p></td>
@@ -1204,13 +1210,13 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <td><p>Full-text description of an entity with BFS traversal</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_graphql_schema</span></code></p></td>
-<td><p>Auto-generated GraphQL schema (SDL) for the project</p></td>
+<td><p>Auto-generated GraphQL schema (SDL) for the domain</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">query_graphql</span></code></p></td>
 <td><p>Execute a GraphQL query with structured results</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_status</span></code></p></td>
-<td><p>Triple store diagnostic (backend, table, count)</p></td>
+<td><p>Triple store diagnostic (view, graph, count)</p></td>
 </tr>
 </tbody>
 </table>
@@ -1224,13 +1230,13 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <li><p>Ask questions like <em>“What entity types are in the knowledge graph?”</em> or <em>“Tell me about Jacob Martinez”</em></p></li>
 </ol>
 </section>
-<section id="enabling-projects-for-mcp">
-<h3>Enabling Projects for MCP<a class="headerlink" href="#enabling-projects-for-mcp" title="Link to this heading">¶</a></h3>
-<p>Projects must have the <strong>API / MCP</strong> flag enabled to be visible through the MCP server:</p>
+<section id="enabling-domains-for-mcp">
+<h3>Enabling Domains for MCP<a class="headerlink" href="#enabling-domains-for-mcp" title="Link to this heading">¶</a></h3>
+<p>Domains must have the <strong>API / MCP</strong> flag enabled to be visible through the MCP server:</p>
 <ol class="arabic simple">
-<li><p>Go to <strong>Project &gt; Information &gt; Global</strong> tab</p></li>
+<li><p>Go to <strong>Domain &gt; Information &gt; Global</strong> tab</p></li>
 <li><p>Toggle <strong>Expose via API &amp; MCP</strong> to ON</p></li>
-<li><p>Save the project</p></li>
+<li><p>Save the domain</p></li>
 </ol>
 <p>See the <a class="reference internal" href="mcp.html"><span class="std std-doc">MCP Server documentation</span></a> for full details including local usage and client configuration.</p>
 </section>
@@ -1402,8 +1408,8 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <p><strong>Problem</strong>: LadybugDB data is lost after application restart</p>
 <p><strong>Solutions</strong>:</p>
 <ul class="simple">
-<li><p>Ensure the project is saved to the registry after building the triple store — the LadybugDB graph is synced to the UC Volume only on project save</p></li>
-<li><p>After loading a project, the graph archive is automatically restored from the registry</p></li>
+<li><p>The LadybugDB graph is automatically archived to the registry UC Volume after each Digital Twin build — ensure your build completes successfully</p></li>
+<li><p>After loading a domain, the graph archive is automatically restored from the registry</p></li>
 <li><p>If the registry is not configured, LadybugDB data lives only in <code class="docutils literal notranslate"><span class="pre">/tmp</span></code> and will not survive a restart</p></li>
 </ul>
 </section>
@@ -1488,7 +1494,7 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <p>The automated pipeline follows these steps:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Step 1: Configure connection
         │
-Step 2: Set up project (LLM endpoint, triple store table)
+Step 2: Set up domain (LLM endpoint, triple store table)
         │
 Step 3: Import table metadata from Unity Catalog
         │
@@ -1519,11 +1525,11 @@ Step 7: Validate with quality checks
 <p>The connection status indicator in the navbar should turn green.</p>
 </section>
 <hr class="docutils" />
-<section id="step-2-set-up-the-project">
-<h3>Step 2: Set Up the Project<a class="headerlink" href="#step-2-set-up-the-project" title="Link to this heading">¶</a></h3>
-<p>Navigate to <strong>Project</strong> in the top navbar, then open the <strong>Information</strong> sidebar section.</p>
+<section id="step-2-set-up-the-domain">
+<h3>Step 2: Set Up the Domain<a class="headerlink" href="#step-2-set-up-the-domain" title="Link to this heading">¶</a></h3>
+<p>Navigate to <strong>Domain</strong> in the top navbar, then open the <strong>Information</strong> sidebar section.</p>
 <ol class="arabic simple">
-<li><p>Enter a <strong>Project Name</strong> (e.g., <code class="docutils literal notranslate"><span class="pre">CustomerAnalytics</span></code>).</p></li>
+<li><p>Enter a <strong>Domain Name</strong> (e.g., <code class="docutils literal notranslate"><span class="pre">CustomerAnalytics</span></code>).</p></li>
 <li><p>Set the <strong>Base URI</strong> for your ontology (e.g., <code class="docutils literal notranslate"><span class="pre">https://ontobricks.com/ontology/</span></code>). This is the namespace for all generated RDF resources.</p></li>
 <li><p>Select the <strong>LLM Endpoint</strong> from the dropdown. This is the Databricks Model Serving endpoint used for ontology generation and auto-mapping.</p></li>
 <li><p>Configure the <strong>Triple Store Table</strong>: select a catalog, schema, and table name where triples will be stored (e.g., <code class="docutils literal notranslate"><span class="pre">my_catalog.my_schema.triples</span></code>). The table will be created automatically during sync.</p></li>
@@ -1532,7 +1538,7 @@ Step 7: Validate with quality checks
 <hr class="docutils" />
 <section id="step-3-import-table-metadata">
 <h3>Step 3: Import Table Metadata<a class="headerlink" href="#step-3-import-table-metadata" title="Link to this heading">¶</a></h3>
-<p>Navigate to <strong>Project &gt; Metadata</strong> in the sidebar.</p>
+<p>Navigate to <strong>Domain &gt; Metadata</strong> in the sidebar.</p>
 <p>This step tells OntoBricks about the Databricks tables you want to model in your ontology.</p>
 <ol class="arabic simple">
 <li><p>Select a <strong>Catalog</strong> from the dropdown.</p></li>
@@ -1574,7 +1580,7 @@ Step 7: Validate with quality checks
 </li>
 <li><p>Click <strong>Generate</strong>.</p></li>
 <li><p>The LLM generates an OWL ontology in Turtle format. You can <strong>preview</strong> the result.</p></li>
-<li><p>Click <strong>Apply</strong> to import the generated ontology into your project.</p></li>
+<li><p>Click <strong>Apply</strong> to import the generated ontology into your domain.</p></li>
 </ol>
 <p>After applying, switch to the <strong>Model</strong> view in the sidebar to see the visual ontology with entities, relationships, and inheritance links.</p>
 <blockquote>
@@ -1599,7 +1605,7 @@ Step 7: Validate with quality checks
 </li>
 <li><p>A progress bar shows the mapping progress.</p></li>
 <li><p>When complete, review the results — successfully mapped items show in green.</p></li>
-<li><p>Click <strong>Apply All</strong> to save all mappings to the project.</p></li>
+<li><p>Click <strong>Apply All</strong> to save all mappings to the domain.</p></li>
 </ol>
 <p>You can verify individual mappings by switching to the <strong>Designer</strong> view:</p>
 <ul class="simple">
@@ -1640,7 +1646,7 @@ Step 7: Validate with quality checks
 <div><p><strong>Note</strong>: If the triple store table already exists, you can choose to <strong>drop and recreate</strong> it or append to the existing data.</p>
 </div></blockquote>
 <blockquote>
-<div><p><strong>Triple Store Backend</strong>: OntoBricks supports two backends — <strong>Delta</strong> (SQL Warehouse, recommended for production) and <strong>LadybugDB</strong> (embedded graph, ideal for development/testing). Configure the backend in Project &gt; Information &gt; Triple Store settings.</p>
+<div><p><strong>Triple Store Backend</strong>: OntoBricks supports two backends — <strong>Delta</strong> (SQL Warehouse, recommended for production) and <strong>LadybugDB</strong> (embedded graph, ideal for development/testing). Configure the backend in Domain &gt; Information &gt; Triple Store settings.</p>
 </div></blockquote>
 </section>
 <hr class="docutils" />
@@ -1782,12 +1788,12 @@ Step 7: Validate with quality checks
 <td><p>Manual (one-time)</p></td>
 </tr>
 <tr class="row-odd"><td><p>2</p></td>
-<td><p>Project &gt; Information</p></td>
+<td><p>Domain &gt; Information</p></td>
 <td><p>Set LLM endpoint and triple store table</p></td>
 <td><p>Manual (one-time)</p></td>
 </tr>
 <tr class="row-even"><td><p>3</p></td>
-<td><p>Project &gt; Metadata</p></td>
+<td><p>Domain &gt; Metadata</p></td>
 <td><p>Import table metadata from Unity Catalog</p></td>
 <td><p>One click</p></td>
 </tr>
@@ -1823,7 +1829,7 @@ Step 7: Validate with quality checks
 <li><p><strong>Start with a template</strong>: Use one of the Wizard quick-templates (CRM, IoT, etc.) if your domain matches — it provides better guidelines for the LLM.</p></li>
 <li><p><strong>Review before syncing</strong>: After auto-map, quickly review the Designer view. Fix any red or orange nodes before synchronizing.</p></li>
 <li><p><strong>Iterate</strong>: The pipeline is not a one-shot process. You can re-generate the ontology, re-run auto-map, or manually adjust individual mappings at any time.</p></li>
-<li><p><strong>Save your project</strong>: After achieving a good result, save the project to Unity Catalog (Project &gt; Save) so you can reload it later.</p></li>
+<li><p><strong>Save your domain</strong>: After achieving a good result, save the domain to Unity Catalog (<strong>Save Domain</strong> in the top menu) so you can reload it later.</p></li>
 </ul>
 </section>
 <hr class="docutils" />
@@ -1831,7 +1837,7 @@ Step 7: Validate with quality checks
 <h3>REST API — Programmatic Pipeline<a class="headerlink" href="#rest-api-programmatic-pipeline" title="Link to this heading">¶</a></h3>
 <p>The full pipeline is also available via REST API for automation or CI/CD integration:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1">## Step 3: Import metadata</span>
-curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>/project/metadata/initialize-async<span class="w"> </span><span class="se">\</span>
+curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>/domain/metadata/initialize-async<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;catalog&quot;: &quot;my_catalog&quot;, &quot;schema&quot;: &quot;my_schema&quot;, &quot;tables&quot;: [&quot;t1&quot;, &quot;t2&quot;]}&#39;</span>
 
 <span class="c1">## Step 4: Generate ontology</span>
@@ -1863,7 +1869,7 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 <p>After your knowledge graph is built, it can be queried programmatically:</p>
 <ul class="simple">
 <li><p><strong>Digital Twin API</strong> (<code class="docutils literal notranslate"><span class="pre">/api/v1/digitaltwin/</span></code>): Stateless REST endpoints for triple store status, entity search, ontology retrieval, and more. See <a class="reference internal" href="api.html"><span class="std std-doc">External API</span></a>.</p></li>
-<li><p><strong>GraphQL API</strong> (<code class="docutils literal notranslate"><span class="pre">/graphql/{project_name}</span></code>): Auto-generated typed schema with nested relationship traversal. See <a class="reference internal" href="api.html#graphql-api"><span class="std std-ref">External API</span></a>.</p></li>
+<li><p><strong>GraphQL API</strong> (<code class="docutils literal notranslate"><span class="pre">/graphql/{domain_name}</span></code>): Auto-generated typed schema with nested relationship traversal. See <a class="reference internal" href="api.html#graphql-api"><span class="std std-ref">External API</span></a>.</p></li>
 <li><p><strong>MCP Server</strong>: Expose your knowledge graph to the Databricks Playground and LLM clients. See <a class="reference internal" href="mcp.html"><span class="std std-doc">MCP Server</span></a>.</p></li>
 </ul>
 </section>
@@ -1914,7 +1920,7 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 </tr>
 </tbody>
 </table>
-<p>All imports merge the fetched content, parse it, and store the result in the current project session. You can continue editing entities, relationships, and attributes after import.</p>
+<p>All imports merge the fetched content, parse it, and store the result in the current domain session. You can continue editing entities, relationships, and attributes after import.</p>
 </section>
 <hr class="docutils" />
 <section id="owl-import">
@@ -2208,7 +2214,7 @@ Parse with OWL/RDFS parser
 Post-processing (filtering, restriction extraction, label resolution)
         │
         ▼
-Store in project session
+Store in domain session
         │
         ▼
 UI refreshes (entities, relationships, map)

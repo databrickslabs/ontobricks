@@ -121,19 +121,19 @@
 <section id="module-back.objects.digitaltwin.DigitalTwin">
 <span id="digitaltwin-class"></span><h2>DigitalTwin class<a class="headerlink" href="#module-back.objects.digitaltwin.DigitalTwin" title="Link to this heading">¶</a></h2>
 <p>Centralizes digital-twin query pipeline, data quality, and API resolution helpers.</p>
-<p>Constructed with a project (<code class="docutils literal notranslate"><span class="pre">ProjectSession</span></code> or snapshot) for instance
-methods that need project state.  Pure transforms and background-thread
+<p>Constructed with a domain session (<code class="docutils literal notranslate"><span class="pre">DomainSession</span></code> or snapshot) for instance
+methods that need domain state.  Pure transforms and background-thread
 runners are exposed as <code class="docutils literal notranslate"><span class="pre">&#64;staticmethod</span></code>.</p>
 </section>
 <section id="module-back.objects.digitaltwin.models">
 <span id="models"></span><h2>Models<a class="headerlink" href="#module-back.objects.digitaltwin.models" title="Link to this heading">¶</a></h2>
 <p>Data-transfer objects for the digital twin domain.</p>
 <dl class="py class">
-<dt class="sig sig-object py" id="back.objects.digitaltwin.models.ProjectSnapshot">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.digitaltwin.models.</span></span><span class="sig-name descname"><span class="pre">ProjectSnapshot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/digitaltwin/models.html#ProjectSnapshot"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.digitaltwin.models.ProjectSnapshot" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.digitaltwin.models.DomainSnapshot">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.digitaltwin.models.</span></span><span class="sig-name descname"><span class="pre">DomainSnapshot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/digitaltwin/models.html#DomainSnapshot"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.digitaltwin.models.DomainSnapshot" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
-<p>Lightweight, thread-safe project snapshot.</p>
-<p>Copies all relevant project data so background threads do not depend
+<p>Lightweight, thread-safe domain session snapshot.</p>
+<p>Copies all relevant domain data so background threads do not depend
 on the (request-scoped) session after the HTTP request completes.</p>
 <p>This is the <strong>single canonical snapshot class</strong> — do not create local
 <code class="docutils literal notranslate"><span class="pre">_Snap</span></code> variants elsewhere; import and use this one instead.</p>

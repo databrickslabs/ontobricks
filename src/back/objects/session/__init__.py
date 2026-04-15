@@ -1,4 +1,4 @@
-"""Centralized session management — middleware, managers, project state."""
+"""Centralized session management — middleware, managers, domain state."""
 
 from .middleware import (
     FileSessionMiddleware,
@@ -7,11 +7,11 @@ from .middleware import (
     get_from_session,
 )
 from .manager import SessionManager, get_session_manager
-from .project_session import (
-    ProjectSession,
-    get_project,
-    get_empty_project,
-    sanitize_project_folder,
+from .domain_session import (
+    DomainSession,
+    get_domain,
+    get_empty_domain,
+    sanitize_domain_folder,
 )
 from .global_config import GlobalConfigService, global_config_service
 
@@ -22,10 +22,10 @@ __all__ = [
     "get_from_session",
     "SessionManager",
     "get_session_manager",
-    "ProjectSession",
-    "get_project",
-    "get_empty_project",
-    "sanitize_project_folder",
+    "DomainSession",
+    "get_domain",
+    "get_empty_domain",
+    "sanitize_domain_folder",
     "GlobalConfigService",
     "global_config_service",
 ]

@@ -28,7 +28,7 @@ def client():
 
 @pytest.fixture
 def mock_session_mgr():
-    """Dict-backed session manager for ProjectSession tests."""
+    """Dict-backed session manager for DomainSession tests."""
     store = {}
 
     class _Mgr:
@@ -45,10 +45,10 @@ def mock_session_mgr():
 
 
 @pytest.fixture
-def project_session(mock_session_mgr):
-    """Create a ProjectSession with a mock session manager."""
-    from back.objects.session.project_session import ProjectSession
-    return ProjectSession(mock_session_mgr)
+def domain_session(mock_session_mgr):
+    """Create a DomainSession with a mock session manager."""
+    from back.objects.session.domain_session import DomainSession
+    return DomainSession(mock_session_mgr)
 
 
 @pytest.fixture

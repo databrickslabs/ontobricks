@@ -1,0 +1,254 @@
+<!-- JS: /static/domain/js/domain-information.js -->
+<!-- Domain information section -->
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-info-circle me-2"></i>Domain Information</h4>
+            <p class="text-muted mb-0 small">Define your domain details</p>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="btnSaveDomain" onclick="saveDomainFromSettings()">
+                <i class="bi bi-cloud-upload me-1"></i> Save Domain
+            </button>
+        </div>
+    </div>
+    
+    <!-- Tab navigation -->
+    <ul class="nav nav-tabs mb-0" id="domainInfoTabs" role="tablist" style="gap: 2px;">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-global" data-bs-toggle="tab" data-bs-target="#panel-global"
+                    type="button" role="tab" aria-controls="panel-global" aria-selected="true">
+                <i class="bi bi-globe2 me-1"></i> Global
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-llm" data-bs-toggle="tab" data-bs-target="#panel-llm"
+                    type="button" role="tab" aria-controls="panel-llm" aria-selected="false">
+                <i class="bi bi-robot me-1"></i> AI
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-triplestore" data-bs-toggle="tab" data-bs-target="#panel-triplestore"
+                    type="button" role="tab" aria-controls="panel-triplestore" aria-selected="false">
+                <i class="bi bi-lightning-charge me-1"></i> Digital Twin
+            </button>
+        </li>
+    </ul>
+
+    <div class="card border-top-0 rounded-top-0">
+        <div class="card-body">
+            <form id="domainForm">
+                <div class="tab-content" id="domainInfoTabContent">
+
+                    <!-- ======== Global Tab ======== -->
+                    <div class="tab-pane fade show active" id="panel-global" role="tabpanel" aria-labelledby="tab-global">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="domainName" class="form-label">
+                                    <i class="bi bi-tag"></i> Domain Name
+                                </label>
+                                <input type="text" class="form-control domain-editable" id="domainName" 
+                                       placeholder="NewDomain" 
+                                       value="{{ domain.name or '' }}">
+                                <small class="text-muted" id="domainNameHint">
+                                    CamelCase, alphanumeric only (e.g. MyOntologyDomain)
+                                </small>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="domainVersion" class="form-label">
+                                    <i class="bi bi-hash"></i> Version
+                                </label>
+                                <input type="text" class="form-control" id="domainVersionDisplay"
+                                       value="v{{ domain.version or '1' }}" readonly
+                                       style="background-color: #e9ecef;">
+                                <input type="hidden" id="domainVersionSelect" value="{{ domain.version or '1' }}">
+                            </div>
+                        </div>
+                        
+                        {% if domain.registry and domain.registry.get('catalog') and domain.domain_folder %}
+                        <div class="row mb-3" id="ucLocationRow">
+                            <div class="col-md-8">
+                                <label class="form-label">
+                                    <i class="bi bi-archive"></i> Registry Location
+                                </label>
+                                <div class="form-control-plaintext bg-light p-2 rounded font-monospace small" id="registryLocationDisplay">
+                                    {{ domain.registry.get('catalog', '') }}.{{ domain.registry.get('schema', '') }}.{{ domain.registry.get('volume', '') }}/domains/{{ domain.domain_folder }}
+                                </div>
+                                <small class="text-muted"><i class="bi bi-info-circle"></i> Domain location in the registry Volume</small>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="mb-3">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <label for="domainBaseUri" class="form-label mb-0">
+                                    <i class="bi bi-link-45deg"></i> Base URI <span class="text-danger">*</span>
+                                </label>
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input" type="checkbox" id="baseUriCustomToggle"
+                                           onchange="applyBaseUriMode()">
+                                    <label class="form-check-label small text-muted" for="baseUriCustomToggle">Custom</label>
+                                </div>
+                            </div>
+                            <input type="text" class="form-control domain-editable" id="domainBaseUri" 
+                                   placeholder="https://example.org/ontology#" 
+                                   value="{{ domain.base_uri or '' }}"
+                                   readonly
+                                   style="background-color: #e9ecef;">
+                            <small class="text-muted">
+                                <span id="baseUriHint">Auto-generated from <a href="/settings">Settings</a> default base URI domain and domain name.</span>
+                            </small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="domainDescription" class="form-label">
+                                <i class="bi bi-card-text"></i> Description
+                            </label>
+                            <textarea class="form-control domain-editable" id="domainDescription" rows="4" 
+                                      placeholder="Describe your domain, its purpose, and scope...">{{ domain.description or '' }}</textarea>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-8 mb-3">
+                                <label for="domainAuthor" class="form-label">
+                                    <i class="bi bi-person"></i> Author
+                                </label>
+                                <input type="text" class="form-control domain-editable" id="domainAuthor" 
+                                       placeholder="Your name or organization" 
+                                       value="{{ domain.author or '' }}">
+                            </div>
+                            
+                        </div>
+                    </div>
+
+                    <!-- ======== LLM Tab ======== -->
+                    <div class="tab-pane fade" id="panel-llm" role="tabpanel" aria-labelledby="tab-llm">
+                        <div class="mb-3">
+                            <label for="domainLlmEndpoint" class="form-label">
+                                <i class="bi bi-robot"></i> LLM Endpoint <small class="text-muted">(for OntoBricks Agents)</small>
+                            </label>
+                            <div class="input-group">
+                                <select class="form-select domain-editable" id="domainLlmEndpoint"
+                                        data-saved-value="{{ domain.llm_endpoint or '' }}">
+                                    <option value="">-- Loading endpoints... --</option>
+                                </select>
+                                <button type="button" class="btn btn-outline-secondary" onclick="loadLlmEndpoints()" title="Refresh endpoints">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted">Select the Databricks Model Serving endpoint to use for the OntoBricks Agents</small>
+                        </div>
+                        <div class="alert alert-light border small mt-4">
+                            <i class="bi bi-info-circle me-1"></i>
+                            OntoBricks agents (OWL generation, auto-mapping, icon mapping) use this endpoint
+                            to interact with a Foundation Model. The endpoint must be a Databricks Model Serving
+                            endpoint accessible from this workspace.
+                        </div>
+                    </div>
+
+                    <!-- ======== Triple Store Tab ======== -->
+                    <div class="tab-pane fade" id="panel-triplestore" role="tabpanel" aria-labelledby="tab-triplestore">
+
+                        <!-- Dual Digital Twin explanation -->
+                        <div class="alert alert-light border mb-4">
+                            <h6 class="alert-heading mb-2"><i class="bi bi-lightning-charge me-1"></i> Dual Digital Twin</h6>
+                            <p class="small mb-2">When you build the Digital Twin, OntoBricks creates two complementary representations:</p>
+                            <ul class="small mb-0">
+                                <li><strong>Zero-Copy View</strong> &mdash; a SQL VIEW in Unity Catalog that maps directly to your source data with no duplication. Used for <em>Quality</em> checks.</li>
+                                <li><strong>Graph Database</strong> &mdash; a LadybugDB embedded graph for <em>Knowledge Graph</em> exploration, <em>GraphQL</em> queries, and <em>API</em> access.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Zero-Copy View configuration -->
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">
+                                <i class="bi bi-eye me-1"></i> Zero-Copy View <small class="text-muted">(Unity Catalog)</small>
+                            </label>
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-5">
+                                    <label class="form-label small text-muted mb-1">Catalog.Schema</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light"><i class="bi bi-database"></i></span>
+                                        <input type="text" class="form-control" id="triplestoreCatalogSchemaDisplay"
+                                               value="{{ domain.delta.catalog ~ '.' ~ domain.delta.schema if domain.delta.catalog else '' }}"
+                                               readonly placeholder="No location set"
+                                               style="background-color: #f8f9fa; cursor: pointer;"
+                                               onclick="openTriplestoreLocationModal()">
+                                        <button type="button" class="btn btn-outline-secondary"
+                                                onclick="openTriplestoreLocationModal()"
+                                                title="Change Catalog.Schema">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                    </div>
+                                    <input type="hidden" id="triplestoreLocationWidget_catalog" value="{{ domain.delta.catalog or '' }}">
+                                    <input type="hidden" id="triplestoreLocationWidget_schema" value="{{ domain.delta.schema or '' }}">
+                                    <div id="triplestoreLocationWidget" style="display:none;"></div>
+                                </div>
+                                <div class="col-md-7">
+                                    <label class="form-label small text-muted mb-1">View name <i class="bi bi-lock-fill" title="Auto-generated from domain name"></i></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light">.</span>
+                                        <input type="text" class="form-control" id="domainTriplestoreTableName"
+                                               placeholder="triplestore_domain_name"
+                                               value="{{ domain.delta.table_name or '' }}"
+                                               readonly
+                                               style="background-color: #e9ecef;">
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>Select <strong>catalog.schema</strong> where the VIEW will be created.
+                                The view name is derived from the domain name and version (<code>triplestore_&lt;domain&gt;_V&lt;version&gt;</code>).
+                            </small>
+                        </div>
+
+                        <!-- Incremental Snapshot (read-only, derived) -->
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">
+                                <i class="bi bi-clock-history me-1"></i> Incremental Snapshot <small class="text-muted">(Delta table)</small>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="bi bi-table"></i></span>
+                                <input type="text" class="form-control" id="domainSnapshotTableName"
+                                       readonly
+                                       style="background-color: #e9ecef;"
+                                       placeholder="Set catalog.schema and domain name first">
+                            </div>
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>A managed Delta table that stores the triple set from the previous build.
+                                Used by <strong>incremental sync</strong> to compute the diff (SQL <code>EXCEPT</code>) and apply only
+                                additions and removals to the graph, instead of rebuilding from scratch.
+                                Automatically created on the first build.
+                            </small>
+                        </div>
+
+                        <!-- Graph Database info (read-only, computed) -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                <i class="bi bi-diagram-3 me-1"></i> Graph Database <small class="text-muted">(LadybugDB)</small>
+                            </label>
+                            <div class="row g-2 mb-2">
+                                <div class="col-12">
+                                    <label class="form-label small text-muted mb-1">Local file</label>
+                                    <div class="form-control-plaintext font-monospace bg-light px-3 py-2 rounded border small"
+                                         id="ladybugLocalPath">/tmp/ontobricks/{{ domain.name|lower }}.lbug</div>
+                                </div>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-12">
+                                    <label class="form-label small text-muted mb-1">Registry location</label>
+                                    <div class="form-control-plaintext font-monospace bg-light px-3 py-2 rounded border small"
+                                         id="ladybugRegistryPath">{% if domain.registry.catalog and domain.domain_folder %}{{ domain.registry.catalog }}.{{ domain.registry.schema }}.{{ domain.registry.volume or 'OntoBricksRegistry' }}/domains/{{ domain.domain_folder }}/V{{ domain.version or '1' }}/{% else %}<span class="text-muted fst-italic">Registry not configured</span>{% endif %}</div>
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>Graph data is automatically synced to the registry when saving or loading the domain.
+                            </small>
+                        </div>
+                    </div>
+
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

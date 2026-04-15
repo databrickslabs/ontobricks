@@ -17,31 +17,31 @@ const UCLocationWidget = (function() {
     // Cache for catalogs and schemas to avoid repeated API calls
     let catalogsCache = null;
     let schemasCache = {};
-    let projectLocationCache = null;
+    let domainLocationCache = null;
     
     // Widget instances
     const widgets = {};
     
     /**
-     * Load project UC location (cached)
-     * Falls back to metadata location if project UC location is not set
+     * Load domain registry UC location (cached)
+     * Falls back to metadata location if registry location is not set
      */
-    async function loadProjectLocation(forceRefresh = false) {
-        if (projectLocationCache && projectLocationCache.catalog && !forceRefresh) {
-            return projectLocationCache;
+    async function loadDomainLocation(forceRefresh = false) {
+        if (domainLocationCache && domainLocationCache.catalog && !forceRefresh) {
+            return domainLocationCache;
         }
         
         try {
-            const response = await fetch('/project/info', { credentials: 'same-origin' });
+            const response = await fetch('/domain/info', { credentials: 'same-origin' });
             const data = await response.json();
             if (data.success && data.registry && data.registry.catalog && data.registry.schema) {
-                projectLocationCache = data.registry;
-                return projectLocationCache;
+                domainLocationCache = data.registry;
+                return domainLocationCache;
             }
             
-            // Fallback: try to get from metadata if project UC location is not set
+            // Fallback: try to get from metadata if registry location is not set
             // Extract catalog/schema from first table's full_name
-            const metadataResponse = await fetch('/project/metadata', { credentials: 'same-origin' });
+            const metadataResponse = await fetch('/domain/metadata', { credentials: 'same-origin' });
             const metadataData = await metadataResponse.json();
             if (metadataData.success && metadataData.has_metadata && metadataData.metadata) {
                 const metadata = metadataData.metadata;
@@ -49,17 +49,17 @@ const UCLocationWidget = (function() {
                 if (tables.length > 0 && tables[0].full_name) {
                     const parts = tables[0].full_name.split('.');
                     if (parts.length >= 2) {
-                        projectLocationCache = {
+                        domainLocationCache = {
                             catalog: parts[0],
                             schema: parts[1],
                             volume: ''
                         };
-                        return projectLocationCache;
+                        return domainLocationCache;
                     }
                 }
             }
         } catch (error) {
-            console.error('[UCLocationWidget] Error loading project location:', error);
+            console.error('[UCLocationWidget] Error loading domain registry location:', error);
         }
         return { catalog: '', schema: '', volume: '' };
     }
@@ -158,13 +158,13 @@ const UCLocationWidget = (function() {
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <!-- Use Project Location Option -->
-                            <div id="ucLocationProjectOption" class="border rounded d-flex align-items-center mb-3 p-2 bg-light" style="display: none !important;">
+                            <!-- Use domain registry location option -->
+                            <div id="ucLocationDomainOption" class="border rounded d-flex align-items-center mb-3 p-2 bg-light" style="display: none !important;">
                                 <div class="flex-grow-1">
-                                    <strong><i class="bi bi-folder2"></i> Project Location:</strong>
-                                    <span id="ucLocationProjectValue" class="fw-semibold ms-1">-</span>
+                                    <strong><i class="bi bi-folder2"></i> Domain Location:</strong>
+                                    <span id="ucLocationDomainValue" class="fw-semibold ms-1">-</span>
                                 </div>
-                                <button type="button" class="btn btn-sm btn-primary" id="ucLocationUseProjectBtn">
+                                <button type="button" class="btn btn-sm btn-primary" id="ucLocationUseDomainBtn">
                                     Use This
                                 </button>
                             </div>
@@ -204,7 +204,7 @@ const UCLocationWidget = (function() {
         document.getElementById('ucLocationModalCatalog').addEventListener('change', onCatalogChange);
         document.getElementById('ucLocationModalSchema').addEventListener('change', onSchemaChange);
         document.getElementById('ucLocationModalConfirm').addEventListener('click', onConfirm);
-        document.getElementById('ucLocationUseProjectBtn').addEventListener('click', onUseProjectLocation);
+        document.getElementById('ucLocationUseDomainBtn').addEventListener('click', onUseDomainLocation);
     }
     
     /**
@@ -253,21 +253,21 @@ const UCLocationWidget = (function() {
     }
     
     /**
-     * Handle use project location button
+     * Handle "use domain registry location" button
      */
-    function onUseProjectLocation() {
-        if (!projectLocationCache) return;
+    function onUseDomainLocation() {
+        if (!domainLocationCache) return;
         
         const catalogSelect = document.getElementById('ucLocationModalCatalog');
         const schemaSelect = document.getElementById('ucLocationModalSchema');
         
         // Set catalog
-        catalogSelect.value = projectLocationCache.catalog;
+        catalogSelect.value = domainLocationCache.catalog;
         
         // Trigger schema load then set schema
         onCatalogChange().then(() => {
             setTimeout(() => {
-                schemaSelect.value = projectLocationCache.schema;
+                schemaSelect.value = domainLocationCache.schema;
                 onSchemaChange();
             }, 100);
         });
@@ -340,8 +340,8 @@ const UCLocationWidget = (function() {
         const catalogSelect = document.getElementById('ucLocationModalCatalog');
         const schemaSelect = document.getElementById('ucLocationModalSchema');
         const confirmBtn = document.getElementById('ucLocationModalConfirm');
-        const projectOption = document.getElementById('ucLocationProjectOption');
-        const projectValue = document.getElementById('ucLocationProjectValue');
+        const domainOption = document.getElementById('ucLocationDomainOption');
+        const domainValue = document.getElementById('ucLocationDomainValue');
         
         // Reset state
         catalogSelect.innerHTML = '<option value="">Loading catalogs...</option>';
@@ -353,18 +353,18 @@ const UCLocationWidget = (function() {
         const bsModal = new bootstrap.Modal(modal);
         bsModal.show();
         
-        // Load project location and catalogs in parallel
-        const [projectLoc, catalogs] = await Promise.all([
-            loadProjectLocation(),
+        // Load domain registry location and catalogs in parallel
+        const [domainLoc, catalogs] = await Promise.all([
+            loadDomainLocation(),
             loadCatalogs()
         ]);
         
-        // Show project option if available
-        if (projectLoc && projectLoc.catalog && projectLoc.schema) {
-            projectOption.style.display = 'flex';
-            projectValue.textContent = `${projectLoc.catalog}.${projectLoc.schema}`;
+        // Show domain registry shortcut if available
+        if (domainLoc && domainLoc.catalog && domainLoc.schema) {
+            domainOption.style.display = 'flex';
+            domainValue.textContent = `${domainLoc.catalog}.${domainLoc.schema}`;
         } else {
-            projectOption.style.display = 'none';
+            domainOption.style.display = 'none';
         }
         
         // Populate catalogs
@@ -403,7 +403,7 @@ const UCLocationWidget = (function() {
         widgets[widgetId] = {
             container: container,
             onSelect: options.onSelect || null,
-            autoLoadProject: options.autoLoadProject !== false
+            autoLoadDomain: options.autoLoadDomain !== false
         };
         
         // Create widget HTML if container is empty
@@ -411,11 +411,11 @@ const UCLocationWidget = (function() {
             container.innerHTML = createWidgetHTML(widgetId, options);
         }
         
-        // Auto-load project location if enabled
-        if (widgets[widgetId].autoLoadProject) {
-            const projectLoc = await loadProjectLocation();
-            if (projectLoc && projectLoc.catalog && projectLoc.schema) {
-                setWidgetValue(widgetId, projectLoc.catalog, projectLoc.schema);
+        // Auto-load domain registry location if enabled
+        if (widgets[widgetId].autoLoadDomain) {
+            const domainLoc = await loadDomainLocation();
+            if (domainLoc && domainLoc.catalog && domainLoc.schema) {
+                setWidgetValue(widgetId, domainLoc.catalog, domainLoc.schema);
             }
         }
         
@@ -432,11 +432,11 @@ const UCLocationWidget = (function() {
     }
     
     /**
-     * Refresh project location cache
+     * Refresh domain registry location cache
      */
-    async function refreshProjectLocation() {
-        projectLocationCache = null;
-        return await loadProjectLocation(true);
+    async function refreshDomainLocation() {
+        domainLocationCache = null;
+        return await loadDomainLocation(true);
     }
     
     /**
@@ -445,7 +445,7 @@ const UCLocationWidget = (function() {
     function clearCache() {
         catalogsCache = null;
         schemasCache = {};
-        projectLocationCache = null;
+        domainLocationCache = null;
     }
     
     // Public API
@@ -455,9 +455,9 @@ const UCLocationWidget = (function() {
         openModal,
         getValue: getWidgetValue,
         setValue: setWidgetValue,
-        refreshProjectLocation,
+        refreshDomainLocation,
         clearCache,
-        loadProjectLocation,
+        loadDomainLocation,
         loadCatalogs,
         loadSchemas
     };

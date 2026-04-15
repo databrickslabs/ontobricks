@@ -1,6 +1,6 @@
 # University Academic Research Dataset
 
-This dataset simulates a complete academic management system for a university with students, faculty, courses, and research. It contains 12 tables with approximately 3,100 records covering academic programs, enrollments, research projects, publications, and grants.
+This dataset simulates a complete academic management system for a university with students, faculty, courses, and research. It contains 12 tables with approximately 3,100 records covering academic programs, enrollments, research domains, publications, and grants.
 
 ## Overview
 
@@ -13,7 +13,7 @@ The dataset models the complete academic lifecycle:
 - **Student Lifecycle**: Student records, enrollments, grades, transcripts
 - **Academic Programs**: Departments, courses, prerequisites, course assignments
 - **Faculty**: Faculty profiles, department affiliations, teaching assignments
-- **Research**: Projects, publications, grants, collaborations
+- **Research**: Research domains, publications, grants, collaborations
 
 ---
 
@@ -95,10 +95,10 @@ The dataset models the complete academic lifecycle:
                                        │                │                        │
                                        │                ▼                        ▼
                                        │   ┌─────────────────────┐      ┌─────────────────────┐
-                                       │   │ project_collaboration      │    GRANT_AWARD      │
+                                       │   │ domain_collaboration       │    GRANT_AWARD      │
                                        │   ├─────────────────────┤      ├─────────────────────┤
-                                       └───│ project_id (FK)     │      │ grant_id (PK)       │
-                                           │ faculty_id (FK)     │      │ project_id (FK)     │
+                                       └───│ domain_id (FK)      │      │ grant_id (PK)       │
+                                           │ faculty_id (FK)     │      │ domain_id (FK)      │
                                            │ role                │      │ faculty_id (FK)     │
                                            │ start_date          │      │ grant_name          │
                                            │ hours_per_week      │      │ agency              │
@@ -111,11 +111,11 @@ The dataset models the complete academic lifecycle:
                                                    │                    ┌──────────┴─────────┐
                                                    │                    │                   │
                               ┌─────────────────────┐                    │                   │
-                              │  RESEARCH_PROJECT    │◄───────────────────┘                   │
+                              │  RESEARCH_DOMAIN     │◄───────────────────┘                   │
                               ├─────────────────────┤                                        │
-                              │ project_id (PK)     │                                        │
+                              │ domain_id (PK)      │                                        │
                               │ department_id (FK)──┼────────────────────────────────────────┘
-                              │ project_name        │
+                              │ domain_name         │
                               │ start_date          │
                               │ end_date            │
                               │ status              │
@@ -130,7 +130,7 @@ The dataset models the complete academic lifecycle:
                               │    PUBLICATION      │
                               ├─────────────────────┤
                               │ publication_id (PK) │
-                              │ project_id (FK)     │
+                              │ domain_id (FK)      │
                               │ title                │
                               │ journal              │
                               │ publication_date     │
@@ -253,17 +253,17 @@ Faculty assignments to courses.
 
 ---
 
-### 7. Research Project (`research_project.csv`)
+### 7. Research Domain (`research_domain.csv`)
 
-Research project records.
+Research domain records (funded research programs / initiatives).
 
 | Column         | Type    | Description                              |
 |----------------|---------|------------------------------------------|
-| project_id     | STRING  | Primary Key (e.g., PRJ00001)            |
+| domain_id      | STRING  | Primary Key (e.g., PRJ00001)            |
 | department_id  | STRING  | Foreign Key → Department                 |
-| project_name   | STRING  | Project name                             |
-| start_date     | DATE    | Project start date                       |
-| end_date       | DATE    | Project end date                         |
+| domain_name    | STRING  | Research domain name                   |
+| start_date     | DATE    | Start date                               |
+| end_date       | DATE    | End date                                 |
 | status         | STRING  | active, completed, on_hold, planning     |
 | funding_amount | DECIMAL | Total funding amount                     |
 | funding_source | STRING  | NSF, NIH, DOE, etc.                     |
@@ -274,12 +274,12 @@ Research project records.
 
 ### 8. Publication (`publication.csv`)
 
-Publications linked to research projects.
+Publications linked to research domains.
 
 | Column           | Type    | Description                              |
 |------------------|---------|------------------------------------------|
 | publication_id   | STRING  | Primary Key (e.g., PUB00001)            |
-| project_id       | STRING  | Foreign Key → Research Project           |
+| domain_id        | STRING  | Foreign Key → Research Domain            |
 | title            | STRING  | Publication title                        |
 | journal          | STRING  | Journal name (Nature, Science, etc.)     |
 | publication_date | DATE    | Publication date                         |
@@ -297,7 +297,7 @@ Grant funding records.
 | Column      | Type    | Description                              |
 |-------------|---------|------------------------------------------|
 | grant_id    | STRING  | Primary Key (e.g., GRT00001)            |
-| project_id  | STRING  | Foreign Key → Research Project           |
+| domain_id   | STRING  | Foreign Key → Research Domain            |
 | faculty_id  | STRING  | Foreign Key → Faculty (PI)               |
 | grant_name  | STRING  | Grant name                               |
 | agency      | STRING  | NSF, NIH, DOE, NASA, etc.               |
@@ -312,14 +312,14 @@ Grant funding records.
 
 ## Relationship Tables
 
-### 10. Project Collaboration (`project_collaboration.csv`)
+### 10. Domain Collaboration (`domain_collaboration.csv`)
 
-Faculty collaboration on research projects.
+Faculty collaboration on research domains.
 
 | Column         | Type    | Description                              |
 |----------------|---------|------------------------------------------|
 | collab_id      | STRING  | Primary Key (e.g., COL00001)            |
-| project_id     | STRING  | Foreign Key → Research Project           |
+| domain_id      | STRING  | Foreign Key → Research Domain            |
 | faculty_id     | STRING  | Foreign Key → Faculty                    |
 | role           | STRING  | PI, Co-I, Researcher, Postdoc, etc.     |
 | start_date     | DATE    | Collaboration start date                 |
@@ -369,10 +369,10 @@ Faculty affiliation with departments.
 | assigned_to       | Faculty       | Course Assignment| 1:N         | Faculty teaches courses       |
 | teaches            | Course Assignment | Course      | N:1         | Assignment is for a course    |
 | has_prerequisite   | Course        | Course           | N:M         | Course prerequisites          |
-| sponsors           | Department    | Research Project  | 1:N         | Department sponsors projects  |
-| publishes          | Research Project | Publication   | 1:N         | Project produces publications |
-| receives_grant    | Research Project | Grant Award   | 1:N         | Project receives grants       |
-| collaborates       | Faculty       | Research Project  | N:M         | Faculty collaborates on projects |
+| sponsors           | Department    | Research Domain   | 1:N         | Department sponsors research domains |
+| publishes          | Research Domain | Publication   | 1:N         | Domain produces publications |
+| receives_grant    | Research Domain | Grant Award   | 1:N         | Domain receives grants       |
+| collaborates       | Faculty       | Research Domain   | N:M         | Faculty collaborates on research domains |
 | affiliated_with    | Faculty       | Department       | N:M         | Faculty affiliated with depts |
 
 ---
@@ -413,7 +413,7 @@ The loader script creates three analytical views:
 |----------------------|--------------------------------------------------|
 | `vw_student_transcript` | Student enrollments with courses and grades   |
 | `vw_faculty_profile`    | Faculty with departments, courses, grants     |
-| `vw_research_overview`  | Research projects with publications and funding |
+| `vw_research_overview`  | Research domains with publications and funding |
 
 ---
 
@@ -450,8 +450,8 @@ SELECT
     SUM(p.citation_count) as total_citations,
     SUM(ga.amount) as total_grant_funding
 FROM faculty f
-LEFT JOIN project_collaboration pc ON f.faculty_id = pc.faculty_id
-LEFT JOIN publication p ON pc.project_id = p.project_id
+LEFT JOIN domain_collaboration dc ON f.faculty_id = dc.faculty_id
+LEFT JOIN publication p ON dc.domain_id = p.domain_id
 LEFT JOIN grant_award ga ON f.faculty_id = ga.faculty_id
 GROUP BY f.faculty_id, f.first_name, f.last_name, f.research_area;
 ```
@@ -474,12 +474,12 @@ ORDER BY c1.course_code;
 ```sql
 SELECT 
     d.department_name,
-    COUNT(DISTINCT rp.project_id) as project_count,
-    SUM(rp.funding_amount) as total_funding,
+    COUNT(DISTINCT rd.domain_id) as domain_count,
+    SUM(rd.funding_amount) as total_funding,
     COUNT(DISTINCT p.publication_id) as publication_count
 FROM department d
-JOIN research_project rp ON d.department_id = rp.department_id
-LEFT JOIN publication p ON rp.project_id = p.project_id
+JOIN research_domain rd ON d.department_id = rd.department_id
+LEFT JOIN publication p ON rd.domain_id = p.domain_id
 GROUP BY d.department_name
 ORDER BY total_funding DESC;
 ```
@@ -491,7 +491,7 @@ ORDER BY total_funding DESC;
 This dataset is ideal for testing and demonstrating:
 
 ### Ontology Modeling
-- ✅ **Class Mapping**: Map tables to OWL classes (Student, Faculty, Course, ResearchProject, etc.)
+- ✅ **Class Mapping**: Map tables to OWL classes (Student, Faculty, Course, ResearchDomain, etc.)
 - ✅ **Object Properties**: Model relationships (enrollsIn, teaches, hasPrerequisite, publishes, etc.)
 - ✅ **Data Properties**: Scalar values (gpa, email, funding_amount, citation_count, etc.)
 - ✅ **Hierarchical Concepts**: Department structure, course levels, research areas
@@ -499,7 +499,7 @@ This dataset is ideal for testing and demonstrating:
 ### Knowledge Graph Construction
 - ✅ **Student 360**: Build complete student profiles from enrollments and grades
 - ✅ **Faculty Profile**: Connect teaching, research, and department affiliations
-- ✅ **Research Impact**: Trace projects to publications and citations
+- ✅ **Research Impact**: Trace research domains to publications and citations
 
 ### SPARQL Queries
 - ✅ **Path Queries**: Find all prerequisites for a course
@@ -518,10 +518,10 @@ This dataset is ideal for testing and demonstrating:
 | course                | 80     | Core Entity   | course_id        |
 | enrollment            | 2,000  | Transaction   | enrollment_id    |
 | course_assignment     | 120    | Transaction   | assignment_id    |
-| research_project      | 40     | Core Entity   | project_id       |
+| research_domain       | 40     | Core Entity   | domain_id        |
 | publication           | 200    | Transaction   | publication_id   |
 | grant_award           | 50     | Transaction   | grant_id         |
-| project_collaboration  | 80     | Relationship  | collab_id       |
+| domain_collaboration   | 80     | Relationship  | collab_id       |
 | course_prerequisite   | 60     | Relationship  | (course_id, prerequisite_id) |
 | department_affiliation| 80     | Relationship  | (faculty_id, department_id) |
 
@@ -551,10 +551,10 @@ This dataset is ideal for testing and demonstrating:
 | `course.csv`              | Course catalog                 |
 | `enrollment.csv`          | Student enrollments            |
 | `course_assignment.csv`   | Faculty course assignments     |
-| `research_project.csv`    | Research projects              |
+| `research_domain.csv`     | Research domains               |
 | `publication.csv`         | Publications                   |
 | `grant_award.csv`         | Grant awards                   |
-| `project_collaboration.csv`| Project collaborations         |
+| `domain_collaboration.csv`| Domain collaborations          |
 | `course_prerequisite.csv` | Course prerequisites           |
 | `department_affiliation.csv` | Department affiliations    |
 | `load_data.py`            | Databricks loader notebook     |

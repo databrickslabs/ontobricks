@@ -15,9 +15,9 @@ VOLUME_PATH = f"/Volumes/{CATALOG}/{SCHEMA}/pm_data"
 TABLES = [
     "person",
     "department",
-    "project",
+    "domain",
     "person_department",
-    "department_project",
+    "department_domain",
     "person_collaboration",
 ]
 
@@ -155,23 +155,23 @@ def create_views():
             LEFT JOIN {CATALOG}.{SCHEMA}.person_department pd ON p.person_id = pd.person_id
             LEFT JOIN {CATALOG}.{SCHEMA}.department d ON pd.department_id = d.department_id
         """,
-        "vw_project_sponsorship": f"""
-            CREATE OR REPLACE VIEW {CATALOG}.{SCHEMA}.vw_project_sponsorship AS
-            SELECT pr.project_id, pr.project_name, pr.status, pr.budget AS total_budget,
-                   d.department_name, dp.sponsorship_type, dp.funding_amount
-            FROM {CATALOG}.{SCHEMA}.project pr
-            JOIN {CATALOG}.{SCHEMA}.department_project dp ON pr.project_id = dp.project_id
-            JOIN {CATALOG}.{SCHEMA}.department d ON dp.department_id = d.department_id
+        "vw_domain_sponsorship": f"""
+            CREATE OR REPLACE VIEW {CATALOG}.{SCHEMA}.vw_domain_sponsorship AS
+            SELECT dom.domain_id, dom.domain_name, dom.status, dom.budget AS total_budget,
+                   d.department_name, dd.sponsorship_type, dd.funding_amount
+            FROM {CATALOG}.{SCHEMA}.domain dom
+            JOIN {CATALOG}.{SCHEMA}.department_domain dd ON dom.domain_id = dd.domain_id
+            JOIN {CATALOG}.{SCHEMA}.department d ON dd.department_id = d.department_id
         """,
         "vw_collaboration_network": f"""
             CREATE OR REPLACE VIEW {CATALOG}.{SCHEMA}.vw_collaboration_network AS
             SELECT p1.first_name || ' ' || p1.last_name AS person_1,
                    p2.first_name || ' ' || p2.last_name AS person_2,
-                   pc.collaboration_type, pr.project_name, pc.hours_per_week
+                   pc.collaboration_type, dom.domain_name, pc.hours_per_week
             FROM {CATALOG}.{SCHEMA}.person_collaboration pc
             JOIN {CATALOG}.{SCHEMA}.person p1 ON pc.person_id_1 = p1.person_id
             JOIN {CATALOG}.{SCHEMA}.person p2 ON pc.person_id_2 = p2.person_id
-            LEFT JOIN {CATALOG}.{SCHEMA}.project pr ON pc.project_id = pr.project_id
+            LEFT JOIN {CATALOG}.{SCHEMA}.domain dom ON pc.domain_id = dom.domain_id
         """,
     }
 

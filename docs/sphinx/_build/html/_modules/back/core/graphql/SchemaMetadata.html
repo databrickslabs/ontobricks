@@ -172,7 +172,7 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">uris</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                 <span class="s2">&quot;GraphQL resolve_list: no subjects found for type=</span><span class="si">%s</span><span class="s2"> (cls_uri=</span><span class="si">%s</span><span class="s2">, search=</span><span class="si">%s</span><span class="s2">). &quot;</span>
-                <span class="s2">&quot;Try the /graphql/</span><span class="si">{project}</span><span class="s2">/debug?type_name=</span><span class="si">%s</span><span class="s2"> endpoint to diagnose.&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;Try the /graphql/</span><span class="si">{domain}</span><span class="s2">/debug?type_name=</span><span class="si">%s</span><span class="s2"> endpoint to diagnose.&quot;</span><span class="p">,</span>
                 <span class="n">type_name</span><span class="p">,</span> <span class="n">info</span><span class="o">.</span><span class="n">cls_uri</span><span class="p">,</span> <span class="n">search</span><span class="p">,</span> <span class="n">type_name</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="k">return</span> <span class="p">[]</span>

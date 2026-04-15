@@ -46,7 +46,7 @@ class SQLWizardService:
         
         try:
             host = self.client.host.rstrip('/')
-            headers = self.client._get_auth_headers()
+            headers = self.client.get_auth_headers()
             
             # Use the serving endpoints API
             url = f"{host}/api/2.0/serving-endpoints"
@@ -242,7 +242,7 @@ class SQLWizardService:
             raise ValidationError("Databricks credentials not configured")
         
         host = self.client.host.rstrip('/')
-        headers = self.client._get_auth_headers()
+        headers = self.client.get_auth_headers()
         
         url = f"{host}/serving-endpoints/{endpoint_name}/invocations"
         

@@ -54,7 +54,7 @@ class DeltaTripleStore(TripleStoreBackend):
         from databricks import sql
 
         total = 0
-        conn_params = self.client._get_sql_connection_params()
+        conn_params = self.client.get_sql_connection_params()
         with sql.connect(**conn_params) as connection:
             with connection.cursor() as cursor:
                 for i in range(0, len(triples), batch_size):

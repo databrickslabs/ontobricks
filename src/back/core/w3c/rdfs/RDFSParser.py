@@ -6,10 +6,7 @@ RDFS is simpler than OWL and uses rdfs:Class instead of owl:Class.
 from rdflib import Graph, RDF, RDFS, Namespace
 from typing import List, Dict, Optional
 
-from back.core.logging import get_logger
 from back.core.errors import ValidationError
-
-logger = get_logger(__name__)
 
 
 class RDFSParser:

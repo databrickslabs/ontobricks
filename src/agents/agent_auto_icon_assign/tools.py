@@ -13,6 +13,7 @@ from agents.tools.ontology import (
     ONTOLOGY_TOOL_HANDLERS,
 )
 from agents.tools.metadata import (
+    GET_METADATA_DEF,
     tool_get_metadata,
 )
 from agents.tools.icons import (
@@ -22,21 +23,8 @@ from agents.tools.icons import (
 
 __all__ = ["ToolContext", "TOOL_DEFINITIONS", "TOOL_HANDLERS"]
 
-_METADATA_DEF = {
-    "type": "function",
-    "function": {
-        "name": "get_metadata",
-        "description": (
-            "Get the project's database table metadata: table names, "
-            "column names, data types, and descriptions. Useful to understand "
-            "what each entity represents in the data."
-        ),
-        "parameters": {"type": "object", "properties": {}, "required": []},
-    },
-}
-
 TOOL_DEFINITIONS: List[dict] = (
-    [_METADATA_DEF]
+    [GET_METADATA_DEF]
     + ONTOLOGY_TOOL_DEFINITIONS
     + ICON_TOOL_DEFINITIONS
 )

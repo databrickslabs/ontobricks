@@ -15,7 +15,6 @@ from typing import Any, Callable, Dict, List, Optional
 
 from back.core.logging import get_logger
 from agents.llm_utils import call_llm_with_retry
-from agents.tracing import trace_llm, trace_tool
 
 logger = get_logger(__name__)
 

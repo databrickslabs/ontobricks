@@ -5,7 +5,6 @@ This middleware provides file-based session storage for FastAPI.
 It stores session data as JSON files in a configurable directory.
 """
 import json
-import os
 import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -137,7 +136,7 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
             else:
                 # Load existing session (served from in-memory cache after first hit)
                 session_data = self._load_session(session_id)
-                pd = session_data.get('project_data', {})
+                pd = session_data.get('domain_data') or session_data.get('project_data', {})
                 ontology_classes = len(pd.get('ontology', {}).get('classes', []))
                 mapping_entities = len(pd.get('assignment', {}).get('entities', []))
                 mapping_rels = len(pd.get('assignment', {}).get('relationships', []))
@@ -157,7 +156,7 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
         # ONLY save session if it was explicitly modified
         # This prevents race conditions where concurrent requests overwrite each other
         if hasattr(request.state, 'session_modified') and request.state.session_modified:
-            pd = request.state.session.get('project_data', {})
+            pd = request.state.session.get('domain_data') or request.state.session.get('project_data', {})
             ontology_classes = len(pd.get('ontology', {}).get('classes', []))
             mapping_entities = len(pd.get('assignment', {}).get('entities', []))
             mapping_rels = len(pd.get('assignment', {}).get('relationships', []))

@@ -57,9 +57,9 @@ Package                                     Responsibility
 ``back.core.w3c``                           OWL, RDFS, R2RML, SPARQL, SHACL services
 ``back.core.reasoning``                     OWL 2 RL inference + SWRL engine
 ``back.core.graphql``                       Strawberry GraphQL schema from ontology
-``back.objects.registry``                   UC Volume project registry + permissions
-``back.objects.session``                    HTTP session + in-memory project state
-``back.objects.project``                    Session-scoped project management (UC, metadata, layout)
+``back.objects.registry``                   UC Volume domain registry + permissions
+``back.objects.session``                    HTTP session + in-memory domain state
+``back.objects.domain``                     Session-scoped domain management (UC, metadata, layout)
 ``back.core.industry``                      FIBO, CDISC, IOF importers
 ``back.core.sqlwizard``                     LLM-assisted SQL generation
 ``front.routes.*``                          UI areas (home, ontology, mapping, etc.)

@@ -2,7 +2,7 @@
 import pytest
 
 from api.service import (
-    get_project_info,
+    get_domain_info,
     get_ontology_info,
     get_ontology_classes,
     get_ontology_properties,
@@ -12,9 +12,9 @@ from api.service import (
 )
 
 
-VERSIONED_PROJECT = {
+VERSIONED_DOMAIN = {
     "info": {
-        "name": "TestProject",
+        "name": "TestDomain",
         "description": "A test",
         "uri": "http://test.org",
         "author": "tester",
@@ -43,7 +43,7 @@ VERSIONED_PROJECT = {
     },
 }
 
-LEGACY_PROJECT = {
+LEGACY_DOMAIN = {
     "info": {"name": "Legacy", "version": "1"},
     "ontology": {
         "classes": [{"uri": "http://x.org#C", "name": "C", "label": "C"}],
@@ -56,10 +56,10 @@ LEGACY_PROJECT = {
 }
 
 
-class TestGetProjectInfo:
+class TestGetDomainInfo:
     def test_versioned_format(self):
-        info = get_project_info(VERSIONED_PROJECT)
-        assert info["name"] == "TestProject"
+        info = get_domain_info(VERSIONED_DOMAIN)
+        assert info["name"] == "TestDomain"
         assert info["version"] == "2"
         assert info["statistics"]["classes"] == 2
         assert info["statistics"]["properties"] == 1
@@ -68,20 +68,20 @@ class TestGetProjectInfo:
         assert info["statistics"]["has_r2rml"] is True
 
     def test_legacy_format(self):
-        info = get_project_info(LEGACY_PROJECT)
+        info = get_domain_info(LEGACY_DOMAIN)
         assert info["name"] == "Legacy"
         assert info["version"] == "1"
         assert info["statistics"]["classes"] == 1
 
-    def test_empty_project(self):
-        info = get_project_info({})
+    def test_empty_domain(self):
+        info = get_domain_info({})
         assert info["name"] == "Untitled"
         assert info["statistics"]["classes"] == 0
 
 
 class TestGetOntologyInfo:
     def test_versioned_format(self):
-        info = get_ontology_info(VERSIONED_PROJECT)
+        info = get_ontology_info(VERSIONED_DOMAIN)
         assert info["statistics"]["class_count"] == 2
         assert info["statistics"]["property_count"] == 1
         assert len(info["classes"]) == 2
@@ -108,7 +108,7 @@ class TestGetOntologyInfo:
 
 class TestGetOntologyClasses:
     def test_versioned_format(self):
-        classes = get_ontology_classes(VERSIONED_PROJECT)
+        classes = get_ontology_classes(VERSIONED_DOMAIN)
         assert len(classes) == 2
         assert any(c["uri"] == "http://test.org#A" for c in classes)
 
@@ -142,7 +142,7 @@ class TestGetOntologyProperties:
 
 class TestGetMappingInfo:
     def test_versioned_format(self):
-        info = get_mapping_info(VERSIONED_PROJECT)
+        info = get_mapping_info(VERSIONED_DOMAIN)
         assert info["statistics"]["entity_count"] == 1
         assert info["statistics"]["relationship_count"] == 1
 
@@ -182,7 +182,7 @@ class TestValidateSparqlQuery:
 
 class TestGenerateSampleQueries:
     def test_versioned_format(self):
-        samples = generate_sample_queries(VERSIONED_PROJECT)
+        samples = generate_sample_queries(VERSIONED_DOMAIN)
         assert len(samples) >= 2
         assert any("http://test.org#A" in s.get("query", "") for s in samples)
 

@@ -28,13 +28,10 @@ class SWRLEngine:
         store: Any,
         table_name: str,
         materialize: bool = False,
+        inference_limit: Optional[int] = None,
+        progress_callback: Optional[Any] = None,
     ) -> ReasoningResult:
         """Run all SWRL rules and collect inferred triples.
-
-        Each rule's antecedent is matched against the triple store.
-        Where the consequent is missing, the engine returns the would-be
-        triples as ``InferredTriple`` objects.  Optionally, these triples
-        can also be written into the store (materialised).
 
         Args:
             rules: List of rule dicts with ``name``, ``antecedent``,
@@ -42,9 +39,9 @@ class SWRLEngine:
             store: A :class:`TripleStoreBackend` instance.
             table_name: The logical triple-store table/graph name.
             materialize: If True, also insert inferred triples into the store.
-
-        Returns:
-            :class:`ReasoningResult` with inferred triples.
+            inference_limit: Max inferred triples per rule (None = unlimited).
+            progress_callback: Optional ``(idx, total, rule_name)`` callable
+                for progress reporting.
         """
         t0 = time.time()
         result = ReasoningResult()
@@ -58,10 +55,16 @@ class SWRLEngine:
         translator = self._get_translator(store, table_name)
         errors = 0
 
-        for rule in rules:
-            if not rule.get("enabled", True):
-                continue
+        enabled_rules = [r for r in rules if r.get("enabled", True)]
+        total = len(enabled_rules)
+
+        for idx, rule in enumerate(enabled_rules):
             name = rule.get("name", "unnamed")
+            if progress_callback:
+                try:
+                    progress_callback(idx, total, name)
+                except Exception:
+                    pass
             params = {
                 "antecedent": rule.get("antecedent", ""),
                 "consequent": rule.get("consequent", ""),
@@ -72,7 +75,7 @@ class SWRLEngine:
             try:
                 self._infer_rule(
                     translator, store, table_name, params, name,
-                    uses_cypher, result,
+                    uses_cypher, result, inference_limit=inference_limit,
                 )
                 if materialize:
                     self._materialize_rule(
@@ -86,20 +89,21 @@ class SWRLEngine:
         duration = time.time() - t0
         result.stats = {
             "phase": "swrl",
-            "rules_count": len(rules),
+            "rules_count": total,
+            "rules_total": len(rules),
             "inferred_count": len(result.inferred_triples),
             "errors": errors,
             "duration_seconds": round(duration, 3),
         }
         logger.info(
-            "SWRL engine: %d rules, %d inferred, %d errors (%.2fs)",
-            len(rules), len(result.inferred_triples), errors, duration,
+            "SWRL engine: %d/%d rules enabled, %d inferred, %d errors (%.2fs)",
+            total, len(rules), len(result.inferred_triples), errors, duration,
         )
         return result
 
     def _infer_rule(
         self, translator, store, table_name, params, rule_name,
-        uses_cypher, result,
+        uses_cypher, result, inference_limit: Optional[int] = None,
     ):
         """Execute inference SELECT for a single rule."""
         if uses_cypher:
@@ -111,6 +115,11 @@ class SWRLEngine:
             logger.warning("Could not build inference query for SWRL rule: %s", rule_name)
             return
 
+        if inference_limit is not None and inference_limit > 0:
+            query = query.rstrip().rstrip(";") + f"\nLIMIT {inference_limit}"
+
+        t_rule = time.time()
+        count = 0
         if uses_cypher:
             conn = store._get_connection()
             r = conn.execute(query)
@@ -122,8 +131,9 @@ class SWRLEngine:
                     provenance=f"swrl:{rule_name}",
                     rule_name=rule_name,
                 ))
+                count += 1
         else:
-            rows = store.execute_query(query)
+            rows = store.execute_query(query) or []
             for row in rows:
                 result.inferred_triples.append(InferredTriple(
                     subject=row.get("subject", ""),
@@ -132,12 +142,15 @@ class SWRLEngine:
                     provenance=f"swrl:{rule_name}",
                     rule_name=rule_name,
                 ))
+                count += 1
+        logger.info("SWRL inference '%s': %d triples (%.2fs)", rule_name, count, time.time() - t_rule)
 
     def _materialize_rule(
         self, translator, store, table_name, params, rule_name, uses_cypher, result
     ):
         """Execute materialisation for a single rule."""
         try:
+            t_rule = time.time()
             if uses_cypher:
                 query = translator.build_materialization_query(params)
                 if query:
@@ -164,6 +177,7 @@ class SWRLEngine:
                         provenance=f"swrl:{rule_name}",
                         rule_name=rule_name,
                     ))
+            logger.info("SWRL materialise '%s': %.2fs", rule_name, time.time() - t_rule)
         except Exception as e:
             logger.error("Materialisation for rule '%s' failed: %s", rule_name, e)
 

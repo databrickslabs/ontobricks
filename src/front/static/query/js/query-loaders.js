@@ -143,6 +143,7 @@ async function loadOntologyClasses() {
                     emoji: cls.emoji || '📦',
                     dashboard: cls.dashboard || null,
                     dashboardParams: cls.dashboardParams || {},
+                    bridges: cls.bridges || [],
                     description: cls.description || cls.comment || '',
                     dataProperties: cls.dataProperties || []
                 };
@@ -212,9 +213,9 @@ async function loadEntityMappings() {
                     classUri: classUri,
                     attributeMappings: attributeMappings,
                     sqlQuery: mapping.sql_query || null,
-                    // Include ontology class metadata
                     dashboard: classInfo?.dashboard || null,
                     dashboardParams: classInfo?.dashboardParams || {},
+                    bridges: classInfo?.bridges || [],
                     emoji: classInfo?.emoji || '📦',
                     description: classInfo?.description || '',
                     dataProperties: classInfo?.dataProperties || []

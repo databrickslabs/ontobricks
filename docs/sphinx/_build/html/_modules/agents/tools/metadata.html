@@ -110,9 +110,9 @@
 <span></span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">Metadata tools – shared across agents.</span>
 
-<span class="sd">Provides tools to retrieve project table metadata from the ToolContext.</span>
-<span class="sd">All metadata is read from imported/project metadata only — no direct</span>
-<span class="sd">Unity Catalog queries. Metadata must be loaded in Project settings first.</span>
+<span class="sd">Provides tools to retrieve domain table metadata from the ToolContext.</span>
+<span class="sd">All metadata is read from imported metadata for the current domain only — no direct</span>
+<span class="sd">Unity Catalog queries. Metadata must be loaded in Domain settings first.</span>
 
 <span class="sd">Limits are applied to avoid exceeding LLM context size when there are</span>
 <span class="sd">many tables or columns. Use get_table_detail for full schema of a specific table.</span>
@@ -138,11 +138,11 @@
 <div class="viewcode-block" id="tool_get_metadata">
 <a class="viewcode-back" href="../../../api/agents.html#agents.tools.metadata.tool_get_metadata">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">tool_get_metadata</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return project table metadata from imported metadata only.</span>
-<span class="sd">    Does NOT query Unity Catalog — uses pre-loaded metadata from Project settings.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return domain table metadata from imported metadata only.</span>
+<span class="sd">    Does NOT query Unity Catalog — uses pre-loaded metadata from Domain settings.</span>
 <span class="sd">    When there are many tables/columns, results are limited to avoid context overflow.</span>
 <span class="sd">    Use get_table_detail for full schema of a specific table.&quot;&quot;&quot;</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_get_metadata: retrieving project metadata&quot;</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_get_metadata: retrieving domain metadata&quot;</span><span class="p">)</span>
     <span class="n">tables</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">,</span> <span class="p">[])</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">tables</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_get_metadata: no tables in metadata&quot;</span><span class="p">)</span>
@@ -246,7 +246,7 @@
         <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_metadata&quot;</span><span class="p">,</span>
             <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="p">(</span>
-                <span class="s2">&quot;Get the project&#39;s database table metadata: table names (full catalog.schema.table names), &quot;</span>
+                <span class="s2">&quot;Get the domain&#39;s database table metadata: table names (full catalog.schema.table names), &quot;</span>
                 <span class="s2">&quot;column names, data types, and descriptions. Call this first to understand the available data.&quot;</span>
             <span class="p">),</span>
             <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{},</span> <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[]},</span>

@@ -24,7 +24,7 @@ document.addEventListener('click', () => {
 
 // ==========================================================================
 // SQL WIZARD BASE CLASS (Metadata-based)
-// Creates a reusable wizard using project metadata tables
+// Creates a reusable wizard using domain metadata tables
 // ==========================================================================
 class SQLWizardBase {
     constructor(config) {
@@ -78,7 +78,7 @@ class SQLWizardBase {
         }
         
         try {
-            const response = await fetch('/project/info', { credentials: 'same-origin' });
+            const response = await fetch('/domain/info', { credentials: 'same-origin' });
             const data = await response.json();
             
             if (data.success && data.info?.llm_endpoint) {
@@ -86,7 +86,7 @@ class SQLWizardBase {
                 if (displayEl) displayEl.innerHTML = `<i class="bi bi-robot me-1"></i>${data.info.llm_endpoint}`;
             } else {
                 if (hiddenInput) hiddenInput.value = '';
-                if (displayEl) displayEl.innerHTML = '<span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Not configured - set in Project settings</span>';
+                if (displayEl) displayEl.innerHTML = '<span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Not configured - set in Domain settings</span>';
             }
         } catch (e) {
             if (hiddenInput) hiddenInput.value = '';
@@ -105,7 +105,7 @@ class SQLWizardBase {
         if (noMetadataEl) noMetadataEl.classList.add('hidden-initial');
         
         try {
-            const response = await fetch('/project/metadata', { credentials: 'same-origin' });
+            const response = await fetch('/domain/metadata', { credentials: 'same-origin' });
             const data = await response.json();
             
             if (data.success && data.has_metadata && data.metadata) {
@@ -139,7 +139,7 @@ class SQLWizardBase {
             }
         } catch (e) {
             console.error('[SQLWizard] Error loading metadata:', e);
-            if (tableListEl) tableListEl.innerHTML = '<div class="text-danger small p-2">Error loading metadata</div>';
+            if (tableListEl) tableListEl.innerHTML = '<div class="text-danger small p-2">Error loading data sources</div>';
         }
         
         this.updateGenerateButton();
@@ -150,7 +150,7 @@ class SQLWizardBase {
         if (!tableListEl) return;
         
         if (tables.length === 0) {
-            tableListEl.innerHTML = '<div class="text-muted small p-2">No tables in metadata</div>';
+            tableListEl.innerHTML = '<div class="text-muted small p-2">No tables in data sources</div>';
             return;
         }
         
@@ -158,8 +158,10 @@ class SQLWizardBase {
             const isSelected = this.selectedTables[table.name] !== false;
             const colCount = table.columns?.length || 0;
             const desc = table.comment || table.description || '';
-            // Use full_name - it's required in the new structure
             const fullName = table.full_name || table.name;
+            const fqnParts = fullName.split('.');
+            const displayName = fqnParts.length === 3 ? fqnParts[2] : fullName;
+            const dataSource = fqnParts.length >= 2 ? `${fqnParts[0]}.${fqnParts[1]}` : '';
             
             return `
                 <div class="form-check wizard-table-item ${isSelected ? '' : 'text-muted'}" data-table="${table.name}">
@@ -168,7 +170,8 @@ class SQLWizardBase {
                            ${isSelected ? 'checked' : ''}
                            onchange="this.closest('.wizard-table-item').classList.toggle('text-muted', !this.checked)">
                     <label class="form-check-label small" for="wizTable_${table.name}" title="${fullName}">
-                        <strong>${fullName}</strong>
+                        <strong>${displayName}</strong>
+                        ${dataSource ? `<span class="text-muted ms-1" style="font-size: 0.75em;">${dataSource}</span>` : ''}
                         <span class="badge bg-secondary ms-1">${colCount}</span>
                         ${desc ? `<span class="text-muted ms-1">- ${desc.substring(0, 40)}${desc.length > 40 ? '...' : ''}</span>` : ''}
                     </label>

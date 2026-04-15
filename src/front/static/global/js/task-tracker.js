@@ -14,8 +14,8 @@ const POLL_INTERVAL_IDLE = 30000;   // 30s when idle
 const TASK_TYPE_URLS = {
     'ontology_generation': '/ontology#wizard',
     'auto_assign': '/mapping#autoassign',
-    'metadata_load': '/project#metadata',
-    'metadata_update': '/project#metadata',
+    'metadata_load': '/domain#metadata',
+    'metadata_update': '/domain#metadata',
     'triplestore_sync': '/dtwin#sync',
     'quality_checks': '/dtwin#quality'
 };

@@ -3,16 +3,16 @@
  * Shared navigation bar functionality for all pages
  */
 
-function showProjectLoading(label) {
-    const el = document.getElementById('projectLoadingOverlay');
+function showDomainLoading(label) {
+    const el = document.getElementById('domainLoadingOverlay');
     if (!el) return;
-    const lbl = document.getElementById('projectLoadingLabel');
-    if (lbl) lbl.textContent = label || 'Loading project...';
+    const lbl = document.getElementById('domainLoadingLabel');
+    if (lbl) lbl.textContent = label || 'Loading domain...';
     el.classList.remove('d-none');
 }
 
-function hideProjectLoading() {
-    const el = document.getElementById('projectLoadingOverlay');
+function hideDomainLoading() {
+    const el = document.getElementById('domainLoadingOverlay');
     if (el) el.classList.add('d-none');
 }
 
@@ -36,18 +36,18 @@ function initNavbar() {
 
 /**
  * Load the consolidated navbar state in a single round-trip and
- * apply project info and warehouse icon to the DOM.
- * Validation indicators have moved to the Project Validation page.
+ * apply domain info and warehouse icon to the DOM.
+ * Validation indicators have moved to the Domain Validation page.
  */
 async function loadNavbarState() {
     try {
         const state = await fetchCached('/navbar/state', 15000);
-        applyProjectInfo(state.project || {});
+        applyDomainInfo(state.domain || {});
         applyWarehouseIcon(state.warehouse || {});
     } catch (error) {
         console.error('Error loading navbar state:', error);
-        updateProjectMenuVisibility(false);
-        updateMenusForProjectStatus(false);
+        updateDomainMenuVisibility(false);
+        updateMenusForDomainStatus(false);
     }
 }
 
@@ -94,67 +94,67 @@ function applyWarehouseIcon(warehouse) {
 }
 
 /**
- * Apply project name and menu visibility from pre-fetched data.
+ * Apply domain name and menu visibility from pre-fetched data.
  */
-function applyProjectInfo(data) {
-    const projectNameEl = document.getElementById('currentProjectName');
-    const projectSectionName = document.getElementById('projectSectionName');
+function applyDomainInfo(data) {
+    const currentDomainNameEl = document.getElementById('currentDomainName');
+    const domainSectionName = document.getElementById('domainSectionName');
 
     const stats = data.stats || {};
     const hasContent = (stats.entities > 0) || (stats.entity_mappings > 0);
-    const hasCustomName = data.info && data.info.name && data.info.name !== 'NewProject';
-    const hasProject = hasCustomName || hasContent;
+    const hasCustomName = data.info && data.info.name && data.info.name !== 'NewProject' && data.info.name !== 'NewDomain';
+    const hasDomain = hasCustomName || hasContent;
 
-    const projectName = (data.info && data.info.name) ? data.info.name : 'NewProject';
+    const domainName = (data.info && data.info.name) ? data.info.name : 'NewDomain';
     const version = (data.info && data.info.version) || '1';
 
-    if (projectNameEl) {
-        if (hasProject) {
-            projectNameEl.textContent = `${projectName} V${version}`;
+    if (currentDomainNameEl) {
+        if (hasDomain) {
+            currentDomainNameEl.textContent = `${domainName} V${version}`;
         } else {
-            projectNameEl.textContent = 'Project';
+            currentDomainNameEl.textContent = 'Domain';
         }
     }
 
-    if (projectSectionName) {
-        projectSectionName.textContent = projectName;
+    if (domainSectionName) {
+        domainSectionName.textContent = domainName;
     }
 
-    updateProjectMenuVisibility(hasProject);
+    updateDomainMenuVisibility(hasDomain);
 
-    const hasRegistry = data.registry && data.registry.catalog && data.project_folder;
-    updateMenusForProjectStatus(hasRegistry);
+    const hasRegistry = data.registry && data.registry.catalog && data.domain_folder;
+    updateMenusForDomainStatus(hasRegistry);
 }
 
 /**
- * Legacy helper: load project name by fetching the consolidated state.
- * Kept for callers outside navbar.js (e.g. after project save).
+ * Legacy helper: load domain name by fetching the consolidated state.
+ * Kept for callers outside navbar.js (e.g. after domain save).
  */
-async function loadProjectName() {
+async function loadDomainName() {
     fetchCachedInvalidate('/navbar/state');
-    fetchOnceInvalidate('/project/info');
+    fetchOnceInvalidate('/domain/info');
     await loadNavbarState();
 }
 
 /**
- * Enable/disable navigation menus based on whether project is saved to UC
- * @param {boolean} isSaved - Whether the project is saved to Unity Catalog
+ * Enable/disable navigation menus based on whether the domain is saved to UC
+ * @param {boolean} isSaved - Whether the domain is saved to Unity Catalog
  */
-function updateMenusForProjectStatus(isSaved) {
-    // Top navbar links that require project
-    const navLinks = document.querySelectorAll('.nav-requires-project');
+function updateMenusForDomainStatus(isSaved) {
+    // Top navbar links that require a saved domain
+    const navLinks = document.querySelectorAll('.nav-requires-domain');
     navLinks.forEach(link => {
         if (isSaved) {
             link.classList.remove('nav-disabled');
             link.removeAttribute('title');
         } else {
             link.classList.add('nav-disabled');
-            link.setAttribute('title', 'Save project to Unity Catalog first');
+            link.setAttribute('title', 'Save domain to Unity Catalog first');
         }
     });
     
-    // Dropdown menu items that require project
-    const dropdownItems = document.querySelectorAll('.dropdown-requires-project');
+    // Dropdown menu items that require a saved domain
+    const dropdownItems = document.querySelectorAll('.dropdown-requires-domain');
     dropdownItems.forEach(item => {
         if (isSaved) {
             item.classList.remove('disabled');
@@ -165,24 +165,24 @@ function updateMenusForProjectStatus(isSaved) {
             item.classList.add('disabled');
             item.style.pointerEvents = 'none';
             item.style.opacity = '0.5';
-            item.setAttribute('title', 'Save project to Unity Catalog first');
+            item.setAttribute('title', 'Save domain to Unity Catalog first');
         }
     });
     
-    // Sidebar links that require project
-    const sidebarLinks = document.querySelectorAll('.sidebar-requires-project');
+    // Sidebar links that require a saved domain
+    const sidebarLinks = document.querySelectorAll('.sidebar-requires-domain');
     sidebarLinks.forEach(link => {
         if (isSaved) {
             link.classList.remove('sidebar-disabled');
             link.removeAttribute('title');
         } else {
             link.classList.add('sidebar-disabled');
-            link.setAttribute('title', 'Save project to Unity Catalog first');
+            link.setAttribute('title', 'Save domain to Unity Catalog first');
         }
     });
     
-    // Buttons that require project (e.g., New Version button)
-    const buttons = document.querySelectorAll('.btn-requires-project');
+    // Buttons that require a saved domain (e.g., New Version button)
+    const buttons = document.querySelectorAll('.btn-requires-domain');
     buttons.forEach(btn => {
         if (isSaved) {
             btn.disabled = false;
@@ -191,36 +191,36 @@ function updateMenusForProjectStatus(isSaved) {
         } else {
             btn.disabled = true;
             btn.classList.add('disabled');
-            btn.setAttribute('title', 'Save project to Unity Catalog first');
+            btn.setAttribute('title', 'Save domain to Unity Catalog first');
         }
     });
     
-    // Show/hide new project message if applicable
-    updateNewProjectMessage(!isSaved);
+    // Show/hide new domain message if applicable
+    updateNewDomainMessage(!isSaved);
 }
 
 /**
- * Show a message for new projects
+ * Show a message for new domains
  */
-function updateNewProjectMessage(showMessage) {
-    // Check if we're on the project page
-    const projectSettingsSection = document.getElementById('information-section');
-    if (!projectSettingsSection) return;
+function updateNewDomainMessage(showMessage) {
+    // Check if we're on the domain information section
+    const domainSettingsSection = document.getElementById('information-section');
+    if (!domainSettingsSection) return;
     
     // Remove existing message if any
-    const existingMsg = document.getElementById('newProjectMessage');
+    const existingMsg = document.getElementById('newDomainMessage');
     if (existingMsg) existingMsg.remove();
     
     if (showMessage) {
         // Add message after the section header
-        const sectionHeader = projectSettingsSection.querySelector('.section-header');
+        const sectionHeader = domainSettingsSection.querySelector('.section-header');
         if (sectionHeader) {
             const msgHtml = `
-                <div id="newProjectMessage" class="alert alert-info d-flex align-items-center mt-3" role="alert">
+                <div id="newDomainMessage" class="alert alert-info d-flex align-items-center mt-3" role="alert">
                     <i class="bi bi-info-circle-fill me-2 fs-5"></i>
                     <div>
-                        <strong>New Project</strong> - Please fill in the <strong>Project Name</strong> and <strong>Base URI</strong>, 
-                        then click <strong>Save Project to Unity Catalog</strong> to enable all features.
+                        <strong>New Domain</strong> - Please fill in the <strong>Domain Name</strong> and <strong>Base URI</strong>, 
+                        then click <strong>Save Domain to Unity Catalog</strong> to enable all features.
                     </div>
                 </div>
             `;
@@ -230,18 +230,18 @@ function updateNewProjectMessage(showMessage) {
 }
 
 /**
- * Called after project is saved to UC to enable menus
+ * Called after the domain is saved to UC to enable menus
  */
 function enableMenusAfterSave() {
-    updateMenusForProjectStatus(true);
+    updateMenusForDomainStatus(true);
 }
 
 /**
- * Update project dropdown menu visibility based on project state
+ * Update domain dropdown menu visibility based on domain state
  * Note: All menu items are now always visible
  */
-function updateProjectMenuVisibility(hasProject) {
-    // All project menu items are now always visible
+function updateDomainMenuVisibility(hasDomain) {
+    // All domain menu items are now always visible
     // This function is kept for compatibility but does nothing
 }
 
@@ -254,16 +254,16 @@ window.refreshDigitalTwinStatus = refreshNavbarIndicators;
 
 
 // ==========================================
-// Project Management Functions
+// Domain lifecycle (navbar)
 // ==========================================
 
 /**
- * Start a new project (clears current data)
+ * Start a new domain (clears current data)
  */
-async function projectNew() {
+async function domainNew() {
     const confirmed = await showConfirmDialog({
-        title: 'New Project',
-        message: 'Start a new project? This will clear all current ontology, design, and mapping data.',
+        title: 'New Domain',
+        message: 'Start a new domain? This will clear all current ontology, design, and mapping data.',
         confirmText: 'Start New',
         confirmClass: 'btn-warning',
         icon: 'file-earmark-plus'
@@ -271,7 +271,7 @@ async function projectNew() {
     if (!confirmed) return;
     
     try {
-        const response = await fetch('/project/clear', {
+        const response = await fetch('/domain/clear', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin'
@@ -280,28 +280,28 @@ async function projectNew() {
         const data = await response.json();
         
         if (data.success) {
-            showNotification('New project started', 'success');
-            // Navigate to Project settings page
+            showNotification('New domain started', 'success');
+            // Navigate to Domain settings page
             setTimeout(() => {
-                window.location.href = '/project/#information';
+                window.location.href = '/domain/#information';
             }, 1000);
         } else {
             showNotification('Error: ' + data.message, 'error');
         }
     } catch (error) {
-        console.error('Error creating new project:', error);
-        showNotification('Failed to create new project: ' + error.message, 'error');
+        console.error('Error creating new domain:', error);
+        showNotification('Failed to create new domain: ' + error.message, 'error');
     }
 }
 
 /**
- * Save project to Unity Catalog Volume
- * Volume name = Project name, File name = version number
+ * Save domain to Unity Catalog Volume
+ * Volume path uses the domain folder; file name = version number
  */
-async function projectSave() {
+async function domainSave() {
     try {
-        // First, save project info from form if on the project page
-        await saveProjectInfoBeforeSave();
+        // First, save domain info from form if on the domain page
+        await saveDomainInfoBeforeSave();
         
         // Save the current design layout if on the design page
         if (typeof ontologyDesigner !== 'undefined' && ontologyDesigner) {
@@ -325,7 +325,7 @@ async function projectSave() {
                     visibility: layoutData.visibility
                 };
                 
-                await fetch('/project/design-views/save-current', {
+                await fetch('/domain/design-views/save-current', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(cleanedLayout),
@@ -337,7 +337,7 @@ async function projectSave() {
         }
         
         // Show catalog/schema selection dialog
-        showProjectSaveDialog();
+        showDomainSaveDialog();
     } catch (error) {
         console.error('Error preparing save:', error);
         showNotification('Failed to prepare save: ' + error.message, 'error');
@@ -345,25 +345,25 @@ async function projectSave() {
 }
 
 /**
- * Save project info from form fields before saving to UC
+ * Save domain info from form fields before saving to UC
  */
-async function saveProjectInfoBeforeSave() {
-    // Check if we're on a page with project info form fields
-    const nameEl = document.getElementById('projectName');
-    const descEl = document.getElementById('projectDescription');
-    const authorEl = document.getElementById('projectAuthor');
-    const baseUriEl = document.getElementById('projectBaseUri');
-    const llmEndpointEl = document.getElementById('projectLlmEndpoint');
-    const versionEl = document.getElementById('projectVersionSelect');
+async function saveDomainInfoBeforeSave() {
+    // Check if we're on a page with domain info form fields
+    const nameEl = document.getElementById('domainName');
+    const descEl = document.getElementById('domainDescription');
+    const authorEl = document.getElementById('domainAuthor');
+    const baseUriEl = document.getElementById('domainBaseUri');
+    const llmEndpointEl = document.getElementById('domainLlmEndpoint');
+    const versionEl = document.getElementById('domainVersionSelect');
 
-    // If any form fields exist, save the project info
+    // If any form fields exist, save the domain info
     if (nameEl || descEl || authorEl || baseUriEl || llmEndpointEl) {
         const deltaCatalog = document.getElementById('triplestoreLocationWidget_catalog')?.value || '';
         const deltaSchema = document.getElementById('triplestoreLocationWidget_schema')?.value || '';
-        const deltaTableName = document.getElementById('projectTriplestoreTableName')?.value.trim() || '';
+        const deltaTableName = document.getElementById('domainTriplestoreTableName')?.value.trim() || '';
         const hasDelta = deltaCatalog || deltaSchema || deltaTableName;
 
-        const projectInfo = {
+        const domainInfoPayload = {
             name: nameEl ? nameEl.value.trim() : undefined,
             description: descEl ? descEl.value.trim() : undefined,
             author: authorEl ? authorEl.value.trim() : undefined,
@@ -380,22 +380,22 @@ async function saveProjectInfoBeforeSave() {
         };
         
         // Remove undefined values
-        Object.keys(projectInfo).forEach(key => {
-            if (projectInfo[key] === undefined) delete projectInfo[key];
+        Object.keys(domainInfoPayload).forEach(key => {
+            if (domainInfoPayload[key] === undefined) delete domainInfoPayload[key];
         });
         
         // Only save if we have something to save
-        if (Object.keys(projectInfo).length > 0) {
-            console.log('[Project] Auto-saving project info before UC save:', projectInfo);
+        if (Object.keys(domainInfoPayload).length > 0) {
+            console.log('[Domain] Auto-saving domain info before UC save:', domainInfoPayload);
             try {
-                await fetch('/project/info', {
+                await fetch('/domain/info', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(projectInfo),
+                    body: JSON.stringify(domainInfoPayload),
                     credentials: 'same-origin'
                 });
             } catch (e) {
-                console.warn('Could not auto-save project info:', e);
+                console.warn('Could not auto-save domain info:', e);
             }
         }
     }
@@ -404,13 +404,13 @@ async function saveProjectInfoBeforeSave() {
 /**
  * Show confirmation dialog before saving to the registry.
  */
-async function showProjectSaveDialog() {
+async function showDomainSaveDialog() {
     const modalHtml = `
-        <div class="modal fade" id="projectSaveModal" tabindex="-1">
+        <div class="modal fade" id="domainSaveModal" tabindex="-1">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title"><i class="bi bi-cloud-upload"></i> Save Project to Registry</h5>
+                        <h5 class="modal-title"><i class="bi bi-cloud-upload"></i> Save Domain to Registry</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
@@ -419,8 +419,8 @@ async function showProjectSaveDialog() {
                         </div>
                         <div class="alert alert-info small">
                             <i class="bi bi-info-circle"></i>
-                            <strong>Project:</strong> <span id="saveProjectName">Loading...</span><br>
-                            <strong>Version:</strong> <span id="saveProjectVersion">Loading...</span>
+                            <strong>Domain:</strong> <span id="saveDomainName">Loading...</span><br>
+                            <strong>Version:</strong> <span id="saveDomainVersion">Loading...</span>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -434,17 +434,17 @@ async function showProjectSaveDialog() {
         </div>
     `;
 
-    const existingModal = document.getElementById('projectSaveModal');
+    const existingModal = document.getElementById('domainSaveModal');
     if (existingModal) existingModal.remove();
     document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(document.getElementById('projectSaveModal'));
+    const modal = new bootstrap.Modal(document.getElementById('domainSaveModal'));
     modal.show();
 
     try {
-        const infoData = await fetchOnce('/project/info');
+        const infoData = await fetchOnce('/domain/info');
         if (infoData.success) {
-            document.getElementById('saveProjectName').textContent = infoData.info.name || 'NewProject';
-            document.getElementById('saveProjectVersion').textContent = infoData.info.version || '1';
+            document.getElementById('saveDomainName').textContent = infoData.info.name || 'NewDomain';
+            document.getElementById('saveDomainVersion').textContent = infoData.info.version || '1';
         }
     } catch (_) { /* ignore */ }
 
@@ -465,14 +465,14 @@ async function showProjectSaveDialog() {
 
     document.getElementById('btnConfirmSave').addEventListener('click', async () => {
         modal.hide();
-        await doProjectSave();
+        await doDomainSave();
     });
 }
 
-async function doProjectSave() {
+async function doDomainSave() {
     try {
-        showNotification('Saving project to registry...', 'info', 5000);
-        const response = await fetch('/project/save-to-uc', {
+        showNotification('Saving domain to registry...', 'info', 5000);
+        const response = await fetch('/domain/save-to-uc', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
@@ -480,10 +480,10 @@ async function doProjectSave() {
         });
         const data = await response.json();
         if (data.success) {
-            showNotification(data.message || 'Project saved successfully!', 'success');
+            showNotification(data.message || 'Domain saved successfully!', 'success');
             enableMenusAfterSave();
             await refreshNavbarIndicators();
-            loadProjectName();
+            loadDomainName();
         } else {
             showNotification('Error: ' + data.message, 'error');
         }
@@ -493,9 +493,9 @@ async function doProjectSave() {
 }
 
 /**
- * Load project from Unity Catalog Volume
+ * Load domain from Unity Catalog Volume
  */
-async function projectLoad() {
+async function domainLoad() {
     // Check if warehouse is selected first
     try {
         const configResponse = await fetch('/settings/current', { credentials: 'same-origin' });
@@ -509,7 +509,7 @@ async function projectLoad() {
         console.error('Error checking warehouse:', error);
     }
     
-    showProjectLoadDialog();
+    showDomainLoadDialog();
 }
 
 /**
@@ -525,7 +525,7 @@ function showWarehouseRequiredDialog() {
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <p>To load a project from Unity Catalog, you need to select a SQL Warehouse first.</p>
+                        <p>To load a domain from Unity Catalog, you need to select a SQL Warehouse first.</p>
                         <p class="text-muted mb-0">Go to <strong>Settings</strong> to select an available SQL Warehouse.</p>
                     </div>
                     <div class="modal-footer">
@@ -555,15 +555,15 @@ function showWarehouseRequiredDialog() {
 
 
 /**
- * Show dialog to pick a project and version from the registry.
+ * Show dialog to pick a domain and version from the registry.
  */
-function showProjectLoadDialog() {
+function showDomainLoadDialog() {
     const modalHtml = `
-        <div class="modal fade" id="projectLoadModal" tabindex="-1">
+        <div class="modal fade" id="domainLoadModal" tabindex="-1">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title"><i class="bi bi-cloud-download"></i> Load Project from Registry</h5>
+                        <h5 class="modal-title"><i class="bi bi-cloud-download"></i> Load Domain from Registry</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
@@ -571,15 +571,15 @@ function showProjectLoadDialog() {
                             <span class="spinner-border spinner-border-sm me-1"></span> Checking registry...
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Project</label>
-                            <select class="form-select" id="loadProjectSelect" disabled>
-                                <option value="">Loading projects...</option>
+                            <label class="form-label">Domain</label>
+                            <select class="form-select" id="loadDomainSelect" disabled>
+                                <option value="">Loading domains...</option>
                             </select>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Version</label>
                             <select class="form-select" id="loadVersionSelect" disabled>
-                                <option value="">Select project first</option>
+                                <option value="">Select domain first</option>
                             </select>
                         </div>
                     </div>
@@ -594,29 +594,29 @@ function showProjectLoadDialog() {
         </div>
     `;
 
-    const existingModal = document.getElementById('projectLoadModal');
+    const existingModal = document.getElementById('domainLoadModal');
     if (existingModal) existingModal.remove();
     document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(document.getElementById('projectLoadModal'));
+    const modal = new bootstrap.Modal(document.getElementById('domainLoadModal'));
     modal.show();
 
-    loadProjectsFromRegistry();
+    loadDomainsFromRegistry();
 
     document.getElementById('btnConfirmLoad').addEventListener('click', async () => {
-        const project = document.getElementById('loadProjectSelect').value;
+        const domainSlug = document.getElementById('loadDomainSelect').value;
         const version = document.getElementById('loadVersionSelect').value;
-        if (!project || !version) {
-            showNotification('Please select a project and version', 'warning');
+        if (!domainSlug || !version) {
+            showNotification('Please select a domain and version', 'warning');
             return;
         }
         modal.hide();
-        await doProjectLoad(project, version);
+        await doDomainLoad(domainSlug, version);
     });
 }
 
-async function loadProjectsFromRegistry() {
+async function loadDomainsFromRegistry() {
     const infoDiv = document.getElementById('loadRegistryInfo');
-    const projectSelect = document.getElementById('loadProjectSelect');
+    const domainSelect = document.getElementById('loadDomainSelect');
     const versionSelect = document.getElementById('loadVersionSelect');
     try {
         const regResp = await fetch('/settings/registry', { credentials: 'same-origin' });
@@ -627,40 +627,41 @@ async function loadProjectsFromRegistry() {
         }
         infoDiv.innerHTML = `<div class="alert alert-success small mb-0"><i class="bi bi-archive me-1"></i> Registry: <strong>${reg.catalog}.${reg.schema}.${reg.volume}</strong></div>`;
 
-        projectSelect.innerHTML = '<option value="">Loading projects...</option>';
-        const projResp = await fetch('/project/list-projects', { credentials: 'same-origin' });
-        const projData = await projResp.json();
+        domainSelect.innerHTML = '<option value="">Loading domains...</option>';
+        const domainListResp = await fetch('/domain/list-projects', { credentials: 'same-origin' });
+        const domainListData = await domainListResp.json();
 
-        projectSelect.innerHTML = '<option value="">Select project...</option>';
-        projectSelect.disabled = false;
+        domainSelect.innerHTML = '<option value="">Select domain...</option>';
+        domainSelect.disabled = false;
 
-        if (projData.success && projData.projects && projData.projects.length > 0) {
-            projData.projects.forEach(p => {
-                projectSelect.innerHTML += `<option value="${p}">${p}</option>`;
+        const _domainList = domainListData.domains || domainListData.projects || [];
+        if (domainListData.success && _domainList.length > 0) {
+            _domainList.forEach(d => {
+                domainSelect.innerHTML += `<option value="${d}">${d}</option>`;
             });
         } else {
-            projectSelect.innerHTML = '<option value="">No projects found</option>';
+            domainSelect.innerHTML = '<option value="">No domains found</option>';
         }
 
-        projectSelect.onchange = () => loadVersionsFromRegistry(projectSelect.value);
+        domainSelect.onchange = () => loadVersionsForDomainFromRegistry(domainSelect.value);
     } catch (e) {
         infoDiv.innerHTML = '<div class="alert alert-danger small mb-0">Error loading registry</div>';
     }
 }
 
-async function loadVersionsFromRegistry(projectName) {
+async function loadVersionsForDomainFromRegistry(domainName) {
     const versionSelect = document.getElementById('loadVersionSelect');
     document.getElementById('btnConfirmLoad').disabled = true;
 
-    if (!projectName) {
+    if (!domainName) {
         versionSelect.disabled = true;
-        versionSelect.innerHTML = '<option value="">Select project first</option>';
+        versionSelect.innerHTML = '<option value="">Select domain first</option>';
         return;
     }
 
     try {
         versionSelect.innerHTML = '<option value="">Loading versions...</option>';
-        const resp = await fetch(`/project/list-versions?project_name=${encodeURIComponent(projectName)}`, { credentials: 'same-origin' });
+        const resp = await fetch(`/domain/list-versions?domain_name=${encodeURIComponent(domainName)}`, { credentials: 'same-origin' });
         const data = await resp.json();
 
         versionSelect.innerHTML = '<option value="">Select version...</option>';
@@ -670,7 +671,7 @@ async function loadVersionsFromRegistry(projectName) {
             const sorted = data.versions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
             versionSelect.innerHTML = '';
             sorted.forEach((ver, idx) => {
-                const label = idx === 0 ? `${ver} (Latest - Active)` : `${ver} (Inactive)`;
+                const label = idx === 0 ? `${ver} (Latest)` : `${ver} (Read-Only)`;
                 versionSelect.innerHTML += `<option value="${ver}">${label}</option>`;
             });
             versionSelect.value = sorted[0];
@@ -687,69 +688,69 @@ async function loadVersionsFromRegistry(projectName) {
     }
 }
 
-async function doProjectLoad(project, version) {
-    showProjectLoading(`Loading ${project}...`);
+async function doDomainLoad(domainSlug, version) {
+    showDomainLoading(`Loading ${domainSlug}...`);
     try {
-        const response = await fetch('/project/load-from-uc', {
+        const response = await fetch('/domain/load-from-uc', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ project, version }),
+            body: JSON.stringify({ domain: domainSlug, version }),
             credentials: 'same-origin'
         });
         const data = await response.json();
         if (data.success) {
-            showNotification(data.message || 'Project loaded successfully!', 'success');
+            showNotification(data.message || 'Domain loaded successfully!', 'success');
             setTimeout(() => location.reload(), 1000);
         } else {
-            hideProjectLoading();
+            hideDomainLoading();
             showNotification('Error: ' + data.message, 'error');
         }
     } catch (error) {
-        hideProjectLoading();
+        hideDomainLoading();
         showNotification('Error: ' + error.message, 'error');
     }
 }
 
 /**
- * Handle the selected project file - parse and check for versions
+ * Handle the selected domain export file - parse and check for versions
  */
-async function handleProjectFile(input) {
+async function handleDomainFile(input) {
     const file = input.files[0];
     if (!file) return;
     
     try {
         // Read the file content first
         const content = await file.text();
-        let projectData;
+        let importedDomain;
         
         try {
-            projectData = JSON.parse(content);
+            importedDomain = JSON.parse(content);
         } catch (e) {
-            showNotification('Error: Invalid JSON in project file', 'error');
+            showNotification('Error: Invalid JSON in domain file', 'error');
             input.value = '';
             return;
         }
         
         // Check if file has versions
-        if (projectData.versions && Object.keys(projectData.versions).length > 0) {
-            const versions = Object.keys(projectData.versions).sort().reverse();
+        if (importedDomain.versions && Object.keys(importedDomain.versions).length > 0) {
+            const versions = Object.keys(importedDomain.versions).sort().reverse();
             
             if (versions.length > 1) {
                 // Show version selection dialog
-                showVersionSelectionDialog(versions, projectData, async (selectedVersion) => {
-                    await importProjectWithVersion(projectData, selectedVersion);
+                showVersionSelectionDialog(versions, importedDomain, async (selectedVersion) => {
+                    await importDomainWithVersion(importedDomain, selectedVersion);
                 });
             } else {
                 // Only one version, load it directly
-                await importProjectWithVersion(projectData, versions[0]);
+                await importDomainWithVersion(importedDomain, versions[0]);
             }
         } else {
             // Legacy format without versions - load directly
-            await importProjectDirect(projectData);
+            await importDomainDirect(importedDomain);
         }
     } catch (error) {
-        console.error('Error loading project:', error);
-        showNotification('Failed to load project: ' + error.message, 'error');
+        console.error('Error loading domain file:', error);
+        showNotification('Failed to load domain: ' + error.message, 'error');
     }
     
     // Reset file input
@@ -759,7 +760,7 @@ async function handleProjectFile(input) {
 /**
  * Show version selection dialog
  */
-function showVersionSelectionDialog(versions, projectData, onSelect) {
+function showVersionSelectionDialog(versions, importedDomain, onSelect) {
     // Create modal if it doesn't exist
     let modal = document.getElementById('versionSelectModal');
     if (!modal) {
@@ -775,7 +776,7 @@ function showVersionSelectionDialog(versions, projectData, onSelect) {
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <p class="text-muted mb-3">This project contains multiple versions. Select the version to load:</p>
+                        <p class="text-muted mb-3">This domain contains multiple versions. Select the version to load:</p>
                         <div id="versionSelectList" class="list-group"></div>
                     </div>
                     <div class="modal-footer">
@@ -792,7 +793,7 @@ function showVersionSelectionDialog(versions, projectData, onSelect) {
     listEl.innerHTML = '';
     
     versions.forEach((version, index) => {
-        const versionData = projectData.versions[version];
+        const versionData = importedDomain.versions[version];
         const classCount = versionData.ontology?.classes?.length || 0;
         const propCount = versionData.ontology?.properties?.length || 0;
         const mappingCount = versionData.assignment?.entities?.length || 0;
@@ -825,46 +826,46 @@ function showVersionSelectionDialog(versions, projectData, onSelect) {
 }
 
 /**
- * Import project with a specific version
+ * Import domain export with a specific version
  */
-async function importProjectWithVersion(projectData, version) {
-    showProjectLoading(`Loading version ${version}...`);
+async function importDomainWithVersion(importedDomain, version) {
+    showDomainLoading(`Loading version ${version}...`);
     try {
-        const response = await fetch('/project/import', {
+        const response = await fetch('/domain/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ project: projectData, version: version }),
+            body: JSON.stringify({ domain: importedDomain, version: version }),
             credentials: 'same-origin'
         });
         
         const data = await response.json();
         handleImportResponse(data);
     } catch (error) {
-        hideProjectLoading();
-        console.error('Error importing project:', error);
-        showNotification('Failed to import project: ' + error.message, 'error');
+        hideDomainLoading();
+        console.error('Error importing domain:', error);
+        showNotification('Failed to import domain: ' + error.message, 'error');
     }
 }
 
 /**
- * Import project directly (legacy format)
+ * Import domain export directly (legacy format)
  */
-async function importProjectDirect(projectData) {
-    showProjectLoading('Loading project...');
+async function importDomainDirect(importedDomain) {
+    showDomainLoading('Loading domain...');
     try {
-        const response = await fetch('/project/import', {
+        const response = await fetch('/domain/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ project: projectData }),
+            body: JSON.stringify({ domain: importedDomain }),
             credentials: 'same-origin'
         });
         
         const data = await response.json();
         handleImportResponse(data);
     } catch (error) {
-        hideProjectLoading();
-        console.error('Error importing project:', error);
-        showNotification('Failed to import project: ' + error.message, 'error');
+        hideDomainLoading();
+        console.error('Error importing domain:', error);
+        showNotification('Failed to import domain: ' + error.message, 'error');
     }
 }
 
@@ -873,7 +874,7 @@ async function importProjectDirect(projectData) {
  */
 function handleImportResponse(data) {
     if (data.success) {
-        let msg = 'Project loaded';
+        let msg = 'Domain loaded';
         if (data.version) msg += ` (v${data.version})`;
         msg += '! ' + data.stats.entities + ' entities, ' + 
                data.stats.relationships + ' relationships, ' + 
@@ -889,21 +890,21 @@ function handleImportResponse(data) {
         showNotification(msg, 'success');
         setTimeout(() => location.reload(), 1500);
     } else {
-        hideProjectLoading();
-        showNotification('Error loading project: ' + data.message, 'error');
+        hideDomainLoading();
+        showNotification('Error loading domain: ' + data.message, 'error');
     }
 }
 
-// Make project functions globally available
-window.projectNew = projectNew;
-window.projectSave = projectSave;
-window.projectLoad = projectLoad;
-window.showProjectSaveDialog = showProjectSaveDialog;
-window.showProjectLoadDialog = showProjectLoadDialog;
-window.doProjectSave = doProjectSave;
-window.doProjectLoad = doProjectLoad;
-window.checkProjectSavedStatus = loadProjectName;
+// Expose domain actions globally
+window.domainNew = domainNew;
+window.domainSave = domainSave;
+window.domainLoad = domainLoad;
+window.showDomainSaveDialog = showDomainSaveDialog;
+window.showDomainLoadDialog = showDomainLoadDialog;
+window.doDomainSave = doDomainSave;
+window.doDomainLoad = doDomainLoad;
+window.checkDomainSavedStatus = loadDomainName;
 window.enableMenusAfterSave = enableMenusAfterSave;
-window.updateMenusForProjectStatus = updateMenusForProjectStatus;
-window.showProjectLoading = showProjectLoading;
-window.hideProjectLoading = hideProjectLoading;
+window.updateMenusForDomainStatus = updateMenusForDomainStatus;
+window.showDomainLoading = showDomainLoading;
+window.hideDomainLoading = hideDomainLoading;

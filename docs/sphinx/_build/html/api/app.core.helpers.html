@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>back.core.helpers – Cross-cutting utility helpers &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="back.core.errors – Centralized Error Handling" href="app.core.errors.html" />
+    <link rel="prev" title="back.core – Core Domain Logic" href="app.core.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="app.core.html#module-back.core.logging">Logging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="app.core.html#module-back.core.task_manager">Task Manager</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="app.core.html#subpackages">Subpackages</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="app.html">OntoBricks Application Packages</a><ul>
+  <li><a href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a><ul>
+      <li>Previous: <a href="app.core.html" title="previous chapter"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+      <li>Next: <a href="app.core.errors.html" title="next chapter"><code class="docutils literal notranslate"><span class="pre">back.core.errors</span></code> – Centralized Error Handling</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="back-core-helpers-cross-cutting-utility-helpers">
+<h1><code class="docutils literal notranslate"><span class="pre">back.core.helpers</span></code> – Cross-cutting utility helpers<a class="headerlink" href="#back-core-helpers-cross-cutting-utility-helpers" title="Link to this heading">¶</a></h1>
+<section id="module-back.core.helpers.DatabricksHelpers">
+<span id="databrickshelpers"></span><h2>DatabricksHelpers<a class="headerlink" href="#module-back.core.helpers.DatabricksHelpers" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.DatabricksHelpers">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.helpers.DatabricksHelpers.</span></span><span class="sig-name descname"><span class="pre">DatabricksHelpers</span></span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.DatabricksHelpers" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.DatabricksHelpers.run_blocking">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">run_blocking</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.run_blocking"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.DatabricksHelpers.run_blocking" title="Link to this definition">¶</a></dt>
+<dd><p>Run a blocking function in a thread pool so it doesn’t freeze the event loop.</p>
+<p>Usage in an <code class="docutils literal notranslate"><span class="pre">async</span> <span class="pre">def</span></code> route handler:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">execute_query</span><span class="p">,</span> <span class="n">sql</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>func</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a>)</p></li>
+<li><p><strong>args</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.DatabricksHelpers.resolve_warehouse_id">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_warehouse_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.resolve_warehouse_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.DatabricksHelpers.resolve_warehouse_id" title="Link to this definition">¶</a></dt>
+<dd><p>Resolve the SQL Warehouse ID using a layered fallback strategy.</p>
+<p>Resolution order:</p>
+<ol class="arabic simple">
+<li><p><strong>Global config</strong> (<code class="docutils literal notranslate"><span class="pre">.global_config.json</span></code> in the registry UC Volume)
+– set by admins via the Settings page, shared across all users.</p></li>
+<li><p><strong>Session</strong> (<code class="docutils literal notranslate"><span class="pre">domain.databricks['warehouse_id']</span></code>) – stored when
+the user selects a warehouse before the registry is configured.</p></li>
+<li><p><strong>Pydantic Settings</strong> (<code class="docutils literal notranslate"><span class="pre">settings.sql_warehouse_id</span></code>) – loaded from
+the <code class="docutils literal notranslate"><span class="pre">DATABRICKS_SQL_WAREHOUSE_ID</span></code> env var / <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code>.</p></li>
+<li><p><strong>Default env var</strong> (<code class="docutils literal notranslate"><span class="pre">DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT</span></code>) –
+static fallback defined in <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code> for MCP / session-less calls.</p></li>
+</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>domain</strong> – DomainSession instance</p></li>
+<li><p><strong>settings</strong> – Settings instance from FastAPI</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The warehouse ID string (empty if none of the sources provide one).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.DatabricksHelpers.resolve_default_base_uri">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_default_base_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.resolve_default_base_uri"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.DatabricksHelpers.resolve_default_base_uri" title="Link to this definition">¶</a></dt>
+<dd><p>Resolve the default ontology base URI domain from global config.</p>
+<p>Falls back to the hard-coded default <code class="docutils literal notranslate"><span class="pre">https://databricks-ontology.com</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.DatabricksHelpers.resolve_default_emoji">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_default_emoji</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.resolve_default_emoji"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.DatabricksHelpers.resolve_default_emoji" title="Link to this definition">¶</a></dt>
+<dd><p>Resolve the default class icon from global config.</p>
+<p>Falls back to the hard-coded default <code class="docutils literal notranslate"><span class="pre">📦</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.DatabricksHelpers.get_databricks_client">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_databricks_client</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.get_databricks_client"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.DatabricksHelpers.get_databricks_client" title="Link to this definition">¶</a></dt>
+<dd><p>Get Databricks client from domain session or settings.</p>
+<p>In Databricks Apps mode, the SDK handles authentication automatically,
+so we don’t need explicit host/token.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>domain</strong> – DomainSession instance</p></li>
+<li><p><strong>settings</strong> – Settings instance from FastAPI</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>DatabricksClient instance or None if not configured</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.DatabricksHelpers.get_databricks_credentials">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_databricks_credentials</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.get_databricks_credentials"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.DatabricksHelpers.get_databricks_credentials" title="Link to this definition">¶</a></dt>
+<dd><p>Get Databricks credentials from domain session or settings.</p>
+<p>Falls back to OAuth token resolution in Databricks App mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>domain</strong> – DomainSession instance</p></li>
+<li><p><strong>settings</strong> – Settings instance from FastAPI</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple of (host, token, warehouse_id)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.DatabricksHelpers.get_databricks_host_and_token">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_databricks_host_and_token</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.get_databricks_host_and_token"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.DatabricksHelpers.get_databricks_host_and_token" title="Link to this definition">¶</a></dt>
+<dd><p>Get only host and token from domain session or settings.</p>
+<p>In Databricks App mode, auto-resolves the host via the SDK and
+obtains a short-lived OAuth token when explicit credentials are
+not stored in the domain session or environment.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>domain</strong> – DomainSession instance</p></li>
+<li><p><strong>settings</strong> – Settings instance from FastAPI</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple of (host, token)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.DatabricksHelpers.require_serving_llm">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">require_serving_llm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.require_serving_llm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.DatabricksHelpers.require_serving_llm" title="Link to this definition">¶</a></dt>
+<dd><p>Validate host, token, and domain LLM serving endpoint.</p>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">(error_response,</span> <span class="pre">None)</span></code> or <code class="docutils literal notranslate"><span class="pre">(None,</span> <span class="pre">(host,</span> <span class="pre">token,</span> <span class="pre">endpoint_name))</span></code>.
+<code class="docutils literal notranslate"><span class="pre">error_response</span></code> uses <code class="docutils literal notranslate"><span class="pre">success</span></code> + <code class="docutils literal notranslate"><span class="pre">message</span></code> for JSON routes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>] | None, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>] | None]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.resolve_ladybug_local_path">
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.DatabricksHelpers.</span></span><span class="sig-name descname"><span class="pre">resolve_ladybug_local_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#resolve_ladybug_local_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.resolve_ladybug_local_path" title="Link to this definition">¶</a></dt>
+<dd><p>Return the local file-system path for a LadybugDB archive.</p>
+<p>Extracts the <code class="docutils literal notranslate"><span class="pre">db_path</span></code> from the domain’s ladybug / triplestore
+configuration, falling back to <code class="docutils literal notranslate"><span class="pre">/tmp/ontobricks</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>db_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.effective_uc_version_path">
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.DatabricksHelpers.</span></span><span class="sig-name descname"><span class="pre">effective_uc_version_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#effective_uc_version_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.effective_uc_version_path" title="Link to this definition">¶</a></dt>
+<dd><p>Return the version-scoped UC Volume path, with domain-level fallback.</p>
+<p>Prefers <code class="docutils literal notranslate"><span class="pre">uc_version_path</span></code> (<code class="docutils literal notranslate"><span class="pre">/Volumes/.../V{N}</span></code>) but falls back to
+<code class="docutils literal notranslate"><span class="pre">uc_domain_path</span></code> (<code class="docutils literal notranslate"><span class="pre">/Volumes/.../domains/{name}</span></code>) for legacy layouts,
+and returns an empty string when neither is available.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-back.core.helpers.SQLHelpers">
+<span id="sqlhelpers"></span><h2>SQLHelpers<a class="headerlink" href="#module-back.core.helpers.SQLHelpers" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.helpers.SQLHelpers.SQLHelpers">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.helpers.SQLHelpers.</span></span><span class="sig-name descname"><span class="pre">SQLHelpers</span></span><a class="reference internal" href="../_modules/back/core/helpers/SQLHelpers.html#SQLHelpers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.SQLHelpers.SQLHelpers" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.SQLHelpers.SQLHelpers.sql_escape">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">sql_escape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/SQLHelpers.html#SQLHelpers.sql_escape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.SQLHelpers.SQLHelpers.sql_escape" title="Link to this definition">¶</a></dt>
+<dd><p>Escape a string value for safe embedding in SQL literals.</p>
+<p>Handles <code class="docutils literal notranslate"><span class="pre">None</span></code> gracefully and escapes both single-quotes and
+backslashes, which is the superset behaviour needed by all callers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.SQLHelpers.SQLHelpers.validate_table_name">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_table_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/SQLHelpers.html#SQLHelpers.validate_table_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.SQLHelpers.SQLHelpers.validate_table_name" title="Link to this definition">¶</a></dt>
+<dd><p>Raise <a class="reference internal" href="app.core.errors.html#module-back.core.errors.ValidationError" title="back.core.errors.ValidationError"><code class="xref py py-class docutils literal notranslate"><span class="pre">ValidationError</span></code></a> if <em>table_name</em> is empty.</p>
+<p>Centralises the guard that every triple-store method must perform.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.SQLHelpers.SQLHelpers.effective_view_table">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">effective_view_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/SQLHelpers.html#SQLHelpers.effective_view_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.SQLHelpers.SQLHelpers.effective_view_table" title="Link to this definition">¶</a></dt>
+<dd><p>Fully-qualified VIEW name derived from domain name, version, and delta location.</p>
+<p>When <em>settings</em> is provided and the composed name is empty, falls back
+to <code class="docutils literal notranslate"><span class="pre">settings.databricks_triplestore_table</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.SQLHelpers.SQLHelpers.effective_graph_name">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">effective_graph_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/SQLHelpers.html#SQLHelpers.effective_graph_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.SQLHelpers.SQLHelpers.effective_graph_name" title="Link to this definition">¶</a></dt>
+<dd><p>LadybugDB graph name derived from the domain name and version.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.helpers.URIHelpers">
+<span id="urihelpers"></span><h2>URIHelpers<a class="headerlink" href="#module-back.core.helpers.URIHelpers" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.helpers.URIHelpers.URIHelpers">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.helpers.URIHelpers.</span></span><span class="sig-name descname"><span class="pre">URIHelpers</span></span><a class="reference internal" href="../_modules/back/core/helpers/URIHelpers.html#URIHelpers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.URIHelpers.URIHelpers" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.URIHelpers.URIHelpers.is_uri">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">is_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/URIHelpers.html#URIHelpers.is_uri"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.URIHelpers.URIHelpers.is_uri" title="Link to this definition">¶</a></dt>
+<dd><p>Return <code class="docutils literal notranslate"><span class="pre">True</span></code> if <em>value</em> looks like an absolute HTTP(S) URI.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.URIHelpers.URIHelpers.extract_local_name">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">extract_local_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/URIHelpers.html#URIHelpers.extract_local_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.URIHelpers.URIHelpers.extract_local_name" title="Link to this definition">¶</a></dt>
+<dd><p>Extract the local name from a URI (the part after <code class="docutils literal notranslate"><span class="pre">#</span></code> or the last <code class="docutils literal notranslate"><span class="pre">/</span></code>).</p>
+<p>This is the canonical implementation used across the codebase.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.URIHelpers.URIHelpers.safe_identifier">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">safe_identifier</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prefix</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/URIHelpers.html#URIHelpers.safe_identifier"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.URIHelpers.URIHelpers.safe_identifier" title="Link to this definition">¶</a></dt>
+<dd><p>Convert <em>name</em> into a valid Python / SQL / GraphQL identifier.</p>
+<p>Replaces non-alphanumeric characters with underscores. If the result
+starts with a digit, <em>prefix</em> (default <code class="docutils literal notranslate"><span class="pre">&quot;_&quot;</span></code>) is prepended.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>prefix</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/api/app.core.helpers.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -110,17 +110,21 @@
 <span></span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">Registry Service for OntoBricks.</span>
 
-<span class="sd">Centralises all project-registry management (config resolution, path</span>
-<span class="sd">construction, project CRUD, version management) behind a single</span>
+<span class="sd">Centralises all domain-registry management (config resolution, path</span>
+<span class="sd">construction, domain CRUD, version management) behind a single</span>
 <span class="sd">``RegistryService`` class and a lightweight ``RegistryCfg`` dataclass.</span>
+
+<span class="sd">New registries store domain folders under ``/domains/``.  For backward</span>
+<span class="sd">compatibility, if the new folder does not exist but the legacy</span>
+<span class="sd">``/projects/`` folder does, the service transparently falls back to it.</span>
 
 <span class="sd">Usage in a route handler::</span>
 
 <span class="sd">    from back.objects.registry import RegistryCfg, RegistryService</span>
 
-<span class="sd">    cfg  = RegistryCfg.from_project(project, settings)</span>
-<span class="sd">    svc  = RegistryService.from_context(project, settings)</span>
-<span class="sd">    ok, names, msg = svc.list_projects()</span>
+<span class="sd">    cfg  = RegistryCfg.from_domain(domain, settings)</span>
+<span class="sd">    svc  = RegistryService.from_context(domain, settings)</span>
+<span class="sd">    ok, names, msg = svc.list_domains()</span>
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -130,11 +134,21 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.registry_cache</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">registry_cache_key</span><span class="p">,</span>
+    <span class="n">get_cached_registry_details</span><span class="p">,</span>
+    <span class="n">set_cached_registry_details</span><span class="p">,</span>
+    <span class="n">get_cached_registry_names</span><span class="p">,</span>
+    <span class="n">set_cached_registry_names</span><span class="p">,</span>
+    <span class="n">invalidate_registry_cache</span><span class="p">,</span>
+<span class="p">)</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 <span class="n">_DEFAULT_VOLUME</span> <span class="o">=</span> <span class="s2">&quot;OntoBricksRegistry&quot;</span>
 <span class="n">_REGISTRY_MARKER</span> <span class="o">=</span> <span class="s2">&quot;.registry&quot;</span>
+<span class="n">_DOMAINS_FOLDER</span> <span class="o">=</span> <span class="s2">&quot;domains&quot;</span>
+<span class="n">_LEGACY_DOMAINS_FOLDER</span> <span class="o">=</span> <span class="s2">&quot;projects&quot;</span>
 
 
 <span class="c1"># ------------------------------------------------------------------</span>
@@ -165,11 +179,11 @@
         <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">catalog</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">volume</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="RegistryCfg.from_project">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryCfg.from_project">[docs]</a>
+<div class="viewcode-block" id="RegistryCfg.from_domain">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryCfg.from_domain">[docs]</a>
     <span class="nd">@classmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">from_project</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RegistryCfg</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build from a *ProjectSession* and *Settings* with env-var fallbacks.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_domain</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RegistryCfg</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build from a *DomainSession* and *Settings* with env-var fallbacks.</span>
 
 <span class="sd">        When the app is deployed with a Volume resource the injected path</span>
 <span class="sd">        (``settings.registry_volume_path``) takes highest priority so that</span>
@@ -179,7 +193,7 @@
         <span class="k">if</span> <span class="n">vol_path</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">from_volume_path</span><span class="p">(</span><span class="n">vol_path</span><span class="p">)</span>
 
-        <span class="n">reg</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">settings</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;registry&quot;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="n">reg</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">settings</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;registry&quot;</span><span class="p">,</span> <span class="p">{})</span>
         <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
             <span class="n">catalog</span><span class="o">=</span><span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">registry_catalog</span><span class="p">,</span>
             <span class="n">schema</span><span class="o">=</span><span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">registry_schema</span><span class="p">,</span>
@@ -192,8 +206,8 @@
     <span class="nd">@classmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_session</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RegistryCfg</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Build from *SessionManager* and *Settings*.&quot;&quot;&quot;</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session.project_session</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_project</span>
-        <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">from_project</span><span class="p">(</span><span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">),</span> <span class="n">settings</span><span class="p">)</span></div>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session.domain_session</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_domain</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">),</span> <span class="n">settings</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="RegistryCfg.from_dict">
@@ -235,18 +249,19 @@
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">RegistryCfg</span><span class="p">,</span> <span class="n">uc</span><span class="p">:</span> <span class="n">VolumeFileService</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span> <span class="o">=</span> <span class="n">cfg</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span> <span class="o">=</span> <span class="n">uc</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_resolved_domains_folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
 
     <span class="c1"># -- factory -----------------------------------------------------</span>
 
 <div class="viewcode-block" id="RegistryService.from_context">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.from_context">[docs]</a>
     <span class="nd">@classmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">from_context</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RegistryService</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_context</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RegistryService</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;One-call factory: resolve config + build VolumeFileService.&quot;&quot;&quot;</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_databricks_host_and_token</span>
 
-        <span class="n">cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_project</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="n">uc</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">uc</span><span class="p">)</span></div>
 
@@ -262,6 +277,12 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Expose the underlying VolumeFileService for callers that need it.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span>
 
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cache_key</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build a cache key from the registry config triplet.&quot;&quot;&quot;</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span>
+        <span class="k">return</span> <span class="n">registry_cache_key</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">catalog</span><span class="p">,</span> <span class="n">c</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span> <span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="p">)</span>
+
     <span class="c1"># -- path builders -----------------------------------------------</span>
 
 <div class="viewcode-block" id="RegistryService.volume_root">
@@ -271,22 +292,56 @@
         <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;/Volumes/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">&quot;</span></div>
 
 
-<div class="viewcode-block" id="RegistryService.projects_path">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.projects_path">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">projects_path</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">volume_root</span><span class="p">()</span><span class="si">}</span><span class="s2">/projects&quot;</span></div>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_domains_folder</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the actual domains sub-folder name inside the volume.</span>
+
+<span class="sd">        New registries use ``domains/``.  If that folder does not exist</span>
+<span class="sd">        but the legacy ``projects/`` folder does, fall back transparently</span>
+<span class="sd">        so that existing registries keep working.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolved_domains_folder</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolved_domains_folder</span>
+
+        <span class="n">root</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume_root</span><span class="p">()</span>
+        <span class="n">new_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">root</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">_DOMAINS_FOLDER</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="n">new_path</span><span class="p">,</span> <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_resolved_domains_folder</span> <span class="o">=</span> <span class="n">_DOMAINS_FOLDER</span>
+            <span class="k">return</span> <span class="n">_DOMAINS_FOLDER</span>
+
+        <span class="n">legacy_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">root</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">_LEGACY_DOMAINS_FOLDER</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">ok_legacy</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="n">legacy_path</span><span class="p">,</span> <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ok_legacy</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Using legacy &#39;</span><span class="si">%s</span><span class="s2">/&#39; folder in registry volume&quot;</span><span class="p">,</span> <span class="n">_LEGACY_DOMAINS_FOLDER</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_resolved_domains_folder</span> <span class="o">=</span> <span class="n">_LEGACY_DOMAINS_FOLDER</span>
+            <span class="k">return</span> <span class="n">_LEGACY_DOMAINS_FOLDER</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_resolved_domains_folder</span> <span class="o">=</span> <span class="n">_DOMAINS_FOLDER</span>
+        <span class="k">return</span> <span class="n">_DOMAINS_FOLDER</span>
+
+<div class="viewcode-block" id="RegistryService.domains_path">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.domains_path">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">domains_path</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">volume_root</span><span class="p">()</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_resolve_domains_folder</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span></div>
 
 
-<div class="viewcode-block" id="RegistryService.project_path">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.project_path">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">project_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">projects_path</span><span class="p">()</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">folder</span><span class="si">}</span><span class="s2">&quot;</span></div>
+<div class="viewcode-block" id="RegistryService.domain_path">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.domain_path">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">domain_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">domains_path</span><span class="p">()</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">folder</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+
+<div class="viewcode-block" id="RegistryService.version_path">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.version_path">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">version_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the version directory: ``.../domains/{folder}/V{version}``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">domain_path</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span><span class="si">}</span><span class="s2">/V</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">&quot;</span></div>
 
 
 <div class="viewcode-block" id="RegistryService.version_file_path">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.version_file_path">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">version_file_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">project_path</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span><span class="si">}</span><span class="s2">/v</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">.json&quot;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">version_path</span><span class="p">(</span><span class="n">folder</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="p">)</span><span class="si">}</span><span class="s2">/V</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">.json&quot;</span></div>
 
 
 <div class="viewcode-block" id="RegistryService.marker_path">
@@ -310,7 +365,7 @@
 <div class="viewcode-block" id="RegistryService.history_file_path">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.history_file_path">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">history_file_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">project_path</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span><span class="si">}</span><span class="s2">/.schedule_history.json&quot;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">domain_path</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span><span class="si">}</span><span class="s2">/.schedule_history.json&quot;</span></div>
 
 
     <span class="c1"># -- registry lifecycle ------------------------------------------</span>
@@ -339,34 +394,58 @@
                 <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Failed to create volume </span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">&quot;</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">write_file</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">marker_path</span><span class="p">(),</span> <span class="s2">&quot;OntoBricks Project Registry&quot;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">marker_path</span><span class="p">(),</span> <span class="s2">&quot;OntoBricks Domain Registry&quot;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Registry initialized at </span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">c</span><span class="o">.</span><span class="n">catalog</span><span class="p">,</span> <span class="n">c</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span> <span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Registry initialized: </span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">&quot;</span></div>
 
 
-    <span class="c1"># -- project CRUD ------------------------------------------------</span>
+    <span class="c1"># -- domain CRUD -------------------------------------------------</span>
 
-<div class="viewcode-block" id="RegistryService.list_projects">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_projects">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">list_projects</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return sorted project folder names (hidden dirs excluded).&quot;&quot;&quot;</span>
-        <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">projects_path</span><span class="p">(),</span> <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="RegistryService.list_domains">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_domains">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_domains</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return sorted domain folder names (hidden dirs excluded).&quot;&quot;&quot;</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domains_path</span><span class="p">(),</span> <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="n">msg</span>
         <span class="n">names</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">items</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">i</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">))</span>
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="s2">&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="RegistryService.list_project_details">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_project_details">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">list_project_details</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;List projects with description and version list.</span>
+<div class="viewcode-block" id="RegistryService.list_domains_cached">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_domains_cached">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_domains_cached</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Like :meth:`list_domains` but with an in-memory TTL cache.&quot;&quot;&quot;</span>
+        <span class="n">cached</span> <span class="o">=</span> <span class="n">get_cached_registry_names</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cached</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">cached</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_domains</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="n">set_cached_registry_names</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_key</span><span class="p">,</span> <span class="n">names</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ok</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">msg</span></div>
 
-<span class="sd">        For each project folder the latest version file is opened to</span>
-<span class="sd">        extract the description from ``info.description``.</span>
+
+<div class="viewcode-block" id="RegistryService.domain_exists">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.domain_exists">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">domain_exists</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check whether a domain folder already exists in the registry.&quot;&quot;&quot;</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_domains</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="n">folder</span> <span class="ow">in</span> <span class="n">names</span></div>
+
+
+<div class="viewcode-block" id="RegistryService.list_domain_details">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_domain_details">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_domain_details</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List domains with name, URI, description and version list.</span>
+
+<span class="sd">        For each domain folder the latest version file is opened to</span>
+<span class="sd">        extract the description from ``info.description`` and the base URI</span>
+<span class="sd">        from the ontology section.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">projects_path</span><span class="p">(),</span> <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domains_path</span><span class="p">(),</span> <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="n">msg</span>
 
@@ -377,33 +456,26 @@
                 <span class="k">continue</span>
 
             <span class="n">description</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">base_uri</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
             <span class="n">version_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">ver_ok</span><span class="p">,</span> <span class="n">ver_items</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">projects_path</span><span class="p">()</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">extensions</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;.json&quot;</span><span class="p">],</span>
-                <span class="p">)</span>
-                <span class="k">if</span> <span class="n">ver_ok</span> <span class="ow">and</span> <span class="n">ver_items</span><span class="p">:</span>
-                    <span class="n">version_list</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span>
-                        <span class="p">[</span>
-                            <span class="n">f</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">5</span><span class="p">]</span>
-                            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">ver_items</span>
-                            <span class="k">if</span> <span class="n">f</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;v&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">f</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.json&quot;</span><span class="p">)</span>
-                        <span class="p">],</span>
-                        <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)],</span>
-                        <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">version_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_versions_sorted</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">version_list</span><span class="p">:</span>
+                    <span class="n">latest</span> <span class="o">=</span> <span class="n">version_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="n">f_ok</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">version_file_path</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">latest</span><span class="p">),</span>
                     <span class="p">)</span>
-                    <span class="k">if</span> <span class="n">version_list</span><span class="p">:</span>
-                        <span class="n">latest_file</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;v</span><span class="si">{</span><span class="n">version_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">.json&quot;</span>
-                        <span class="n">f_ok</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span>
-                            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">projects_path</span><span class="p">()</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">latest_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                        <span class="p">)</span>
-                        <span class="k">if</span> <span class="n">f_ok</span> <span class="ow">and</span> <span class="n">content</span><span class="p">:</span>
-                            <span class="n">description</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">content</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">f_ok</span> <span class="ow">and</span> <span class="n">content</span><span class="p">:</span>
+                        <span class="n">doc</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+                        <span class="n">description</span> <span class="o">=</span> <span class="n">doc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                        <span class="n">ontology</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_latest_ontology</span><span class="p">(</span><span class="n">doc</span><span class="p">)</span>
+                        <span class="n">base_uri</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
             <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not read description for project </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not read details for domain </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
 
             <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
                 <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+                <span class="s2">&quot;base_uri&quot;</span><span class="p">:</span> <span class="n">base_uri</span><span class="p">,</span>
                 <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="n">description</span><span class="p">,</span>
                 <span class="s2">&quot;versions&quot;</span><span class="p">:</span> <span class="n">version_list</span><span class="p">,</span>
             <span class="p">})</span>
@@ -411,17 +483,40 @@
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="s2">&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="RegistryService.list_mcp_projects">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_mcp_projects">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">list_mcp_projects</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">require_ontology</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span> <span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;List projects that have an MCP-enabled version.</span>
+<div class="viewcode-block" id="RegistryService.list_domain_details_cached">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_domain_details_cached">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_domain_details_cached</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Like :meth:`list_domain_details` but with an in-memory TTL cache.&quot;&quot;&quot;</span>
+        <span class="n">cached</span> <span class="o">=</span> <span class="n">get_cached_registry_details</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cached</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">cached</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">details</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_domain_details</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="n">set_cached_registry_details</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_key</span><span class="p">,</span> <span class="n">details</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ok</span><span class="p">,</span> <span class="n">details</span><span class="p">,</span> <span class="n">msg</span></div>
 
-<span class="sd">        Returns ``(ok, projects, message)`` where each project is</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_latest_ontology</span><span class="p">(</span><span class="n">doc</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the ontology dict from the latest version in a domain document.&quot;&quot;&quot;</span>
+        <span class="n">versions</span> <span class="o">=</span> <span class="n">doc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;versions&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">versions</span><span class="p">:</span>
+            <span class="n">latest_key</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">versions</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">latest_key</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">versions</span><span class="p">[</span><span class="n">latest_key</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">return</span> <span class="n">doc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="p">{})</span>
+
+<div class="viewcode-block" id="RegistryService.list_mcp_domains">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_mcp_domains">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_mcp_domains</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">require_ontology</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List domains that have an MCP-enabled version.</span>
+
+<span class="sd">        Returns ``(ok, domains, message)`` where each domain is</span>
 <span class="sd">        ``{&quot;name&quot;: ..., &quot;description&quot;: ...}``.  When *require_ontology* is</span>
-<span class="sd">        ``True`` only projects whose MCP version has a non-empty ``classes``</span>
+<span class="sd">        ``True`` only domains whose MCP version has a non-empty ``classes``</span>
 <span class="sd">        list are included.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">projects_path</span><span class="p">(),</span> <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domains_path</span><span class="p">(),</span> <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="n">msg</span>
 
@@ -442,15 +537,17 @@
                         <span class="k">continue</span>
                 <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)})</span>
             <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not inspect project </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not inspect domain </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="s2">&quot;&quot;</span></div>
 
 
-<div class="viewcode-block" id="RegistryService.delete_project">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.delete_project">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">delete_project</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete a project directory and all its contents.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">recursive_delete</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">project_path</span><span class="p">(</span><span class="n">folder</span><span class="p">))</span></div>
+<div class="viewcode-block" id="RegistryService.delete_domain">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.delete_domain">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_domain</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete a domain directory and all its contents.&quot;&quot;&quot;</span>
+        <span class="n">errors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">recursive_delete</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domain_path</span><span class="p">(</span><span class="n">folder</span><span class="p">))</span>
+        <span class="n">invalidate_registry_cache</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_key</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">errors</span></div>
 
 
 <div class="viewcode-block" id="RegistryService.recursive_delete">
@@ -498,16 +595,19 @@
 <div class="viewcode-block" id="RegistryService.list_versions">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_versions">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">list_versions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return version strings (e.g. ``[&#39;2&#39;, &#39;1&#39;]``) for a project folder.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return version strings (e.g. ``[&#39;2&#39;, &#39;1&#39;]``) for a domain folder.</span>
+
+<span class="sd">        Scans ``V{N}/`` subdirectories inside the domain folder.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">project_path</span><span class="p">(</span><span class="n">folder</span><span class="p">),</span> <span class="n">extensions</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;.json&quot;</span><span class="p">],</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">domain_path</span><span class="p">(</span><span class="n">folder</span><span class="p">),</span> <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="n">msg</span>
         <span class="n">versions</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="n">f</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">5</span><span class="p">]</span>
-            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">items</span>
-            <span class="k">if</span> <span class="n">f</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;v&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">f</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.json&quot;</span><span class="p">)</span>
+            <span class="n">d</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">:]</span>
+            <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">items</span>
+            <span class="k">if</span> <span class="n">d</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;V&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">d</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">isdigit</span><span class="p">()</span>
         <span class="p">]</span>
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">versions</span><span class="p">,</span> <span class="s2">&quot;&quot;</span></div>
 
@@ -556,23 +656,27 @@
 <div class="viewcode-block" id="RegistryService.delete_version">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.delete_version">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">delete_version</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete a single version file.&quot;&quot;&quot;</span>
-        <span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">version_file_path</span><span class="p">(</span><span class="n">folder</span><span class="p">,</span> <span class="n">version</span><span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">delete_file</span><span class="p">(</span><span class="n">path</span><span class="p">)</span></div>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete an entire version directory (``V{version}/``) and its contents.&quot;&quot;&quot;</span>
+        <span class="n">ver_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">version_path</span><span class="p">(</span><span class="n">folder</span><span class="p">,</span> <span class="n">version</span><span class="p">)</span>
+        <span class="n">errors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">recursive_delete</span><span class="p">(</span><span class="n">ver_dir</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">errors</span><span class="p">:</span>
+            <span class="n">invalidate_registry_cache</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_key</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">errors</span><span class="p">)</span></div>
 
 
-    <span class="c1"># -- load project from registry (stateless) ----------------------</span>
+    <span class="c1"># -- load domain from registry (stateless) -----------------------</span>
 
-<div class="viewcode-block" id="RegistryService.load_latest_project_data">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.load_latest_project_data">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">load_latest_project_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">dict</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<div class="viewcode-block" id="RegistryService.load_latest_domain_data">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.load_latest_domain_data">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">load_latest_domain_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">dict</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Load the latest version for *folder*.</span>
 
 <span class="sd">        Returns ``(ok, data_dict, version_str, error_msg)``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">latest</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_latest_version</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">latest</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">{},</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;No versions found for project &quot;</span><span class="si">{</span><span class="n">folder</span><span class="si">}</span><span class="s1">&quot;&#39;</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">{},</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;No versions found for domain &quot;</span><span class="si">{</span><span class="n">folder</span><span class="si">}</span><span class="s1">&quot;&#39;</span>
         <span class="n">ok</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_version</span><span class="p">(</span><span class="n">folder</span><span class="p">,</span> <span class="n">latest</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">{},</span> <span class="n">latest</span><span class="p">,</span> <span class="n">msg</span>
@@ -596,9 +700,9 @@
         <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="p">{}</span></div>
 
 
-<div class="viewcode-block" id="RegistryService.load_mcp_project_data">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.load_mcp_project_data">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">load_mcp_project_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">dict</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<div class="viewcode-block" id="RegistryService.load_mcp_domain_data">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.load_mcp_domain_data">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">load_mcp_domain_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">dict</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Load the MCP-enabled version for *folder*.</span>
 
 <span class="sd">        Falls back to the latest version when no version has</span>
@@ -609,7 +713,160 @@
         <span class="n">ver</span><span class="p">,</span> <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">find_mcp_version</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">ver</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">ver</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_latest_project_data</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_latest_domain_data</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span></div>
+
+
+    <span class="c1"># -- document operations -------------------------------------------</span>
+
+<div class="viewcode-block" id="RegistryService.copy_version_documents">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.copy_version_documents">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">copy_version_documents</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">src_version</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">dst_version</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Copy all documents from one version directory to another.</span>
+
+<span class="sd">        Returns ``(copied_count, error_messages)``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">src_docs</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">version_path</span><span class="p">(</span><span class="n">folder</span><span class="p">,</span><span class="w"> </span><span class="n">src_version</span><span class="p">)</span><span class="si">}</span><span class="s2">/documents&quot;</span>
+        <span class="n">dst_docs</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">version_path</span><span class="p">(</span><span class="n">folder</span><span class="p">,</span><span class="w"> </span><span class="n">dst_version</span><span class="p">)</span><span class="si">}</span><span class="s2">/documents&quot;</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="n">src_docs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s2">&quot;not found&quot;</span> <span class="ow">in</span> <span class="n">msg</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+                <span class="k">return</span> <span class="mi">0</span><span class="p">,</span> <span class="p">[]</span>
+            <span class="k">return</span> <span class="mi">0</span><span class="p">,</span> <span class="p">[</span><span class="n">msg</span><span class="p">]</span>
+        <span class="n">errors</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">copied</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;is_directory&quot;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+            <span class="n">src_file</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">src_docs</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">dst_file</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dst_docs</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">r_ok</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">r_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">read_binary_file</span><span class="p">(</span><span class="n">src_file</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">r_ok</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Read </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">r_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="n">w_ok</span><span class="p">,</span> <span class="n">w_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">write_binary_file</span><span class="p">(</span><span class="n">dst_file</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">w_ok</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Write </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">w_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="n">copied</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">copied</span><span class="p">,</span> <span class="n">errors</span></div>
+
+
+    <span class="c1"># -- one-time layout migration -------------------------------------</span>
+
+<div class="viewcode-block" id="RegistryService.migrate_domain_layout">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.migrate_domain_layout">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">migrate_domain_layout</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Migrate a single domain from the flat layout to the versioned layout.</span>
+
+<span class="sd">        Flat layout (old)::</span>
+
+<span class="sd">            domains/{folder}/v1.json</span>
+<span class="sd">            domains/{folder}/v2.json</span>
+<span class="sd">            domains/{folder}/documents/</span>
+<span class="sd">            domains/{folder}/ontobricks_*.lbug.tar.gz</span>
+
+<span class="sd">        Versioned layout (new)::</span>
+
+<span class="sd">            domains/{folder}/V1/V1.json</span>
+<span class="sd">            domains/{folder}/V1/documents/</span>
+<span class="sd">            domains/{folder}/V1/ontobricks_*.lbug.tar.gz</span>
+<span class="sd">            domains/{folder}/V2/V2.json</span>
+<span class="sd">            domains/{folder}/V2/documents/</span>
+<span class="sd">            domains/{folder}/V2/ontobricks_*.lbug.tar.gz</span>
+
+<span class="sd">        Returns ``(ok, message)``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">base</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">domain_path</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span>
+
+        <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="n">base</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Cannot list </span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">msg</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="n">flat_versions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">lbug_files</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">has_documents</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;v&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">name</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.json&quot;</span><span class="p">):</span>
+                <span class="n">flat_versions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">5</span><span class="p">])</span>  <span class="c1"># &quot;v1.json&quot; -&gt; &quot;1&quot;</span>
+            <span class="k">elif</span> <span class="n">name</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.lbug.tar.gz&quot;</span><span class="p">):</span>
+                <span class="n">lbug_files</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;path&quot;</span><span class="p">]})</span>
+            <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;documents&quot;</span> <span class="ow">and</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;is_directory&quot;</span><span class="p">):</span>
+                <span class="n">has_documents</span> <span class="o">=</span> <span class="kc">True</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">flat_versions</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;No flat version files found — nothing to migrate&quot;</span>
+
+        <span class="n">flat_versions</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span>
+            <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)],</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">latest_version</span> <span class="o">=</span> <span class="n">flat_versions</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">errors</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">ver</span> <span class="ow">in</span> <span class="n">flat_versions</span><span class="p">:</span>
+            <span class="n">old_file</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">/v</span><span class="si">{</span><span class="n">ver</span><span class="si">}</span><span class="s2">.json&quot;</span>
+            <span class="n">new_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">version_file_path</span><span class="p">(</span><span class="n">folder</span><span class="p">,</span> <span class="n">ver</span><span class="p">)</span>
+            <span class="n">r_ok</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">r_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">old_file</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">r_ok</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Read v</span><span class="si">{</span><span class="n">ver</span><span class="si">}</span><span class="s2">.json: </span><span class="si">{</span><span class="n">r_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="n">w_ok</span><span class="p">,</span> <span class="n">w_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">write_file</span><span class="p">(</span><span class="n">new_file</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">w_ok</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Write V</span><span class="si">{</span><span class="n">ver</span><span class="si">}</span><span class="s2">/V</span><span class="si">{</span><span class="n">ver</span><span class="si">}</span><span class="s2">.json: </span><span class="si">{</span><span class="n">w_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="n">d_ok</span><span class="p">,</span> <span class="n">d_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">delete_file</span><span class="p">(</span><span class="n">old_file</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">d_ok</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Delete old v</span><span class="si">{</span><span class="n">ver</span><span class="si">}</span><span class="s2">.json: </span><span class="si">{</span><span class="n">d_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">lbug</span> <span class="ow">in</span> <span class="n">lbug_files</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">lbug</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+            <span class="n">matched_version</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">for</span> <span class="n">ver</span> <span class="ow">in</span> <span class="n">flat_versions</span><span class="p">:</span>
+                <span class="k">if</span> <span class="sa">f</span><span class="s2">&quot;_V</span><span class="si">{</span><span class="n">ver</span><span class="si">}</span><span class="s2">&quot;</span> <span class="ow">in</span> <span class="n">name</span><span class="p">:</span>
+                    <span class="n">matched_version</span> <span class="o">=</span> <span class="n">ver</span>
+                    <span class="k">break</span>
+            <span class="n">target_version</span> <span class="o">=</span> <span class="n">matched_version</span> <span class="ow">or</span> <span class="n">latest_version</span>
+            <span class="n">old_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">new_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">version_path</span><span class="p">(</span><span class="n">folder</span><span class="p">,</span><span class="w"> </span><span class="n">target_version</span><span class="p">)</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">r_ok</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">r_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">read_binary_file</span><span class="p">(</span><span class="n">old_path</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">r_ok</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Read </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">r_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="n">w_ok</span><span class="p">,</span> <span class="n">w_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">write_binary_file</span><span class="p">(</span><span class="n">new_path</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">w_ok</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Write </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">w_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="n">d_ok</span><span class="p">,</span> <span class="n">d_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">delete_file</span><span class="p">(</span><span class="n">old_path</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">d_ok</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Delete old </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">d_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">has_documents</span><span class="p">:</span>
+            <span class="n">src_docs</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">/documents&quot;</span>
+            <span class="n">dst_docs</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">version_path</span><span class="p">(</span><span class="n">folder</span><span class="p">,</span><span class="w"> </span><span class="n">latest_version</span><span class="p">)</span><span class="si">}</span><span class="s2">/documents&quot;</span>
+            <span class="n">doc_ok</span><span class="p">,</span> <span class="n">doc_items</span><span class="p">,</span> <span class="n">doc_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="n">src_docs</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">doc_ok</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">doc_items</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;is_directory&quot;</span><span class="p">):</span>
+                        <span class="k">continue</span>
+                    <span class="n">name</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+                    <span class="n">r_ok</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">r_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">read_binary_file</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">src_docs</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">r_ok</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Read doc </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">r_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                        <span class="k">continue</span>
+                    <span class="n">w_ok</span><span class="p">,</span> <span class="n">w_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">write_binary_file</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dst_docs</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">w_ok</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Write doc </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">w_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                        <span class="k">continue</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">delete_file</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">src_docs</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">delete_directory</span><span class="p">(</span><span class="n">src_docs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Migration completed with errors: </span><span class="si">{</span><span class="s1">&#39;; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">errors</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Migrated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">flat_versions</span><span class="p">)</span><span class="si">}</span><span class="s2"> version(s) to versioned layout&quot;</span></div>
 </div>
 
 </pre></div>

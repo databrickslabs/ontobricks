@@ -1,9 +1,9 @@
 """
 Metadata tools – shared across agents.
 
-Provides tools to retrieve project table metadata from the ToolContext.
-All metadata is read from imported/project metadata only — no direct
-Unity Catalog queries. Metadata must be loaded in Project settings first.
+Provides tools to retrieve domain table metadata from the ToolContext.
+All metadata is read from imported metadata for the current domain only — no direct
+Unity Catalog queries. Metadata must be loaded in Domain settings first.
 
 Limits are applied to avoid exceeding LLM context size when there are
 many tables or columns. Use get_table_detail for full schema of a specific table.
@@ -27,11 +27,11 @@ _MAX_COLUMNS_PER_TABLE = 80
 # =====================================================
 
 def tool_get_metadata(ctx: ToolContext, **_kwargs) -> str:
-    """Return project table metadata from imported metadata only.
-    Does NOT query Unity Catalog — uses pre-loaded metadata from Project settings.
+    """Return domain table metadata from imported metadata only.
+    Does NOT query Unity Catalog — uses pre-loaded metadata from Domain settings.
     When there are many tables/columns, results are limited to avoid context overflow.
     Use get_table_detail for full schema of a specific table."""
-    logger.info("tool_get_metadata: retrieving project metadata")
+    logger.info("tool_get_metadata: retrieving domain metadata")
     tables = ctx.metadata.get("tables", [])
     if not tables:
         logger.info("tool_get_metadata: no tables in metadata")
@@ -125,13 +125,25 @@ def tool_get_table_detail(ctx: ToolContext, *, table_name: str = "", **_kwargs) 
 # OpenAI function-calling definitions
 # =====================================================
 
+GET_METADATA_DEF: dict = {
+    "type": "function",
+    "function": {
+        "name": "get_metadata",
+        "description": (
+            "Get the domain's database table metadata: table names (full catalog.schema.table names), "
+            "column names, data types, and descriptions. Call this first to understand the available data."
+        ),
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+}
+
 METADATA_TOOL_DEFINITIONS: List[dict] = [
     {
         "type": "function",
         "function": {
             "name": "get_metadata",
             "description": (
-                "Get the project's database table metadata: table names (full catalog.schema.table names), "
+                "Get the domain's database table metadata: table names (full catalog.schema.table names), "
                 "column names, data types, and descriptions. Call this first to understand the available data."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},

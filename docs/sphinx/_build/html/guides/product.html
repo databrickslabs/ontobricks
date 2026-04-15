@@ -206,7 +206,7 @@ Each section maps to one slide or slide group.</p>
 </thead>
 <tbody>
 <tr class="row-even"><td><p>Unity Catalog</p></td>
-<td><p>Storage for tables, project files (Volumes), and metadata</p></td>
+<td><p>Storage for tables, domain files (Volumes), and metadata</p></td>
 </tr>
 <tr class="row-odd"><td><p>SQL Warehouse</p></td>
 <td><p>Executes all data queries – no separate compute</p></td>
@@ -256,7 +256,7 @@ Each section maps to one slide or slide group.</p>
 </thead>
 <tbody>
 <tr class="row-even"><td><p><strong>1</strong></p></td>
-<td><p>Project &gt; Metadata</p></td>
+<td><p>Domain &gt; Metadata</p></td>
 <td><p>Fetches table and column metadata from Unity Catalog</p></td>
 <td><p>Unity Catalog API</p></td>
 </tr>
@@ -368,8 +368,8 @@ Each section maps to one slide or slide group.</p>
 </tbody>
 </table>
 </section>
-<section id="project-management">
-<h4>Project Management<a class="headerlink" href="#project-management" title="Link to this heading">¶</a></h4>
+<section id="domain-management">
+<h4>Domain Management<a class="headerlink" href="#domain-management" title="Link to this heading">¶</a></h4>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Capability</p></th>
@@ -378,13 +378,13 @@ Each section maps to one slide or slide group.</p>
 </thead>
 <tbody>
 <tr class="row-even"><td><p>Unity Catalog Storage</p></td>
-<td><p>Save and load projects to UC Volumes with version control</p></td>
+<td><p>Save and load domains to UC Volumes with version control</p></td>
 </tr>
 <tr class="row-odd"><td><p>Import/Export</p></td>
 <td><p>Import OWL, RDFS, R2RML; export OWL and R2RML</p></td>
 </tr>
 <tr class="row-even"><td><p>Secret-Safe Design</p></td>
-<td><p>Projects never store tokens, passwords, or query results</p></td>
+<td><p>Domains never store tokens, passwords, or query results</p></td>
 </tr>
 </tbody>
 </table>
@@ -402,7 +402,7 @@ Each section maps to one slide or slide group.</p>
 <td><p>Stateless endpoints for triple store status, entity search, ontology/R2RML/SQL retrieval, and build triggers</p></td>
 </tr>
 <tr class="row-odd"><td><p>GraphQL API</p></td>
-<td><p>Auto-generated typed schema per project with configurable depth, GraphiQL playground</p></td>
+<td><p>Auto-generated typed schema per domain with configurable depth, GraphiQL playground</p></td>
 </tr>
 <tr class="row-even"><td><p>MCP Server</p></td>
 <td><p>Model Context Protocol server for Databricks Playground and LLM clients (Cursor, Claude Desktop)</p></td>
@@ -498,7 +498,7 @@ Each section maps to one slide or slide group.</p>
 </tr>
 <tr class="row-odd"><td><p><strong>Knowledge sharing</strong></p></td>
 <td><p>ER diagrams in Confluence, tribal knowledge in meetings</p></td>
-<td><p>Versioned ontology projects in Unity Catalog, shareable across teams</p></td>
+<td><p>Versioned ontology domains in Unity Catalog, shareable across teams</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>Data quality</strong></p></td>
 <td><p>Manual spot-checks or custom validation scripts</p></td>
@@ -564,7 +564,7 @@ Each section maps to one slide or slide group.</p>
 <td><p>Optional – required for LLM features (ontology generation, auto-mapping)</p></td>
 </tr>
 <tr class="row-even"><td><p>Unity Catalog</p></td>
-<td><p>For table access and project storage (Volumes)</p></td>
+<td><p>For table access and domain storage (Volumes)</p></td>
 </tr>
 </tbody>
 </table>
@@ -644,7 +644,7 @@ Each section maps to one slide or slide group.</p>
 <h4>Data Mapping<a class="headerlink" href="#data-mapping" title="Link to this heading">¶</a></h4>
 <ul class="simple">
 <li><p><strong>Visual mapping</strong>: Click entities on an interactive graph to configure their SQL source.</p></li>
-<li><p><strong>LLM-powered Auto-Map</strong>: The LLM generates SQL queries and column mappings for every entity and relationship automatically, using project metadata as context.</p></li>
+<li><p><strong>LLM-powered Auto-Map</strong>: The LLM generates SQL queries and column mappings for every entity and relationship automatically, using domain metadata as context.</p></li>
 <li><p><strong>R2RML generation</strong>: W3C-compliant R2RML mappings are generated behind the scenes — users never need to write mapping rules manually.</p></li>
 </ul>
 </section>
@@ -678,7 +678,7 @@ Each section maps to one slide or slide group.</p>
 <h4>External &amp; Programmatic Access<a class="headerlink" href="#external-programmatic-access" title="Link to this heading">¶</a></h4>
 <ul class="simple">
 <li><p><strong>Digital Twin REST API</strong>: Stateless endpoints for triple store status, ontology/R2RML/SQL retrieval, entity search, and build triggers (<code class="docutils literal notranslate"><span class="pre">/api/v1/digitaltwin/</span></code>).</p></li>
-<li><p><strong>GraphQL API</strong>: Auto-generated typed schema per project with configurable relationship depth and GraphiQL playground.</p></li>
+<li><p><strong>GraphQL API</strong>: Auto-generated typed schema per domain with configurable relationship depth and GraphiQL playground.</p></li>
 <li><p><strong>MCP Server</strong>: Model Context Protocol server deployable as a Databricks App (<code class="docutils literal notranslate"><span class="pre">mcp-ontobricks</span></code>) for Databricks Playground integration and LLM client access (Cursor, Claude Desktop).</p></li>
 <li><p><strong>Ontology Assistant</strong>: Conversational LLM agent for natural-language ontology editing.</p></li>
 </ul>
@@ -736,7 +736,7 @@ Each section maps to one slide or slide group.</p>
 <ul class="simple">
 <li><p>Deploys in minutes via <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">apps</span> <span class="pre">deploy</span></code></p></li>
 <li><p>Requires only a SQL Warehouse and (optionally) a Model Serving endpoint</p></li>
-<li><p>Stores all project data in Unity Catalog Volumes (no external dependencies)</p></li>
+<li><p>Stores all domain data in Unity Catalog Volumes (no external dependencies)</p></li>
 <li><p>Supports the full lifecycle: design → map → materialize → explore → validate</p></li>
 </ul>
 </section>
@@ -768,7 +768,7 @@ Each section maps to one slide or slide group.</p>
 <td><p>LLM automation reduces the manual effort from weeks of custom development to minutes of guided interaction</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>Reusability</strong></p></td>
-<td><p>Saved projects (ontology + mappings) can be versioned, shared, and applied to new datasets</p></td>
+<td><p>Saved domains (ontology + mappings) can be versioned, shared, and applied to new datasets</p></td>
 </tr>
 <tr class="row-odd"><td><p><strong>Data quality</strong></p></td>
 <td><p>Built-in quality checks and formal constraint validation ensure the knowledge graph adheres to ontology semantics</p></td>
@@ -835,6 +835,7 @@ Each section maps to one slide or slide group.</p>
 <li><p><strong>Reasoning engine operational</strong>: OWL 2 RL deductive closure, SWRL rule engine (SQL + Cypher) with graphical D3 editor, graph reasoning (transitive closure, symmetric expansion), constraint validation, and SHACL data quality shapes (PySHACL + SQL compilation)</p></li>
 <li><p><strong>Dual triple store backends</strong>: Delta (SQL Warehouse) and LadybugDB (embedded Cypher graph DB) with typed schema generation from OWL</p></li>
 <li><p>MCP server deployed and operational for Databricks Playground</p></li>
+<li><p><strong>Entity Groups</strong>: OWL-compliant class grouping via <code class="docutils literal notranslate"><span class="pre">owl:equivalentClass</span></code> + <code class="docutils literal notranslate"><span class="pre">owl:unionOf</span></code>, with expand/collapse super-nodes in the Knowledge Graph visualization</p></li>
 <li><p>Digital Twin REST API with design status, ontology, R2RML, Spark SQL endpoints</p></li>
 <li><p>GraphQL API with configurable depth and auto-generated schema</p></li>
 <li><p>Documentation: README, user guide, architecture, API reference, import guide, automated pipeline guide</p></li>

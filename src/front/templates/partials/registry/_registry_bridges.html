@@ -1,0 +1,37 @@
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-signpost-split me-2"></i>Bridges</h4>
+            <p class="text-muted mb-0 small">Cross-domain bridges connecting ontology classes across domains</p>
+        </div>
+        <div class="d-flex gap-2">
+            <div class="btn-group btn-group-sm" id="bridgesViewToggle" style="display:none;">
+                <button type="button" class="btn btn-outline-primary active" data-view="graph" title="Graph view">
+                    <i class="bi bi-diagram-3"></i> Graph
+                </button>
+                <button type="button" class="btn btn-outline-primary" data-view="table" title="Table view">
+                    <i class="bi bi-table"></i> Table
+                </button>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshBridges" title="Refresh bridges">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="bridgesStatus" class="mb-3" style="display:none;"></div>
+
+    <div id="bridgesSummary" style="display:none;flex-shrink:0;"></div>
+
+    <div id="bridgesGraphContainer" style="display:none;">
+        <div id="bridgesGraph"></div>
+    </div>
+
+    <div id="bridgesContent">
+        <div class="text-center text-muted small py-3">
+            <span class="spinner-border spinner-border-sm me-1"></span> Loading bridges...
+        </div>
+    </div>
+
+    <div id="bridgesGraphTooltip" class="bridges-graph-tooltip" style="display:none;"></div>
+</div>

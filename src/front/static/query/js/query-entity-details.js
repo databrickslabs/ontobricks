@@ -399,6 +399,35 @@ async function showEntityDetails(entity) {
             </div>
         `;
     }
+
+    // Cross-domain bridges
+    const bridges = entityMapping?.bridges || classInfo?.bridges || [];
+    if (bridges.length > 0) {
+        html += `
+            <div class="entity-detail-section">
+                <h6><i class="bi bi-signpost-2"></i> Bridges (${bridges.length})</h6>
+        `;
+        for (const bridge of bridges) {
+            const tgtDom = bridge.target_domain || bridge.target_project || '';
+            const targetEntityUri = actualIdValue
+                ? (bridge.target_class_uri || '') + '#' + actualIdValue
+                : (bridge.target_class_uri || '');
+            const resolveUrl = '/resolve?uri=' + encodeURIComponent(targetEntityUri) +
+                '&domain=' + encodeURIComponent(tgtDom);
+            const tooltip = escapeHtml(bridge.label || 'Navigate to ' + bridge.target_class_name + ' in ' + tgtDom);
+            html += `
+                <div class="entity-detail-item">
+                    <a href="${escapeHtml(resolveUrl)}" class="btn btn-sm btn-outline-primary w-100 text-start" title="${tooltip}">
+                        <i class="bi bi-signpost-2 me-1"></i>
+                        <span class="fw-semibold">${escapeHtml(bridge.target_class_name || '')}</span>
+                        <small class="text-muted ms-1"><i class="bi bi-folder2-open ms-1 me-1"></i>${escapeHtml(tgtDom)}</small>
+                        <i class="bi bi-box-arrow-up-right ms-auto float-end mt-1"></i>
+                    </a>
+                </div>
+            `;
+        }
+        html += `</div>`;
+    }
     
     // Outgoing relationships
     if (outgoingRels.length > 0) {

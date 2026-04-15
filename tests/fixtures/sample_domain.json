@@ -1,0 +1,36 @@
+{
+  "info": {
+    "name": "Test Project",
+    "description": "A domain for unit tests",
+    "author": "Test Author",
+    "llm_endpoint": ""
+  },
+  "versions": {
+    "1": {
+      "ontology": {
+        "name": "TestOntology",
+        "base_uri": "http://test.org/ontology#",
+        "description": "Test ontology",
+        "classes": [
+          {"uri": "http://test.org/ontology#Customer", "name": "Customer", "label": "Customer", "comment": "A customer", "emoji": "👤", "parent": "", "dataProperties": []}
+        ],
+        "properties": [
+          {"uri": "http://test.org/ontology#hasOrder", "name": "hasOrder", "label": "has Order", "type": "ObjectProperty", "domain": "Customer", "range": "Order"}
+        ],
+        "constraints": [],
+        "swrl_rules": [],
+        "axioms": [],
+        "expressions": []
+      },
+      "assignment": {
+        "entities": [],
+        "relationships": []
+      },
+      "design_layout": {
+        "current_view": "default",
+        "views": {},
+        "map": {}
+      }
+    }
+  }
+}

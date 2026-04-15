@@ -107,8 +107,10 @@ class TestTaskLifecycle:
         task = mgr.create_task("T", "t")
         mgr.update_progress(task.id, 200)
         assert task.progress == 100
-        mgr.update_progress(task.id, -10)
-        assert task.progress == 0
+
+        task2 = mgr.create_task("T2", "t")
+        mgr.update_progress(task2.id, -10)
+        assert task2.progress == 0
 
     def test_update_progress_nonexistent(self, mgr):
         assert mgr.update_progress("nope", 50) is False

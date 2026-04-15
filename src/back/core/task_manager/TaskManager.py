@@ -132,7 +132,7 @@ class TaskManager:
         task.message = f"Failed: {error[:100]}"
         if task.steps and task.current_step < len(task.steps):
             task.steps[task.current_step].status = "failed"
-        logger.exception("Task %s failed: %s", task_id, error)
+        logger.error("Task %s failed: %s", task_id, error)
         return True
 
     def cancel_task(self, task_id: str) -> bool:

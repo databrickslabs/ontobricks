@@ -761,8 +761,8 @@ uv<span class="w"> </span>sync<span class="w"> </span>--dev
   <span class="n">test_home_service</span><span class="o">.</span><span class="n">py</span>              <span class="c1"># Home/dashboard service layer</span>
   <span class="n">test_dtwin_service</span><span class="o">.</span><span class="n">py</span>             <span class="c1"># Digital Twin domain class (back.objects.digitaltwin)</span>
   <span class="n">test_mapping_service</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># Mapping domain class (back.objects.mapping.Mapping)</span>
-  <span class="n">test_project_service</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># Project domain class (back.objects.project.Project)</span>
-  <span class="n">test_project_session</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># ProjectSession state management</span>
+  <span class="n">test_domain_service</span><span class="o">.</span><span class="n">py</span>            <span class="c1"># Domain class (back.objects.domain.Domain)</span>
+  <span class="n">test_domain_session</span><span class="o">.</span><span class="n">py</span>            <span class="c1"># DomainSession state management</span>
   <span class="n">test_databricks_client</span><span class="o">.</span><span class="n">py</span>         <span class="c1"># Databricks client (mocked)</span>
   <span class="n">test_llm_utils</span><span class="o">.</span><span class="n">py</span>                 <span class="c1"># LLM retry logic</span>
   <span class="n">test_triplestore_factory</span><span class="o">.</span><span class="n">py</span>       <span class="c1"># Triplestore factory</span>
@@ -775,7 +775,20 @@ uv<span class="w"> </span>sync<span class="w"> </span>--dev
   <span class="n">test_workflow_owl_roundtrip</span><span class="o">.</span><span class="n">py</span>    <span class="c1"># Integration: OWL generate -&gt; parse cycle</span>
   <span class="n">test_workflow_mapping</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># Integration: ontology -&gt; R2RML pipeline</span>
   <span class="n">test_workflow_sparql</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># Integration: SPARQL-to-SQL translation pipeline</span>
-  <span class="n">test_workflow_project</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># Integration: project export/import cycle</span>
+  <span class="n">test_workflow_domain</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># Integration: domain export/import cycle</span>
+  <span class="n">test_registry</span><span class="o">.</span><span class="n">py</span>                  <span class="c1"># Registry service and cache tests</span>
+  <span class="n">test_permissions</span><span class="o">.</span><span class="n">py</span>               <span class="c1"># Permission service tests</span>
+  <span class="n">test_reasoning</span><span class="o">.</span><span class="n">py</span>                 <span class="c1"># Reasoning engine tests</span>
+  <span class="n">test_reasoning_service</span><span class="o">.</span><span class="n">py</span>         <span class="c1"># Reasoning service orchestration</span>
+  <span class="n">test_swrl_engine</span><span class="o">.</span><span class="n">py</span>               <span class="c1"># SWRL rule compilation and execution</span>
+  <span class="n">test_business_rules</span><span class="o">.</span><span class="n">py</span>            <span class="c1"># Business rules engine tests</span>
+  <span class="n">test_dataquality</span><span class="o">.</span><span class="n">py</span>               <span class="c1"># SHACL data quality shapes and SQL generation</span>
+  <span class="n">test_errors</span><span class="o">.</span><span class="n">py</span>                    <span class="c1"># Centralized error hierarchy</span>
+  <span class="n">test_config</span><span class="o">.</span><span class="n">py</span>                    <span class="c1"># Configuration / settings tests</span>
+  <span class="n">test_middleware_session</span><span class="o">.</span><span class="n">py</span>         <span class="c1"># Session middleware tests</span>
+  <span class="n">test_helpers</span><span class="o">.</span><span class="n">py</span>                   <span class="c1"># Helper function unit tests</span>
+  <span class="n">test_rdfs_parser</span><span class="o">.</span><span class="n">py</span>               <span class="c1"># RDFS parser tests</span>
+  <span class="n">test_ladybug_reasoning</span><span class="o">.</span><span class="n">py</span>         <span class="c1"># LadybugDB reasoning integration</span>
   <span class="n">e2e</span><span class="o">/</span>
     <span class="n">conftest</span><span class="o">.</span><span class="n">py</span>                     <span class="c1"># Uvicorn server + Playwright browser fixtures</span>
     <span class="n">test_e2e_flows</span><span class="o">.</span><span class="n">py</span>               <span class="c1"># UI Layer 2: end-to-end browser tests (Playwright)</span>
@@ -811,11 +824,11 @@ uv<span class="w"> </span>sync<span class="w"> </span>--dev
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">mock_session_mgr</span></code></p></td>
 <td><p>function</p></td>
-<td><p>Mocked <code class="docutils literal notranslate"><span class="pre">SessionManager</span></code> returning a fresh <code class="docutils literal notranslate"><span class="pre">ProjectSession</span></code></p></td>
+<td><p>Mocked <code class="docutils literal notranslate"><span class="pre">SessionManager</span></code> returning a fresh <code class="docutils literal notranslate"><span class="pre">DomainSession</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">project_session</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">domain_session</span></code></p></td>
 <td><p>function</p></td>
-<td><p>A clean <code class="docutils literal notranslate"><span class="pre">ProjectSession</span></code> with a temp directory</p></td>
+<td><p>A clean <code class="docutils literal notranslate"><span class="pre">DomainSession</span></code> with a mock session manager</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sample_ontology_config</span></code></p></td>
 <td><p>function</p></td>
@@ -927,20 +940,20 @@ uv<span class="w"> </span>sync<span class="w"> </span>--dev
 <td><p><code class="docutils literal notranslate"><span class="pre">back.core.databricks.DatabricksClient</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">is_databricks_app</span></code>, <code class="docutils literal notranslate"><span class="pre">normalize_host</span></code>, <code class="docutils literal notranslate"><span class="pre">get_workspace_host</span></code>, <code class="docutils literal notranslate"><span class="pre">DatabricksClient</span></code> init, <code class="docutils literal notranslate"><span class="pre">has_valid_auth</span></code>, <code class="docutils literal notranslate"><span class="pre">test_connection</span></code>, <code class="docutils literal notranslate"><span class="pre">get_catalogs</span></code>, <code class="docutils literal notranslate"><span class="pre">get_schemas</span></code>, <code class="docutils literal notranslate"><span class="pre">get_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">get_table_columns</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_project_session.py</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_domain_session.py</span></code></p></td>
 <td><p>21</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">back.objects.session.project_session</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">get_empty_project</span></code>, <code class="docutils literal notranslate"><span class="pre">ProjectSession</span></code> properties (info, version, ontology, assignment, generated, R2RML), save/reset, export/import, legacy migration</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.objects.session.domain_session</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">get_empty_domain</span></code>, <code class="docutils literal notranslate"><span class="pre">DomainSession</span></code> properties (info, version, ontology, assignment, generated, R2RML), save/reset, export/import, legacy migration</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_mapping_service.py</span></code></p></td>
 <td><p>14</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">back.objects.mapping.Mapping</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">build_entity_mapping</span></code>, <code class="docutils literal notranslate"><span class="pre">build_relationship_mapping</span></code>, add/update/delete entities and relationships, <code class="docutils literal notranslate"><span class="pre">get_mapping_stats</span></code>, <code class="docutils literal notranslate"><span class="pre">save_mapping_config</span></code>, <code class="docutils literal notranslate"><span class="pre">reset_mapping</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_project_service.py</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_domain_service.py</span></code></p></td>
 <td><p>8</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">back.objects.project.Project</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">get_project_info</span></code>, <code class="docutils literal notranslate"><span class="pre">get_project_stats</span></code>, <code class="docutils literal notranslate"><span class="pre">save_project_info</span></code>, <code class="docutils literal notranslate"><span class="pre">get_session_debug_data</span></code> (secret masking, value truncation), <code class="docutils literal notranslate"><span class="pre">get_project_template_data</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.objects.domain.Domain</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">get_domain_info</span></code>, <code class="docutils literal notranslate"><span class="pre">get_domain_stats</span></code>, <code class="docutils literal notranslate"><span class="pre">save_domain_info</span></code>, <code class="docutils literal notranslate"><span class="pre">get_domain_template_data</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_llm_utils.py</span></code></p></td>
 <td><p>5</p></td>
@@ -1023,7 +1036,7 @@ uv<span class="w"> </span>sync<span class="w"> </span>--dev
 <td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/tasks/</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/tasks/active</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TestAPIv1Routes</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/health</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/query/validate</span></code>, project endpoints (validation and auth-required behavior)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/health</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/query/validate</span></code>, domain endpoints (validation and auth-required behavior)</p></td>
 </tr>
 </tbody>
 </table>
@@ -1055,10 +1068,10 @@ uv<span class="w"> </span>sync<span class="w"> </span>--dev
 <td><p>Ontology + Mapping -&gt; R2RML -&gt; Extraction -&gt; SPARQL-to-SQL</p></td>
 <td><p>End-to-end translation of SPARQL queries to Spark SQL via R2RML mappings</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_workflow_project.py</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_workflow_domain.py</span></code></p></td>
 <td><p>3</p></td>
-<td><p>Create project -&gt; Set data -&gt; Export -&gt; Import -&gt; Verify</p></td>
-<td><p>Full project roundtrip data integrity, secret exclusion from exports</p></td>
+<td><p>Create domain -&gt; Set data -&gt; Export -&gt; Import -&gt; Verify</p></td>
+<td><p>Full domain roundtrip data integrity, secret exclusion from exports</p></td>
 </tr>
 </tbody>
 </table>
@@ -1135,7 +1148,7 @@ open<span class="w"> </span>htmlcov/index.html
 <td><p>67%</p></td>
 <td><p>Good coverage</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">back/objects/session/project_session.py</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">back/objects/session/domain_session.py</span></code></p></td>
 <td><p>66%</p></td>
 <td><p>Legacy migration paths less covered</p></td>
 </tr>
@@ -1203,7 +1216,7 @@ open<span class="w"> </span>htmlcov/index.html
 <h4>Writing New Tests<a class="headerlink" href="#writing-new-tests" title="Link to this heading">¶</a></h4>
 <ol class="arabic simple">
 <li><p><strong>Place the file</strong> in <code class="docutils literal notranslate"><span class="pre">tests/</span></code> with the <code class="docutils literal notranslate"><span class="pre">test_</span></code> prefix.</p></li>
-<li><p><strong>Use fixtures</strong> from <code class="docutils literal notranslate"><span class="pre">conftest.py</span></code> when possible (<code class="docutils literal notranslate"><span class="pre">client</span></code>, <code class="docutils literal notranslate"><span class="pre">project_session</span></code>, <code class="docutils literal notranslate"><span class="pre">sample_ontology_config</span></code>, etc.).</p></li>
+<li><p><strong>Use fixtures</strong> from <code class="docutils literal notranslate"><span class="pre">conftest.py</span></code> when possible (<code class="docutils literal notranslate"><span class="pre">client</span></code>, <code class="docutils literal notranslate"><span class="pre">domain_session</span></code>, <code class="docutils literal notranslate"><span class="pre">sample_ontology_config</span></code>, etc.).</p></li>
 <li><p><strong>Mock external calls</strong> – never call real Databricks APIs, LLMs, or network services in tests. Use <code class="docutils literal notranslate"><span class="pre">unittest.mock.patch</span></code> or the <code class="docutils literal notranslate"><span class="pre">responses</span></code> library for HTTP mocking.</p></li>
 <li><p><strong>Keep tests fast</strong> – the full suite runs in under 3 seconds. Avoid <code class="docutils literal notranslate"><span class="pre">time.sleep</span></code> or expensive setup.</p></li>
 <li><p><strong>Test one thing per test function</strong> – each test should verify a single behavior or edge case.</p></li>
@@ -1275,27 +1288,30 @@ uv<span class="w"> </span>sync<span class="w"> </span>--dev
 </thead>
 <tbody>
 <tr class="row-even"><td><p>All pages</p></td>
-<td><p>Navbar present, brand link, notification container, Bootstrap/utils.js scripts, nav dropdowns (Project, Ontology, Mapping, Digital Twin), Settings link, warehouse dropdown, task tracker</p></td>
+<td><p>Navbar present, brand link, notification container, Bootstrap/utils.js scripts, nav dropdowns (Registry, Domain, Digital Twin), Ontology/Mapping links under Domain dropdown, Settings link, warehouse status, task tracker</p></td>
 </tr>
 <tr class="row-odd"><td><p>Home <code class="docutils literal notranslate"><span class="pre">/</span></code></p></td>
-<td><p>Hero section, project panel, stat items (Entities, Relationships, Mappings), quick links (Settings, About)</p></td>
+<td><p>Hero section, domain panel, stat items (Entities, Relationships, Mappings), quick links (Settings, About)</p></td>
 </tr>
 <tr class="row-even"><td><p>Settings <code class="docutils literal notranslate"><span class="pre">/settings</span></code></p></td>
 <td><p>Connection form, host/token/warehouse displays, Test Connection button, base URI field, Save button</p></td>
 </tr>
-<tr class="row-odd"><td><p>Ontology <code class="docutils literal notranslate"><span class="pre">/ontology</span></code></p></td>
+<tr class="row-odd"><td><p>Registry <code class="docutils literal notranslate"><span class="pre">/registry/</span></code></p></td>
+<td><p>Registry domains section, schedules table, API endpoint cards</p></td>
+</tr>
+<tr class="row-even"><td><p>Ontology <code class="docutils literal notranslate"><span class="pre">/ontology</span></code></p></td>
 <td><p>Sidebar section groups: Ontology Editor (Information, Import, Generate, Model, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Expr. &amp; Axioms), W3C Standards (OWL); section divs, OntoViz script</p></td>
 </tr>
-<tr class="row-even"><td><p>Mapping <code class="docutils literal notranslate"><span class="pre">/mapping</span></code></p></td>
+<tr class="row-odd"><td><p>Mapping <code class="docutils literal notranslate"><span class="pre">/mapping</span></code></p></td>
 <td><p>Sidebar with 6 section links (Information, Designer, Manual, Auto-Map, R2RML, Spark SQL), mapping-core.js</p></td>
 </tr>
-<tr class="row-odd"><td><p>Project <code class="docutils literal notranslate"><span class="pre">/project</span></code></p></td>
+<tr class="row-even"><td><p>Domain <code class="docutils literal notranslate"><span class="pre">/domain</span></code></p></td>
 <td><p>Sidebar with 6 section links (Information, Metadata, Documents, Validation, OWL, R2RML), section divs</p></td>
 </tr>
-<tr class="row-even"><td><p>Digital Twin <code class="docutils literal notranslate"><span class="pre">/dtwin/</span></code></p></td>
-<td><p>Sidebar section groups: Management (Build information, API), Graph (Knowledge Graph, GraphQL), Advanced (Data Quality, Reasoning); sync section, Sigma.js script</p></td>
+<tr class="row-odd"><td><p>Digital Twin <code class="docutils literal notranslate"><span class="pre">/dtwin/</span></code></p></td>
+<td><p>Sidebar section groups: Navigation (Knowledge Graph, GraphQL), Advanced (Data Quality, Reasoning); Sigma.js script</p></td>
 </tr>
-<tr class="row-odd"><td><p>About <code class="docutils literal notranslate"><span class="pre">/about</span></code></p></td>
+<tr class="row-even"><td><p>About <code class="docutils literal notranslate"><span class="pre">/about</span></code></p></td>
 <td><p>Page renders, contains “OntoBricks”</p></td>
 </tr>
 </tbody>
@@ -1324,7 +1340,7 @@ uv<span class="w"> </span>sync<span class="w"> </span>--dev
 <td><p>All pages load with correct titles, navbar brand navigates home, Settings link works</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TestHomePage</span></code></p></td>
-<td><p>Hero visible, project panel visible, 3 workflow cards, stat items present</p></td>
+<td><p>Hero visible, domain panel visible, 3 workflow cards, stat items present</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TestSettingsPage</span></code></p></td>
 <td><p>Connection form visible, host display, base URI field populated, Save button enabled</p></td>
@@ -1461,11 +1477,11 @@ list</strong>. It is intended for administrators who deploy and manage OntoBrick
 </tr>
 <tr class="row-odd"><td><p><strong>Editor</strong></p></td>
 <td><p>In-app permission list</p></td>
-<td><p>Can view all pages, create and modify projects, ontologies, mappings, and run syncs. Cannot access Settings.</p></td>
+<td><p>Can view all pages, create and modify domains, ontologies, mappings, and run syncs. Cannot access Settings.</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>Viewer</strong></p></td>
 <td><p>In-app permission list</p></td>
-<td><p>Read-only access. Can browse projects, ontologies, and query results. All write operations (POST, PUT, PATCH, DELETE) are blocked. Cannot access Settings.</p></td>
+<td><p>Read-only access. Can browse domains, ontologies, and query results. All write operations (POST, PUT, PATCH, DELETE) are blocked. Cannot access Settings.</p></td>
 </tr>
 <tr class="row-odd"><td><p><strong>None</strong></p></td>
 <td><p>Default when not matched</p></td>
@@ -1575,7 +1591,7 @@ with roles then controlled by the in-app permission list.</p></li>
 <h3>In-App Permission List (Internal)<a class="headerlink" href="#in-app-permission-list-internal" title="Link to this heading">¶</a></h3>
 <p>The in-app permission list is stored as a JSON file in the configured
 Unity Catalog Registry Volume:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">/</span><span class="n">Volumes</span><span class="o">/</span><span class="p">{</span><span class="n">catalog</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">schema</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">volume</span><span class="p">}</span><span class="o">/</span><span class="n">projects</span><span class="o">/.</span><span class="n">permissions</span><span class="o">.</span><span class="n">json</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">/</span><span class="n">Volumes</span><span class="o">/</span><span class="p">{</span><span class="n">catalog</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">schema</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">volume</span><span class="p">}</span><span class="o">/.</span><span class="n">permissions</span><span class="o">.</span><span class="n">json</span>
 </pre></div>
 </div>
 <section id="file-format">
@@ -1801,7 +1817,7 @@ user has no access to any part of the application.</p>
 </section>
 <section id="permission-file-location">
 <h4>Permission File Location<a class="headerlink" href="#permission-file-location" title="Link to this heading">¶</a></h4>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">/</span><span class="n">Volumes</span><span class="o">/</span><span class="p">{</span><span class="n">REGISTRY_CATALOG</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">REGISTRY_SCHEMA</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">REGISTRY_VOLUME</span><span class="p">}</span><span class="o">/</span><span class="n">projects</span><span class="o">/.</span><span class="n">permissions</span><span class="o">.</span><span class="n">json</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">/</span><span class="n">Volumes</span><span class="o">/</span><span class="p">{</span><span class="n">REGISTRY_CATALOG</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">REGISTRY_SCHEMA</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">REGISTRY_VOLUME</span><span class="p">}</span><span class="o">/.</span><span class="n">permissions</span><span class="o">.</span><span class="n">json</span>
 </pre></div>
 </div>
 </section>

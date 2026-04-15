@@ -26,17 +26,17 @@ class SQLHelpers:
             raise ValidationError(MSG_TABLE_NAME_REQUIRED)
 
     @staticmethod
-    def effective_view_table(project, settings=None) -> str:
-        """Fully-qualified VIEW name derived from project name, version, and delta location.
+    def effective_view_table(domain, settings=None) -> str:
+        """Fully-qualified VIEW name derived from domain name, version, and delta location.
 
         When *settings* is provided and the composed name is empty, falls back
         to ``settings.databricks_triplestore_table``.
         """
-        delta = getattr(project, 'delta', None) or {}
+        delta = getattr(domain, 'delta', None) or {}
         catalog = delta.get('catalog', '')
         schema = delta.get('schema', '')
-        name = (getattr(project, 'info', None) or {}).get('name', '')
-        version = getattr(project, 'current_version', DEFAULT_GRAPH_VERSION) or DEFAULT_GRAPH_VERSION
+        name = (getattr(domain, 'info', None) or {}).get('name', '')
+        version = getattr(domain, 'current_version', DEFAULT_GRAPH_VERSION) or DEFAULT_GRAPH_VERSION
         if name:
             safe = re.sub(r'[^a-z0-9_]', '_', name.lower())
             view_name = f"triplestore_{safe}_V{version}"
@@ -49,8 +49,8 @@ class SQLHelpers:
         return table
 
     @staticmethod
-    def effective_graph_name(project) -> str:
-        """LadybugDB graph name derived from the project name and version."""
-        name = (getattr(project, 'info', None) or {}).get('name', DEFAULT_GRAPH_NAME)
-        version = getattr(project, 'current_version', DEFAULT_GRAPH_VERSION) or DEFAULT_GRAPH_VERSION
+    def effective_graph_name(domain) -> str:
+        """LadybugDB graph name derived from the domain name and version."""
+        name = (getattr(domain, 'info', None) or {}).get('name', DEFAULT_GRAPH_NAME)
+        version = getattr(domain, 'current_version', DEFAULT_GRAPH_VERSION) or DEFAULT_GRAPH_VERSION
         return f"{name}_V{version}"

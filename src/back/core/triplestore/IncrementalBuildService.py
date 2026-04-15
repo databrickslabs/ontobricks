@@ -97,11 +97,11 @@ class IncrementalBuildService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def snapshot_table_name(project_name: str, delta_cfg: Dict[str, str], version: str = "1") -> str:
+    def snapshot_table_name(domain_name: str, delta_cfg: Dict[str, str], version: str = "1") -> str:
         """Derive the fully-qualified snapshot table name (versioned)."""
         catalog = delta_cfg.get("catalog", "")
         schema = delta_cfg.get("schema", "")
-        safe_name = re.sub(r"[^a-z0-9_]", "_", project_name.lower())
+        safe_name = re.sub(r"[^a-z0-9_]", "_", domain_name.lower())
         safe_version = re.sub(r"[^a-z0-9_]", "_", (version or "1").lower())
         prefix = IncrementalBuildService._SNAPSHOT_PREFIX
         return f"{catalog}.{schema}.{prefix}{safe_name}_v{safe_version}"

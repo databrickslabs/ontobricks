@@ -188,6 +188,43 @@ class TripleStoreBackend(ABC):
         rows = self.execute_query(sql)
         return rows[0]["subject"] if rows else None
 
+    def get_entity_metadata(
+        self, table_name: str, subjects: List[str]
+    ) -> List[Dict[str, str]]:
+        """Return ``rdf:type`` and ``rdfs:label`` for each subject.
+
+        Returns a list of dicts with keys ``uri``, ``type`` (full URI),
+        and ``label`` (literal value or empty string).
+        """
+        if not subjects:
+            return []
+        in_clause = ", ".join(f"'{self._sql_escape(u)}'" for u in subjects)
+
+        type_sql = (
+            f"SELECT subject, object FROM {table_name} "
+            f"WHERE predicate = '{RDF_TYPE}' AND subject IN ({in_clause})"
+        )
+        label_sql = (
+            f"SELECT subject, object FROM {table_name} "
+            f"WHERE predicate = '{RDFS_LABEL}' AND subject IN ({in_clause})"
+        )
+
+        type_rows = self.execute_query(type_sql) or []
+        label_rows = self.execute_query(label_sql) or []
+
+        types: Dict[str, str] = {}
+        for r in type_rows:
+            types.setdefault(r["subject"], r["object"])
+        labels: Dict[str, str] = {}
+        for r in label_rows:
+            labels.setdefault(r["subject"], r["object"])
+
+        return [
+            {"uri": uri, "type": types.get(uri, ""), "label": labels.get(uri, "")}
+            for uri in subjects
+            if uri in types
+        ]
+
     def get_triples_for_subjects(
         self, table_name: str, subjects: List[str]
     ) -> List[Dict[str, str]]:

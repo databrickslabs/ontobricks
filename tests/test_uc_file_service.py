@@ -168,6 +168,6 @@ class TestListDirectory:
                 {"name": "readme.md", "file_size": 50},
             ]},
         )
-        ok, items, msg = svc.list_directory("/Volumes/c/s/v/projects", dirs_only=True)
+        ok, items, msg = svc.list_directory("/Volumes/c/s/v/domains", dirs_only=True)
         assert ok is True
         assert len(items) == 2

@@ -59,17 +59,7 @@ function _renderAssignmentLink(containerId, type, name) {
 // SHARED SPLIT PANEL - Entity & Relationship Editing
 // =====================================================
 
-// Emoji categories for icon picker
-const sharedEmojiCategories = {
-    'People & Roles': ['👤', '👥', '👨', '👩', '👶', '👴', '👵', '🧑', '👨‍💼', '👩‍💼', '👨‍🔬', '👩‍🔬', '👨‍💻', '👩‍💻', '👨‍🏫', '👩‍🏫', '👨‍⚕️', '👩‍⚕️', '🧑‍🤝‍🧑', '👪'],
-    'Business & Work': ['🏢', '🏭', '🏬', '🏛️', '💼', '📊', '📈', '📉', '💰', '💵', '💳', '🏦', '📋', '📁', '📂', '🗂️', '📝', '✏️', '📌', '📎'],
-    'Technology': ['💻', '🖥️', '⌨️', '🖱️', '📱', '📲', '☎️', '🔌', '💾', '💿', '📀', '🔧', '🔩', '⚙️', '🔬', '🔭', '📡', '🤖', '🔋', '💡'],
-    'Data & Documents': ['📄', '📃', '📑', '📰', '📚', '📖', '📒', '📓', '📔', '📕', '📗', '📘', '📙', '🗃️', '🗄️', '📦', '📫', '📬', '📭', '📮'],
-    'Nature & Science': ['🌍', '🌎', '🌏', '🌐', '🌳', '🌲', '🌴', '🌵', '🌾', '🌻', '🔥', '💧', '⚡', '🌈', '☀️', '🌙', '⭐', '🌟', '💎', '🔮'],
-    'Objects & Things': ['🏠', '🏡', '🚗', '🚕', '🚌', '✈️', '🚀', '🛸', '⚓', '🎯', '🎨', '🎭', '🎪', '🎬', '🎮', '🎲', '🧩', '🔑', '🗝️', '🔒'],
-    'Symbols': ['❤️', '💙', '💚', '💛', '💜', '🖤', '🤍', '🤎', '⭕', '❌', '✅', '❎', '➕', '➖', '➗', '✖️', '💯', '🔴', '🟠', '🟢'],
-    'Arrows & Shapes': ['⬆️', '⬇️', '⬅️', '➡️', '↗️', '↘️', '↙️', '↖️', '↕️', '↔️', '🔄', '🔃', '🔀', '🔁', '🔂', '▶️', '⏸️', '⏹️', '🔷', '🔶']
-};
+// Emoji categories sourced from global EmojiPicker module (emoji-picker.js)
 
 // Current editing state
 let sharedPanelEditType = null;
@@ -83,6 +73,7 @@ let sharedPanelCurrentSection = null;
 let sharedPanelElement = null;  // Reference to the current panel DOM element for scoped queries
 let sharedPanelDashboardUrl = null;  // Dashboard URL for the entity
 let sharedPanelDashboardParams = {};  // Dashboard parameter mappings { paramName: attributeName }
+let sharedPanelBridges = [];  // Cross-domain entity bridges
 let sharedPanelDirty = false;
 
 // Panel resize state
@@ -519,6 +510,7 @@ function closeSharedPanel() {
     sharedPanelElement = null;
     sharedPanelDashboardUrl = null;
     sharedPanelDashboardParams = {};
+    sharedPanelBridges = [];
     sharedPanelDirty = false;
 }
 
@@ -558,6 +550,7 @@ async function openEntityPanel(options = {}) {
     sharedPanelOnSaveCallback = options.onSave || null;
     sharedPanelDashboardUrl = null;  // Reset dashboard for new entity
     sharedPanelDashboardParams = {};  // Reset dashboard parameter mappings
+    sharedPanelBridges = [];  // Reset bridges for new entity
     
     openSharedPanel();
     
@@ -590,7 +583,8 @@ async function openEntityPanelForEdit(idx, options = {}) {
     sharedPanelOnSaveCallback = options.onSave || null;
     sharedPanelDashboardUrl = cls.dashboard || null;  // Load existing dashboard URL
     sharedPanelDashboardParams = cls.dashboardParams || {};  // Load existing parameter mappings
-    
+    sharedPanelBridges = cls.bridges ? JSON.parse(JSON.stringify(cls.bridges)) : [];
+
     console.log('[SharedPanel] Edit - Loaded class:', cls.name, 'dataProperties:', (cls.dataProperties || []).length);
     
     sharedPanelInheritedAttributes = getSharedInheritedProperties(cls.parent);
@@ -626,7 +620,8 @@ async function openEntityPanelForView(idx, options = {}) {
     sharedPanelOnSaveCallback = null;
     sharedPanelDashboardUrl = cls.dashboard || null;  // Load existing dashboard URL
     sharedPanelDashboardParams = cls.dashboardParams || {};  // Load existing parameter mappings
-    
+    sharedPanelBridges = cls.bridges ? JSON.parse(JSON.stringify(cls.bridges)) : [];
+
     sharedPanelInheritedAttributes = getSharedInheritedProperties(cls.parent);
     const inheritedNames = new Set(sharedPanelInheritedAttributes.map(a => a.name));
     sharedPanelOwnAttributes = (cls.dataProperties || [])
@@ -681,6 +676,24 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
             console.error('[SharedPanel] Error loading entity constraints:', error);
         }
     }
+
+    let groupOptions = '<option value="">-- None --</option>';
+    let currentGroup = '';
+    try {
+        const gRes = await fetch('/ontology/groups/list', { credentials: 'same-origin' });
+        const gData = await gRes.json();
+        if (gData.success && gData.groups) {
+            gData.groups.forEach(g => {
+                const isMember = (g.members || []).includes(cls?.name);
+                if (isMember) currentGroup = g.name;
+                const sel = isMember ? 'selected' : '';
+                const icon = g.icon || '';
+                groupOptions += `<option value="${g.name}" ${sel}>${icon} ${g.label || g.name}</option>`;
+            });
+        }
+    } catch (e) {
+        console.warn('[SharedPanel] Could not load groups:', e);
+    }
     
     body.innerHTML = `
         <div id="sharedEntityAssignmentLink"></div>
@@ -690,6 +703,15 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                 <select class="form-select form-select-sm" id="sharedEntityParent" ${disabled} onchange="onSharedEntityParentChange()">
                     <option value="">-- None --</option>
                     ${parentOptions}
+                </select>
+            </div>
+            <div class="mb-3 p-2 bg-light rounded border">
+                <label for="sharedEntityGroup" class="form-label"><i class="bi bi-collection"></i> Group</label>
+                <select class="form-select form-select-sm" id="sharedEntityGroup" ${disabled}
+                    data-entity="${(cls?.name || '').replace(/"/g, '&quot;')}"
+                    data-prev-group="${currentGroup.replace(/"/g, '&quot;')}"
+                    onchange="onSharedEntityGroupChange(this.dataset.entity, this.value, this.dataset.prevGroup)">
+                    ${groupOptions}
                 </select>
             </div>
             
@@ -705,20 +727,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                     <input type="text" class="form-control" id="sharedEntityIcon" value="${emoji}" ${disabled} maxlength="2" style="width: 45px;">
                     <button type="button" class="btn btn-outline-secondary" id="sharedEntityEmojiBtn" ${disabled}><i class="bi bi-emoji-smile"></i></button>
                 </div>
-                <div id="sharedEntityEmojiPicker" class="emoji-picker-container mt-2" style="display: none;">
-                    <div class="card">
-                        <div class="card-header py-1">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="fw-bold">Select Icon</small>
-                                <button type="button" class="btn-close btn-sm" onclick="closeSharedEmojiPicker()"></button>
-                            </div>
-                        </div>
-                        <div class="card-body p-2">
-                            <input type="text" class="form-control form-control-sm mb-2" id="sharedEntityEmojiSearch" placeholder="Search...">
-                            <div id="sharedEntityEmojiGrid" class="emoji-picker-grid"></div>
-                        </div>
-                    </div>
-                </div>
+                <div id="sharedEntityEmojiPickerMount"></div>
             </div>
             
             <div class="mb-3">
@@ -730,7 +739,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                 <label class="form-label d-flex justify-content-between align-items-center">
                     <span>Attributes</span>
                     ${!viewOnly ? `<div class="d-flex gap-1">
-                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="openMetadataAttributePicker()" title="Add from metadata"><i class="bi bi-database"></i></button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="openMetadataAttributePicker()" title="Add from data sources"><i class="bi bi-database"></i></button>
                         <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="addSharedEntityAttribute()" title="Add manually"><i class="bi bi-plus"></i></button>
                     </div>` : ''}
                 </label>
@@ -746,6 +755,19 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                 <div id="sharedEntityDashboard" class="border rounded p-2" style="background: #f8f9fa;">
                     <div id="sharedEntityDashboardContent">
                         <small class="text-muted">No dashboard assigned</small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Cross-Project Bridges Section -->
+            <div class="mb-3">
+                <label class="form-label d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-signpost-2 me-1"></i>Bridges</span>
+                    ${!viewOnly ? '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openBridgeSelectorModal()"><i class="bi bi-plus"></i> Add</button>' : ''}
+                </label>
+                <div id="sharedEntityBridges" class="border rounded p-2" style="background: #f8f9fa;">
+                    <div id="sharedEntityBridgesContent">
+                        <small class="text-muted">No bridges to other domains</small>
                     </div>
                 </div>
             </div>
@@ -803,7 +825,18 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
     
     renderSharedEntityAttributes(viewOnly);
     renderSharedEntityDashboard(viewOnly);
-    if (!viewOnly) initSharedEmojiPicker();
+    renderSharedEntityBridges(viewOnly);
+    if (!viewOnly) {
+        var _btnEl = panelGetById('sharedEntityEmojiBtn');
+        if (_btnEl) {
+            EmojiPicker.create({
+                triggerEl:   _btnEl,
+                previewEl:   panelGetById('sharedEntityEmojiPreview'),
+                inputEl:     panelGetById('sharedEntityIcon'),
+                containerEl: panelGetById('sharedEntityEmojiPickerMount')
+            });
+        }
+    }
 
     if (cls?.name) {
         _renderAssignmentLink('sharedEntityAssignmentLink', 'entity', cls.name);
@@ -873,50 +906,43 @@ function onSharedEntityParentChange() {
     renderSharedEntityAttributes(false);
 }
 
-function closeSharedEmojiPicker() {
-    const picker = panelGetById('sharedEntityEmojiPicker');
-    if (picker) picker.style.display = 'none';
+function onSharedEntityGroupChange(entityName, newGroup, previousGroup) {
+    if (!entityName) return;
+    const requests = [];
+    if (previousGroup && previousGroup !== newGroup) {
+        requests.push(fetch('/ontology/groups/members', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: previousGroup, remove: [entityName] })
+        }));
+    }
+    if (newGroup) {
+        requests.push(fetch('/ontology/groups/members', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newGroup, add: [entityName] })
+        }));
+    }
+    Promise.all(requests)
+        .then(responses => Promise.all(responses.map(r => r.json())))
+        .then(results => {
+            const failed = results.find(r => !r.success);
+            if (failed) {
+                showNotification(failed.message || 'Failed to update group membership', 'error');
+            } else {
+                const label = newGroup || 'none';
+                showNotification(`${entityName} is now in group: ${label}`, 'success');
+            }
+            const sel = panelGetById('sharedEntityGroup');
+            if (sel) sel.dataset.prevGroup = newGroup;
+        })
+        .catch(err => {
+            console.error('[SharedPanel] Group update failed:', err);
+            showNotification('Could not update group membership', 'error');
+        });
 }
 
-function initSharedEmojiPicker() {
-    const btn = panelGetById('sharedEntityEmojiBtn');
-    const picker = panelGetById('sharedEntityEmojiPicker');
-    const grid = panelGetById('sharedEntityEmojiGrid');
-    const search = panelGetById('sharedEntityEmojiSearch');
-    const preview = panelGetById('sharedEntityEmojiPreview');
-    const input = panelGetById('sharedEntityIcon');
-    
-    if (!btn || !picker || !grid) return;
-    
-    function renderEmojis(filter = '') {
-        grid.innerHTML = '';
-        for (const [category, emojis] of Object.entries(sharedEmojiCategories)) {
-            if (filter && !category.toLowerCase().includes(filter.toLowerCase())) continue;
-            const div = document.createElement('div');
-            div.className = 'mb-2';
-            div.innerHTML = `<small class="text-muted fw-bold">${category}</small>`;
-            const row = document.createElement('div');
-            row.className = 'd-flex flex-wrap gap-1 mt-1';
-            emojis.forEach(emoji => {
-                const b = document.createElement('button');
-                b.type = 'button';
-                b.className = 'btn btn-light btn-sm emoji-btn';
-                b.textContent = emoji;
-                b.onclick = () => { preview.textContent = emoji; input.value = emoji; picker.style.display = 'none'; };
-                row.appendChild(b);
-            });
-            div.appendChild(row);
-            grid.appendChild(div);
-        }
-    }
-    
-    btn.onclick = () => {
-        picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
-        if (picker.style.display === 'block') { renderEmojis(); search.value = ''; }
-    };
-    search.oninput = (e) => renderEmojis(e.target.value);
-    input.oninput = () => { preview.textContent = input.value || OntologyState.defaultClassEmoji; };
-}
+// Emoji picker functions removed — now uses global EmojiPicker.create() (emoji-picker.js)
 
 // =====================================================
 // DASHBOARD FUNCTIONS
@@ -996,6 +1022,262 @@ function removeSharedEntityDashboard() {
     markPanelDirty();
     renderSharedEntityDashboard(false);
 }
+
+// =====================================================
+// CROSS-PROJECT BRIDGES
+// =====================================================
+
+/**
+ * Render the bridges section in the entity form
+ */
+function renderSharedEntityBridges(viewOnly = false) {
+    const container = panelGetById('sharedEntityBridgesContent');
+    if (!container) return;
+
+    if (sharedPanelBridges.length > 0) {
+        container.innerHTML = sharedPanelBridges.map((bridge, idx) => `
+            <div class="d-flex align-items-center gap-2 ${idx > 0 ? 'mt-1 pt-1 border-top' : ''}">
+                <div class="flex-grow-1">
+                    <small class="d-block">
+                        <i class="bi bi-signpost-2 text-info"></i>
+                        <span class="fw-semibold ms-1">${escapeHtml(bridge.target_class_name || '')}</span>
+                    </small>
+                    <small class="text-muted d-block ms-3">
+                        <i class="bi bi-folder2-open me-1"></i>${escapeHtml(bridge.target_domain || bridge.target_project || '')}
+                        ${bridge.label ? ` &mdash; ${escapeHtml(bridge.label)}` : ''}
+                    </small>
+                </div>
+                ${!viewOnly ? `<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeSharedEntityBridge(${idx})" title="Remove bridge"><i class="bi bi-x"></i></button>` : ''}
+            </div>
+        `).join('');
+    } else {
+        container.innerHTML = '<small class="text-muted">No bridges to other domains</small>';
+    }
+}
+
+/**
+ * Remove a bridge by index
+ */
+function removeSharedEntityBridge(index) {
+    sharedPanelBridges.splice(index, 1);
+    markPanelDirty();
+    renderSharedEntityBridges(false);
+}
+
+/**
+ * Open the bridge selector modal (two-step: domain then class)
+ */
+async function openBridgeSelectorModal() {
+    const modalId = 'bridgeSelectorModal';
+
+    const existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+
+    const modalHtml = `
+        <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-signpost-2 me-2"></i>Add Bridge to Another Domain
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="bridgeSelectorLoading" class="text-center py-4">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                            <span class="ms-2">Loading registry domains...</span>
+                        </div>
+                        <div id="bridgeSelectorContent" style="display: none;">
+                            <!-- Step 1: Project selection -->
+                            <div id="bridgeStepDomain">
+                                <label class="form-label fw-semibold">Select a domain</label>
+                                <div id="bridgeDomainList" class="list-group" style="max-height: 300px; overflow-y: auto;"></div>
+                            </div>
+                            <!-- Step 2: Class selection (hidden initially) -->
+                            <div id="bridgeStepClass" style="display: none;">
+                                <div class="d-flex align-items-center gap-2 mb-3">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="_bridgeBackToDomains()">
+                                        <i class="bi bi-arrow-left"></i>
+                                    </button>
+                                    <span class="fw-semibold" id="bridgeSelectedDomainName"></span>
+                                </div>
+                                <label class="form-label fw-semibold">Select a target entity</label>
+                                <input type="text" class="form-control form-control-sm mb-2" id="bridgeClassSearch" placeholder="Search classes..." oninput="_filterBridgeClasses()">
+                                <div id="bridgeClassList" class="list-group" style="max-height: 280px; overflow-y: auto;"></div>
+                            </div>
+                            <!-- Step 3: Label (hidden initially) -->
+                            <div id="bridgeStepLabel" style="display: none;">
+                                <div class="d-flex align-items-center gap-2 mb-3">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="_bridgeBackToClasses()">
+                                        <i class="bi bi-arrow-left"></i>
+                                    </button>
+                                    <span id="bridgeSummary" class="fw-semibold"></span>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="bridgeLabelInput" class="form-label">Label <small class="text-muted">(optional)</small></label>
+                                    <input type="text" class="form-control form-control-sm" id="bridgeLabelInput" placeholder="e.g. Same as Client in DomainB">
+                                </div>
+                                <button type="button" class="btn btn-primary w-100" onclick="_bridgeConfirm()">
+                                    <i class="bi bi-check-lg me-1"></i>Add Bridge
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = new bootstrap.Modal(document.getElementById(modalId));
+    modal.show();
+
+    try {
+        const resp = await fetch('/ontology/bridges/domains', { credentials: 'same-origin' });
+        const data = await resp.json();
+        document.getElementById('bridgeSelectorLoading').style.display = 'none';
+        document.getElementById('bridgeSelectorContent').style.display = '';
+
+        const list = document.getElementById('bridgeDomainList');
+        const bridgeRows = data.domains || data.projects || [];
+        if (!data.success || !bridgeRows.length) {
+            list.innerHTML = '<div class="text-muted p-3 text-center">No other domains found in the registry</div>';
+            return;
+        }
+
+        list.innerHTML = bridgeRows.map(p => `
+            <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+                    onclick="_bridgeSelectDomain('${escapeHtml(p.name)}')">
+                <i class="bi bi-folder2-open text-primary"></i>
+                <div class="flex-grow-1">
+                    <div class="fw-semibold">${escapeHtml(p.name)}</div>
+                    ${p.description ? `<small class="text-muted">${escapeHtml(p.description)}</small>` : ''}
+                </div>
+                <i class="bi bi-chevron-right text-muted"></i>
+            </button>
+        `).join('');
+    } catch (err) {
+        console.error('[Bridges] Error loading domains:', err);
+        document.getElementById('bridgeSelectorLoading').innerHTML =
+            '<div class="text-danger"><i class="bi bi-exclamation-triangle"></i> Failed to load domains</div>';
+    }
+}
+
+let _bridgePendingDomain = '';
+let _bridgePendingClass = null;
+let _bridgeAllClasses = [];
+
+async function _bridgeSelectDomain(domainName) {
+    _bridgePendingDomain = domainName;
+    document.getElementById('bridgeStepDomain').style.display = 'none';
+    document.getElementById('bridgeStepClass').style.display = '';
+    document.getElementById('bridgeSelectedDomainName').textContent = domainName;
+
+    const list = document.getElementById('bridgeClassList');
+    list.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading classes...</div>';
+
+    try {
+        const resp = await fetch(`/ontology/bridges/domains/${encodeURIComponent(domainName)}/classes`, { credentials: 'same-origin' });
+        const data = await resp.json();
+        _bridgeAllClasses = (data.success && data.classes) ? data.classes : [];
+
+        if (!_bridgeAllClasses.length) {
+            list.innerHTML = '<div class="text-muted p-3 text-center">No classes found in this domain</div>';
+            return;
+        }
+        _renderBridgeClassList(_bridgeAllClasses);
+    } catch (err) {
+        console.error('[Bridges] Error loading classes:', err);
+        list.innerHTML = '<div class="text-danger p-2"><i class="bi bi-exclamation-triangle"></i> Failed to load classes</div>';
+    }
+}
+
+function _renderBridgeClassList(classes) {
+    const list = document.getElementById('bridgeClassList');
+    list.innerHTML = classes.map(c => `
+        <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+                onclick='_bridgeSelectClass(${JSON.stringify(c).replace(/'/g, "&#39;")})'>
+            <span>${c.emoji || '📦'}</span>
+            <div class="flex-grow-1">
+                <div class="fw-semibold">${escapeHtml(c.name)}</div>
+                ${c.description ? `<small class="text-muted">${escapeHtml(c.description.substring(0, 80))}</small>` : ''}
+            </div>
+            <i class="bi bi-chevron-right text-muted"></i>
+        </button>
+    `).join('');
+}
+
+function _filterBridgeClasses() {
+    const q = (document.getElementById('bridgeClassSearch')?.value || '').toLowerCase();
+    const filtered = _bridgeAllClasses.filter(c =>
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.label || '').toLowerCase().includes(q) ||
+        (c.description || '').toLowerCase().includes(q)
+    );
+    _renderBridgeClassList(filtered);
+}
+
+function _bridgeSelectClass(cls) {
+    _bridgePendingClass = cls;
+    document.getElementById('bridgeStepClass').style.display = 'none';
+    document.getElementById('bridgeStepLabel').style.display = '';
+    document.getElementById('bridgeSummary').innerHTML =
+        `<i class="bi bi-folder2-open me-1"></i>${escapeHtml(_bridgePendingDomain)} <i class="bi bi-arrow-right mx-1"></i> ${cls.emoji || '📦'} ${escapeHtml(cls.name)}`;
+}
+
+function _bridgeBackToDomains() {
+    document.getElementById('bridgeStepClass').style.display = 'none';
+    document.getElementById('bridgeStepDomain').style.display = '';
+    _bridgePendingDomain = '';
+    _bridgePendingClass = null;
+    _bridgeAllClasses = [];
+}
+
+function _bridgeBackToClasses() {
+    document.getElementById('bridgeStepLabel').style.display = 'none';
+    document.getElementById('bridgeStepClass').style.display = '';
+    _bridgePendingClass = null;
+}
+
+function _bridgeConfirm() {
+    if (!_bridgePendingDomain || !_bridgePendingClass) return;
+
+    const duplicate = sharedPanelBridges.some(b =>
+        (b.target_domain || b.target_project) === _bridgePendingDomain && b.target_class_uri === _bridgePendingClass.uri
+    );
+    if (duplicate) {
+        showNotification('This bridge already exists', 'warning');
+        return;
+    }
+
+    const label = (document.getElementById('bridgeLabelInput')?.value || '').trim();
+
+    sharedPanelBridges.push({
+        target_domain: _bridgePendingDomain,
+        target_class_uri: _bridgePendingClass.uri,
+        target_class_name: _bridgePendingClass.name,
+        label: label
+    });
+
+    markPanelDirty();
+    renderSharedEntityBridges(false);
+    closeBridgeSelectorModal();
+    showNotification(`Bridge added to ${_bridgePendingClass.name} in ${_bridgePendingDomain}`, 'success', 3000);
+}
+
+function closeBridgeSelectorModal() {
+    const modal = document.getElementById('bridgeSelectorModal');
+    if (modal) {
+        const bsModal = bootstrap.Modal.getInstance(modal);
+        if (bsModal) bsModal.hide();
+        modal.addEventListener('hidden.bs.modal', () => modal.remove(), { once: true });
+    }
+    _bridgePendingDomain = '';
+    _bridgePendingClass = null;
+    _bridgeAllClasses = [];
+}
+
 
 /**
  * Open the dashboard selector modal
@@ -1424,9 +1706,9 @@ async function saveSharedEntity() {
         description, 
         comment: description, 
         dataProperties: validAttributes,
-        dashboard: sharedPanelDashboardUrl || undefined,  // Dashboard URL
-        dashboardParams: Object.keys(sharedPanelDashboardParams).length > 0 ? sharedPanelDashboardParams : undefined  // Dashboard parameter mappings
-        // NOTE: constraints are stored ONLY in session_data/ontology/constraints, not here
+        dashboard: sharedPanelDashboardUrl || undefined,
+        dashboardParams: Object.keys(sharedPanelDashboardParams).length > 0 ? sharedPanelDashboardParams : undefined,
+        bridges: sharedPanelBridges.length > 0 ? sharedPanelBridges : undefined
     };
     
     console.log('[SharedPanel] Saving - classData.dashboardParams:', JSON.stringify(classData.dashboardParams));
@@ -2009,7 +2291,7 @@ function columnToCamelCase(name) {
 
 /**
  * Open the metadata attribute picker modal.
- * Fetches project metadata and shows table list.
+ * Fetches domain metadata and shows table list.
  */
 async function openMetadataAttributePicker() {
     if (!metaAttrPickerModal) {
@@ -2023,16 +2305,16 @@ async function openMetadataAttributePicker() {
     document.getElementById('metaAttrFooter').style.display = 'none';
     
     const tableList = document.getElementById('metaAttrTableList');
-    tableList.innerHTML = '<div class="text-muted small p-2"><i class="bi bi-hourglass-split me-1"></i>Loading metadata...</div>';
+    tableList.innerHTML = '<div class="text-muted small p-2"><i class="bi bi-hourglass-split me-1"></i>Loading data sources...</div>';
     
     metaAttrPickerModal.show();
     
     try {
-        const response = await fetch('/project/metadata', { credentials: 'same-origin' });
+        const response = await fetch('/domain/metadata', { credentials: 'same-origin' });
         const data = await response.json();
         
         if (!data.success || !data.has_metadata || !data.metadata?.tables?.length) {
-            tableList.innerHTML = '<div class="text-muted small p-2"><i class="bi bi-exclamation-circle me-1"></i>No metadata loaded. Load metadata in Project settings first.</div>';
+            tableList.innerHTML = '<div class="text-muted small p-2"><i class="bi bi-exclamation-circle me-1"></i>No data sources loaded. Load data sources in Domain settings first.</div>';
             return;
         }
         
@@ -2064,16 +2346,19 @@ function renderMetaAttrTableList() {
     let html = '';
     for (const table of tables) {
         const colCount = table.columns?.length || 0;
-        const tableName = table.full_name || table.name;
-        // Count how many columns are already attributes
+        const tableFqn = table.full_name || table.name;
+        const fqnParts = tableFqn.split('.');
+        const displayName = fqnParts.length === 3 ? fqnParts[2] : tableFqn;
+        const dataSource = fqnParts.length >= 2 ? `${fqnParts[0]}.${fqnParts[1]}` : '';
         const alreadyCount = table.columns ? table.columns.filter(c => allAttrs.has(columnToCamelCase(c.name).toLowerCase())).length : 0;
         
         html += `
-            <a href="#" class="list-group-item list-group-item-action py-2 px-2" onclick="metaAttrSelectTable('${tableName.replace(/'/g, "\\'")}'); return false;">
+            <a href="#" class="list-group-item list-group-item-action py-2 px-2" onclick="metaAttrSelectTable('${tableFqn.replace(/'/g, "\\'")}'); return false;">
                 <div class="d-flex justify-content-between align-items-center">
-                    <span class="small fw-semibold"><i class="bi bi-table me-1 text-primary"></i>${tableName}</span>
+                    <span class="small fw-semibold"><i class="bi bi-table me-1 text-primary"></i>${displayName}</span>
                     <span class="badge bg-secondary">${colCount} col</span>
                 </div>
+                ${dataSource ? `<small class="text-muted d-block" style="font-size: 0.7rem;">${dataSource}</small>` : ''}
                 ${table.comment ? `<small class="text-muted d-block" style="font-size: 0.7rem;">${table.comment}</small>` : ''}
                 ${alreadyCount > 0 ? `<small class="text-info" style="font-size: 0.65rem;">${alreadyCount} column(s) already as attributes</small>` : ''}
             </a>
@@ -2228,7 +2513,7 @@ function metaAttrApplySelection() {
     }
     
     if (addedCount > 0) {
-        showNotification(`Added ${addedCount} attribute(s) from metadata`, 'success', 2000);
+        showNotification(`Added ${addedCount} attribute(s) from data sources`, 'success', 2000);
     } else {
         showNotification('All selected columns already exist as attributes', 'info', 2000);
     }

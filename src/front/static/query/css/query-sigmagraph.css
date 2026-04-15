@@ -82,8 +82,48 @@
 
 #sigmagraph-section .details-panel .card-body {
     flex: 1;
-    overflow-y: auto;
+    overflow: hidden;
     font-size: 0.85rem;
+    min-height: 0;
+}
+
+/* Tabbed panel */
+.sg-panel-tabs {
+    border-bottom: 1px solid #dee2e6;
+}
+
+.sg-panel-tabs .nav-link {
+    font-size: 0.78rem;
+    padding: 0.45rem 0.7rem;
+    color: #6c757d;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+}
+
+.sg-panel-tabs .nav-link:hover {
+    color: #495057;
+    border-bottom-color: #dee2e6;
+}
+
+.sg-panel-tabs .nav-link.active {
+    color: #0d6efd;
+    border-bottom-color: #0d6efd;
+    background: transparent;
+}
+
+.sg-tab-content {
+    height: 100%;
+    overflow: hidden;
+}
+
+.sg-tab-pane {
+    height: 100%;
+}
+
+.sg-tab-inner {
+    height: 100%;
+    overflow-y: auto;
 }
 
 #sigmagraph-section .entity-details-placeholder {
@@ -164,4 +204,79 @@
     white-space: nowrap;
     z-index: 100;
     display: none;
+}
+
+/* Seed preview modal */
+.sg-seed-table-wrap {
+    max-height: 55vh;
+    overflow-y: auto;
+}
+
+.sg-seed-table {
+    font-size: 0.82rem;
+}
+
+.sg-seed-table th {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    z-index: 1;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.sg-seed-table td {
+    vertical-align: middle;
+    padding: 0.3rem 0.5rem;
+}
+
+.sg-type-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    color: #fff;
+    white-space: nowrap;
+}
+
+#sgSeedPreviewModal .modal-body {
+    padding: 0;
+}
+
+#sgSeedPreviewModal .modal-footer {
+    background: #f8f9fa;
+}
+
+/* Data cluster panel */
+.sg-cluster-controls {
+    padding: 0.25rem 0;
+}
+
+.sg-cluster-slider {
+    height: 0.4rem;
+}
+
+.sg-cluster-list {
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.sg-cluster-chip {
+    padding: 0.25rem 0.4rem;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    background: #f8f9fa;
+    transition: background 0.15s;
+}
+
+.sg-cluster-chip:hover {
+    background: #e9ecef;
+}
+
+.sg-cluster-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
 }

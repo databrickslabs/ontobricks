@@ -86,12 +86,12 @@ def _title_text(html: str) -> str:
 class TestBaseTemplate:
     """Verify elements inherited from base.html on every page."""
 
-    @pytest.mark.parametrize("path", ["/", "/settings", "/ontology", "/mapping", "/project", "/dtwin/", "/about"])
+    @pytest.mark.parametrize("path", ["/", "/settings", "/ontology", "/mapping", "/domain", "/dtwin/", "/about"])
     def test_has_navbar(self, client, path):
         html = _html(client, path)
         assert _find(_tags(html), tag="nav", class_="navbar") is not None
 
-    @pytest.mark.parametrize("path", ["/", "/settings", "/ontology", "/mapping", "/project", "/dtwin/", "/about"])
+    @pytest.mark.parametrize("path", ["/", "/settings", "/ontology", "/mapping", "/domain", "/dtwin/", "/about"])
     def test_has_brand_link(self, client, path):
         html = _html(client, path)
         tags = _tags(html)
@@ -115,21 +115,23 @@ class TestBaseTemplate:
         html = _html(client, path)
         assert any("utils.js" in src for src in _script_srcs(html))
 
-    def test_navbar_has_project_dropdown(self, client):
+    def test_navbar_has_domain_dropdown(self, client):
         html = _html(client, "/")
-        assert _find(_tags(html), id_="projectDropdown") is not None
-
-    def test_navbar_has_ontology_dropdown(self, client):
-        html = _html(client, "/")
-        assert _find(_tags(html), id_="ontologyDropdown") is not None
-
-    def test_navbar_has_assignment_dropdown(self, client):
-        html = _html(client, "/")
-        assert _find(_tags(html), id_="assignmentDropdown") is not None
+        assert _find(_tags(html), id_="domainDropdown") is not None
 
     def test_navbar_has_digital_twin_dropdown(self, client):
         html = _html(client, "/")
         assert _find(_tags(html), id_="digitaltwinDropdown") is not None
+
+    def test_navbar_has_ontology_link_under_domain(self, client):
+        """Ontology appears as a sub-item under the Domain dropdown (navbar_hidden)."""
+        html = _html(client, "/")
+        assert "/ontology/" in html
+
+    def test_navbar_has_mapping_link_under_domain(self, client):
+        """Mapping appears as a sub-item under the Domain dropdown (navbar_hidden)."""
+        html = _html(client, "/")
+        assert "/mapping/" in html
 
     def test_navbar_has_settings_link(self, client):
         html = _html(client, "/")
@@ -162,10 +164,10 @@ class TestHomePage:
         assert _find(_tags(html), class_="home-hero") is not None
         assert "OntoBricks" in html
 
-    def test_project_panel(self, client):
+    def test_domain_panel(self, client):
         html = _html(client, "/")
         assert _find(_tags(html), id_="sessionPanel") is not None
-        assert _find(_tags(html), id_="homeProjectName") is not None
+        assert _find(_tags(html), id_="homeDomainName") is not None
 
     def test_stat_items(self, client):
         html = _html(client, "/")
@@ -195,7 +197,6 @@ class TestSettingsPage:
         html = _html(client, "/settings")
         tags = _tags(html)
         assert _find(tags, id_="tab-databricks") is not None
-        assert _find(tags, id_="tab-registry") is not None
         assert _find(tags, id_="tab-global") is not None
 
     def test_host_display(self, client):
@@ -220,9 +221,17 @@ class TestSettingsPage:
         html = _html(client, "/settings")
         assert _find(_tags(html), id_="btnSaveAllSettings") is not None
 
-    def test_registry_pane(self, client):
-        html = _html(client, "/settings")
-        assert _find(_tags(html), id_="pane-registry") is not None
+    def test_registry_pane_moved_to_registry_page(self, client):
+        html = _html(client, "/registry/")
+        assert _find(_tags(html), id_="registryDomainsSection") is not None
+
+    def test_schedule_on_registry_page(self, client):
+        html = _html(client, "/registry/")
+        assert _find(_tags(html), id_="schedulesTableContainer") is not None
+
+    def test_api_on_registry_page(self, client):
+        html = _html(client, "/registry/")
+        assert _find(_tags(html), id_="apiEndpointCards") is not None
 
 
 # =====================================================
@@ -324,17 +333,17 @@ class TestMappingPage:
 
 
 # =====================================================
-# PROJECT PAGE
+# DOMAIN PAGE
 # =====================================================
 
 
-class TestProjectPage:
+class TestDomainPage:
     def test_title(self, client):
-        html = _html(client, "/project")
-        assert "Project" in _title_text(html)
+        html = _html(client, "/domain")
+        assert "Domain" in _title_text(html)
 
     def test_sidebar_present(self, client):
-        html = _html(client, "/project")
+        html = _html(client, "/domain")
         assert _find(_tags(html), class_="sidebar-nav") is not None
 
     @pytest.mark.parametrize(
@@ -342,14 +351,14 @@ class TestProjectPage:
         ["information", "metadata", "documents", "validation", "owl-content", "r2rml"],
     )
     def test_sidebar_has_section_link(self, client, section):
-        html = _html(client, "/project")
+        html = _html(client, "/domain")
         tags = _tags(html)
         found = any(t == "a" and a.get("data-section") == section for t, a in tags)
         assert found, f"Sidebar link for section '{section}' not found"
 
     @pytest.mark.parametrize("section_id", ["information-section", "metadata-section", "validation-section"])
     def test_section_div_exists(self, client, section_id):
-        html = _html(client, "/project")
+        html = _html(client, "/domain")
         assert _find(_tags(html), id_=section_id) is not None
 
 
@@ -367,16 +376,16 @@ class TestDigitalTwinPage:
         html = _html(client, "/dtwin/")
         assert _find(_tags(html), class_="sidebar-nav") is not None
 
-    @pytest.mark.parametrize("section", ["sync", "dataquality", "sigmagraph", "graphql"])
+    @pytest.mark.parametrize("section", ["dataquality", "sigmagraph", "graphql", "reasoning"])
     def test_sidebar_has_section_link(self, client, section):
         html = _html(client, "/dtwin/")
         tags = _tags(html)
         found = any(t == "a" and a.get("data-section") == section for t, a in tags)
         assert found, f"Sidebar link for section '{section}' not found"
 
-    def test_sync_section_present(self, client):
+    def test_sigmagraph_section_present(self, client):
         html = _html(client, "/dtwin/")
-        assert _find(_tags(html), id_="sync-section") is not None
+        assert _find(_tags(html), id_="sigmagraph-section") is not None
 
     def test_sigma_script_loaded(self, client):
         html = _html(client, "/dtwin/")

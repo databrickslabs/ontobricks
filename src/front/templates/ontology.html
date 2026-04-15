@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-business-rules.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-dataquality.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-wizard.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-groups.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-assistant.css') }}?v={{ asset_version }}">
 {% endblock %}
 
@@ -67,6 +68,11 @@
                 {% include "partials/ontology/_ontology_relationships.html" %}
             </div>
             
+            <!-- Groups Section (Entity Groups for expand/collapse in DT) -->
+            <div id="groups-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_groups.html" %}
+            </div>
+            
             <!-- Data Quality (SHACL) Section -->
             <div id="dataquality-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_dataquality.html" %}
@@ -94,7 +100,7 @@
 </div>
 
 <!-- OntoViz library for Design section -->
-<script src="{{ url_for('static', filename='global/ontoviz/ontoviz.js') }}?v={{ range(1000000) | random }}"></script>
+<script src="{{ url_for('static', filename='global/ontoviz/ontoviz.js') }}?v={{ asset_version }}"></script>
 
 <!-- Ontology Design module (extracted from _ontology_design.html partial) -->
 <script src="{{ url_for('static', filename='global/js/ontology-design.js') }}?v={{ asset_version }}"></script>
@@ -111,6 +117,7 @@
 <script src="{{ url_for('static', filename='ontology/js/ontology-owl-content.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-information.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-import.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-groups.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-wizard.js') }}?v={{ asset_version }}"></script>
 <!-- Markdown rendering for assistant chat -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>

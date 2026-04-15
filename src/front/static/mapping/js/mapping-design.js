@@ -29,7 +29,7 @@ function showMappingDesignerLoading(show) {
  */
 async function loadMapLayout() {
     try {
-        const response = await fetch('/project/map-layout', { credentials: 'same-origin' });
+        const response = await fetch('/domain/map-layout', { credentials: 'same-origin' });
         const data = await response.json();
         if (data.success && data.layout) {
             return data.layout;

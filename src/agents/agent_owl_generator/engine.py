@@ -62,7 +62,7 @@ Your goal is to generate a concise, logically consistent OWL ontology (**Turtle*
 
 # TOOLS
 You have four tools:
-  • list_documents  – discover documents in the project volume
+  • list_documents  – discover documents in the domain volume
   • read_document   – read a document's text content
   • get_metadata    – get all table schemas (names, columns, types)
   • get_table_detail – get detailed info for one table
@@ -247,8 +247,9 @@ def run_agent(
     guidelines: str,
     options: dict,
     base_uri: str,
-    project_name: Optional[str] = None,
-    project_folder: Optional[str] = None,
+    domain_name: Optional[str] = None,
+    domain_folder: Optional[str] = None,
+    domain_version: Optional[str] = None,
     selected_tables: Optional[List[str]] = None,
     selected_docs: Optional[List[str]] = None,
     on_step: Optional[Callable[[str], None]] = None,
@@ -273,8 +274,9 @@ def run_agent(
         host=host.rstrip("/"),
         token=token,
         registry=registry or {},
-        project_name=project_name or "",
-        project_folder=project_folder or "",
+        domain_name=domain_name or "",
+        domain_folder=domain_folder or "",
+        domain_version=domain_version or "1",
         metadata=metadata or {},
     )
     logger.info("Agent context created — host=%s, registry=%s",

@@ -413,7 +413,7 @@ python<span class="w"> </span>run.py
 <section id="r2rml-output">
 <h4>R2RML Output<a class="headerlink" href="#r2rml-output" title="Link to this heading">¶</a></h4>
 <ol class="arabic simple">
-<li><p>Navigate to <strong>Project</strong> → <strong>Export</strong></p></li>
+<li><p>Navigate to <strong>Domain</strong> → <strong>Export</strong></p></li>
 <li><p>View the auto-generated R2RML mapping</p></li>
 <li><p>Copy or download as needed</p></li>
 <li><p>Click <strong>Validate</strong> (in navbar) to verify all mappings are complete</p></li>
@@ -542,7 +542,7 @@ make<span class="w"> </span><span class="nb">help</span>
 </tbody>
 </table>
 <blockquote>
-<div><p><strong>Tip</strong>: The Wizard provides domain-specific quick templates (CRM, E-Commerce, IoT, Healthcare, Energy). These are defined in <code class="docutils literal notranslate"><span class="pre">src/app/config/constants.py</span></code> and can be customised or extended.</p>
+<div><p><strong>Tip</strong>: The Wizard provides domain-specific quick templates (CRM, E-Commerce, IoT, Healthcare, Energy). These are defined in <code class="docutils literal notranslate"><span class="pre">src/shared/config/constants.py</span></code> and can be customised or extended.</p>
 </div></blockquote>
 </section>
 <section id="troubleshooting">
@@ -587,7 +587,7 @@ rm<span class="w"> </span>-rf<span class="w"> </span>.venv
 <h3>Sync or Knowledge Graph Fails<a class="headerlink" href="#sync-or-knowledge-graph-fails" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p>Ensure both Ontology and Mapping have green checkmarks in the navbar</p></li>
-<li><p>Check that the R2RML mapping is generated (visible in Project → Export)</p></li>
+<li><p>Check that the R2RML mapping is generated (visible in Domain → Export)</p></li>
 <li><p>Verify the SQL Warehouse is running and accessible</p></li>
 <li><p>Check browser console for any errors</p></li>
 </ul>
@@ -955,7 +955,7 @@ rm<span class="w"> </span>-rf<span class="w"> </span>.venv
 </section>
 <section id="global-constants-non-environment">
 <h3>Global Constants (Non-Environment)<a class="headerlink" href="#global-constants-non-environment" title="Link to this heading">¶</a></h3>
-<p>Some application-wide constants are not controlled by environment variables. These live in <code class="docutils literal notranslate"><span class="pre">src/app/config/constants.py</span></code> and include:</p>
+<p>Some application-wide constants are not controlled by environment variables. These live in <code class="docutils literal notranslate"><span class="pre">src/shared/config/constants.py</span></code> and include:</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Constant</p></th>
@@ -1012,7 +1012,7 @@ rm<span class="w"> </span>-rf<span class="w"> </span>.venv
 <h3>Loading Priority<a class="headerlink" href="#loading-priority" title="Link to this heading">¶</a></h3>
 <p>When the application starts, configuration is loaded in this order (later values override earlier ones):</p>
 <ol class="arabic simple">
-<li><p>Default values in code (including <code class="docutils literal notranslate"><span class="pre">src/app/config/constants.py</span></code>)</p></li>
+<li><p>Default values in code (including <code class="docutils literal notranslate"><span class="pre">src/shared/config/constants.py</span></code>)</p></li>
 <li><p>Environment variables from OS</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">.env</span></code> file (if present)</p></li>
 <li><p>Manual user input (stored in session)</p></li>

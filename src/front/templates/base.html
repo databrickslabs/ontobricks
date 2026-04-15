@@ -19,6 +19,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/components.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/pages.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/sidebar-layout.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='global/css/emoji-picker.css') }}?v={{ asset_version }}">
     
     <!-- OntoBricks JS Utilities (defer: non-blocking, executed after HTML parse) -->
     <script defer src="{{ url_for('static', filename='global/js/utils.js') }}?v={{ asset_version }}"></script>
@@ -28,6 +29,7 @@
     <script defer src="{{ url_for('static', filename='global/js/navbar.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/sidebar-nav.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/task-tracker.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='global/js/emoji-picker.js') }}?v={{ asset_version }}"></script>
     
     {% block extra_css %}{% endblock %}
 </head>
@@ -47,45 +49,79 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     {% for menu in menu_config.menus %}
+                    {% if not menu.navbar_hidden|default(false) %}
                     <li class="nav-item nav-chevron" aria-hidden="true">
                         <svg viewBox="0 0 12 40" preserveAspectRatio="none"><polyline points="0,0 10,20 0,40" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/></svg>
                     </li>
                     <li class="nav-item dropdown">
-                        {% if menu.id == 'project' %}
-                        <a class="nav-link dropdown-toggle" href="#" id="projectDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="bi {{ menu.icon }}"></i> <span id="currentProjectName">{{ menu.label }}</span>
+                        {% if menu.id == 'domain' %}
+                        <a class="nav-link dropdown-toggle" href="#" id="domainDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi {{ menu.icon }}"></i> <span id="currentDomainName" class="text-light small">{{ menu.label }}</span>
                         </a>
-                        <ul class="dropdown-menu" aria-labelledby="projectDropdown" id="projectDropdownMenu">
+                        <ul class="dropdown-menu" aria-labelledby="domainDropdown" id="domainDropdownMenu">
                             {% for action in menu.navbar_actions %}
                             <li><a class="dropdown-item" href="#" onclick="{{ action.action }}()"{% if action.element_id %} id="{{ action.element_id }}"{% endif %}><i class="bi {{ action.icon }}"></i> {{ action.label }}</a></li>
                             {% endfor %}
                             {% for group in menu.groups %}
                             {% if not group.sidebar_only|default(false) %}
                             <li><hr class="dropdown-divider"></li>
-                            <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> <span{% if loop.first %} id="projectSectionName"{% endif %}>{{ group.title }}</span></h6></li>
+                            <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> <span{% if loop.first %} id="domainSectionName"{% endif %}>{{ group.title }}</span></h6></li>
                             {% for item in group['items'] %}
-                            <li><a class="dropdown-item{% if item.requires == 'project_saved' %} dropdown-requires-project{% endif %}" href="{{ menu.route }}?section={{ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
+                            {% if item.route %}
+                            {% set sub = namespace(menu=none) %}
+                            {% for m in menu_config.menus if m.navbar_hidden|default(false) and m.route == item.route %}
+                            {% set sub.menu = m %}
+                            {% endfor %}
+                            {% if sub.menu %}
+                            <li class="dropend">
+                                <a class="dropdown-item dropdown-toggle dropdown-requires-domain" href="{{ item.route }}" data-bs-toggle="dropdown"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a>
+                                <ul class="dropdown-menu">
+                                    {% for sg in sub.menu.groups %}
+                                    {% if not sg.sidebar_only|default(false) %}
+                                    {% if not loop.first %}<li><hr class="dropdown-divider"></li>{% endif %}
+                                    <li><h6 class="dropdown-header"><i class="bi {{ sg.icon }}"></i> {{ sg.title }}</h6></li>
+                                    {% for si in sg['items'] %}
+                                    <li><a class="dropdown-item" href="{{ sub.menu.route }}?section={{ si.id }}"><i class="bi {{ si.icon }}"></i> {{ si.label }}</a></li>
+                                    {% endfor %}
+                                    {% endif %}
+                                    {% endfor %}
+                                </ul>
+                            </li>
+                            {% else %}
+                            <li><a class="dropdown-item dropdown-requires-domain" href="{{ item.route }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
+                            {% endif %}
+                            {% else %}
+                            <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}" href="{{ menu.route }}?section={{ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
+                            {% endif %}
                             {% endfor %}
                             {% endif %}
                             {% endfor %}
                         </ul>
                         {% else %}
-                        <a class="nav-link dropdown-toggle{% if menu.requires_project_saved %} nav-requires-project{% endif %}" href="#" id="{{ menu.id }}Dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <a class="nav-link dropdown-toggle{% if menu.requires_domain_saved %} nav-requires-domain{% endif %}" href="#" id="{{ menu.id }}Dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi {{ menu.icon }}"></i> <span class="text-light small">{{ menu.label }}</span>
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="{{ menu.id }}Dropdown">
+                            {% if menu.navbar_actions|default([])|length > 0 %}
+                            {% for action in menu.navbar_actions %}
+                            <li><a class="dropdown-item" href="#" onclick="{{ action.action }}()"{% if action.element_id %} id="{{ action.element_id }}"{% endif %}><i class="bi {{ action.icon }}"></i> {{ action.label }}</a></li>
+                            {% endfor %}
+                            {% endif %}
+                            {% set vis = namespace(any=menu.navbar_actions|default([])|length > 0) %}
                             {% for group in menu.groups %}
                             {% if not group.sidebar_only|default(false) %}
-                            {% if not loop.first %}<li><hr class="dropdown-divider"></li>{% endif %}
+                            {% if vis.any %}<li><hr class="dropdown-divider"></li>{% endif %}
+                            {% set vis.any = true %}
                             <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> {{ group.title }}</h6></li>
                             {% for item in group['items'] %}
-                            <li><a class="dropdown-item{% if item.requires == 'project_saved' %} dropdown-requires-project{% endif %}" href="{{ menu.route }}?section={{ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
+                            <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}" href="{{ item.route if item.route else menu.route ~ '?section=' ~ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
                             {% endfor %}
                             {% endif %}
                             {% endfor %}
                         </ul>
                         {% endif %}
                     </li>
+                    {% endif %}
                     {% endfor %}
                 </ul>
                 
@@ -156,8 +192,8 @@
         </div>
     </nav>
     
-    <!-- Full-page project loading overlay (hidden by default) -->
-    <div id="projectLoadingOverlay" class="project-loading-overlay d-none">
+    <!-- Full-page domain loading overlay (hidden by default) -->
+    <div id="domainLoadingOverlay" class="domain-loading-overlay d-none">
         <div class="ob-loading-spinner">
             <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
                 <g class="ob-ring">
@@ -180,7 +216,7 @@
                     </g>
                 </g>
             </svg>
-            <span class="ob-spinner-label" id="projectLoadingLabel">Loading project...</span>
+            <span class="ob-spinner-label" id="domainLoadingLabel">Loading domain...</span>
         </div>
     </div>
 

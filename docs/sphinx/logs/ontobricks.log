@@ -10,3 +10,5 @@
 2026-04-05T22:25:34+0200 | INFO     | ontobricks | logging.setup:120 | Logging configured — level=DEBUG, console=stdout, file=/Users/benoit.cayla/git-dbx/OntoBricks/docs/sphinx/logs/ontobricks.log
 2026-04-05T22:25:49+0200 | INFO     | ontobricks | logging.setup:120 | Logging configured — level=DEBUG, console=stdout, file=/Users/benoit.cayla/git-dbx/OntoBricks/docs/sphinx/logs/ontobricks.log
 2026-04-05T22:26:14+0200 | INFO     | ontobricks | logging.setup:120 | Logging configured — level=DEBUG, console=stdout, file=/Users/benoit.cayla/git-dbx/OntoBricks/docs/sphinx/logs/ontobricks.log
+2026-04-12T15:10:39+0200 | INFO     | ontobricks | LogManager.setup:104 | Logging configured — level=DEBUG, console=stdout, file=/Users/benoit.cayla/git-dbx/OntoBricks/docs/sphinx/logs/ontobricks.log
+2026-04-12T15:11:00+0200 | INFO     | ontobricks | LogManager.setup:104 | Logging configured — level=DEBUG, console=stdout, file=/Users/benoit.cayla/git-dbx/OntoBricks/docs/sphinx/logs/ontobricks.log

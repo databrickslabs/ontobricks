@@ -45,8 +45,8 @@ class TestLocalDbPath:
 
 class TestGraphVolumePath:
     def test_path(self):
-        path = graph_volume_path("/Volumes/cat/sch/vol/projects/proj1", "mydb")
-        assert path == "/Volumes/cat/sch/vol/projects/proj1/ontobricks_mydb.lbug.tar.gz"
+        path = graph_volume_path("/Volumes/cat/sch/vol/domains/proj1", "mydb")
+        assert path == "/Volumes/cat/sch/vol/domains/proj1/ontobricks_mydb.lbug.tar.gz"
 
 
 class TestSyncToVolume:
@@ -61,7 +61,7 @@ class TestSyncToVolume:
 
         ok, msg = sync_to_volume(
             uc_mock,
-            "/Volumes/cat/sch/vol/projects/proj",
+            "/Volumes/cat/sch/vol/domains/proj",
             "test",
             local_base=TEMP_BASE,
         )
@@ -76,7 +76,7 @@ class TestSyncToVolume:
         uc_mock = MagicMock()
         ok, msg = sync_to_volume(
             uc_mock,
-            "/Volumes/cat/sch/vol/projects/proj",
+            "/Volumes/cat/sch/vol/domains/proj",
             "nonexistent",
             local_base=TEMP_BASE,
         )
@@ -95,7 +95,7 @@ class TestSyncToVolume:
 
         ok, msg = sync_to_volume(
             uc_mock,
-            "/Volumes/cat/sch/vol/projects/proj",
+            "/Volumes/cat/sch/vol/domains/proj",
             "test",
             local_base=TEMP_BASE,
         )
@@ -129,7 +129,7 @@ class TestSyncFromVolume:
 
         ok, msg = sync_from_volume(
             uc_mock,
-            "/Volumes/cat/sch/vol/projects/proj",
+            "/Volumes/cat/sch/vol/domains/proj",
             "test",
             local_base=TEMP_BASE,
         )
@@ -145,7 +145,7 @@ class TestSyncFromVolume:
 
         ok, msg = sync_from_volume(
             uc_mock,
-            "/Volumes/cat/sch/vol/projects/proj",
+            "/Volumes/cat/sch/vol/domains/proj",
             "test",
             local_base=TEMP_BASE,
         )
@@ -161,12 +161,12 @@ class TestSyncFromVolume:
 
         ok, msg = sync_from_volume(
             uc_mock,
-            "/Volumes/cat/sch/vol/projects/proj",
+            "/Volumes/cat/sch/vol/domains/proj",
             "test",
             local_base=TEMP_BASE,
         )
-        assert ok  # not-found is not an error (new project)
-        assert "new project" in msg.lower()
+        assert ok  # not-found is not an error (new domain)
+        assert "new domain" in msg.lower()
 
     def test_download_error(self):
         uc_mock = MagicMock()
@@ -174,7 +174,7 @@ class TestSyncFromVolume:
 
         ok, msg = sync_from_volume(
             uc_mock,
-            "/Volumes/cat/sch/vol/projects/proj",
+            "/Volumes/cat/sch/vol/domains/proj",
             "test",
             local_base=TEMP_BASE,
         )
@@ -193,7 +193,7 @@ class TestSyncFromVolume:
 
         ok, msg = sync_from_volume(
             uc_mock,
-            "/Volumes/cat/sch/vol/projects/proj",
+            "/Volumes/cat/sch/vol/domains/proj",
             "test",
             local_base=TEMP_BASE,
         )

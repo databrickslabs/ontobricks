@@ -4,6 +4,7 @@ HTTP routing stays in ``routes``; this module holds orchestration, validation, a
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import time
@@ -25,8 +26,9 @@ from back.objects.registry import (
     RegistryCfg,
     RegistryService,
     permission_service,
+    invalidate_registry_cache,
 )
-from back.objects.session import SessionManager, get_project, global_config_service
+from back.objects.session import SessionManager, get_domain, global_config_service
 
 logger = get_logger(__name__)
 
@@ -54,11 +56,11 @@ def is_registry_locked(settings: Settings) -> bool:
 
 
 def _resolve_context(session_mgr: SessionManager, settings: Settings):
-    """Return the (project, host, token, registry_cfg_dict) tuple used by most endpoints."""
-    project = get_project(session_mgr)
-    host, token = get_databricks_host_and_token(project, settings)
-    registry_cfg = RegistryCfg.from_project(project, settings).as_dict()
-    return project, host, token, registry_cfg
+    """Return the (domain, host, token, registry_cfg_dict) tuple used by most endpoints."""
+    domain = get_domain(session_mgr)
+    host, token = get_databricks_host_and_token(domain, settings)
+    registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
+    return domain, host, token, registry_cfg
 
 
 def require_admin_error(
@@ -85,11 +87,11 @@ def require_admin_error(
 
 def build_current_config(session_mgr: SessionManager, settings: Settings) -> Dict[str, Any]:
     """Build the payload for GET /settings/current."""
-    project = get_project(session_mgr)
+    domain = get_domain(session_mgr)
 
-    host = project.databricks.get('host') or settings.databricks_host
-    token = project.databricks.get('token') or settings.databricks_token
-    warehouse_id = resolve_warehouse_id(project, settings)
+    host = domain.databricks.get('host') or settings.databricks_host
+    token = domain.databricks.get('token') or settings.databricks_token
+    warehouse_id = resolve_warehouse_id(domain, settings)
 
     has_config = bool(host and (token or settings.databricks_token))
     is_app_mode = bool(settings.databricks_host)
@@ -125,18 +127,18 @@ def apply_config_save(
     settings: Settings,
 ) -> Dict[str, Any]:
     """Apply POST /settings/save body to session and optional global warehouse."""
-    project = get_project(session_mgr)
+    domain = get_domain(session_mgr)
 
     if data.get('host'):
-        project.databricks['host'] = data['host']
+        domain.databricks['host'] = data['host']
     if data.get('token'):
-        project.databricks['token'] = data['token']
+        domain.databricks['token'] = data['token']
 
     if data.get('warehouse_id'):
         if is_warehouse_locked(settings):
             return {'success': False, 'message': 'SQL Warehouse is configured via Databricks App resources and cannot be changed here.'}
 
-        project.databricks['warehouse_id'] = data['warehouse_id']
+        domain.databricks['warehouse_id'] = data['warehouse_id']
 
         admin_err = require_admin_error(request, session_mgr, settings)
         if admin_err is None:
@@ -147,14 +149,14 @@ def apply_config_save(
             if not ok:
                 logger.info("Warehouse saved in session only (global: %s)", msg)
 
-    project.save()
+    domain.save()
     return {'success': True, 'message': 'Configuration saved'}
 
 
 async def test_connection(session_mgr: SessionManager, settings: Settings) -> Dict[str, Any]:
     """Test Databricks connectivity; returns success/message dict."""
     try:
-        client = get_databricks_client(get_project(session_mgr), settings)
+        client = get_databricks_client(get_domain(session_mgr), settings)
 
         if not client:
             return {'success': False, 'message': 'Databricks not configured. Please set DATABRICKS_HOST and DATABRICKS_TOKEN.'}
@@ -175,7 +177,7 @@ async def test_connection(session_mgr: SessionManager, settings: Settings) -> Di
 async def fetch_warehouses(session_mgr: SessionManager, settings: Settings) -> Dict[str, Any]:
     """List warehouses or return {'error': ...}."""
     try:
-        client = get_databricks_client(get_project(session_mgr), settings)
+        client = get_databricks_client(get_domain(session_mgr), settings)
         if not client:
             return {'error': 'Databricks not configured'}
         return {'warehouses': await run_blocking(client.get_warehouses)}
@@ -208,9 +210,9 @@ def select_warehouse(
     if admin_err:
         return admin_err
 
-    project, host, token, registry_cfg = _resolve_context(session_mgr, settings)
-    project.databricks['warehouse_id'] = warehouse_id
-    project.save()
+    domain, host, token, registry_cfg = _resolve_context(session_mgr, settings)
+    domain.databricks['warehouse_id'] = warehouse_id
+    domain.save()
 
     ok, msg = global_config_service.set_warehouse_id(
         host, token, registry_cfg, warehouse_id,
@@ -228,7 +230,7 @@ def select_warehouse(
 
 async def fetch_catalogs(session_mgr: SessionManager, settings: Settings) -> Dict[str, Any]:
     try:
-        client = get_databricks_client(get_project(session_mgr), settings)
+        client = get_databricks_client(get_domain(session_mgr), settings)
         if not client:
             return {'error': 'Databricks not configured'}
         return {'catalogs': await run_blocking(client.get_catalogs)}
@@ -245,7 +247,7 @@ async def fetch_schemas(
     log_label: str = "Get schemas",
 ) -> Dict[str, Any]:
     try:
-        client = get_databricks_client(get_project(session_mgr), settings)
+        client = get_databricks_client(get_domain(session_mgr), settings)
         if not client:
             return {'error': 'Databricks not configured'}
         return {'schemas': await run_blocking(client.get_schemas, catalog)}
@@ -262,7 +264,7 @@ async def fetch_volumes(
     log_label: str = "Get volumes",
 ) -> Dict[str, Any]:
     try:
-        client = get_databricks_client(get_project(session_mgr), settings)
+        client = get_databricks_client(get_domain(session_mgr), settings)
         if not client:
             return {'error': 'Databricks not configured'}
         return {'volumes': await run_blocking(client.get_volumes, catalog, schema)}
@@ -281,7 +283,7 @@ def build_registry_get_payload(session_mgr: SessionManager, settings: Settings) 
 
     if rcfg.is_configured:
         try:
-            svc = RegistryService.from_context(get_project(session_mgr), settings)
+            svc = RegistryService.from_context(get_domain(session_mgr), settings)
             initialized = svc.is_initialized()
         except Exception:
             logger.debug("Could not check registry marker")
@@ -296,26 +298,26 @@ def build_registry_get_payload(session_mgr: SessionManager, settings: Settings) 
 
 def apply_registry_save(data: Dict[str, Any], session_mgr: SessionManager) -> Dict[str, Any]:
     """Persist registry catalog/schema/volume from request body."""
-    project = get_project(session_mgr)
-    reg = project.settings.setdefault('registry', {})
+    domain = get_domain(session_mgr)
+    reg = domain.settings.setdefault('registry', {})
     if data.get('catalog'):
         reg['catalog'] = data['catalog']
     if data.get('schema'):
         reg['schema'] = data['schema']
     if data.get('volume'):
         reg['volume'] = data['volume']
-    project.save()
+    domain.save()
     return {'success': True, 'message': 'Registry configuration saved'}
 
 
 def initialize_registry_result(session_mgr: SessionManager, settings: Settings) -> Dict[str, Any]:
     try:
-        project = get_project(session_mgr)
-        svc = RegistryService.from_context(project, settings)
+        domain = get_domain(session_mgr)
+        svc = RegistryService.from_context(domain, settings)
         if not svc.cfg.is_configured:
             return {'success': False, 'message': 'Registry catalog, schema, and volume must be configured first'}
 
-        client = get_databricks_client(project, settings)
+        client = get_databricks_client(domain, settings)
         if not client:
             return {'success': False, 'message': 'Databricks not configured'}
 
@@ -326,63 +328,132 @@ def initialize_registry_result(session_mgr: SessionManager, settings: Settings) 
         return {'success': False, 'message': str(e)}
 
 
-def list_registry_projects_result(session_mgr: SessionManager, settings: Settings) -> Dict[str, Any]:
+def list_registry_domains_result(session_mgr: SessionManager, settings: Settings) -> Dict[str, Any]:
     try:
-        project = get_project(session_mgr)
-        svc = RegistryService.from_context(project, settings)
+        domain = get_domain(session_mgr)
+        svc = RegistryService.from_context(domain, settings)
         if not svc.cfg.is_configured:
-            return {'success': False, 'message': 'Registry not configured', 'projects': []}
+            return {'success': False, 'message': 'Registry not configured', 'domains': []}
 
-        ok, result, msg = svc.list_project_details()
+        ok, result, msg = svc.list_domain_details_cached()
         if not ok:
-            return {'success': False, 'message': msg, 'projects': []}
-        return {'success': True, 'projects': result}
+            return {'success': False, 'message': msg, 'domains': []}
+        return {'success': True, 'domains': result}
     except Exception as e:
-        logger.exception("List registry projects failed: %s", e)
-        return {'success': False, 'message': str(e), 'projects': []}
+        logger.exception("List registry domains failed: %s", e)
+        return {'success': False, 'message': str(e), 'domains': []}
 
 
-def delete_registry_project_result(
-    project_name: str,
+def list_registry_bridges_result(session_mgr: SessionManager, settings: Settings) -> Dict[str, Any]:
+    """Return all bridges across every domain in the registry."""
+    try:
+        domain = get_domain(session_mgr)
+        svc = RegistryService.from_context(domain, settings)
+        if not svc.cfg.is_configured:
+            return {'success': False, 'message': 'Registry not configured', 'domains': []}
+
+        ok, result, msg = svc.list_all_bridges()
+        if not ok:
+            return {'success': False, 'message': msg, 'domains': []}
+        return {'success': True, 'domains': result}
+    except Exception as e:
+        logger.exception("List registry bridges failed: %s", e)
+        return {'success': False, 'message': str(e), 'domains': []}
+
+
+def delete_registry_domain_result(
+    domain_name: str,
     session_mgr: SessionManager,
     settings: Settings,
 ) -> Dict[str, Any]:
     try:
-        project = get_project(session_mgr)
-        svc = RegistryService.from_context(project, settings)
+        domain = get_domain(session_mgr)
+        svc = RegistryService.from_context(domain, settings)
         if not svc.cfg.is_configured:
             return {'success': False, 'message': 'Registry not configured'}
 
-        errors = svc.delete_project(project_name)
+        errors = svc.delete_domain(domain_name)
 
         if errors:
             return {'success': False, 'message': f'Partially deleted. Errors: {"; ".join(errors)}'}
 
-        return {'success': True, 'message': f'Project "{project_name}" deleted from registry'}
+        return {'success': True, 'message': f'Domain "{domain_name}" deleted from registry'}
     except Exception as e:
-        logger.exception("Delete registry project failed: %s", e)
+        logger.exception("Delete registry domain failed: %s", e)
         return {'success': False, 'message': str(e)}
 
 
 def delete_registry_version_result(
-    project_name: str,
+    domain_name: str,
     version: str,
     session_mgr: SessionManager,
     settings: Settings,
 ) -> Dict[str, Any]:
     try:
-        project = get_project(session_mgr)
-        svc = RegistryService.from_context(project, settings)
+        domain = get_domain(session_mgr)
+        svc = RegistryService.from_context(domain, settings)
         if not svc.cfg.is_configured:
             return {'success': False, 'message': 'Registry not configured'}
 
-        d_ok, d_msg = svc.delete_version(project_name, version)
+        d_ok, d_msg = svc.delete_version(domain_name, version)
         if not d_ok:
             return {'success': False, 'message': f'Failed to delete version: {d_msg}'}
 
-        return {'success': True, 'message': f'Version {version} deleted from "{project_name}"'}
+        return {'success': True, 'message': f'Version {version} deleted from "{domain_name}"'}
     except Exception as e:
         logger.exception("Delete registry version failed: %s", e)
+        return {'success': False, 'message': str(e)}
+
+
+def set_registry_version_active_result(
+    domain_name: str,
+    version: str,
+    enabled: bool,
+    session_mgr: SessionManager,
+    settings: Settings,
+) -> Dict[str, Any]:
+    """Toggle the *active* (``mcp_enabled``) flag for a specific version.
+
+    Works on any domain in the registry — the domain does not need to be
+    loaded in the current session.  Only one version per domain may be
+    active; enabling one automatically disables the others.
+    """
+    try:
+        domain = get_domain(session_mgr)
+        svc = RegistryService.from_context(domain, settings)
+        if not svc.cfg.is_configured:
+            return {'success': False, 'message': 'Registry not configured'}
+
+        sorted_versions = svc.list_versions_sorted(domain_name)
+        if version not in sorted_versions:
+            return {'success': False, 'message': f'Version {version} not found in "{domain_name}"'}
+
+        if enabled:
+            for ver in sorted_versions:
+                if ver == version:
+                    continue
+                ok, data, _ = svc.read_version(domain_name, ver)
+                if not ok:
+                    continue
+                if data.get('info', {}).get('mcp_enabled'):
+                    data['info']['mcp_enabled'] = False
+                    svc.write_version(domain_name, ver, json.dumps(data))
+
+        ok, data, msg = svc.read_version(domain_name, version)
+        if not ok:
+            return {'success': False, 'message': msg}
+
+        data.setdefault('info', {})['mcp_enabled'] = enabled
+        svc.write_version(domain_name, version, json.dumps(data))
+
+        invalidate_registry_cache()
+
+        if domain.domain_folder == domain_name and domain.current_version == version:
+            domain.info['mcp_enabled'] = enabled
+
+        return {'success': True, 'version': version, 'active': enabled}
+    except Exception as e:
+        logger.exception("Set registry version active failed: %s", e)
         return {'success': False, 'message': str(e)}
 
 
@@ -421,6 +492,32 @@ def save_base_uri_result(
     if not ok:
         return {'success': False, 'message': msg}
     return {'success': True, 'base_uri': base_uri}
+
+
+def get_registry_cache_ttl_result(
+    session_mgr: SessionManager,
+    settings: Settings,
+) -> Dict[str, Any]:
+    _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
+    ttl = global_config_service.get_registry_cache_ttl(host, token, registry_cfg)
+    return {'success': True, 'registry_cache_ttl': ttl}
+
+
+def save_registry_cache_ttl_result(
+    ttl: int,
+    request: Request,
+    session_mgr: SessionManager,
+    settings: Settings,
+) -> Dict[str, Any]:
+    admin_err = require_admin_error(request, session_mgr, settings)
+    if admin_err:
+        return admin_err
+
+    _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
+    ok, msg = global_config_service.set_registry_cache_ttl(host, token, registry_cfg, ttl)
+    if not ok:
+        return {'success': False, 'message': msg}
+    return {'success': True, 'registry_cache_ttl': max(10, int(ttl))}
 
 
 # --- Permissions ---
@@ -594,10 +691,10 @@ def search_workspace_principals(
     client = DatabricksClient(host=host, token=token)
 
     if principal_type == "group":
-        groups = client.search_groups(query, max_results=50)
+        groups = client.search_groups(query)
         return {"success": True, "results": groups}
     else:
-        users = client.search_users(query, max_results=50)
+        users = client.search_users(query)
         return {"success": True, "results": users}
 
 
@@ -698,20 +795,22 @@ def save_schedule_result(
     settings: Settings,
 ) -> Dict[str, Any]:
     try:
-        project_name = (data.get("project_name") or "").strip()
+        domain_name = (
+            (data.get("domain_name") or data.get("project_name") or "").strip()
+        )
         interval_minutes = int(data.get("interval_minutes", 60))
         drop_existing = bool(data.get("drop_existing", True))
         enabled = bool(data.get("enabled", True))
         version = (data.get("version") or "latest").strip()
 
-        if not project_name:
-            return {"success": False, "message": "project_name is required"}
+        if not domain_name:
+            return {"success": False, "message": "Domain name is required"}
 
         _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
 
         scheduler = _get_scheduler()
         ok, msg = scheduler.save_schedule(
-            host, token, registry_cfg, settings, project_name, interval_minutes,
+            host, token, registry_cfg, settings, domain_name, interval_minutes,
             drop_existing, enabled, version=version,
         )
         return {"success": ok, "message": msg}
@@ -721,17 +820,17 @@ def save_schedule_result(
 
 
 def get_schedule_history_result(
-    project_name: str,
+    domain_name: str,
     session_mgr: SessionManager,
     settings: Settings,
 ) -> Dict[str, Any]:
     _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
     scheduler = _get_scheduler()
     try:
-        entries = scheduler.get_schedule_history(host, token, registry_cfg, project_name)
-        return {"success": True, "project_name": project_name, "history": entries}
+        entries = scheduler.get_schedule_history(host, token, registry_cfg, domain_name)
+        return {"success": True, "domain_name": domain_name, "history": entries}
     except Exception as e:
-        logger.exception("get_schedule_history failed for '%s': %s", project_name, e)
+        logger.exception("get_schedule_history failed for '%s': %s", domain_name, e)
         return {"success": False, "message": str(e), "history": []}
 
 
@@ -741,7 +840,7 @@ def scheduler_status_payload() -> Dict[str, Any]:
 
 
 def delete_schedule_result(
-    project_name: str,
+    domain_name: str,
     session_mgr: SessionManager,
     settings: Settings,
 ) -> Dict[str, Any]:
@@ -749,7 +848,7 @@ def delete_schedule_result(
         _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
 
         scheduler = _get_scheduler()
-        ok, msg = scheduler.remove_schedule(host, token, registry_cfg, project_name)
+        ok, msg = scheduler.remove_schedule(host, token, registry_cfg, domain_name)
         return {"success": ok, "message": msg}
     except Exception as e:
         logger.exception("delete_schedule failed: %s", e)

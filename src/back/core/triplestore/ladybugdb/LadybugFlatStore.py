@@ -4,6 +4,9 @@ Triples are stored as rows in a single node table
 ``Triple(id INT64 PRIMARY KEY, subject STRING, predicate STRING,
 object STRING)``.  All query methods are implemented in Cypher.
 """
+import csv
+import os
+import tempfile
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from back.core.logging import get_logger
@@ -12,6 +15,8 @@ from back.core.triplestore.ladybugdb import LadybugBase
 from back.core.helpers import validate_table_name
 
 logger = get_logger(__name__)
+
+_BULK_INSERT_THRESHOLD = 50
 
 
 class LadybugFlatStore(LadybugBase):
@@ -61,6 +66,77 @@ class LadybugFlatStore(LadybugBase):
         validate_table_name(table_name)
         if not triples:
             return 0
+
+        if len(triples) >= _BULK_INSERT_THRESHOLD:
+            try:
+                return self._bulk_insert_triples(table_name, triples, on_progress)
+            except Exception as exc:
+                logger.warning(
+                    "Bulk COPY FROM failed, falling back to row-by-row: %s", exc
+                )
+
+        return self._row_insert_triples(table_name, triples, batch_size, on_progress)
+
+    def _bulk_insert_triples(
+        self,
+        table_name: str,
+        triples: List[Dict[str, str]],
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> int:
+        """Insert triples via COPY FROM a temporary CSV (10-100x faster)."""
+        import time
+        t0 = time.monotonic()
+
+        node = self._node_table(table_name)
+        conn = self._get_connection()
+
+        try:
+            result = conn.execute(f"MATCH (t:{node}) RETURN MAX(t.id) AS max_id")
+            row = result.get_next() if result.has_next() else None
+            if row and row[0] is not None:
+                self._next_id = max(self._next_id, int(row[0]) + 1)
+        except Exception:
+            pass
+
+        start_id = self._next_id
+        csv_path = tempfile.mktemp(suffix=".csv", prefix="ob_flat_")
+        try:
+            with open(csv_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                for i, t in enumerate(triples):
+                    writer.writerow([
+                        start_id + i,
+                        t.get("subject", "") or "",
+                        t.get("predicate", "") or "",
+                        t.get("object", "") or "",
+                    ])
+
+            conn.execute(f'COPY {node} FROM "{csv_path}" (header=false)')
+            self._next_id = start_id + len(triples)
+
+            if on_progress:
+                on_progress(len(triples), len(triples))
+
+            elapsed = time.monotonic() - t0
+            logger.info(
+                "Bulk inserted %d triples into %s via COPY FROM in %.1fs",
+                len(triples), node, elapsed,
+            )
+            return len(triples)
+        finally:
+            try:
+                os.unlink(csv_path)
+            except OSError:
+                pass
+
+    def _row_insert_triples(
+        self,
+        table_name: str,
+        triples: List[Dict[str, str]],
+        batch_size: int,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> int:
+        """Row-by-row insert fallback for small batches or COPY FROM failures."""
         node = self._node_table(table_name)
         conn = self._get_connection()
 
@@ -96,7 +172,7 @@ class LadybugFlatStore(LadybugBase):
                 i + 1, i + len(batch), len(triples), node,
             )
 
-        logger.info("Inserted %d triples into %s", total, node)
+        logger.info("Inserted %d triples into %s (row-by-row)", total, node)
         return total
 
     def delete_triples(
@@ -113,24 +189,45 @@ class LadybugFlatStore(LadybugBase):
         conn = self._get_connection()
         deleted = 0
 
-        for i in range(0, len(triples), batch_size):
-            batch = triples[i : i + batch_size]
+        delete_batch_size = min(batch_size, 200)
+
+        for i in range(0, len(triples), delete_batch_size):
+            batch = triples[i : i + delete_batch_size]
+            or_clauses = []
             for t in batch:
-                s = (t.get("subject", "") or "")
-                p = (t.get("predicate", "") or "")
-                o = (t.get("object", "") or "")
-                try:
-                    conn.execute(
-                        f"MATCH (t:{node}) "
-                        f"WHERE t.subject = $s "
-                        f"AND t.predicate = $p "
-                        f"AND t.object = $o "
-                        f"DELETE t",
-                        parameters={"s": s, "p": p, "o": o},
-                    )
-                    deleted += 1
-                except Exception as e:
-                    logger.debug("Flat delete failed for (%s, %s, %s): %s", s[:40], p[:40], o[:40], e)
+                s = (t.get("subject", "") or "").replace("'", "\\'")
+                p = (t.get("predicate", "") or "").replace("'", "\\'")
+                o = (t.get("object", "") or "").replace("'", "\\'")
+                or_clauses.append(
+                    f"(t.subject = '{s}' AND t.predicate = '{p}' AND t.object = '{o}')"
+                )
+            where = " OR ".join(or_clauses)
+            try:
+                conn.execute(
+                    f"MATCH (t:{node}) WHERE {where} DELETE t"
+                )
+                deleted += len(batch)
+            except Exception as e:
+                logger.debug("Batch delete failed, falling back to row-by-row: %s", e)
+                for t in batch:
+                    s = (t.get("subject", "") or "")
+                    p = (t.get("predicate", "") or "")
+                    o = (t.get("object", "") or "")
+                    try:
+                        conn.execute(
+                            f"MATCH (t:{node}) "
+                            f"WHERE t.subject = $s "
+                            f"AND t.predicate = $p "
+                            f"AND t.object = $o "
+                            f"DELETE t",
+                            parameters={"s": s, "p": p, "o": o},
+                        )
+                        deleted += 1
+                    except Exception as e2:
+                        logger.debug(
+                            "Flat delete failed for (%s, %s, %s): %s",
+                            s[:40], p[:40], o[:40], e2,
+                        )
             if on_progress:
                 on_progress(min(i + len(batch), len(triples)), len(triples))
 
@@ -404,6 +501,41 @@ class LadybugFlatStore(LadybugBase):
         )
         row = result.get_next() if result.has_next() else None
         return row[0] if row else None
+
+    def get_entity_metadata(
+        self, table_name: str, subjects: List[str]
+    ) -> List[Dict[str, str]]:
+        if not subjects:
+            return []
+        node = self._node_table(table_name)
+        conn = self._get_connection()
+        subj_list = list(subjects)
+
+        type_rows = conn.execute(
+            f"MATCH (t:{node}) "
+            f"WHERE t.subject IN $subjects AND t.predicate = $rdf_type "
+            f"RETURN t.subject AS uri, t.object AS type_uri",
+            parameters={"subjects": subj_list, "rdf_type": RDF_TYPE},
+        )
+        types: Dict[str, str] = {}
+        for row in type_rows:
+            types.setdefault(row[0], row[1])
+
+        label_rows = conn.execute(
+            f"MATCH (t:{node}) "
+            f"WHERE t.subject IN $subjects AND t.predicate = $rdfs_label "
+            f"RETURN t.subject AS uri, t.object AS label",
+            parameters={"subjects": subj_list, "rdfs_label": RDFS_LABEL},
+        )
+        labels: Dict[str, str] = {}
+        for row in label_rows:
+            labels.setdefault(row[0], row[1])
+
+        return [
+            {"uri": uri, "type": types.get(uri, ""), "label": labels.get(uri, "")}
+            for uri in subjects
+            if uri in types
+        ]
 
     def get_triples_for_subjects(
         self, table_name: str, subjects: List[str]

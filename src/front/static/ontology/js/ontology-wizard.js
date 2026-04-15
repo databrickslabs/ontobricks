@@ -304,7 +304,7 @@ async function showWizardResults(result) {
 }
 
 /**
- * Apply the generated OWL to the project ontology (no confirmation dialog)
+ * Apply the generated OWL to the domain ontology (no confirmation dialog)
  * @returns {Promise<boolean>} true if applied successfully
  */
 async function applyWizardOntologySilent() {
@@ -339,7 +339,7 @@ async function loadWizardMetadata() {
     const tableBody = document.getElementById('wizardMetadataTableBody');
     
     try {
-        const response = await fetch('/project/metadata', { credentials: 'same-origin' });
+        const response = await fetch('/domain/metadata', { credentials: 'same-origin' });
         const result = await response.json();
         
         if (result.success && result.metadata && result.metadata.tables && result.metadata.tables.length > 0) {
@@ -408,7 +408,7 @@ async function loadWizardMetadata() {
             statusEl.innerHTML = `
                 <div class="d-flex align-items-center text-muted">
                     <i class="bi bi-info-circle me-2 fs-5"></i>
-                    <span>No metadata loaded — you can still generate from documents or guidelines</span>
+                    <span>No data sources loaded — you can still generate from documents or guidelines</span>
                 </div>
             `;
             previewEl.style.display = 'none';
@@ -419,7 +419,7 @@ async function loadWizardMetadata() {
         statusEl.innerHTML = `
             <div class="d-flex align-items-center text-danger">
                 <i class="bi bi-x-circle-fill me-2 fs-5"></i>
-                <span>Error loading metadata: ${error.message}</span>
+                <span>Error loading data sources: ${error.message}</span>
             </div>
         `;
         noMetadataEl.style.display = 'block';
@@ -573,7 +573,7 @@ async function generateOntologyFromWizard() {
     const hasDocs = documents.length > 0;
 
     if (!hasMetadata && !hasGuidelines && !hasDocs) {
-        showNotification('Please provide at least metadata, documents, or guidelines', 'warning');
+        showNotification('Please provide at least data sources, documents, or guidelines', 'warning');
         return;
     }
 
@@ -762,7 +762,7 @@ async function applyWizardOntology() {
 // =====================================================
 
 /**
- * Load documents from the project volume.
+ * Load documents from the domain volume.
  */
 async function loadWizardDocuments() {
     const statusEl = document.getElementById('wizardDocsStatus');
@@ -770,7 +770,7 @@ async function loadWizardDocuments() {
     const noDocsEl = document.getElementById('wizardNoDocs');
 
     try {
-        const response = await fetch('/project/documents/list', { credentials: 'same-origin' });
+        const response = await fetch('/domain/documents/list', { credentials: 'same-origin' });
         const result = await response.json();
 
         if (result.success && result.files && result.files.length > 0) {

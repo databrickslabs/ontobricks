@@ -36,10 +36,10 @@ class TestExceptionHierarchy:
         assert exc.detail == "extra"
 
     def test_not_found(self):
-        exc = NotFoundError("Project missing")
+        exc = NotFoundError("Domain missing")
         assert isinstance(exc, OntoBricksError)
         assert exc.status_code == 404
-        assert exc.message == "Project missing"
+        assert exc.message == "Domain missing"
 
     def test_validation(self):
         exc = ValidationError()
@@ -98,13 +98,13 @@ class TestErrorResponseModel:
     def test_full(self):
         r = ErrorResponse(
             error="not_found",
-            message="Project missing",
+            message="Domain missing",
             detail="path=/foo",
             request_id="abc-123",
         )
         d = r.model_dump()
         assert d["error"] == "not_found"
-        assert d["message"] == "Project missing"
+        assert d["message"] == "Domain missing"
         assert d["detail"] == "path=/foo"
         assert d["request_id"] == "abc-123"
 
@@ -129,8 +129,8 @@ class TestGlobalExceptionHandler:
         return TestClient(app, raise_server_exceptions=False)
 
     def test_ontobricks_error_returns_json(self, client):
-        """POST to /api/v1/projects/list without credentials triggers ValidationError."""
-        resp = client.post("/api/v1/projects/list", json={
+        """POST to /api/v1/domains/list without credentials triggers ValidationError."""
+        resp = client.post("/api/v1/domains/list", json={
             "catalog": "c", "schema": "s", "volume": "v",
         })
         assert resp.status_code == 400
@@ -160,15 +160,15 @@ class TestGlobalExceptionHandler:
 class TestApiServiceMigration:
     """Verify the service layer now raises instead of returning tuples."""
 
-    def test_list_projects_no_creds_raises(self):
-        from api.service import list_projects_from_uc
+    def test_list_domains_no_creds_raises(self):
+        from api.service import list_domains_from_uc
         with pytest.raises(ValidationError, match="credentials"):
-            list_projects_from_uc("cat", "sch", "vol", None, None)
+            list_domains_from_uc("cat", "sch", "vol", None, None)
 
-    def test_load_project_no_creds_raises(self):
-        from api.service import load_project_from_uc
+    def test_load_domain_no_creds_raises(self):
+        from api.service import load_domain_from_uc
         with pytest.raises(ValidationError, match="credentials"):
-            load_project_from_uc("/some/path", None, None)
+            load_domain_from_uc("/some/path", None, None)
 
     def test_execute_sparql_no_r2rml_raises(self):
         from api.service import execute_sparql_query
@@ -177,6 +177,6 @@ class TestApiServiceMigration:
 
     def test_execute_sparql_spark_engine_raises(self):
         from api.service import execute_sparql_query
-        project_data = {"assignment": {"r2rml_output": "some content"}}
+        domain_data = {"assignment": {"r2rml_output": "some content"}}
         with pytest.raises(ValidationError, match="Spark engine"):
-            execute_sparql_query(project_data, "SELECT ?s WHERE {?s ?p ?o}", engine="spark")
+            execute_sparql_query(domain_data, "SELECT ?s WHERE {?s ?p ?o}", engine="spark")

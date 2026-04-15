@@ -3,9 +3,12 @@
 The graph database (``/tmp/ontobricks/<name>.lbug`` — may be a single file
 or a directory depending on the LadybugDB version) is archived into a
 ``tar.gz`` and transferred via the UC Files API.  The archive is stored
-alongside the project version files in the registry:
+alongside the domain version files in the registry:
 
-    /Volumes/{cat}/{sch}/{vol}/projects/{folder}/ontobricks_{name}.lbug.tar.gz
+    /Volumes/{cat}/{sch}/{vol}/domains/{folder}/ontobricks_{name}.lbug.tar.gz
+
+Legacy registries may still use ``projects/`` instead of ``domains/``;
+the path is resolved by :class:`RegistryService` at I/O time.
 """
 import io
 import os
@@ -47,12 +50,12 @@ class GraphSyncService:
         safe = GraphSyncService.sanitize_db_name(self._db_name)
         return os.path.join(self._local_base, f"{safe}.lbug")
 
-    def volume_path(self, uc_project_path: str) -> str:
+    def volume_path(self, uc_domain_path: str) -> str:
         """Build the archive path inside the registry Volume."""
         safe = GraphSyncService.sanitize_db_name(self._db_name)
-        return f"{uc_project_path}/ontobricks_{safe}.lbug.tar.gz"
+        return f"{uc_domain_path}/ontobricks_{safe}.lbug.tar.gz"
 
-    def sync_to_volume(self, uc_project_path: str) -> Tuple[bool, str]:
+    def sync_to_volume(self, uc_domain_path: str) -> Tuple[bool, str]:
         """Archive the local ``.lbug`` directory and upload it to the registry."""
         local_path = self.local_db_path
         if not os.path.exists(local_path):
@@ -60,7 +63,7 @@ class GraphSyncService:
             logger.warning(msg)
             return False, msg
 
-        vol_path = self.volume_path(uc_project_path)
+        vol_path = self.volume_path(uc_domain_path)
 
         try:
             buf = io.BytesIO()
@@ -83,9 +86,9 @@ class GraphSyncService:
             logger.error("Failed to upload graph archive: %s", msg)
         return ok, msg
 
-    def sync_from_volume(self, uc_project_path: str) -> Tuple[bool, str]:
+    def sync_from_volume(self, uc_domain_path: str) -> Tuple[bool, str]:
         """Download the graph archive from the registry and extract locally."""
-        vol_path = self.volume_path(uc_project_path)
+        vol_path = self.volume_path(uc_domain_path)
 
         ok, data, msg = self._uc.read_binary_file(vol_path)
         if not ok:
@@ -94,7 +97,7 @@ class GraphSyncService:
                     "No graph archive in registry yet (%s) — nothing to restore",
                     vol_path,
                 )
-                return True, "No graph archive in registry (new project)"
+                return True, "No graph archive in registry (new domain)"
             logger.error("Failed to download graph archive: %s", msg)
             return False, msg
 
@@ -138,29 +141,29 @@ class GraphSyncService:
         return os.path.join(local_base, f"{safe}.lbug")
 
     @staticmethod
-    def volume_archive_path(uc_project_path: str, db_name: str) -> str:
+    def volume_archive_path(uc_domain_path: str, db_name: str) -> str:
         """Build the archive path inside the registry Volume."""
         safe = GraphSyncService.sanitize_db_name(db_name)
-        return f"{uc_project_path}/ontobricks_{safe}.lbug.tar.gz"
+        return f"{uc_domain_path}/ontobricks_{safe}.lbug.tar.gz"
 
     @staticmethod
     def upload_to_volume(
         uc_service,
-        uc_project_path: str,
+        uc_domain_path: str,
         db_name: str,
         local_base: str = "/tmp/ontobricks",
     ) -> Tuple[bool, str]:
         return GraphSyncService(uc_service, db_name, local_base).sync_to_volume(
-            uc_project_path,
+            uc_domain_path,
         )
 
     @staticmethod
     def download_from_volume(
         uc_service,
-        uc_project_path: str,
+        uc_domain_path: str,
         db_name: str,
         local_base: str = "/tmp/ontobricks",
     ) -> Tuple[bool, str]:
         return GraphSyncService(uc_service, db_name, local_base).sync_from_volume(
-            uc_project_path,
+            uc_domain_path,
         )

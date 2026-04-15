@@ -8,7 +8,7 @@ import json
 
 WAREHOUSE_ID = "66e8366e84d57752"
 CATALOG = "benoit_cayla"
-SCHEMA = "customer"
+SCHEMA = "customer_large"
 VOLUME_PATH = f"/Volumes/{CATALOG}/{SCHEMA}/customer_data"
 
 TABLES = [

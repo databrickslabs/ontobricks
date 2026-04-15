@@ -138,11 +138,14 @@
         <span class="k">return</span> <span class="kc">None</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
     <span class="n">c</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">reg</span><span class="p">)</span>
-    <span class="n">folder</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">project_folder</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">folder</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">domain_folder</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">folder</span><span class="p">:</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session.project_session</span><span class="w"> </span><span class="kn">import</span> <span class="n">sanitize_project_folder</span>
-        <span class="n">folder</span> <span class="o">=</span> <span class="n">sanitize_project_folder</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">project_name</span> <span class="ow">or</span> <span class="s2">&quot;untitled_project&quot;</span><span class="p">)</span>
-    <span class="n">path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;/Volumes/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">/projects/</span><span class="si">{</span><span class="n">folder</span><span class="si">}</span><span class="s2">/documents&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session.domain_session</span><span class="w"> </span><span class="kn">import</span> <span class="n">sanitize_domain_folder</span>
+
+        <span class="n">folder</span> <span class="o">=</span> <span class="n">sanitize_domain_folder</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">domain_name</span> <span class="ow">or</span> <span class="s2">&quot;untitled_domain&quot;</span><span class="p">)</span>
+    <span class="n">version</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">domain_version</span> <span class="ow">or</span> <span class="s2">&quot;1&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.service</span><span class="w"> </span><span class="kn">import</span> <span class="n">_DOMAINS_FOLDER</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;/Volumes/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">_DOMAINS_FOLDER</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">folder</span><span class="si">}</span><span class="s2">/V</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">/documents&quot;</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;_volume_docs_path: resolved to </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">path</span>
 
@@ -154,12 +157,12 @@
 <div class="viewcode-block" id="tool_list_documents">
 <a class="viewcode-back" href="../../../api/agents.html#agents.tools.documents.tool_list_documents">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">tool_list_documents</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List documents available in the project UC volume.&quot;&quot;&quot;</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_list_documents: listing documents in project volume&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List documents available in the domain UC volume.&quot;&quot;&quot;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_list_documents: listing documents in domain volume&quot;</span><span class="p">)</span>
     <span class="n">base_path</span> <span class="o">=</span> <span class="n">_volume_docs_path</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">base_path</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_list_documents: no UC location configured — returning error&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;Project not saved to Unity Catalog&quot;</span><span class="p">})</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;Domain not saved to Unity Catalog&quot;</span><span class="p">})</span>
 
     <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ctx</span><span class="o">.</span><span class="n">host</span><span class="si">}</span><span class="s2">/api/2.0/fs/directories</span><span class="si">{</span><span class="n">base_path</span><span class="si">}</span><span class="s2">&quot;</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_list_documents: GET </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">base_path</span><span class="p">)</span>
@@ -190,7 +193,7 @@
 <div class="viewcode-block" id="tool_read_document">
 <a class="viewcode-back" href="../../../api/agents.html#agents.tools.documents.tool_read_document">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">tool_read_document</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Read the text content of a document from the project volume.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Read the text content of a document from the domain volume.&quot;&quot;&quot;</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_read_document: reading &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">filename</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;tool_read_document: called without filename parameter&quot;</span><span class="p">)</span>
@@ -199,7 +202,7 @@
     <span class="n">base_path</span> <span class="o">=</span> <span class="n">_volume_docs_path</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">base_path</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_read_document: no UC location configured — returning error&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;Project not saved to Unity Catalog&quot;</span><span class="p">})</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;Domain not saved to Unity Catalog&quot;</span><span class="p">})</span>
 
     <span class="n">file_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_path</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2">&quot;</span>
     <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ctx</span><span class="o">.</span><span class="n">host</span><span class="si">}</span><span class="s2">/api/2.0/fs/files</span><span class="si">{</span><span class="n">file_path</span><span class="si">}</span><span class="s2">&quot;</span>
@@ -253,14 +256,14 @@
 <div class="viewcode-block" id="tool_get_documents_context">
 <a class="viewcode-back" href="../../../api/agents.html#agents.tools.documents.tool_get_documents_context">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">tool_get_documents_context</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return pre-loaded document content from imported project documents.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return pre-loaded document content from imported domain documents.</span>
 <span class="sd">    Does NOT query Unity Catalog — uses documents loaded at agent start.</span>
 <span class="sd">    Limited to avoid context overflow when many/large documents are loaded.&quot;&quot;&quot;</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_get_documents_context: returning </span><span class="si">%d</span><span class="s2"> pre-loaded document(s)&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">documents</span><span class="p">))</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">documents</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span>
             <span class="s2">&quot;documents&quot;</span><span class="p">:</span> <span class="p">[],</span>
-            <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;No documents were loaded. Upload documents in Project → Documents to enrich mapping context.&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;No documents were loaded. Upload documents in Domain → Documents to enrich mapping context.&quot;</span><span class="p">,</span>
         <span class="p">})</span>
     <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="n">total_chars</span> <span class="o">=</span> <span class="mi">0</span>
@@ -294,7 +297,7 @@
     <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
         <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_documents_context&quot;</span><span class="p">,</span>
         <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="p">(</span>
-            <span class="s2">&quot;Get the project&#39;s imported documents (context loaded at agent start). &quot;</span>
+            <span class="s2">&quot;Get the domain&#39;s imported documents (context loaded at agent start). &quot;</span>
             <span class="s2">&quot;Use this to enrich domain knowledge for mapping decisions. &quot;</span>
             <span class="s2">&quot;Does NOT query Unity Catalog.&quot;</span>
         <span class="p">),</span>
@@ -308,7 +311,7 @@
         <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;list_documents&quot;</span><span class="p">,</span>
             <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="p">(</span>
-                <span class="s2">&quot;List all documents in the project&#39;s Unity Catalog volume. &quot;</span>
+                <span class="s2">&quot;List all documents in the domain&#39;s Unity Catalog volume. &quot;</span>
                 <span class="s2">&quot;Call this first to discover available documents before reading them.&quot;</span>
             <span class="p">),</span>
             <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{},</span> <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[]},</span>
@@ -319,7 +322,7 @@
         <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;read_document&quot;</span><span class="p">,</span>
             <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="p">(</span>
-                <span class="s2">&quot;Read the text content of a document from the project volume. &quot;</span>
+                <span class="s2">&quot;Read the text content of a document from the domain volume. &quot;</span>
                 <span class="s2">&quot;Supports .txt, .csv, .json, .md and similar text formats.&quot;</span>
             <span class="p">),</span>
             <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>

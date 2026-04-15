@@ -29,11 +29,14 @@ def _volume_docs_path(ctx: ToolContext) -> Optional[str]:
         return None
     from back.objects.registry import RegistryCfg
     c = RegistryCfg.from_dict(reg)
-    folder = ctx.project_folder or ""
+    folder = ctx.domain_folder or ""
     if not folder:
-        from back.objects.session.project_session import sanitize_project_folder
-        folder = sanitize_project_folder(ctx.project_name or "untitled_project")
-    path = f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/projects/{folder}/documents"
+        from back.objects.session.domain_session import sanitize_domain_folder
+
+        folder = sanitize_domain_folder(ctx.domain_name or "untitled_domain")
+    version = ctx.domain_version or "1"
+    from back.objects.registry.service import _DOMAINS_FOLDER
+    path = f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/{_DOMAINS_FOLDER}/{folder}/V{version}/documents"
     logger.debug("_volume_docs_path: resolved to %s", path)
     return path
 
@@ -43,12 +46,12 @@ def _volume_docs_path(ctx: ToolContext) -> Optional[str]:
 # =====================================================
 
 def tool_list_documents(ctx: ToolContext, **_kwargs) -> str:
-    """List documents available in the project UC volume."""
-    logger.info("tool_list_documents: listing documents in project volume")
+    """List documents available in the domain UC volume."""
+    logger.info("tool_list_documents: listing documents in domain volume")
     base_path = _volume_docs_path(ctx)
     if not base_path:
         logger.info("tool_list_documents: no UC location configured — returning error")
-        return json.dumps({"error": "Project not saved to Unity Catalog"})
+        return json.dumps({"error": "Domain not saved to Unity Catalog"})
 
     url = f"{ctx.host}/api/2.0/fs/directories{base_path}"
     logger.info("tool_list_documents: GET %s", base_path)
@@ -76,7 +79,7 @@ def tool_list_documents(ctx: ToolContext, **_kwargs) -> str:
 
 
 def tool_read_document(ctx: ToolContext, *, filename: str = "", **_kwargs) -> str:
-    """Read the text content of a document from the project volume."""
+    """Read the text content of a document from the domain volume."""
     logger.info("tool_read_document: reading '%s'", filename)
     if not filename:
         logger.warning("tool_read_document: called without filename parameter")
@@ -85,7 +88,7 @@ def tool_read_document(ctx: ToolContext, *, filename: str = "", **_kwargs) -> st
     base_path = _volume_docs_path(ctx)
     if not base_path:
         logger.info("tool_read_document: no UC location configured — returning error")
-        return json.dumps({"error": "Project not saved to Unity Catalog"})
+        return json.dumps({"error": "Domain not saved to Unity Catalog"})
 
     file_path = f"{base_path}/{filename}"
     url = f"{ctx.host}/api/2.0/fs/files{file_path}"
@@ -136,14 +139,14 @@ _MAX_TOTAL_DOC_CHARS = 150_000
 
 
 def tool_get_documents_context(ctx: ToolContext, **_kwargs) -> str:
-    """Return pre-loaded document content from imported project documents.
+    """Return pre-loaded document content from imported domain documents.
     Does NOT query Unity Catalog — uses documents loaded at agent start.
     Limited to avoid context overflow when many/large documents are loaded."""
     logger.info("tool_get_documents_context: returning %d pre-loaded document(s)", len(ctx.documents))
     if not ctx.documents:
         return json.dumps({
             "documents": [],
-            "message": "No documents were loaded. Upload documents in Project → Documents to enrich mapping context.",
+            "message": "No documents were loaded. Upload documents in Domain → Documents to enrich mapping context.",
         })
     result = []
     total_chars = 0
@@ -176,7 +179,7 @@ GET_DOCUMENTS_CONTEXT_DEF = {
     "function": {
         "name": "get_documents_context",
         "description": (
-            "Get the project's imported documents (context loaded at agent start). "
+            "Get the domain's imported documents (context loaded at agent start). "
             "Use this to enrich domain knowledge for mapping decisions. "
             "Does NOT query Unity Catalog."
         ),
@@ -190,7 +193,7 @@ DOCUMENT_TOOL_DEFINITIONS: List[dict] = [
         "function": {
             "name": "list_documents",
             "description": (
-                "List all documents in the project's Unity Catalog volume. "
+                "List all documents in the domain's Unity Catalog volume. "
                 "Call this first to discover available documents before reading them."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
@@ -201,7 +204,7 @@ DOCUMENT_TOOL_DEFINITIONS: List[dict] = [
         "function": {
             "name": "read_document",
             "description": (
-                "Read the text content of a document from the project volume. "
+                "Read the text content of a document from the domain volume. "
                 "Supports .txt, .csv, .json, .md and similar text formats."
             ),
             "parameters": {

@@ -6,14 +6,11 @@ Moved from app/frontend/settings/routes.py during the front/back split.
 from fastapi import APIRouter, Request, Depends
 
 from shared.config.settings import get_settings, Settings
-from back.core.logging import get_logger
 from back.objects.session import SessionManager, get_session_manager
 from back.core.helpers import resolve_default_base_uri, resolve_default_emoji
-from back.objects.session import get_project
+from back.objects.session import get_domain
 
 from back.services import settings as config_service
-
-logger = get_logger(__name__)
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
@@ -117,14 +114,14 @@ async def get_volumes_path(catalog: str, schema: str, session_mgr: SessionManage
 
 
 # ===========================================
-# Project Registry
+# Domain Registry
 # ===========================================
 
 
 @router.get("/registry")
 async def get_registry(session_mgr: SessionManager = Depends(get_session_manager),
                        settings: Settings = Depends(get_settings)):
-    """Return current project-registry configuration and initialization status."""
+    """Return current domain-registry configuration and initialization status."""
     return config_service.build_registry_get_payload(session_mgr, settings)
 
 
@@ -147,35 +144,60 @@ async def initialize_registry(session_mgr: SessionManager = Depends(get_session_
     return config_service.initialize_registry_result(session_mgr, settings)
 
 
-@router.get("/registry/projects")
-async def list_registry_projects(
+@router.get("/registry/domains")
+async def list_registry_domains(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings)
 ):
-    """List projects in the registry with name and description."""
-    return config_service.list_registry_projects_result(session_mgr, settings)
+    """List domains in the registry with name and description."""
+    return config_service.list_registry_domains_result(session_mgr, settings)
 
 
-@router.delete("/registry/projects/{project_name}")
-async def delete_registry_project(
-    project_name: str,
+@router.get("/registry/bridges")
+async def list_registry_bridges(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List all bridges across every domain in the registry."""
+    return config_service.list_registry_bridges_result(session_mgr, settings)
+
+
+@router.delete("/registry/domains/{domain_name}")
+async def delete_registry_domain(
+    domain_name: str,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings)
 ):
-    """Delete a project folder and all its versions from the registry."""
-    return config_service.delete_registry_project_result(project_name, session_mgr, settings)
+    """Delete a domain folder and all its versions from the registry."""
+    return config_service.delete_registry_domain_result(domain_name, session_mgr, settings)
 
 
-@router.delete("/registry/projects/{project_name}/versions/{version}")
+@router.delete("/registry/domains/{domain_name}/versions/{version}")
 async def delete_registry_version(
-    project_name: str,
+    domain_name: str,
     version: str,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings)
 ):
-    """Delete a single version file from a project in the registry."""
+    """Delete a single version file from a domain in the registry."""
     return config_service.delete_registry_version_result(
-        project_name, version, session_mgr, settings,
+        domain_name, version, session_mgr, settings,
+    )
+
+
+@router.post("/registry/domains/{domain_name}/versions/{version}/active")
+async def set_registry_version_active(
+    domain_name: str,
+    version: str,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Set or clear the Active flag on a version in the registry."""
+    data = await request.json()
+    enabled = bool(data.get("enabled", False))
+    return config_service.set_registry_version_active_result(
+        domain_name, version, enabled, session_mgr, settings,
     )
 
 
@@ -189,8 +211,8 @@ async def get_default_emoji(
     settings: Settings = Depends(get_settings),
 ):
     """Get default emoji setting (instance-global)."""
-    project = get_project(session_mgr)
-    return {'success': True, 'emoji': resolve_default_emoji(project, settings)}
+    domain = get_domain(session_mgr)
+    return {'success': True, 'emoji': resolve_default_emoji(domain, settings)}
 
 
 @router.post("/set-default-emoji")
@@ -211,8 +233,8 @@ async def get_base_uri(
     settings: Settings = Depends(get_settings),
 ):
     """Get default base URI domain (instance-global)."""
-    project = get_project(session_mgr)
-    return {'success': True, 'base_uri': resolve_default_base_uri(project, settings)}
+    domain = get_domain(session_mgr)
+    return {'success': True, 'base_uri': resolve_default_base_uri(domain, settings)}
 
 
 @router.post("/save-base-uri")
@@ -225,6 +247,27 @@ async def save_base_uri(
     data = await request.json()
     base_uri = data.get('base_uri', 'https://databricks-ontology.com')
     return config_service.save_base_uri_result(base_uri, request, session_mgr, settings)
+
+
+@router.get("/get-registry-cache-ttl")
+async def get_registry_cache_ttl(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Get registry cache TTL in seconds (instance-global)."""
+    return config_service.get_registry_cache_ttl_result(session_mgr, settings)
+
+
+@router.post("/save-registry-cache-ttl")
+async def save_registry_cache_ttl(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save registry cache TTL in seconds (admin only, stored globally)."""
+    data = await request.json()
+    ttl = int(data.get('registry_cache_ttl', 300))
+    return config_service.save_registry_cache_ttl_result(ttl, request, session_mgr, settings)
 
 
 # ===========================================
@@ -337,7 +380,7 @@ async def list_schedules(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Return all per-project build schedules."""
+    """Return all per-domain build schedules."""
     return config_service.list_schedules_result(session_mgr, settings)
 
 
@@ -347,19 +390,19 @@ async def save_schedule(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Create or update a build schedule for a project."""
+    """Create or update a build schedule for a domain."""
     data = await request.json()
     return config_service.save_schedule_result(data, session_mgr, settings)
 
 
-@router.get("/schedules/{project_name}/history")
+@router.get("/schedules/{domain_name}/history")
 async def get_schedule_history(
-    project_name: str,
+    domain_name: str,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Return the run history for a single project schedule."""
-    return config_service.get_schedule_history_result(project_name, session_mgr, settings)
+    """Return the run history for a single domain schedule."""
+    return config_service.get_schedule_history_result(domain_name, session_mgr, settings)
 
 
 @router.get("/schedules/status")
@@ -368,11 +411,11 @@ async def scheduler_status():
     return config_service.scheduler_status_payload()
 
 
-@router.delete("/schedules/{project_name}")
+@router.delete("/schedules/{domain_name}")
 async def delete_schedule(
-    project_name: str,
+    domain_name: str,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Remove a build schedule for a project."""
-    return config_service.delete_schedule_result(project_name, session_mgr, settings)
+    """Remove a build schedule for a domain."""
+    return config_service.delete_schedule_result(domain_name, session_mgr, settings)

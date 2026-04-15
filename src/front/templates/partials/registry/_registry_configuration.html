@@ -1,0 +1,66 @@
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-archive me-2"></i>Registry Location</h4>
+            <p class="text-muted mb-0 small">All domains are stored in a single Unity Catalog Volume (the registry)</p>
+        </div>
+    </div>
+
+    <div class="d-flex align-items-center gap-3 mb-3">
+        <div>
+            <label class="form-label fw-semibold small mb-1">Registry Location</label>
+            <div class="d-flex align-items-center gap-2">
+                <span id="registryLocationLabel" class="font-monospace bg-light px-3 py-2 rounded border">
+                    <i class="bi bi-hourglass-split text-muted"></i> <span class="text-muted">Loading...</span>
+                </span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnChangeRegistry" title="Change registry location">
+                    <i class="bi bi-pencil me-1"></i> Change
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-success" id="btnInitRegistry" style="display:none;" title="Create volume and /domains folder">
+                    <i class="bi bi-plus-circle me-1"></i> Initialize
+                </button>
+            </div>
+            <small class="text-muted d-block mt-1" id="registryHelp"></small>
+        </div>
+    </div>
+
+    <div id="registryConfigStatus" class="mb-3" style="display:none;"></div>
+</div>
+
+<!-- Registry Change Modal -->
+<div class="modal fade" id="registryChangeModal" tabindex="-1" aria-labelledby="registryChangeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="registryChangeModalLabel">
+                    <i class="bi bi-archive me-2"></i>Change Registry Location
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small mb-1">Catalog</label>
+                    <select class="form-select form-select-sm" id="registryCatalog">
+                        <option value="">Loading catalogs...</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small mb-1">Schema</label>
+                    <select class="form-select form-select-sm" id="registrySchema" disabled>
+                        <option value="">Select catalog first</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small mb-1">Volume</label>
+                    <input type="text" class="form-control form-control-sm" id="registryVolume" value="OntoBricksRegistry" placeholder="OntoBricksRegistry">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" id="btnApplyRegistry">
+                    <i class="bi bi-check-circle me-1"></i> Apply
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -34,7 +34,7 @@ const SidebarNav = {
         // Ensure collapse UI is set up (idempotent)
         SidebarNav._setupCollapse();
 
-        document.querySelectorAll(`${navSelector} .nav-link`).forEach(link => {
+        document.querySelectorAll(`${navSelector} .nav-link[data-section]`).forEach(link => {
             link.addEventListener('click', async function(e) {
                 e.preventDefault();
                 const section = this.dataset.section;
@@ -62,6 +62,10 @@ const SidebarNav = {
                     targetSection.classList.add('active');
                 }
                 
+                document.dispatchEvent(new CustomEvent('sidebarSectionChanged', {
+                    detail: { section, targetSection }
+                }));
+
                 if (onSectionChange && typeof onSectionChange === 'function') {
                     onSectionChange(section, targetSection);
                 }
@@ -171,13 +175,14 @@ if (typeof window !== 'undefined' && !window.SIDEBAR_NAV_MANUAL_INIT) {
             SidebarNav._setupCollapse();
             SidebarNav.init();
             
-            // Handle URL hash for direct section navigation
-            const hash = window.location.hash.substring(1);
-            if (hash) {
-                const link = document.querySelector(`.sidebar-nav .nav-link[data-section="${hash}"]`);
+            // Handle URL query param (?section=...) or hash (#...) for direct section navigation
+            const params = new URLSearchParams(window.location.search);
+            const target = params.get('section') || window.location.hash.substring(1);
+            if (target) {
+                const link = document.querySelector(`.sidebar-nav .nav-link[data-section="${target}"]`);
                 if (link) {
                     setTimeout(() => {
-                        SidebarNav.switchTo(hash);
+                        SidebarNav.switchTo(target);
                     }, 100);
                 }
             }

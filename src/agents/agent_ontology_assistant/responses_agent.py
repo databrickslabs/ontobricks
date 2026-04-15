@@ -47,7 +47,7 @@ from mlflow.types.responses import (
 from back.core.logging import get_logger
 from agents.agent_ontology_assistant.tools import TOOL_DEFINITIONS, TOOL_HANDLERS
 from agents.tools.context import ToolContext
-from agents.llm_utils import call_llm_with_retry
+from agents.engine_base import call_serving_endpoint, dispatch_tool
 
 logger = get_logger(__name__)
 
@@ -221,31 +221,22 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
         messages: list,
         tools: Optional[list],
     ) -> Optional[dict]:
-        url = f"{host.rstrip('/')}/serving-endpoints/{endpoint_name}/invocations"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        }
-        payload = {"messages": messages, "max_tokens": 2048, "temperature": 0.2}
-        if tools:
-            payload["tools"] = tools
         try:
-            resp = call_llm_with_retry(url, headers, payload, timeout=LLM_TIMEOUT)
-            return resp.json()
+            return call_serving_endpoint(
+                host, token, endpoint_name, messages,
+                tools=tools, max_tokens=2048, temperature=0.2,
+                timeout=LLM_TIMEOUT, trace_name="responses_agent:llm",
+            )
         except Exception as exc:
             logger.error("ResponsesAgent _call_llm failed: %s", exc)
             return None
 
     @mlflow.trace(span_type=SpanType.TOOL)
     def _execute_tool(self, ctx: ToolContext, tool_name: str, arguments: dict) -> str:
-        handler = TOOL_HANDLERS.get(tool_name)
-        if not handler:
-            return json.dumps({"error": f"Unknown tool: {tool_name}"})
-        try:
-            return handler(ctx, **arguments)
-        except Exception as exc:
-            logger.exception("ResponsesAgent tool '%s' failed: %s", tool_name, exc)
-            return json.dumps({"error": f"Tool execution failed: {exc}"})
+        return dispatch_tool(
+            TOOL_HANDLERS, ctx, tool_name, arguments,
+            trace_name="responses_agent:tool",
+        )
 
     @staticmethod
     def _extract_user_message(request: ResponsesAgentRequest) -> str:

@@ -6,10 +6,8 @@
 // INFORMATION SECTION - Event Handlers
 // =====================================================
 
-// Auto-generate OWL when ontology name changes (base URI is managed in Project)
-document.getElementById('ontologyName')?.addEventListener('input', function() {
-    autoGenerateOwl();
-});
+// Ontology name is readonly (derived from domain name lowercase).
+// No input listener needed — the value is set by loadOntologyFromSession.
 
 // Reset ontology
 document.getElementById('resetOntology')?.addEventListener('click', async function() {
@@ -42,12 +40,12 @@ document.getElementById('resetOntology')?.addEventListener('click', async functi
             credentials: 'same-origin'
         });
         
-        let defaultName = 'MyOntology';
+        let defaultName = 'myontology';
         try {
-            const projResp = await fetch('/project/info', { credentials: 'same-origin' });
+            const projResp = await fetch('/domain/info', { credentials: 'same-origin' });
             const projData = await projResp.json();
             if (projData.success && projData.info && projData.info.name) {
-                defaultName = projData.info.name;
+                defaultName = projData.info.name.toLowerCase();
             }
         } catch (_) { /* keep fallback */ }
 
@@ -59,7 +57,7 @@ document.getElementById('resetOntology')?.addEventListener('click', async functi
         };
         
         document.getElementById('ontologyName').value = defaultName;
-        loadBaseUriFromProject();
+        loadBaseUriFromDomain();
         
         if (typeof updateClassesList === 'function') updateClassesList();
         if (typeof updatePropertiesList === 'function') updatePropertiesList();
@@ -342,7 +340,16 @@ async function parseAndLoadOwl(content, filename) {
                 }
             });
             
-            OntologyState.config.name = onto.info.label || 'LoadedOntology';
+            // Ontology name is always derived from the domain name (lowercase)
+            let owlOntologyName = 'loadedontology';
+            try {
+                const piResp = await fetch('/domain/info', { credentials: 'same-origin' });
+                const piData = await piResp.json();
+                if (piData.success && piData.info && piData.info.name) {
+                    owlOntologyName = piData.info.name.toLowerCase();
+                }
+            } catch (_) { /* keep fallback */ }
+            OntologyState.config.name = owlOntologyName;
             OntologyState.config.base_uri = onto.info.namespace || onto.info.uri || OntologyState.baseUriDomain + '/LoadedOntology#';
             
             // Build classes with their attributes
@@ -374,16 +381,16 @@ async function parseAndLoadOwl(content, filename) {
             // Save loaded config to session immediately
             await window.saveConfigToSession();
             
-            // Also update base_uri in project (since it's managed there)
+            // Also update base_uri in domain settings (since it's managed there)
             try {
-                await fetch('/project/info', {
+                await fetch('/domain/info', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ base_uri: OntologyState.config.base_uri }),
                     credentials: 'same-origin'
                 });
             } catch (e) {
-                console.log('Could not update project base URI:', e);
+                console.log('Could not update domain base URI:', e);
             }
             
             await autoGenerateOwl();
@@ -687,7 +694,16 @@ async function parseAndLoadRdfs(content, filename) {
                 }
             });
             
-            OntologyState.config.name = onto.info.label || 'LoadedVocabulary';
+            // Ontology name is always derived from the domain name (lowercase)
+            let rdfsOntologyName = 'loadedvocabulary';
+            try {
+                const piResp2 = await fetch('/domain/info', { credentials: 'same-origin' });
+                const piData2 = await piResp2.json();
+                if (piData2.success && piData2.info && piData2.info.name) {
+                    rdfsOntologyName = piData2.info.name.toLowerCase();
+                }
+            } catch (_) { /* keep fallback */ }
+            OntologyState.config.name = rdfsOntologyName;
             OntologyState.config.base_uri = onto.info.namespace || onto.info.uri || OntologyState.baseUriDomain + '/LoadedVocabulary#';
             
             // Build classes with their attributes
@@ -719,16 +735,16 @@ async function parseAndLoadRdfs(content, filename) {
             // Save loaded config to session immediately
             await window.saveConfigToSession();
             
-            // Also update base_uri in project (since it's managed there)
+            // Also update base_uri in domain settings (since it's managed there)
             try {
-                await fetch('/project/info', {
+                await fetch('/domain/info', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ base_uri: OntologyState.config.base_uri }),
                     credentials: 'same-origin'
                 });
             } catch (e) {
-                console.log('Could not update project base URI:', e);
+                console.log('Could not update domain base URI:', e);
             }
             
             await autoGenerateOwl();

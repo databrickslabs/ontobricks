@@ -1,4 +1,4 @@
-grant_id,project_id,faculty_id,grant_name,agency,amount,start_date,end_date,status
+grant_id,domain_id,faculty_id,grant_name,agency,amount,start_date,end_date,status
 GRT00001,PRJ00001,FAC00017,DOE-ARPA-E Grant - Research in Organic Chemi,Moore Foundation,219535.95,2020-11-05,2023-02-12,pending
 GRT00002,PRJ00036,FAC00060,Sloan Foundation Grant - Research in Macroeconomic,DARPA,886678.18,2023-06-06,2027-05-12,terminated
 GRT00003,PRJ00007,FAC00015,DARPA Grant - Research in Materials Sci,NSF,1345116.13,2024-02-02,2025-12-16,active

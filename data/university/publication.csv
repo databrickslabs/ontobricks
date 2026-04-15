@@ -1,4 +1,4 @@
-publication_id,project_id,title,journal,publication_date,doi,citation_count
+publication_id,domain_id,title,journal,publication_date,doi,citation_count
 PUB00001,PRJ00002,Findings from Research in Computational Biol...,Psychological Science,2025-12-22,10.1234/uni.00001,213
 PUB00002,PRJ00011,Findings from Research in Computational Biol...,PLOS ONE,2023-02-04,10.1234/uni.00002,98
 PUB00003,PRJ00033,Findings from Research in Literary Theory - ...,Chemical Reviews,2022-02-21,10.1234/uni.00003,462

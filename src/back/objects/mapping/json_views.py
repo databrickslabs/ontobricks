@@ -1,14 +1,14 @@
-"""Read-model helpers for mapping / assignment data inside project JSON dicts."""
+"""Read-model helpers for mapping / assignment data inside domain JSON dicts."""
 from __future__ import annotations
 
 from typing import Any, Dict
 
-from back.objects.project.payload import resolve_project_slice
+from back.objects.domain.payload import resolve_domain_slice
 
 
-def get_mapping_info(project_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Get mapping details for the active project version."""
-    sl = resolve_project_slice(project_data)
+def get_mapping_info(domain_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Get mapping details for the active domain version."""
+    sl = resolve_domain_slice(domain_data)
     assignment = sl["assignment"]
 
     entities = assignment.get("entities", assignment.get("data_source_mappings", []))

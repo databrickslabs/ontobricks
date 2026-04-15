@@ -141,13 +141,13 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">GraphQLSchemaBuilder</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Build and cache Strawberry GraphQL schemas from ontology metadata.</span>
 
-<span class="sd">    A single instance manages a per-project cache so that repeated</span>
+<span class="sd">    A single instance manages a per-domain cache so that repeated</span>
 <span class="sd">    calls with the same ontology fingerprint return the same schema.</span>
 
 <span class="sd">    Usage::</span>
 
 <span class="sd">        builder = GraphQLSchemaBuilder()</span>
-<span class="sd">        result  = builder.build_for_project(classes, props, base_uri, &quot;my_project&quot;)</span>
+<span class="sd">        result  = builder.build_for_domain(classes, props, base_uri, &quot;my_domain&quot;)</span>
 <span class="sd">        if result:</span>
 <span class="sd">            schema, metadata = result</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -159,14 +159,14 @@
     <span class="c1"># Public API</span>
     <span class="c1"># ------------------------------------------------------------------</span>
 
-<div class="viewcode-block" id="GraphQLSchemaBuilder.build_for_project">
-<a class="viewcode-back" href="../../../../api/app.core.graphql.html#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.build_for_project">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_for_project</span><span class="p">(</span>
+<div class="viewcode-block" id="GraphQLSchemaBuilder.build_for_domain">
+<a class="viewcode-back" href="../../../../api/app.core.graphql.html#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.build_for_domain">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_for_domain</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">ontology_classes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
         <span class="n">ontology_properties</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
         <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">project_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">strawberry</span><span class="o">.</span><span class="n">Schema</span><span class="p">,</span> <span class="n">SchemaMetadata</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Build (or return cached) a Strawberry Schema from ontology metadata.</span>
 
@@ -174,24 +174,24 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">h</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ontology_hash</span><span class="p">(</span><span class="n">ontology_classes</span><span class="p">,</span> <span class="n">ontology_properties</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">project_name</span> <span class="ow">and</span> <span class="n">project_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="p">:</span>
-            <span class="n">cached_schema</span><span class="p">,</span> <span class="n">cached_hash</span><span class="p">,</span> <span class="n">cached_meta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="p">[</span><span class="n">project_name</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">domain_name</span> <span class="ow">and</span> <span class="n">domain_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="p">:</span>
+            <span class="n">cached_schema</span><span class="p">,</span> <span class="n">cached_hash</span><span class="p">,</span> <span class="n">cached_meta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="p">[</span><span class="n">domain_name</span><span class="p">]</span>
             <span class="k">if</span> <span class="n">cached_hash</span> <span class="o">==</span> <span class="n">h</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;GraphQL schema cache hit for project &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">project_name</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;GraphQL schema cache hit for domain &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
                 <span class="k">return</span> <span class="n">cached_schema</span><span class="p">,</span> <span class="n">cached_meta</span>
 
         <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build</span><span class="p">(</span><span class="n">ontology_classes</span><span class="p">,</span> <span class="n">ontology_properties</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">result</span> <span class="ow">and</span> <span class="n">project_name</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">result</span> <span class="ow">and</span> <span class="n">domain_name</span><span class="p">:</span>
             <span class="n">schema</span><span class="p">,</span> <span class="n">meta</span> <span class="o">=</span> <span class="n">result</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="p">[</span><span class="n">project_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">h</span><span class="p">,</span> <span class="n">meta</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="p">[</span><span class="n">domain_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">h</span><span class="p">,</span> <span class="n">meta</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">result</span></div>
 
 
 <div class="viewcode-block" id="GraphQLSchemaBuilder.invalidate_cache">
 <a class="viewcode-back" href="../../../../api/app.core.graphql.html#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.invalidate_cache">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">invalidate_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">project_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Remove a project&#39;s cached schema.&quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">project_name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span></div>
+    <span class="k">def</span><span class="w"> </span><span class="nf">invalidate_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Remove a domain&#39;s cached schema.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">domain_name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span></div>
 
 
     <span class="c1"># ------------------------------------------------------------------</span>
@@ -547,26 +547,26 @@
 <span class="n">_default_builder</span> <span class="o">=</span> <span class="n">GraphQLSchemaBuilder</span><span class="p">()</span>
 
 
-<div class="viewcode-block" id="build_schema_for_project">
-<a class="viewcode-back" href="../../../../api/app.core.graphql.html#back.core.graphql.GraphQLSchemaBuilder.build_schema_for_project">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">build_schema_for_project</span><span class="p">(</span>
+<div class="viewcode-block" id="build_schema_for_domain">
+<a class="viewcode-back" href="../../../../api/app.core.graphql.html#back.core.graphql.GraphQLSchemaBuilder.build_schema_for_domain">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_schema_for_domain</span><span class="p">(</span>
     <span class="n">ontology_classes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
     <span class="n">ontology_properties</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
     <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">project_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">strawberry</span><span class="o">.</span><span class="n">Schema</span><span class="p">,</span> <span class="n">SchemaMetadata</span><span class="p">]]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Module-level delegate — uses the default ``GraphQLSchemaBuilder``.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">_default_builder</span><span class="o">.</span><span class="n">build_for_project</span><span class="p">(</span>
-        <span class="n">ontology_classes</span><span class="p">,</span> <span class="n">ontology_properties</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">project_name</span><span class="p">,</span>
+    <span class="k">return</span> <span class="n">_default_builder</span><span class="o">.</span><span class="n">build_for_domain</span><span class="p">(</span>
+        <span class="n">ontology_classes</span><span class="p">,</span> <span class="n">ontology_properties</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="invalidate_cache">
 <a class="viewcode-back" href="../../../../api/app.core.graphql.html#back.core.graphql.GraphQLSchemaBuilder.invalidate_cache">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">invalidate_cache</span><span class="p">(</span><span class="n">project_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">invalidate_cache</span><span class="p">(</span><span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Module-level delegate — invalidates on the default builder.&quot;&quot;&quot;</span>
-    <span class="n">_default_builder</span><span class="o">.</span><span class="n">invalidate_cache</span><span class="p">(</span><span class="n">project_name</span><span class="p">)</span></div>
+    <span class="n">_default_builder</span><span class="o">.</span><span class="n">invalidate_cache</span><span class="p">(</span><span class="n">domain_name</span><span class="p">)</span></div>
 
 
 

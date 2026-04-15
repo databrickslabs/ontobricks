@@ -5,12 +5,12 @@ Stateless API endpoints for external integrations.
 All endpoints accept authentication via headers or request body.
 """
 from fastapi import APIRouter, Header
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 from typing import Optional, Any
 
 from back.core.errors import ValidationError, NotFoundError
 from shared.config.constants import APP_VERSION
-from back.objects.project.payload import resolve_project_slice
+from back.objects.domain.payload import resolve_domain_slice
 from api import service
 
 router = APIRouter()
@@ -45,7 +45,7 @@ class CredentialsModel(BaseModel):
 
 
 class UCLocationModel(CredentialsModel):
-    """Unity Catalog location model for accessing project files."""
+    """Unity Catalog location model for accessing domain JSON files."""
     catalog: str = Field(..., description="Unity Catalog name", examples=["main"])
     schema_name: str = Field(
         ..., 
@@ -69,16 +69,19 @@ class UCLocationModel(CredentialsModel):
     }
 
 
-class ProjectPathModel(CredentialsModel):
-    """Model with Unity Catalog project file path."""
-    project_path: str = Field(
-        ..., 
-        description="Full path to the project JSON file in Unity Catalog volume",
-        examples=["/Volumes/main/ontobricks/projects/my_project.json"]
+class DomainPathModel(CredentialsModel):
+    """Model with Unity Catalog domain JSON file path."""
+    model_config = {"populate_by_name": True}
+
+    domain_path: str = Field(
+        ...,
+        description="Full path to the domain JSON file in Unity Catalog volume",
+        validation_alias=AliasChoices("domain_path", "project_path"),
+        examples=["/Volumes/main/ontobricks/domains/my_domain.json"],
     )
 
 
-class QueryModel(ProjectPathModel):
+class QueryModel(DomainPathModel):
     """SPARQL query execution request model."""
     query: str = Field(
         ..., 
@@ -159,125 +162,125 @@ async def api_health():
 
 
 # ===========================================
-# Project Endpoints
+# Domain Endpoints
 # ===========================================
 
-@router.post("/projects/list", response_model=SuccessResponse, summary="List Projects")
-async def list_projects(
+@router.post("/domains/list", response_model=SuccessResponse, summary="List Domains")
+async def list_domains(
     data: UCLocationModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host", description="Databricks workspace URL"),
     x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token", description="Authentication token")
 ):
     """
-    List all OntoBricks projects in a Unity Catalog volume.
-    
-    Returns a list of `.json` project files found in the specified volume location.
-    
+    List all OntoBricks domain JSON files in a Unity Catalog volume.
+
+    Returns a list of `.json` domain files found in the specified volume location.
+
     **Authentication** can be provided via:
     - HTTP Headers: `X-Databricks-Host`, `X-Databricks-Token`
     - Request body: `databricks_host`, `databricks_token`
-    
+
     **Returns:**
-    - **projects**: List of project file paths
-    - **count**: Number of projects found
+    - **domains**: List of domain file entries
+    - **count**: Number of domains found
     """
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
 
-    projects = service.list_projects_from_uc(
+    domains = service.list_domains_from_uc(
         data.catalog, data.schema_name, data.volume, host, token,
     )
 
     return SuccessResponse(
-        data={"projects": projects, "count": len(projects)},
-        message=f"Found {len(projects)} projects",
+        data={"domains": domains, "count": len(domains)},
+        message=f"Found {len(domains)} domains",
     )
 
 
-@router.post("/project/info", response_model=SuccessResponse)
-async def get_project_info(
-    data: ProjectPathModel,
+@router.post("/domain/info", response_model=SuccessResponse)
+async def get_domain_info(
+    data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
     x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
 ):
-    """Get project information and statistics."""
+    """Get domain information and statistics."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
 
-    project_data = service.load_project_from_uc(data.project_path, host, token)
-    info = service.get_project_info(project_data)
+    domain_data = service.load_domain_from_uc(data.domain_path, host, token)
+    info = service.get_domain_info(domain_data)
     return SuccessResponse(data=info)
 
 
-@router.post("/project/ontology", response_model=SuccessResponse)
+@router.post("/domain/ontology", response_model=SuccessResponse)
 async def get_ontology(
-    data: ProjectPathModel,
+    data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
     x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
 ):
     """Get ontology details (classes and properties)."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
 
-    project_data = service.load_project_from_uc(data.project_path, host, token)
-    ontology_info = service.get_ontology_info(project_data)
+    domain_data = service.load_domain_from_uc(data.domain_path, host, token)
+    ontology_info = service.get_ontology_info(domain_data)
     return SuccessResponse(data=ontology_info)
 
 
-@router.post("/project/ontology/classes", response_model=SuccessResponse)
+@router.post("/domain/ontology/classes", response_model=SuccessResponse)
 async def get_ontology_classes(
-    data: ProjectPathModel,
+    data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
     x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
 ):
     """Get list of ontology classes with their URIs."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
 
-    project_data = service.load_project_from_uc(data.project_path, host, token)
-    classes = service.get_ontology_classes(project_data)
+    domain_data = service.load_domain_from_uc(data.domain_path, host, token)
+    classes = service.get_ontology_classes(domain_data)
     return SuccessResponse(data={"classes": classes, "count": len(classes)})
 
 
-@router.post("/project/ontology/properties", response_model=SuccessResponse)
+@router.post("/domain/ontology/properties", response_model=SuccessResponse)
 async def get_ontology_properties(
-    data: ProjectPathModel,
+    data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
     x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
 ):
     """Get list of ontology properties (relationships) with their URIs."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
 
-    project_data = service.load_project_from_uc(data.project_path, host, token)
-    properties = service.get_ontology_properties(project_data)
+    domain_data = service.load_domain_from_uc(data.domain_path, host, token)
+    properties = service.get_ontology_properties(domain_data)
     return SuccessResponse(data={"properties": properties, "count": len(properties)})
 
 
-@router.post("/project/mappings", response_model=SuccessResponse)
+@router.post("/domain/mappings", response_model=SuccessResponse)
 async def get_mappings(
-    data: ProjectPathModel,
+    data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
     x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
 ):
     """Get mapping details (entity and relationship mappings)."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
 
-    project_data = service.load_project_from_uc(data.project_path, host, token)
-    mapping_info = service.get_mapping_info(project_data)
+    domain_data = service.load_domain_from_uc(data.domain_path, host, token)
+    mapping_info = service.get_mapping_info(domain_data)
     return SuccessResponse(data=mapping_info)
 
 
-@router.post("/project/r2rml", response_model=SuccessResponse)
+@router.post("/domain/r2rml", response_model=SuccessResponse)
 async def get_r2rml(
-    data: ProjectPathModel,
+    data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
     x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
 ):
-    """Get the R2RML mapping content from a project."""
+    """Get the R2RML mapping content from a domain."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
 
-    project_data = service.load_project_from_uc(data.project_path, host, token)
-    sl = resolve_project_slice(project_data)
+    domain_data = service.load_domain_from_uc(data.domain_path, host, token)
+    sl = resolve_domain_slice(domain_data)
     r2rml_content = sl["assignment"].get("r2rml_output", "")
 
     if not r2rml_content:
-        raise NotFoundError("No R2RML mapping found in project. Generate R2RML first.")
+        raise NotFoundError("No R2RML mapping found in domain. Generate R2RML first.")
 
     return SuccessResponse(data={"r2rml": r2rml_content, "format": "turtle"})
 
@@ -293,7 +296,7 @@ async def execute_query(
     x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token", description="Authentication token")
 ):
     """
-    Execute a SPARQL query against a project's mapped data.
+    Execute a SPARQL query against a domain's mapped data.
 
     The query is translated to SQL using R2RML mappings and executed against
     Databricks.
@@ -323,8 +326,8 @@ async def execute_query(
 
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
 
-    project_data = service.load_project_from_uc(data.project_path, host, token)
-    result = service.execute_sparql_query(project_data, data.query, data.limit, data.engine)
+    domain_data = service.load_domain_from_uc(data.domain_path, host, token)
+    result = service.execute_sparql_query(domain_data, data.query, data.limit, data.engine)
 
     return SuccessResponse(data={
         "results": result.get('results', []),
@@ -347,13 +350,13 @@ async def validate_query(data: ValidateQueryModel):
 
 @router.post("/query/samples", response_model=SuccessResponse)
 async def get_sample_queries(
-    data: ProjectPathModel,
+    data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
     x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
 ):
-    """Get sample SPARQL queries for a project."""
+    """Get sample SPARQL queries for a domain."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
 
-    project_data = service.load_project_from_uc(data.project_path, host, token)
-    samples = service.generate_sample_queries(project_data)
+    domain_data = service.load_domain_from_uc(data.domain_path, host, token)
+    samples = service.generate_sample_queries(domain_data)
     return SuccessResponse(data={"queries": samples, "count": len(samples)})

@@ -1,14 +1,14 @@
 """GraphQL API endpoint for OntoBricks.
 
-Mounts a per-project GraphQL endpoint that auto-generates a typed
-schema from the project's ontology and resolves queries against the
+Mounts a per-domain GraphQL endpoint that auto-generates a typed
+schema from the domain's ontology and resolves queries against the
 triple store.
 
 Routes (mounted at ``/graphql`` on the main app and at the external prefix from ``api.constants.EXTERNAL_GRAPHQL_PUBLIC_PREFIX``):
 
-    GET  …/graphql              — list projects with GraphQL available
-    GET  …/graphql/{project}    — GraphiQL playground
-    POST …/graphql/{project}    — execute a GraphQL query
+    GET  …/graphql              — list domains with GraphQL available
+    GET  …/graphql/{domain_name}    — GraphiQL playground
+    POST …/graphql/{domain_name}    — execute a GraphQL query
 """
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 
 from api.constants import EXTERNAL_GRAPHQL_PUBLIC_PREFIX
 from shared.config.settings import get_settings, Settings
-from back.objects.session import SessionManager, get_session_manager, get_project
+from back.objects.session import SessionManager, get_session_manager, get_domain
 from back.core.graphql import DEFAULT_DEPTH, MAX_DEPTH
 from back.core.logging import get_logger
 from back.core.errors import ValidationError, NotFoundError, InfrastructureError
@@ -44,14 +44,14 @@ class GraphQLRequest(BaseModel):
     depth: Optional[int] = Field(None, description="Relationship traversal depth (1–5, default 2)")
 
 
-class GraphQLProjectInfo(BaseModel):
+class GraphQLDomainInfo(BaseModel):
     name: str
     description: str = ""
 
 
-class GraphQLProjectsResponse(BaseModel):
+class GraphQLDomainsResponse(BaseModel):
     success: bool
-    projects: List[GraphQLProjectInfo] = []
+    domains: List[GraphQLDomainInfo] = []
     message: Optional[str] = None
 
 
@@ -60,76 +60,86 @@ class GraphQLProjectsResponse(BaseModel):
 # ------------------------------------------------------------------
 
 
-def _load_project_from_registry(project_name, session_mgr, settings):
-    """Load a project by name from the registry and return a ProjectSession."""
-    project = get_project(session_mgr)
+def _load_domain_from_registry(domain_name, session_mgr, settings):
+    """Load a domain by name from the registry and return a DomainSession."""
+    domain = get_domain(session_mgr)
 
-    svc = RegistryService.from_context(project, settings)
+    svc = RegistryService.from_context(domain, settings)
     if not svc.cfg.is_configured:
         raise ValidationError("Registry not configured")
 
     # If the user already has this registry folder open at a chosen version,
-    # keep it. Otherwise GraphQL would call load_mcp_project_data(), which
+    # keep it. Otherwise GraphQL would call load_mcp_domain_data(), which
     # picks the newest version with mcp_enabled=True — often an older v3 while
     # the user is on v4 — and would open the wrong LadybugDB file (.lbug) for
     # subsequent Digital Twin / data-quality calls.
-    session_folder = (getattr(project, "project_folder", None) or "").strip()
-    session_ver = (getattr(project, "current_version", None) or "").strip()
-    if session_folder == project_name and session_ver:
+    session_folder = (getattr(domain, "domain_folder", None) or "").strip()
+    session_ver = (getattr(domain, "current_version", None) or "").strip()
+    if session_folder == domain_name and session_ver:
         ok_session, data_session, msg_session = svc.read_version(
-            project_name, session_ver
+            domain_name, session_ver
         )
         if ok_session:
-            project.clear_generated_content()
-            project.import_from_file(data_session, version=session_ver)
-            project.project_folder = project_name
-            project.save()
+            domain.clear_generated_content()
+            domain.import_from_file(data_session, version=session_ver)
+            domain.domain_folder = domain_name
+            domain.save()
             logger.info(
-                "GraphQL: using session project '%s' at version %s",
-                project_name,
+                "GraphQL: using session domain '%s' at version %s",
+                domain_name,
                 session_ver,
             )
-            _ensure_ladybug_synced(project, svc.uc)
-            return project
+            _ensure_ladybug_synced(domain, svc.uc)
+            return domain
         logger.warning(
             "GraphQL: cannot read session version %s for '%s' (%s) — "
             "falling back to MCP-enabled / latest version",
             session_ver,
-            project_name,
+            domain_name,
             msg_session,
         )
 
-    ok, data, version, err = svc.load_mcp_project_data(project_name)
+    ok, data, version, err = svc.load_mcp_domain_data(domain_name)
     if not ok:
         if "not found" in err.lower() or "no versions" in err.lower():
             raise NotFoundError(err)
         raise InfrastructureError(err)
 
-    project.clear_generated_content()
-    project.import_from_file(data, version=version)
-    project.project_folder = project_name
-    project.save()
+    domain.clear_generated_content()
+    domain.import_from_file(data, version=version)
+    domain.domain_folder = domain_name
+    domain.save()
 
     logger.info(
-        "GraphQL: loaded project '%s' version %s from registry",
-        project_name, version,
+        "GraphQL: loaded domain '%s' version %s from registry",
+        domain_name, version,
     )
 
-    _ensure_ladybug_synced(project, svc.uc)
+    _ensure_ladybug_synced(domain, svc.uc)
 
-    return project
+    return domain
 
 
-def _ensure_ladybug_synced(project, uc_service):
-    """Pull LadybugDB data from UC Volume to local disk if not already present."""
+def _ensure_ladybug_synced(domain, uc_service):
+    """Pull LadybugDB data from UC Volume to local disk if not already present.
+
+    Skips the download when a local ``.lbug`` file already exists so that
+    an in-progress build is never overwritten.
+    """
     try:
+        import os
+        from back.core.helpers import effective_uc_version_path, resolve_ladybug_local_path
         from back.core.triplestore.ladybugdb import sync_from_volume
 
-        uc_path = project.uc_project_path
+        uc_path = effective_uc_version_path(domain)
         if not uc_path:
-            logger.warning("GraphQL LadybugDB: no UC project path — skipping sync")
+            logger.warning("GraphQL LadybugDB: no UC domain path — skipping sync")
             return
-        db_name = effective_graph_name(project)
+        db_name = effective_graph_name(domain)
+        local = resolve_ladybug_local_path(domain, db_name)
+        if os.path.exists(local):
+            logger.debug("GraphQL LadybugDB: local file exists (%s) — skipping sync", local)
+            return
         ok, msg = sync_from_volume(uc_service, uc_path, db_name)
         if ok:
             logger.info("GraphQL LadybugDB: synced '%s' from volume", db_name)
@@ -139,27 +149,27 @@ def _ensure_ladybug_synced(project, uc_service):
         logger.warning("GraphQL LadybugDB: sync error — %s", e)
 
 
-def _get_schema_and_context(project, settings):
+def _get_schema_and_context(domain, settings):
     """Build (or retrieve cached) GraphQL schema and execution context."""
-    from back.core.graphql import build_schema_for_project
+    from back.core.graphql import build_schema_for_domain
 
-    ontology = project.ontology or {}
+    ontology = domain.ontology or {}
     classes = ontology.get("classes", [])
     properties_list = ontology.get("properties", [])
     base_uri = ontology.get("base_uri", DEFAULT_BASE_URI)
-    project_name = (project.info or {}).get("name", "")
+    display_name = (domain.info or {}).get("name", "")
 
-    result = build_schema_for_project(classes, properties_list, base_uri, project_name)
+    result = build_schema_for_domain(classes, properties_list, base_uri, display_name)
     if not result:
         raise ValidationError("Could not generate GraphQL schema — ontology may be empty.")
 
     schema, metadata = result
 
-    store = get_triplestore(project, settings, backend="graph")
+    store = get_triplestore(domain, settings, backend="graph")
     if not store:
         raise InfrastructureError("Graph backend (LadybugDB) not configured or unreachable.")
 
-    table = effective_graph_name(project)
+    table = effective_graph_name(domain)
 
     logger.info(
         "GraphQL context: table=%s, store=%s, classes=%d",
@@ -182,28 +192,28 @@ def _get_schema_and_context(project, settings):
 
 @router.get(
     "",
-    response_model=GraphQLProjectsResponse,
-    summary="List GraphQL-enabled projects",
-    description="Returns projects that have both MCP/API enabled and a "
+    response_model=GraphQLDomainsResponse,
+    summary="List GraphQL-enabled domains",
+    description="Returns domains that have both MCP/API enabled and a "
     "populated ontology — prerequisites for a GraphQL schema.",
 )
-async def graphql_list_projects(
+async def graphql_list_domains(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    project = get_project(session_mgr)
-    svc = RegistryService.from_context(project, settings)
+    domain = get_domain(session_mgr)
+    svc = RegistryService.from_context(domain, settings)
     if not svc.cfg.is_configured:
-        return GraphQLProjectsResponse(
+        return GraphQLDomainsResponse(
             success=False, message="Registry not configured"
         )
 
-    ok, items, msg = svc.list_mcp_projects(require_ontology=True)
+    ok, items, msg = svc.list_mcp_domains(require_ontology=True)
     if not ok:
-        return GraphQLProjectsResponse(success=False, message=msg)
-    return GraphQLProjectsResponse(
+        return GraphQLDomainsResponse(success=False, message=msg)
+    return GraphQLDomainsResponse(
         success=True,
-        projects=[GraphQLProjectInfo(name=p["name"], description=p["description"]) for p in items],
+        domains=[GraphQLDomainInfo(name=p["name"], description=p["description"]) for p in items],
     )
 
 
@@ -220,50 +230,50 @@ async def graphql_depth_settings():
 
 
 @router.get(
-    "/{project_name}",
+    "/{domain_name}",
     response_class=HTMLResponse,
     summary="GraphiQL playground",
-    description="Interactive GraphQL playground for a project's knowledge graph.",
+    description="Interactive GraphQL playground for a domain's knowledge graph.",
 )
 async def graphql_playground(
     request: Request,
-    project_name: str,
+    domain_name: str,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    project = _load_project_from_registry(project_name, session_mgr, settings)
-    _get_schema_and_context(project, settings)
+    domain = _load_domain_from_registry(domain_name, session_mgr, settings)
+    _get_schema_and_context(domain, settings)
 
-    display_name = (project.info or {}).get("name", project_name)
+    display_name = (domain.info or {}).get("name", domain_name)
     api_prefix = (
         EXTERNAL_GRAPHQL_PUBLIC_PREFIX
         if request.url.path.startswith(EXTERNAL_GRAPHQL_PUBLIC_PREFIX)
         else "/graphql"
     )
-    return HTMLResponse(_graphiql_html(project_name, display_name, api_prefix))
+    return HTMLResponse(_graphiql_html(domain_name, display_name, api_prefix))
 
 
 @router.post(
-    "/{project_name}",
+    "/{domain_name}",
     summary="Execute GraphQL query",
-    description="Execute a GraphQL query against a project's knowledge graph. "
-    "The schema is auto-generated from the project's ontology.",
+    description="Execute a GraphQL query against a domain's knowledge graph. "
+    "The schema is auto-generated from the domain's ontology.",
 )
 async def graphql_execute(
-    project_name: str,
+    domain_name: str,
     body: GraphQLRequest,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    project = _load_project_from_registry(project_name, session_mgr, settings)
-    schema, context = _get_schema_and_context(project, settings)
+    domain = _load_domain_from_registry(domain_name, session_mgr, settings)
+    schema, context = _get_schema_and_context(domain, settings)
 
     if body.depth is not None:
         context["depth"] = min(max(body.depth, 1), MAX_DEPTH)
 
     logger.debug(
         "GraphQL query for '%s' (depth=%s): %s",
-        project_name, context.get("depth", DEFAULT_DEPTH), body.query[:200],
+        domain_name, context.get("depth", DEFAULT_DEPTH), body.query[:200],
     )
 
     result = schema.execute_sync(
@@ -287,17 +297,17 @@ async def graphql_execute(
 
 
 @router.get(
-    "/{project_name}/schema",
+    "/{domain_name}/schema",
     summary="Introspect GraphQL schema (SDL)",
     description="Return the auto-generated GraphQL schema in SDL format.",
 )
 async def graphql_sdl(
-    project_name: str,
+    domain_name: str,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    project = _load_project_from_registry(project_name, session_mgr, settings)
-    schema, _ = _get_schema_and_context(project, settings)
+    domain = _load_domain_from_registry(domain_name, session_mgr, settings)
+    schema, _ = _get_schema_and_context(domain, settings)
 
     from strawberry.printer import print_schema
 
@@ -306,30 +316,30 @@ async def graphql_sdl(
 
 
 @router.get(
-    "/{project_name}/debug",
+    "/{domain_name}/debug",
     summary="Debug predicate mapping",
     description="Compare triple-store predicates with GraphQL schema expectations. "
     "Also returns subject counts and optional search diagnostics.",
 )
 async def graphql_debug(
-    project_name: str,
+    domain_name: str,
     type_name: str = Query(None, description="Type to inspect (e.g. Customer)"),
     search: str = Query(None, description="Test search string (e.g. Martinez)"),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    project = _load_project_from_registry(project_name, session_mgr, settings)
-    schema, context = _get_schema_and_context(project, settings)
+    domain = _load_domain_from_registry(domain_name, session_mgr, settings)
+    schema, context = _get_schema_and_context(domain, settings)
 
-    from back.core.graphql import build_schema_for_project
+    from back.core.graphql import build_schema_for_domain
 
-    ontology = project.ontology or {}
+    ontology = domain.ontology or {}
     classes = ontology.get("classes", [])
     base_uri = ontology.get("base_uri", "")
 
-    result = build_schema_for_project(
+    result = build_schema_for_domain(
         classes, ontology.get("properties", []), base_uri,
-        (project.info or {}).get("name", ""),
+        (domain.info or {}).get("name", ""),
     )
     if not result:
         return JSONResponse({"error": "no schema"})
@@ -378,7 +388,7 @@ async def graphql_debug(
 # ------------------------------------------------------------------
 
 
-def _graphiql_html(project_name: str, display_name: str, graphql_api_prefix: str) -> str:
+def _graphiql_html(domain_name: str, display_name: str, graphql_api_prefix: str) -> str:
     """*graphql_api_prefix* is ``/graphql`` or ``EXTERNAL_GRAPHQL_PUBLIC_PREFIX`` so GraphiQL POSTs to the same mount."""
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -428,7 +438,7 @@ def _graphiql_html(project_name: str, display_name: str, graphql_api_prefix: str
       function fetcher(params) {{
         var depth = parseInt(sel.value || dflt, 10);
         var body = Object.assign({{}}, params, {{ depth: depth }});
-        return fetch('{graphql_api_prefix}/{project_name}', {{
+        return fetch('{graphql_api_prefix}/{domain_name}', {{
           method: 'POST',
           headers: {{ 'Content-Type': 'application/json' }},
           credentials: 'same-origin',

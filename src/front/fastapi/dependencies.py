@@ -32,7 +32,7 @@ templates = Jinja2Templates(directory=_template_dir)
 _partials_dir = os.path.join(_template_dir, "partials")
 if os.path.isdir(_partials_dir) and _partials_dir not in templates.env.loader.searchpath:
     templates.env.loader.searchpath.append(_partials_dir)
-    for _sub in ("layout", "ontology", "mapping", "dtwin", "project"):
+    for _sub in ("layout", "ontology", "mapping", "dtwin", "domain", "registry"):
         _sub_dir = os.path.join(_partials_dir, _sub)
         if os.path.isdir(_sub_dir) and _sub_dir not in templates.env.loader.searchpath:
             templates.env.loader.searchpath.append(_sub_dir)
@@ -55,7 +55,7 @@ def url_for(context: dict, endpoint: str, **values) -> str:
     
     if endpoint == 'static':
         filename = values.get('filename', '')
-        return f"/static/{filename}?v={_asset_version}"
+        return f"/static/{filename}"
     
     # For other endpoints, try to use request.url_for
     try:
@@ -117,5 +117,18 @@ templates.env.filters['random'] = random_filter
 
 
 # ===========================================
-# Configuration Dependencies
+# Shared template-context helpers
 # ===========================================
+
+def triplestore_page_context(domain_session) -> dict:
+    """Build the triplestore-related template context shared by dtwin and domain pages.
+
+    Returns dict with ``view_table``, ``graph_name``, and ``triplestore_cache``.
+    """
+    from back.core.helpers import effective_view_table, effective_graph_name
+
+    return {
+        "view_table": effective_view_table(domain_session),
+        "graph_name": effective_graph_name(domain_session),
+        "triplestore_cache": (domain_session.triplestore or {}).get("stats", {}),
+    }

@@ -7,12 +7,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let currentWarehouseId = null;
     let warehouseLocked = false;
-    let registryLocked = false;
+
+    function escapeHtmlSettings(str) { return escapeHtml(str); }
 
     loadCurrentConfig();
-    loadRegistryConfig();
     loadBaseUri();
     loadCurrentDefaultEmoji();
+    loadRegistryCacheTtl();
 
     // =====================================================================
     //  DATABRICKS TAB
@@ -148,406 +149,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // =====================================================================
-    //  REGISTRY TAB
-    // =====================================================================
-
-    let registryConfigured = false;
-    let registryCfg = { catalog: '', schema: '', volume: 'OntoBricksRegistry', configured: false };
-
-    async function loadRegistryConfig() {
-        const label = document.getElementById('registryLocationLabel');
-
-        try {
-            const resp = await fetch('/settings/registry', { credentials: 'same-origin' });
-            registryCfg = await resp.json();
-            registryLocked = !!registryCfg.registry_locked;
-
-            updateRegistryLabel();
-            updateRegistryStatus(registryCfg);
-
-            if (registryLocked) {
-                const btnChange = document.getElementById('btnChangeRegistry');
-                if (btnChange) btnChange.disabled = true;
-                const regHelp = document.getElementById('registryHelp');
-                if (regHelp) regHelp.innerHTML = '<i class="bi bi-lock-fill text-muted me-1"></i> Configured via Databricks App resource';
-
-                const btnInit = document.getElementById('btnInitRegistry');
-                if (btnInit) {
-                    if (registryCfg.configured) {
-                        btnInit.style.display = 'none';
-                    } else {
-                        btnInit.style.display = '';
-                        btnInit.disabled = false;
-                    }
-                }
-            }
-        } catch (e) {
-            console.error('Error loading registry config:', e);
-            label.innerHTML = '<i class="bi bi-x-circle text-danger"></i> <span class="text-danger">Error loading config</span>';
-        }
-    }
-
-    function updateRegistryLabel() {
-        const label = document.getElementById('registryLocationLabel');
-        const initBtn = document.getElementById('btnInitRegistry');
-
-        if (registryCfg.catalog && registryCfg.schema) {
-            const path = registryCfg.catalog + '.' + registryCfg.schema + '.' + (registryCfg.volume || 'OntoBricksRegistry');
-            label.innerHTML = '<i class="bi bi-archive text-success me-1"></i> <strong>' + escapeHtmlSettings(path) + '</strong>';
-            initBtn.style.display = registryCfg.configured ? 'none' : '';
-        } else {
-            label.innerHTML = '<i class="bi bi-exclamation-triangle text-warning me-1"></i> <span class="text-muted">Not configured</span>';
-            initBtn.style.display = 'none';
-        }
-    }
-
-    function updateRegistryStatus(cfg) {
-        const div = document.getElementById('registryStatus');
-        registryConfigured = !!cfg.configured;
-
-        if (cfg.configured) {
-            div.style.display = 'none';
-            loadRegistryProjects();
-        } else if (cfg.catalog && cfg.schema) {
-            div.style.display = 'block';
-            const msg = registryLocked
-                ? 'Registry volume is set via Databricks App resource but not yet initialized. Click <strong>Initialize</strong> to set up the registry.'
-                : 'Registry location set but not initialized yet. Click <strong>Initialize</strong> to create the volume.';
-            div.innerHTML = '<div class="alert alert-warning small mb-0">' +
-                '<i class="bi bi-exclamation-triangle me-1"></i> ' + msg + '</div>';
-            const section = document.getElementById('registryProjectsSection');
-            if (section) section.style.display = 'none';
-        } else {
-            div.style.display = 'block';
-            div.innerHTML = '<div class="alert alert-warning small mb-0">' +
-                '<i class="bi bi-exclamation-triangle me-1"></i> Registry not configured. Click <strong>Change</strong> to select a catalog, schema and volume.</div>';
-            const section = document.getElementById('registryProjectsSection');
-            if (section) section.style.display = 'none';
-        }
-    }
-
-    // --- Change modal: lazy-load catalogs/schemas only when opened ---
-
-    document.getElementById('btnChangeRegistry')?.addEventListener('click', () => {
-        const modal = new bootstrap.Modal(document.getElementById('registryChangeModal'));
-        modal.show();
-        loadModalCatalogs();
-    });
-
-    async function loadModalCatalogs() {
-        const catSelect = document.getElementById('registryCatalog');
-        const schSelect = document.getElementById('registrySchema');
-
-        catSelect.disabled = true;
-        catSelect.innerHTML = '<option value="">Loading catalogs...</option>';
-        schSelect.disabled = true;
-        schSelect.innerHTML = '<option value="">Select catalog first</option>';
-
-        try {
-            const resp = await fetch('/settings/catalogs', { credentials: 'same-origin' });
-            const data = await resp.json();
-
-            catSelect.innerHTML = '<option value="">Select catalog...</option>';
-            if (data.catalogs) {
-                data.catalogs.forEach(c => {
-                    catSelect.innerHTML += '<option value="' + c + '"' +
-                        (c === registryCfg.catalog ? ' selected' : '') + '>' + c + '</option>';
-                });
-            }
-            catSelect.disabled = false;
-
-            catSelect.onchange = () => loadModalSchemas(catSelect.value, null);
-
-            if (registryCfg.catalog) {
-                await loadModalSchemas(registryCfg.catalog, registryCfg.schema);
-            }
-        } catch (e) {
-            console.error('Error loading catalogs:', e);
-            catSelect.innerHTML = '<option value="">Error loading catalogs</option>';
-        }
-
-        const volInput = document.getElementById('registryVolume');
-        if (registryCfg.volume) volInput.value = registryCfg.volume;
-    }
-
-    async function loadModalSchemas(catalog, preselectSchema) {
-        const schSelect = document.getElementById('registrySchema');
-        if (!catalog) {
-            schSelect.disabled = true;
-            schSelect.innerHTML = '<option value="">Select catalog first</option>';
-            return;
-        }
-
-        schSelect.disabled = true;
-        schSelect.innerHTML = '<option value="">Loading schemas...</option>';
-
-        try {
-            const resp = await fetch('/settings/schemas?catalog=' + encodeURIComponent(catalog), { credentials: 'same-origin' });
-            const data = await resp.json();
-
-            schSelect.innerHTML = '<option value="">Select schema...</option>';
-            schSelect.disabled = false;
-            if (data.schemas) {
-                data.schemas.forEach(s => {
-                    schSelect.innerHTML += '<option value="' + s + '"' +
-                        (s === preselectSchema ? ' selected' : '') + '>' + s + '</option>';
-                });
-            }
-        } catch (e) {
-            schSelect.innerHTML = '<option value="">Error loading schemas</option>';
-        }
-    }
-
-    document.getElementById('btnApplyRegistry')?.addEventListener('click', async () => {
-        const catalog = document.getElementById('registryCatalog').value;
-        const schema = document.getElementById('registrySchema').value;
-        const volume = document.getElementById('registryVolume').value.trim() || 'OntoBricksRegistry';
-
-        if (!catalog || !schema) {
-            showNotification('Please select both a catalog and a schema', 'warning');
-            return;
-        }
-
-        const btn = document.getElementById('btnApplyRegistry');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
-
-        try {
-            const resp = await fetch('/settings/registry', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({ catalog, schema, volume })
-            });
-            const r = await resp.json();
-
-            if (r.success) {
-                registryCfg = { catalog, schema, volume, configured: r.configured !== undefined ? r.configured : registryCfg.configured };
-
-                const cfgResp = await fetch('/settings/registry', { credentials: 'same-origin' });
-                registryCfg = await cfgResp.json();
-
-                updateRegistryLabel();
-                updateRegistryStatus(registryCfg);
-                bootstrap.Modal.getInstance(document.getElementById('registryChangeModal'))?.hide();
-                showNotification('Registry location updated', 'success', 2000);
-            } else {
-                showNotification('Error: ' + r.message, 'error');
-            }
-        } catch (e) {
-            showNotification('Error saving registry: ' + e.message, 'error');
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Apply';
-        }
-    });
-
-    // --- Registry project list ---
-
-    async function loadRegistryProjects() {
-        const section = document.getElementById('registryProjectsSection');
-        const listDiv = document.getElementById('registryProjectsList');
-        if (!section || !listDiv) return;
-
-        section.style.display = 'block';
-        listDiv.innerHTML = '<div class="text-center text-muted small py-3">' +
-            '<span class="spinner-border spinner-border-sm me-1"></span> Loading projects...</div>';
-
-        try {
-            const [data, vsData] = await Promise.all([
-                fetch('/settings/registry/projects', { credentials: 'same-origin' }).then(r => r.json()),
-                fetchOnce('/project/version-status')
-            ]);
-            const currentFolder = (vsData.success && vsData.project_folder) ? vsData.project_folder : null;
-
-            if (!data.success) {
-                listDiv.innerHTML = '<div class="text-muted small py-3"><i class="bi bi-exclamation-triangle text-warning me-1"></i> ' +
-                    (data.message || 'Could not load projects') + '</div>';
-                return;
-            }
-
-            if (!data.projects || data.projects.length === 0) {
-                listDiv.innerHTML = '<div class="text-muted small py-3 text-center">' +
-                    '<i class="bi bi-folder"></i> No projects in registry yet</div>';
-                return;
-            }
-
-            let html = '<div class="table-responsive registry-project-table-wrapper">' +
-                '<table class="table table-sm table-hover align-middle mb-0 registry-project-table">' +
-                '<thead><tr>' +
-                    '<th class="ps-3">Name</th>' +
-                    '<th>Description</th>' +
-                    '<th class="text-center" style="width:5rem;">Versions</th>' +
-                    '<th class="text-end pe-3" style="width:3rem;"></th>' +
-                '</tr></thead><tbody>';
-
-            data.projects.forEach((p, idx) => {
-                const desc = p.description
-                    ? escapeHtmlSettings(p.description)
-                    : '<span class="fst-italic text-muted">—</span>';
-                const vCount = (p.versions || []).length;
-                const hasVersions = vCount > 0;
-                const rowId = 'reg-versions-' + idx;
-                const isCurrent = currentFolder && p.name === currentFolder;
-                const nameLabel = escapeHtmlSettings(p.name) +
-                    (isCurrent ? ' <span class="badge bg-primary-subtle text-primary border ms-1" style="font-size:0.65rem;">current</span>' : '');
-                const deleteBtn = isCurrent
-                    ? '<button type="button" class="btn btn-sm border-0 text-muted" disabled title="Cannot delete the currently loaded project">' +
-                          '<i class="bi bi-trash"></i></button>'
-                    : '<button type="button" class="btn btn-sm btn-outline-danger border-0 registry-delete-btn" ' +
-                          'data-project="' + escapeHtmlSettings(p.name) + '" title="Delete project and all versions">' +
-                          '<i class="bi bi-trash"></i></button>';
-                html += '<tr class="registry-project-row" data-target="' + rowId + '" style="cursor:pointer;">' +
-                    '<td class="ps-3 fw-semibold text-nowrap">' +
-                        '<i class="bi bi-chevron-right me-1 text-muted registry-chevron" style="font-size:0.7rem;transition:transform 0.15s;"></i>' +
-                        '<i class="bi bi-folder2 me-1 text-primary"></i>' +
-                        nameLabel +
-                    '</td>' +
-                    '<td class="text-muted text-truncate" style="max-width:300px;">' + desc + '</td>' +
-                    '<td class="text-center"><span class="badge bg-secondary">' + vCount + '</span></td>' +
-                    '<td class="text-end pe-3">' + deleteBtn + '</td>' +
-                '</tr>';
-                // Expandable version rows (hidden by default)
-                if (hasVersions) {
-                    html += '<tr id="' + rowId + '" class="registry-version-panel" style="display:none;">' +
-                        '<td colspan="4" class="ps-5 pe-3 py-0">' +
-                        '<div class="d-flex flex-wrap gap-1 py-2">';
-                    p.versions.forEach(v => {
-                        html += '<span class="badge bg-light text-dark border d-inline-flex align-items-center gap-1 registry-version-badge">' +
-                            'v' + escapeHtmlSettings(v) +
-                            '<button type="button" class="btn-close btn-close-sm registry-delete-version-btn" ' +
-                                'data-project="' + escapeHtmlSettings(p.name) + '" data-version="' + escapeHtmlSettings(v) + '" ' +
-                                'title="Delete version v' + escapeHtmlSettings(v) + '" style="font-size:0.55rem;margin-left:2px;"></button>' +
-                        '</span>';
-                    });
-                    html += '</div></td></tr>';
-                }
-            });
-
-            html += '</tbody></table></div>';
-            listDiv.innerHTML = html;
-
-            // Toggle version panel on project row click
-            listDiv.querySelectorAll('.registry-project-row').forEach(row => {
-                row.addEventListener('click', (e) => {
-                    if (e.target.closest('.registry-delete-btn')) return;
-                    const target = document.getElementById(row.dataset.target);
-                    if (!target) return;
-                    const chevron = row.querySelector('.registry-chevron');
-                    const isOpen = target.style.display !== 'none';
-                    target.style.display = isOpen ? 'none' : '';
-                    if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(90deg)';
-                });
-            });
-
-            listDiv.querySelectorAll('.registry-delete-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    deleteRegistryProject(btn.dataset.project);
-                });
-            });
-
-            listDiv.querySelectorAll('.registry-delete-version-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    deleteRegistryVersion(btn.dataset.project, btn.dataset.version);
-                });
-            });
-
-        } catch (e) {
-            console.error('Error loading registry projects:', e);
-            listDiv.innerHTML = '<div class="text-danger small py-3">' +
-                '<i class="bi bi-x-circle me-1"></i> Error loading projects</div>';
-        }
-    }
-
-    async function deleteRegistryProject(projectName) {
-        const confirmed = await showConfirmDialog({
-            title: 'Delete Project',
-            message: 'Delete project "' + projectName + '" and all its versions from the registry? This cannot be undone.',
-            confirmText: 'Delete',
-            confirmClass: 'btn-danger',
-            icon: 'trash'
-        });
-        if (!confirmed) return;
-
-        try {
-            const resp = await fetch('/settings/registry/projects/' + encodeURIComponent(projectName), {
-                method: 'DELETE',
-                credentials: 'same-origin'
-            });
-            const data = await resp.json();
-            if (data.success) {
-                showNotification(data.message, 'success');
-                loadRegistryProjects();
-            } else {
-                showNotification('Error: ' + data.message, 'error');
-            }
-        } catch (e) {
-            showNotification('Error deleting project: ' + e.message, 'error');
-        }
-    }
-
-    async function deleteRegistryVersion(projectName, version) {
-        const confirmed = await showConfirmDialog({
-            title: 'Delete Version',
-            message: 'Delete version v' + version + ' from project "' + projectName + '"? This cannot be undone.',
-            confirmText: 'Delete',
-            confirmClass: 'btn-danger',
-            icon: 'trash'
-        });
-        if (!confirmed) return;
-
-        try {
-            const resp = await fetch(
-                '/settings/registry/projects/' + encodeURIComponent(projectName) + '/versions/' + encodeURIComponent(version),
-                { method: 'DELETE', credentials: 'same-origin' }
-            );
-            const data = await resp.json();
-            if (data.success) {
-                showNotification(data.message, 'success');
-                loadRegistryProjects();
-            } else {
-                showNotification('Error: ' + data.message, 'error');
-            }
-        } catch (e) {
-            showNotification('Error deleting version: ' + e.message, 'error');
-        }
-    }
-
-    function escapeHtmlSettings(str) { return escapeHtml(str); }
-
-    document.getElementById('btnRefreshProjects')?.addEventListener('click', () => loadRegistryProjects());
-
-    document.getElementById('btnInitRegistry')?.addEventListener('click', async () => {
-        const btn = document.getElementById('btnInitRegistry');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Initializing...';
-        try {
-            const resp = await fetch('/settings/registry/initialize', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin'
-            });
-            const data = await resp.json();
-            if (data.success) {
-                showNotification(data.message, 'success');
-                registryConfigured = true;
-                registryCfg.configured = true;
-                updateRegistryLabel();
-                updateRegistryStatus(registryCfg);
-            } else {
-                showNotification('Error: ' + data.message, 'error');
-            }
-        } catch (e) {
-            showNotification('Error: ' + e.message, 'error');
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Initialize';
-        }
-    });
-
-    // =====================================================================
     //  GLOBAL TAB – Base URI
     // =====================================================================
 
@@ -564,19 +165,24 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // =====================================================================
-    //  GLOBAL TAB – Default Emoji Picker
+    //  GLOBAL TAB – Registry Cache TTL
     // =====================================================================
 
-    const emojiCategories = {
-        'People & Roles': ['👤', '👥', '👨', '👩', '👶', '👴', '👵', '🧑', '👨‍💼', '👩‍💼', '👨‍🔬', '👩‍🔬', '👨‍💻', '👩‍💻', '👨‍🏫', '👩‍🏫', '👨‍⚕️', '👩‍⚕️', '🧑‍🤝‍🧑', '👪'],
-        'Business & Work': ['🏢', '🏭', '🏬', '🏛️', '💼', '📊', '📈', '📉', '💰', '💵', '💳', '🏦', '📋', '📁', '📂', '🗂️', '📝', '✏️', '📌', '📎'],
-        'Technology': ['💻', '🖥️', '⌨️', '🖱️', '📱', '📲', '☎️', '🔌', '💾', '💿', '📀', '🔧', '🔩', '⚙️', '🔬', '🔭', '📡', '🤖', '🔋', '💡'],
-        'Data & Documents': ['📄', '📃', '📑', '📰', '📚', '📖', '📒', '📓', '📔', '📕', '📗', '📘', '📙', '🗃️', '🗄️', '📦', '📫', '📬', '📭', '📮'],
-        'Nature & Science': ['🌍', '🌎', '🌏', '🌐', '🌳', '🌲', '🌴', '🌵', '🌾', '🌻', '🔥', '💧', '⚡', '🌈', '☀️', '🌙', '⭐', '🌟', '💎', '🔮'],
-        'Objects & Things': ['🏠', '🏡', '🚗', '🚕', '🚌', '✈️', '🚀', '🛸', '⚓', '🎯', '🎨', '🎭', '🎪', '🎬', '🎮', '🎲', '🧩', '🔑', '🗝️', '🔒'],
-        'Symbols': ['❤️', '💙', '💚', '💛', '💜', '🖤', '🤍', '🤎', '⭕', '❌', '✅', '❎', '➕', '➖', '➗', '✖️', '💯', '🔴', '🟠', '🟢'],
-        'Arrows & Shapes': ['⬆️', '⬇️', '⬅️', '➡️', '↗️', '↘️', '↙️', '↖️', '↕️', '↔️', '🔄', '🔃', '🔀', '🔁', '🔂', '▶️', '⏸️', '⏹️', '🔷', '🔶']
-    };
+    async function loadRegistryCacheTtl() {
+        try {
+            const resp = await fetch('/settings/get-registry-cache-ttl', { credentials: 'same-origin' });
+            const result = await resp.json();
+            if (result.success && result.registry_cache_ttl != null) {
+                document.getElementById('registryCacheTtl').value = result.registry_cache_ttl;
+            }
+        } catch (error) {
+            console.log('Using default registry cache TTL');
+        }
+    }
+
+    // =====================================================================
+    //  GLOBAL TAB – Default Emoji Picker (uses shared EmojiPicker module)
+    // =====================================================================
 
     async function loadCurrentDefaultEmoji() {
         try {
@@ -587,33 +193,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (error) {
             console.log('Using default emoji');
-        }
-    }
-
-    function initDefaultEmojiPicker() {
-        const grid = document.getElementById('defaultEmojiGrid');
-        for (const [category, emojis] of Object.entries(emojiCategories)) {
-            const categoryDiv = document.createElement('div');
-            categoryDiv.className = 'mb-2';
-            categoryDiv.innerHTML = `<small class="text-muted fw-bold">${category}</small>`;
-
-            const emojiRow = document.createElement('div');
-            emojiRow.className = 'd-flex flex-wrap gap-1 mt-1';
-
-            emojis.forEach(emoji => {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'btn btn-light btn-sm';
-                btn.style.fontSize = '1.2rem';
-                btn.style.padding = '0.25rem 0.5rem';
-                btn.textContent = emoji;
-                btn.title = emoji;
-                btn.onclick = () => selectDefaultEmoji(emoji);
-                emojiRow.appendChild(btn);
-            });
-
-            categoryDiv.appendChild(emojiRow);
-            grid.appendChild(categoryDiv);
         }
     }
 
@@ -628,7 +207,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const result = await response.json();
             if (result.success) {
                 document.getElementById('currentDefaultEmoji').textContent = emoji;
-                document.getElementById('defaultEmojiPickerContainer').style.display = 'none';
                 showNotification('Default class icon updated to ' + emoji, 'success', 2000);
             } else {
                 showNotification('Error: ' + result.message, 'error');
@@ -638,21 +216,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    document.getElementById('changeDefaultEmoji')?.addEventListener('click', function () {
-        const picker = document.getElementById('defaultEmojiPickerContainer');
-        if (picker.style.display === 'none') {
-            picker.style.display = 'block';
-            if (document.getElementById('defaultEmojiGrid').children.length === 0) {
-                initDefaultEmojiPicker();
-            }
-        } else {
-            picker.style.display = 'none';
-        }
-    });
-
-    document.getElementById('closeDefaultEmojiPicker')?.addEventListener('click', function () {
-        document.getElementById('defaultEmojiPickerContainer').style.display = 'none';
-    });
+    const changeBtn = document.getElementById('changeDefaultEmoji');
+    if (changeBtn) {
+        EmojiPicker.create({
+            triggerEl:   changeBtn,
+            previewEl:   document.getElementById('currentDefaultEmoji'),
+            containerEl: document.getElementById('defaultEmojiPickerMount'),
+            showSearch:  false,
+            onSelect:    function (emoji) { selectDefaultEmoji(emoji); }
+        });
+    }
 
     // =====================================================================
     //  LADYBUGDB TAB
@@ -759,7 +332,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // =====================================================================
-    //  GLOBAL SAVE BUTTON – saves Warehouse + Registry + Base URI
+    //  GLOBAL SAVE BUTTON – saves Warehouse + Base URI
     // =====================================================================
 
     document.getElementById('btnSaveAllSettings')?.addEventListener('click', async function () {
@@ -785,9 +358,7 @@ document.addEventListener('DOMContentLoaded', function () {
             } catch (e) { errors.push('Warehouse: ' + e.message); }
         }
 
-        // 2. Registry is saved via the modal Apply button — no action needed here
-
-        // 3. Save base URI
+        // 2. Save base URI
         const baseUri = document.getElementById('baseUriDefault').value.trim();
         if (baseUri) {
             try {
@@ -800,6 +371,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 const r = await resp.json();
                 if (!r.success) errors.push('Base URI: ' + r.message);
             } catch (e) { errors.push('Base URI: ' + e.message); }
+        }
+
+        // 3. Save registry cache TTL
+        const ttlInput = document.getElementById('registryCacheTtl');
+        if (ttlInput) {
+            const ttl = parseInt(ttlInput.value, 10);
+            if (!isNaN(ttl) && ttl >= 10) {
+                try {
+                    const resp = await fetch('/settings/save-registry-cache-ttl', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ registry_cache_ttl: ttl })
+                    });
+                    const r = await resp.json();
+                    if (!r.success) errors.push('Cache TTL: ' + r.message);
+                } catch (e) { errors.push('Cache TTL: ' + e.message); }
+            }
         }
 
         btn.disabled = false;

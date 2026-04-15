@@ -21,7 +21,7 @@ let tripleStoreHasData = false;
  * The caller is responsible for showing/hiding the loading overlay so that
  * it covers the full render cycle (including post-fetch DOM updates).
  *
- * Returns the parsed payload so callers can act on it (e.g. project info).
+ * Returns the parsed payload so callers can act on it (e.g. domain info).
  */
 async function loadSyncInfo() {
     try {
@@ -239,10 +239,11 @@ async function initSyncSection() {
 
         var cfg = window.__TRIPLESTORE_CONFIG || {};
 
-        if (payload && payload.project_info && payload.project_info.success && payload.project_info.info) {
+        const di = payload && (payload.domain_info || payload.project_info);
+        if (di && di.success && di.info) {
             cfg = {
-                view_table: payload.project_info.info.view_table || '',
-                graph_name: payload.project_info.info.graph_name || '',
+                view_table: di.info.view_table || '',
+                graph_name: di.info.graph_name || '',
                 cache: {}
             };
             window.__TRIPLESTORE_CONFIG = cfg;
@@ -382,7 +383,7 @@ function renderTripleStoreStatus(data) {
         if (reason.toLowerCase().includes('does not exist')) {
             msg = 'Digital Twin not built yet. Click <strong>Build</strong> to create the VIEW and graph.';
         } else if (reason.toLowerCase().includes('not configured')) {
-            msg = 'Digital Twin is not configured. Set it in <a href="/project/#information">Project Settings</a>.';
+            msg = 'Digital Twin is not configured. Set it in <a href="/domain/#information">Domain Settings</a>.';
         } else {
             msg = entity + ' is empty. Run <strong>Synchronize</strong> to generate triples.';
         }
@@ -471,7 +472,7 @@ async function checkAndResumeSyncTask() {
 
 /**
  * Show a confirmation modal before building the Digital Twin.
- * Always displayed so the project is saved with the latest changes.
+ * Always displayed so the domain is saved with the latest changes.
  * Resolves to 'save' (user confirms) or 'cancel'.
  */
 function _showSaveBeforeBuildDialog() {
@@ -491,7 +492,7 @@ function _showSaveBeforeBuildDialog() {
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <p>The project will be saved to the registry before building the Digital Twin.</p>
+                            <p>The domain will be saved to the registry before building the Digital Twin.</p>
                             <p class="mb-0 text-muted">
                                 This ensures the triple store, GraphQL API, and other services
                                 use the latest ontology and mapping configuration.
@@ -534,7 +535,7 @@ function _showSaveBeforeBuildDialog() {
 
 /**
  * Start the synchronization process.
- * Always prompts the user to save the project first so the registry
+ * Always prompts the user to save the domain first so the registry
  * contains the latest ontology and mapping configuration.
  */
 async function startTripleStoreSync() {
@@ -542,7 +543,7 @@ async function startTripleStoreSync() {
     const triplestoreTable = tableEl ? tableEl.value.trim() : '';
 
     if (!triplestoreTable) {
-        showNotification('Triple store table not configured. Please set it in Project Settings.', 'warning');
+        showNotification('Triple store table not configured. Please set it in Domain Settings.', 'warning');
         return;
     }
 
@@ -550,10 +551,10 @@ async function startTripleStoreSync() {
     if (choice === 'cancel') return;
 
     try {
-        if (typeof saveProjectInfoBeforeSave === 'function') {
-            await saveProjectInfoBeforeSave();
+        if (typeof saveDomainInfoBeforeSave === 'function') {
+            await saveDomainInfoBeforeSave();
         }
-        await doProjectSave();
+        await doDomainSave();
     } catch (err) {
         showNotification('Save failed: ' + err.message, 'error');
         return;
@@ -803,7 +804,7 @@ async function loadTripleStore(options = {}) {
     const navigate = options.navigate !== false;
     const silent = options.silent === true;
 
-    // Try to read from the sync input first, then fall back to project settings
+    // Try to read from the sync input first, then fall back to domain settings
     const tableEl = document.getElementById('syncTriplestoreTable');
     let triplestoreTable = tableEl ? tableEl.value.trim() : '';
 
@@ -815,7 +816,7 @@ async function loadTripleStore(options = {}) {
     }
 
     if (!triplestoreTable) {
-        if (!silent) showNotification('Triple store table not configured. Please set it in Project Settings.', 'warning');
+        if (!silent) showNotification('Triple store table not configured. Please set it in Domain Settings.', 'warning');
         return;
     }
 

@@ -2,12 +2,12 @@
 
 OntoBricks exposes its Digital Twin knowledge-graph capabilities via the
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), allowing
-LLM-based tools to browse projects, discover entity types, look up specific
+LLM-based tools to browse domains, discover entity types, look up specific
 entities with full-text descriptions, and check triple-store health — all
 through a standardised interface.
 
 The MCP server lives in the **`src/mcp-server/`** directory as a self-contained
-Python project deployed separately from the main OntoBricks web application.
+Python package deployed separately from the main OntoBricks web application.
 
 ---
 
@@ -15,18 +15,18 @@ Python project deployed separately from the main OntoBricks web application.
 
 The MCP server follows a **two-step workflow**:
 
-1. **Choose a project** — call `list_projects` to see available knowledge graphs with descriptions, then `select_project` to activate one. Only projects with the **API / MCP** flag enabled in OntoBricks are listed.
-2. **Query the knowledge graph** — use `list_entity_types`, `describe_entity`, or `get_status` on the selected project.
+1. **Choose a domain** — call `list_domains` to see available knowledge graphs with descriptions, then `select_domain` to activate one. Only domains with the **API / MCP** flag enabled in OntoBricks are listed.
+2. **Query the knowledge graph** — use `list_entity_types`, `describe_entity`, or `get_status` on the selected domain.
 
 **Advanced — GraphQL querying:**
 
-After selecting a project, the LLM can also leverage GraphQL for structured data retrieval:
+After selecting a domain, the LLM can also leverage GraphQL for structured data retrieval:
 1. Call `get_graphql_schema` to discover the typed schema (types, fields, relationships).
 2. Call `query_graphql` with a GraphQL query to retrieve data with nested traversal, specific field selection, and filtering.
 
 The LLM is instructed (via the MCP `instructions` field) to always select a
-project before querying entities. If the user's question clearly refers to a
-domain covered by one of the projects, the LLM selects it automatically.
+domain before querying entities. If the user's question clearly refers to a
+topic covered by one of the listed domains, the LLM selects it automatically.
 
 ---
 
@@ -34,28 +34,30 @@ domain covered by one of the projects, the LLM selects it automatically.
 
 | Tool | Description |
 |------|-------------|
-| `list_projects` | Lists all projects (knowledge graphs) in the registry with their names and descriptions |
-| `select_project` | Activates a project by name — all subsequent queries operate on this project's triple store |
-| `list_entity_types` | Returns a human-readable overview of the selected project's knowledge graph: total triples, distinct entities, every entity type with instance count, and predicate usage breakdown |
+| `list_domains` | Lists all domains (knowledge graphs) in the registry with their names and descriptions |
+| `select_domain` | Activates a domain by name — all subsequent queries operate on this domain's triple store |
+| `list_domain_versions` | Lists registry versions for a named domain (latest first) |
+| `get_design_status` | Design pipeline readiness (ontology, metadata, assignment, build_ready) for a domain |
+| `list_entity_types` | Returns a human-readable overview of the selected domain's knowledge graph: total triples, distinct entities, every entity type with instance count, and predicate usage breakdown |
 | `describe_entity` | Searches for an entity by name/type and returns a **full-text description** — identity, attributes, relationships, and related entities discovered hop-by-hop (BFS traversal) |
-| `get_status` | Compact diagnostic: project name, backend type, table name, data availability, triple count |
-| `get_graphql_schema` | Returns the auto-generated GraphQL schema (SDL) for the selected project — shows types, fields, and relationships |
-| `query_graphql` | Executes a GraphQL query against the selected project's knowledge graph with structured, nested results |
+| `get_status` | Compact diagnostic: domain name, view table, graph name, data availability, triple count |
+| `get_graphql_schema` | Returns the auto-generated GraphQL schema (SDL) for the selected domain — shows types, fields, and relationships |
+| `query_graphql` | Executes a GraphQL query against the selected domain's knowledge graph with structured, nested results |
 
 ### Tool Details
 
-#### `list_projects`
+#### `list_domains`
 
 No arguments. Always call this first.
 
-> **Note**: Only projects with the **API / MCP** flag enabled (in Project
-> Information → Global tab) are listed. Projects without this flag are hidden
+> **Note**: Only domains with the **API / MCP** flag enabled (in Domain
+> Information → Global tab) are listed. Domains without this flag are hidden
 > from both the REST API and MCP tools.
 
 Returns formatted text:
 
 ```
-Available Projects (3)
+Available Domains (3)
 ========================================
   • customer360
     Customer 360 knowledge graph with interactions, contracts, and claims
@@ -64,21 +66,21 @@ Available Projects (3)
   • hr_analytics
     HR data model with employees, departments, and org structure
 
-No project selected yet — call select_project(<name>) next.
+No domain selected yet — call select_domain(<name>) next.
 ```
 
-#### `select_project`
+#### `select_domain`
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `project_name` | string | Exact project name as shown by `list_projects` |
+| `domain_name` | string | Exact domain name as shown by `list_domains` |
 
-Returns a confirmation with project status:
+Returns a confirmation with domain status:
 
 ```
-Project 'customer360' selected.
-Backend: delta
-Table:   catalog.schema.triplestore
+Domain 'customer360' selected.
+View:  catalog.schema.triplestore
+Graph: customer360_graph
 Data:    Yes (12,030 triples)
 
 You can now use list_entity_types and describe_entity.
@@ -86,7 +88,7 @@ You can now use list_entity_types and describe_entity.
 
 #### `list_entity_types`
 
-No arguments. Requires a project to be selected first.
+No arguments. Requires a domain to be selected first.
 
 Returns formatted text:
 
@@ -123,7 +125,7 @@ Predicates (attributes & relationships)
 | `entity_type` | string | — | Filter by type local name (e.g. `"Customer"`) |
 | `depth` | int | 2 | BFS traversal depth (1–10) |
 
-Requires a project to be selected first.
+Requires a domain to be selected first.
 At least one of `search` or `entity_type` is required.
 
 Returns formatted text:
@@ -161,23 +163,23 @@ Key features of the text output:
 
 #### `get_status`
 
-No arguments. Requires a project to be selected first.
+No arguments. Requires a domain to be selected first.
 
 Returns compact text:
 
 ```
-Project: customer360
-Backend: delta
-Table:   catalog.schema.triplestore
+Domain: customer360
+View:    catalog.schema.triplestore
+Graph:   customer360_graph
 Status:  OK
 Data:    Yes (12,030 triples)
 ```
 
 #### `get_graphql_schema`
 
-No arguments. Requires a project to be selected first.
+No arguments. Requires a domain to be selected first.
 
-Returns the auto-generated GraphQL schema in SDL format. The schema is derived from the project's ontology — each class becomes a GraphQL type, each data property becomes a field, and each object property becomes a typed relationship.
+Returns the auto-generated GraphQL schema in SDL format. The schema is derived from the domain's ontology — each class becomes a GraphQL type, each data property becomes a field, and each object property becomes a typed relationship.
 
 Use this to discover available types and fields before calling `query_graphql`.
 
@@ -219,7 +221,7 @@ Use query_graphql to execute queries against this schema.
 | `query` | string | — | A valid GraphQL query string |
 | `variables` | string | — | Optional JSON string of query variables |
 
-Requires a project to be selected first.
+Requires a domain to be selected first.
 
 Executes a GraphQL query against the knowledge graph and returns structured, formatted results. Ideal for:
 - Fetching specific fields without over-fetching
@@ -259,16 +261,16 @@ allCustomer (1 results)
 | Fetch specific fields across many entities | `query_graphql` |
 | Get all attributes and relationships for one entity | `describe_entity` |
 | Nested relationship queries (2+ levels) | `query_graphql` |
-| Explore an unfamiliar project | `get_graphql_schema` → `query_graphql` |
+| Explore an unfamiliar domain | `get_graphql_schema` → `query_graphql` |
 
 ## Available Resources
 
 | URI | Description |
 |-----|-------------|
-| `ontobricks://projects` | List of projects in the registry (JSON) |
-| `ontobricks://status` | Current triple store status for the selected project (JSON) |
-| `ontobricks://stats` | Triple store content statistics for the selected project (JSON) |
-| `ontobricks://graphql-schema` | GraphQL schema (SDL) for the selected project (JSON) |
+| `ontobricks://domains` | List of domains in the registry (JSON) |
+| `ontobricks://status` | Current triple store status for the selected domain (JSON) |
+| `ontobricks://stats` | Triple store content statistics for the selected domain (JSON) |
+| `ontobricks://graphql-schema` | GraphQL schema (SDL) for the selected domain (JSON) |
 
 ---
 
@@ -291,7 +293,7 @@ mcp-ontobricks  (Databricks App)
     ▼
 OntoBricks  (Databricks App)
     ├── /api/v1/digitaltwin/*    (REST — entity search, stats, status)
-    └── /graphql/{project}       (GraphQL — typed queries, nested traversal)
+    └── /graphql/{domain}        (GraphQL — typed queries, nested traversal; path segment is the registry domain name)
     │
     ▼
 Triple Store (Delta Lake via SQL Warehouse)
@@ -306,16 +308,16 @@ Authentication between the two apps uses Databricks OAuth (service principal).
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `ONTOBRICKS_URL` | Yes | `http://localhost:8000` | URL of the main OntoBricks app |
-| `REGISTRY_CATALOG` | Yes (deployed) | — | Unity Catalog catalog containing the project registry |
+| `REGISTRY_CATALOG` | Yes (deployed) | — | Unity Catalog catalog containing the domain registry |
 | `REGISTRY_SCHEMA` | Yes (deployed) | — | Schema within the catalog |
-| `REGISTRY_VOLUME` | No | `OntoBricksRegistry` | Volume name for project storage |
+| `REGISTRY_VOLUME` | No | `OntoBricksRegistry` | Volume name for domain registry storage |
 
 The registry variables are passed as query parameters to every
 `/api/v1/digitaltwin/*` call, letting the MCP server operate without a
 browser session.  Set them in `src/mcp-server/app.yaml` to match the
 registry you configured in the OntoBricks Settings UI.
 
-### Project structure
+### MCP server layout
 
 ```
 src/mcp-server/
@@ -326,7 +328,7 @@ src/mcp-server/
 ├── pyproject.toml           # Python dependencies
 └── server/
     ├── __init__.py
-    ├── app.py               # MCP tools, project selection, text formatting,
+    ├── app.py               # MCP tools, domain selection, text formatting,
     │                        #   URI helpers, combined FastAPI+MCP app factory
     └── main.py              # Entry point: uv run mcp-ontobricks
 ```
@@ -358,7 +360,7 @@ databricks apps deploy mcp-ontobricks \
 
 ### stdio (for Cursor, Claude Desktop, etc.)
 
-Run the standalone entry point from the project root:
+Run the standalone entry point from the repository root:
 
 ```bash
 python mcp_server.py              # stdio transport

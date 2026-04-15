@@ -13,42 +13,42 @@ _delta_triple_store_mod = importlib.import_module(
 )
 
 
-def _mock_project(host='https://h', token='tok', warehouse_id='wh'):
-    project = MagicMock()
-    project.triplestore = {}
-    project.databricks = {'host': host, 'token': token, 'warehouse_id': warehouse_id}
-    project.info = {'name': 'TestProject'}
-    project.ladybug = {'db_path': '/tmp/ontobricks'}
-    return project
+def _mock_domain(host='https://h', token='tok', warehouse_id='wh'):
+    domain = MagicMock()
+    domain.triplestore = {}
+    domain.databricks = {'host': host, 'token': token, 'warehouse_id': warehouse_id}
+    domain.info = {'name': 'TestDomain'}
+    domain.ladybug = {'db_path': '/tmp/ontobricks'}
+    return domain
 
 
 class TestGetTriplestore:
     def test_unknown_backend_returns_none(self):
-        project = _mock_project()
-        result = get_triplestore(project, backend='unknown')
+        domain = _mock_domain()
+        result = get_triplestore(domain, backend='unknown')
         assert result is None
 
     def test_default_backend_is_graph(self):
         """When backend is None, default to graph (LadybugDB)."""
-        project = _mock_project()
+        domain = _mock_domain()
         with patch.object(
             TripleStoreFactory, '_create_ladybug'
         ) as mock_lb:
             mock_lb.return_value = MagicMock()
-            result = get_triplestore(project)
-            mock_lb.assert_called_once_with(project, None)
+            result = get_triplestore(domain)
+            mock_lb.assert_called_once_with(domain, None)
 
     @patch.object(_triple_store_factory_mod, 'get_databricks_host_and_token', return_value=('', ''))
     def test_view_missing_host_returns_none(self, mock_get):
-        project = _mock_project(host='', token='')
-        project.databricks = {'host': '', 'token': '', 'warehouse_id': 'wh'}
-        result = get_triplestore(project, settings=MagicMock(databricks_sql_warehouse_id='wh'), backend='view')
+        domain = _mock_domain(host='', token='')
+        domain.databricks = {'host': '', 'token': '', 'warehouse_id': 'wh'}
+        result = get_triplestore(domain, settings=MagicMock(databricks_sql_warehouse_id='wh'), backend='view')
         assert result is None
 
     @patch.object(_triple_store_factory_mod, 'get_databricks_host_and_token', return_value=('https://h', 'tok'))
     @patch.object(_triple_store_factory_mod, 'resolve_warehouse_id', return_value='wh')
     def test_view_success(self, mock_wh, mock_get):
-        project = _mock_project()
+        domain = _mock_domain()
         settings = MagicMock()
         settings.databricks_sql_warehouse_id = 'wh'
 
@@ -56,4 +56,4 @@ class TestGetTriplestore:
              patch.object(_delta_triple_store_mod, 'DeltaTripleStore') as mock_delta_cls:
             mock_client_cls.return_value = MagicMock()
             mock_delta_cls.return_value = MagicMock()
-            result = get_triplestore(project, settings=settings, backend='view')
+            result = get_triplestore(domain, settings=settings, backend='view')

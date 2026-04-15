@@ -23,8 +23,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
 from back.core.logging import get_logger
-from rdflib import Graph, RDF, RDFS, URIRef
-from rdflib.namespace import SKOS, XSD
+from shared.config.constants import HTTP_USER_AGENT
+from rdflib import Graph, RDF, URIRef
+from rdflib.namespace import SKOS
 
 from back.core.helpers import extract_local_name as _extract_local
 from back.core.industry.constants import (
@@ -230,7 +231,7 @@ class CdiscImportService:
             resp = requests.get(
                 url,
                 timeout=CdiscImportService._REQUEST_TIMEOUT,
-                headers={"User-Agent": "OntoBricks/1.0", "Accept": "*/*"},
+                headers={"User-Agent": HTTP_USER_AGENT, "Accept": "*/*"},
                 allow_redirects=True,
             )
             if resp.status_code == 200:
@@ -708,7 +709,7 @@ class CdiscImportService:
             turtle_content = merged_graph.serialize(format="turtle")
             from back.objects.ontology import Ontology
             result = Ontology.parse_owl(turtle_content, extract_advanced=True)
-            ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions = result
+            ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions, _groups = result
 
         # Count relationships (ObjectProperty) vs attributes (DatatypeProperty)
         relationships = [p for p in properties if p.get("type") == "ObjectProperty"]

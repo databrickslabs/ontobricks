@@ -148,17 +148,17 @@ document.getElementById('downloadR2RMLBtn')?.addEventListener('click', async fun
         return;
     }
     
-    // Get project name for filename
-    let projectName = 'mapping';
+    // Get domain name for filename
+    let domainName = 'mapping';
     try {
-        const response = await fetch('/project/info', { credentials: 'same-origin' });
+        const response = await fetch('/domain/info', { credentials: 'same-origin' });
         const data = await response.json();
         if (data.success && data.info?.name) {
-            projectName = data.info.name;
+            domainName = data.info.name;
         }
     } catch (e) {}
     
-    const filename = projectName.replace(/\s+/g, '_') + '_r2rml.ttl';
+    const filename = domainName.replace(/\s+/g, '_') + '_r2rml.ttl';
     const blob = new Blob([r2rmlText], { type: 'text/turtle' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

@@ -261,6 +261,7 @@ window.DataQualityModule = {
     },
 
     editShape(shapeId) {
+        if (window.isActiveVersion === false) return;
         const shape = this.shapes.find(s => s.id === shapeId);
         if (!shape) return;
         document.getElementById('dqEditShapeId').value = shapeId;
@@ -790,6 +791,7 @@ window.DataQualityModule = {
     },
 
     async deleteShape(shapeId) {
+        if (window.isActiveVersion === false) return;
         const confirmed = await showConfirmDialog({
             title: 'Delete Rule',
             message: 'Delete this data quality rule?',
@@ -816,6 +818,7 @@ window.DataQualityModule = {
     },
 
     async toggleShape(shapeId) {
+        if (window.isActiveVersion === false) return;
         const shape = this.shapes.find(s => s.id === shapeId);
         if (!shape) return;
         shape.enabled = !shape.enabled;

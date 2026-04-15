@@ -113,6 +113,7 @@ Explore your knowledge graph — search, filter, and navigate entities and relat
 - **⚡ Incremental Sync**: Detects source data changes via Delta table version tracking and applies only the diff (additions + removals) using a server-side snapshot table — skips the build entirely when nothing changed
 - **💾 Two Backends**: **Delta** (Databricks SQL Warehouse) or **LadybugDB** (embedded Cypher-based graph database with automatic UC Volume sync)
 - **📈 Knowledge Graph**: Interactive sigma.js WebGL-powered graph to explore entities and relationships visually with search, filtering, and entity detail panels
+- **🔬 Data Cluster Detection**: Detect communities in the knowledge graph using Louvain, Label Propagation, or Greedy Modularity algorithms — client-side (Graphology) for the visible subgraph, server-side (NetworkX) for the full graph; color-by-cluster visualization, adjustable resolution, cluster collapse/expand into super-nodes with member details on click
 - **🗺️ Ontology Model Viewer**: Read-only D3.js ontology model accessible from Knowledge Graph and GraphQL sections — frozen force-directed graph with pan/zoom in a fullscreen modal
 - **📊 Dashboard Integration**: Embed Databricks dashboards with parameter mapping to entities
 - **✅ Async Quality Checks**: Validate data against ontology constraints with background processing and progress tracking
@@ -130,10 +131,10 @@ Explore your knowledge graph — search, filter, and navigate entities and relat
 ### GraphQL API
 - **🔮 Auto-Generated Schema**: The GraphQL schema is derived from the ontology — each class becomes a type, each data property a field, each object property a typed relationship
 - **🔗 Nested Traversal**: Query entities with nested relationships (e.g., `customers { hasInteraction { label date } }`) instead of flat triple lists
-- **🎮 GraphiQL Playground**: Interactive in-browser IDE per project with introspection, auto-complete, and documentation
+- **🎮 GraphiQL Playground**: Interactive in-browser IDE per domain with introspection, auto-complete, and documentation
 - **📐 Schema Introspection**: SDL endpoint lets tools and LLM agents auto-discover the schema
 - **⚡ Batch Resolution**: Resolvers batch-load triples from the triple store for efficient query execution
-- **📦 Per-Project Schemas**: Each project gets its own GraphQL schema, cached and invalidated on ontology change
+- **📦 Per-Domain Schemas**: Each domain gets its own GraphQL schema, cached and invalidated on ontology change
 
 ### MCP Server (AI Integration)
 - **🤖 Model Context Protocol**: Expose the knowledge graph to LLM agents via [MCP](https://modelcontextprotocol.io/)
@@ -145,16 +146,21 @@ Explore your knowledge graph — search, filter, and navigate entities and relat
 - **🎯 Databricks Playground**: Deployed as `mcp-ontobricks`, auto-discoverable in the Databricks Playground
 - **🔌 Multi-Client**: Works with Cursor, Claude Desktop, or any MCP-compatible client via stdio or HTTP transport
 
-### Project Management
-- **💾 Unity Catalog Storage**: Save/load projects to UC Volumes with version control
+### Domain Management
+- **💾 Unity Catalog Storage**: Save/load domains to UC Volumes with version control
 - **📥 Import/Export**: Import OWL, RDFS ontologies and R2RML mappings; export OWL and R2RML
 - **🏦 Industry-Standard Ontologies**: One-click import of [FIBO](https://spec.edmcouncil.org/fibo/) (Financial), [CDISC](https://www.cdisc.org/) (Clinical), and [IOF](https://www.industrialontologies.org/) (Manufacturing) — see [Ontology import](docs/user-guide.md#ontology-import-merged) in the user guide
 - **☁️ Databricks Apps Ready**: Designed for deployment as a Databricks App
 
+### Registry
+- **📂 Multi-Domain Registry**: Central registry backed by a UC Volume that indexes all domains, their versions, and status
+- **🔄 Scheduled Refresh**: Background scheduler keeps the registry cache up-to-date on a configurable interval
+- **🔗 Entity URI Resolution**: `/resolve` endpoint resolves entity URIs to the correct domain and redirects into the knowledge graph
+
 ### Navigation & UI
 - **📋 Centralized Menu Configuration**: Top navbar and sidebar menus are driven from a single JSON config (`menu_config.json`)
 - **🔔 Unified Status Indicators**: Ontology, Mapping, and Digital Twin navbar indicators refresh simultaneously via a centralized function
-- **🏷️ Smart Defaults**: Ontology name defaults to the project name; version displayed in the top navbar
+- **🏷️ Smart Defaults**: Ontology name defaults to the domain name; version displayed in the top navbar
 
 ## Quick Start
 
@@ -218,7 +224,7 @@ OntoBricks can automatically build a complete knowledge graph from your Databric
 
 | Step | Action | What Happens |
 |------|--------|--------------|
-| **1** | **Import Metadata** (Project > Metadata) | Fetches table and column metadata from Unity Catalog |
+| **1** | **Import Metadata** (Domain > Metadata) | Fetches table and column metadata from Unity Catalog |
 | **2** | **Generate Ontology** (Ontology > Wizard) | LLM designs entities, relationships, and attributes from your metadata |
 | **3** | **Auto-Map** (Mapping > Auto-Map) | LLM generates SQL mappings for every entity and relationship |
 | **4** | **Synchronize** (Digital Twin > Status) | Executes mappings and populates the triple store table |
@@ -273,16 +279,16 @@ Connect ontology to Databricks tables via the **Mapping** page:
 - **Auto-Map**: Batch-map all unmapped entities and relationships in one async operation
 - **Re-Assign Attributes**: Fix entities with missing attribute mappings via targeted re-mapping
 - **Preview Limit**: Control how many rows are previewed in the Mapping grid (SQL is stored without LIMIT)
-- **R2RML Generation**: Auto-generated W3C-compliant mapping (view in Project → Export)
+- **R2RML Generation**: Auto-generated W3C-compliant mapping (view in Domain → Export)
 
-### Project Contents
+### Domain Contents
 
-A saved OntoBricks project contains:
+A saved OntoBricks domain contains:
 - **Ontology details**: Entities, relationships, and inheritance hierarchy
 - **Design layout**: OntoViz canvas positions and visual configuration
 - **Configuration**: SQL Warehouse settings
 
-Projects **never** store:
+Domains **never** store:
 - Authentication tokens or passwords
 - Query results
 
@@ -320,7 +326,7 @@ src/
 │   └── routers/                 # v1, digitaltwin, internal/*, …
 │
 ├── back/                        # Core domain, objects, GraphQL (Strawberry)
-│   ├── core/                    # Databricks, W3C, triplestore, reasoning, registry helpers, …
+│   ├── core/                    # Databricks, W3C, triplestore, reasoning, graph_analysis, registry helpers, …
 │   ├── objects/                 # Session, project, registry, digital twin models
 │   └── fastapi/                 # GraphQL wiring with core services
 │
@@ -473,7 +479,7 @@ Incremental sync gracefully falls back to a full rebuild when:
 | Condition | Reason |
 |-----------|--------|
 | Ontology or mappings changed | Schema changes invalidate the existing graph structure |
-| No snapshot table exists | First build for this project — must create baseline |
+| No snapshot table exists | First build for this domain — must create baseline |
 | Diff exceeds 80% of total triples | Incremental overhead is worse than a full reload |
 | User selects "Full rebuild" in UI | Explicit opt-in to drop and recreate |
 | Any error during incremental path | Safety net — never leaves the graph in a partial state |
@@ -544,7 +550,7 @@ OntoBricks implements a **multi-phase reasoning pipeline** (`src/back/core/reaso
 
 #### Phase 1: T-Box Reasoning (OWL 2 RL)
 
-OntoBricks uses the **OWL 2 RL** (Rule Language) profile — a decidable subset of OWL 2 designed for rule-based forward chaining. The [`owlrl`](https://owl-rl.readthedocs.io/) library runs a **deductive closure** over the project's OWL ontology:
+OntoBricks uses the **OWL 2 RL** (Rule Language) profile — a decidable subset of OWL 2 designed for rule-based forward chaining. The [`owlrl`](https://owl-rl.readthedocs.io/) library runs a **deductive closure** over the domain's OWL ontology:
 
 - Parses the generated OWL Turtle into an RDFLib graph
 - Applies `DeductiveClosure(OWLRL_Semantics).expand(graph)` — forward-chaining all OWL 2 RL entailment rules
@@ -652,6 +658,7 @@ make help
 |-------|-------------|
 | **Backend** | Python 3.9+, FastAPI 0.109+, Uvicorn, RDFLib 7.0, Strawberry GraphQL |
 | **Reasoning** | owlrl 7.0+ (OWL 2 RL forward chaining), PySHACL 0.26+ (SHACL validation), custom SWRL engine (SQL + Cypher translators) |
+| **Graph Analysis** | NetworkX 3.0+ (community detection: Louvain, Label Propagation, Greedy Modularity), Graphology communities-louvain (client-side) |
 | **Graph** | LadybugDB / real_ladybug (embedded Cypher graph DB), Cypher query language, typed node/rel tables |
 | **Frontend** | Bootstrap 5.3, Sigma.js 3.x, Graphology, D3.js 7.x, OntoViz, Vanilla JS |
 | **Data** | Databricks SQL Connector, Unity Catalog, Delta Lake |

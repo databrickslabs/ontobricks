@@ -1,0 +1,29 @@
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-folder2-open me-2"></i>Domains</h4>
+            <p class="text-muted mb-0 small">Browse, load and manage domains stored in the registry</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshDomains" title="Refresh domain list">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-primary" onclick="domainNew()">
+                <i class="bi bi-file-earmark-plus me-1"></i> New Domain
+            </button>
+            <button type="button" class="btn btn-sm btn-success" onclick="domainLoad()">
+                <i class="bi bi-cloud-download me-1"></i> Load Domain
+            </button>
+        </div>
+    </div>
+
+    <div id="registryStatus" class="mb-3" style="display:none;"></div>
+
+    <div id="registryDomainsSection" style="display:none;">
+        <div id="registryDomainsList">
+            <div class="text-center text-muted small py-3">
+                <span class="spinner-border spinner-border-sm me-1"></span> Loading domains...
+            </div>
+        </div>
+    </div>
+</div>

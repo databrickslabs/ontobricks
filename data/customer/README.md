@@ -372,37 +372,80 @@ General customer interaction log across all channels.
 
 ---
 
-## Loading the Data
+## Generating and Loading Data
+
+The `generate_data.py` script generates synthetic data on the fly and writes it
+directly into Databricks Unity Catalog tables.  No intermediate CSV files are
+created.
 
 ### Prerequisites
 
-1. Upload CSV files to a Unity Catalog Volume
-2. Permissions to create schema and tables in the target catalog
-
-### Using the Databricks Notebook
-
-Use the provided notebook `load_customer_data.py` to:
-
-1. Create a schema in Unity Catalog
-2. Load all 10 CSV files as tables with proper data types
-3. Create useful views for analysis
-4. Verify data integrity with test queries
+1. Python 3.10+
+2. `databricks-sql-connector` (already in project dependencies)
+3. `pyarrow` (already in project dependencies; only needed for large datasets)
+4. A Databricks workspace with a SQL Warehouse and permissions to create schemas/tables
 
 ### Quick Start
 
-```python
-# 1. Upload CSV files to a Unity Catalog Volume
-# 2. Update notebook configuration
-catalog = "your_catalog"
-schema = "customer_journey"
-volume_name = "customer_data"
+```bash
+# Set credentials via environment variables
+export DATABRICKS_HOST="your-workspace.cloud.databricks.com"
+export DATABRICKS_TOKEN="dapi..."
+export DATABRICKS_SQL_WAREHOUSE_ID="abc123def456"
 
-# 3. Run the notebook - it will create all tables automatically
+# Generate default dataset (~4,700 rows)
+python generate_data.py --catalog main --schema customer_journey
 ```
+
+### Scaling to Millions of Rows
+
+For large datasets, provide a UC Volume path for Parquet staging (much faster
+than SQL INSERT for >50K rows):
+
+```bash
+python generate_data.py \
+  --catalog main --schema cj_large \
+  --customers 1000000 \
+  --contracts 1500000 \
+  --subscriptions 1750000 \
+  --meters 2000000 \
+  --meter-readings 5000000 \
+  --invoices 4000000 \
+  --payments 3500000 \
+  --calls 1500000 \
+  --claims 750000 \
+  --interactions 2500000 \
+  --volume /Volumes/main/cj_large/staging \
+  --drop-existing
+```
+
+### All CLI Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--catalog` | (required) | Unity Catalog catalog name |
+| `--schema` | (required) | Unity Catalog schema name |
+| `--customers` | 200 | Number of customer rows |
+| `--contracts` | 300 | Number of contract rows |
+| `--subscriptions` | 350 | Number of subscription rows |
+| `--meters` | 400 | Number of meter rows |
+| `--meter-readings` | 1000 | Number of meter_reading rows |
+| `--invoices` | 800 | Number of invoice rows |
+| `--payments` | 700 | Number of payment rows |
+| `--calls` | 300 | Number of call rows |
+| `--claims` | 150 | Number of claim rows |
+| `--interactions` | 500 | Number of interaction rows |
+| `--host` | env var | Databricks workspace host |
+| `--token` | env var | Databricks PAT token |
+| `--warehouse` | env var | SQL Warehouse ID |
+| `--seed` | 42 | Random seed for reproducibility |
+| `--drop-existing` | off | Drop tables before creating |
+| `--volume` | none | UC Volume path for Parquet staging |
+| `--skip-views` | off | Skip creation of analytical views |
 
 ### Views Created
 
-The loader script creates three analytical views:
+The script creates three analytical views (unless `--skip-views` is set):
 
 | View | Description |
 |------|-------------|
@@ -503,28 +546,28 @@ This dataset is ideal for testing and demonstrating:
 
 ---
 
-## Dataset Statistics
+## Dataset Statistics (defaults)
 
-| Table           | Rows  | Type          | Primary Key     |
-|-----------------|-------|---------------|-----------------|
-| customer        | 200   | Core Entity   | customer_id     |
-| contract        | 300   | Core Entity   | contract_id     |
-| subscription    | 350   | Core Entity   | subscription_id |
-| meter           | 400   | Core Entity   | meter_id        |
-| meter_reading   | 1,000 | Transaction   | reading_id      |
-| invoice         | 800   | Transaction   | invoice_id      |
-| payment         | 700   | Transaction   | payment_id      |
-| call            | 300   | Interaction   | call_id         |
-| claim           | 150   | Interaction   | claim_id        |
-| interaction     | 500   | Interaction   | interaction_id  |
+| Table           | Default Rows | Type          | Primary Key     |
+|-----------------|-------------|---------------|-----------------|
+| customer        | 200         | Core Entity   | customer_id     |
+| contract        | 300         | Core Entity   | contract_id     |
+| subscription    | 350         | Core Entity   | subscription_id |
+| meter           | 400         | Core Entity   | meter_id        |
+| meter_reading   | 1,000       | Transaction   | reading_id      |
+| invoice         | 800         | Transaction   | invoice_id      |
+| payment         | 700         | Transaction   | payment_id      |
+| call            | 300         | Interaction   | call_id         |
+| claim           | 150         | Interaction   | claim_id        |
+| interaction     | 500         | Interaction   | interaction_id  |
 
-**Total:** 10 tables, ~4,700 records
+**Default total:** 10 tables, ~4,700 records (all configurable via CLI options)
 
 ---
 
 ## Data Quality Notes
 
-- All IDs use meaningful prefixes (CUST, CON, MTR, etc.) for readability
+- All IDs use meaningful prefixes (CUST, CON, MTR, etc.) with 7-digit padding for readability
 - Date format: YYYY-MM-DD
 - DateTime format: YYYY-MM-DD HH:MM:SS
 - No NULL values in primary keys
@@ -532,6 +575,8 @@ This dataset is ideal for testing and demonstrating:
 - Realistic French addresses and phone numbers
 - Energy prices based on typical French market rates
 - Customer segments: residential (majority), small_business, professional
+- Names use combinatorial generation (200+ first x 200+ last names) with numeric suffixes for uniqueness beyond 40K customers
+- Same seed always produces the same dataset (reproducible via `--seed`)
 
 ---
 
@@ -539,19 +584,35 @@ This dataset is ideal for testing and demonstrating:
 
 | File | Description |
 |------|-------------|
-| `customer.csv` | Core customer records |
-| `contract.csv` | Energy supply contracts |
-| `subscription.csv` | Pricing plans and tariffs |
-| `meter.csv` | Physical meter information |
-| `meter_reading.csv` | Consumption readings |
-| `invoice.csv` | Billing records |
-| `payment.csv` | Payment transactions |
-| `call.csv` | Customer service calls |
-| `claim.csv` | Customer complaints |
-| `interaction.csv` | General interactions |
-| `load_customer_data.py` | Databricks loader notebook |
-| `generate_data.py` | Data generation script |
+| `generate_data.py` | CLI script: generates synthetic data and loads it into Databricks tables |
+| `generate.sh` | Wrapper script with preset size profiles (`default`, `medium`, `large`, `xlarge`, `custom`) |
+| `load_customer_data.py` | Databricks notebook (alternative: loads from CSV files in a Volume) |
 | `README.md` | This documentation |
+
+---
+
+## Shell Wrapper (`generate.sh`)
+
+The `generate.sh` script wraps `generate_data.py` with preset size profiles.
+Credentials are read from environment variables or the project root `.env` file.
+
+```bash
+./generate.sh                        # default ~4,700 rows
+./generate.sh medium                 # ~23,500 rows
+./generate.sh large                  # ~235,000 rows (Parquet staging auto-enabled)
+./generate.sh xlarge                 # ~2,350,000 rows (Parquet staging auto-enabled)
+./generate.sh custom 5000 7500       # custom: 5000 customers, 7500 contracts, rest scaled
+```
+
+| Profile | Customers | Total Rows | Parquet Staging |
+|---------|-----------|------------|-----------------|
+| `default` | 200 | ~4,700 | No |
+| `medium` | 1,000 | ~23,500 | No |
+| `large` | 10,000 | ~235,000 | Yes (auto) |
+| `xlarge` | 100,000 | ~2,350,000 | Yes (auto) |
+| `custom` | User-defined | Scaled | When total >= 50K |
+
+Override defaults via environment variables: `CATALOG`, `SCHEMA`, `VOLUME`, `SEED`.
 
 ---
 
@@ -561,11 +622,18 @@ To regenerate the dataset with different parameters:
 
 ```bash
 cd data/customer
-python generate_data.py
+
+# Default (~4,700 rows)
+python generate_data.py --catalog main --schema customer_journey
+
+# Custom counts and fresh tables
+python generate_data.py --catalog main --schema cj_test \
+    --customers 10000 --contracts 15000 --drop-existing
+
+# Different random data with a new seed
+python generate_data.py --catalog main --schema customer_journey --seed 123
 ```
 
-Modify `generate_data.py` to:
-- Change record counts
-- Adjust date ranges
-- Add/remove data fields
-- Modify random seed for different data
+The script generates data in memory and loads it directly -- no CSV files are
+created.  For datasets exceeding 50,000 total rows, use `--volume` to enable
+Parquet staging for faster loading.

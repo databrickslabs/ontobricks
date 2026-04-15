@@ -506,7 +506,7 @@ const DocumentPreview = {
         const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
         modal.show();
 
-        const url = `/project/documents/preview/${encodeURIComponent(filename)}`;
+        const url = `/domain/documents/preview/${encodeURIComponent(filename)}`;
 
         if (ext === 'pdf') {
             body.innerHTML = `<iframe class="doc-preview-iframe" src="${url}"></iframe>`;

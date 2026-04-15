@@ -302,9 +302,9 @@ occurrence (preserving provenance of the earliest phase).</p>
 Decision Table, SPARQL CONSTRUCT, and Aggregate rule phases.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="back.core.reasoning.ReasoningService.ReasoningService">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.ReasoningService.</span></span><span class="sig-name descname"><span class="pre">ReasoningService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project_session</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triplestore_backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.ReasoningService.</span></span><span class="sig-name descname"><span class="pre">ReasoningService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_session</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triplestore_backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
-<p>Orchestrate all reasoning phases over a project’s ontology and data.</p>
+<p>Orchestrate all reasoning phases over a domain’s ontology and data.</p>
 <p>Phases (in order):</p>
 <ul class="simple">
 <li><p><strong>T-Box</strong> — OWL 2 RL closure via owlrl on the ontology graph.</p></li>
@@ -327,7 +327,7 @@ are executed as SHACL shapes under the <em>structural</em> and
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>project_session</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>domain_session</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
 <li><p><strong>triplestore_backend</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
 </ul>
 </dd>
@@ -349,7 +349,7 @@ are executed as SHACL shapes under the <em>structural</em> and
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.reasoning.ReasoningService.ReasoningService.run_tbox_reasoning">
 <span class="sig-name descname"><span class="pre">run_tbox_reasoning</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService.run_tbox_reasoning"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService.run_tbox_reasoning" title="Link to this definition">¶</a></dt>
-<dd><p>Run OWL 2 RL deductive closure on the project ontology.</p>
+<dd><p>Run OWL 2 RL deductive closure on the domain ontology.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>

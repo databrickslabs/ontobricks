@@ -7,7 +7,7 @@
 # MAGIC ## Dataset Structure
 # MAGIC - **Core Entity Tables**: Student, Faculty, Department, Course
 # MAGIC - **Academic Tables**: Enrollment, Course Assignment, Course Prerequisite
-# MAGIC - **Research Tables**: Research Project, Publication, Grant Award, Project Collaboration
+# MAGIC - **Research Tables**: Research Domain, Publication, Grant Award, Domain Collaboration
 # MAGIC - **Affiliation Table**: Department Affiliation
 # MAGIC 
 # MAGIC ## Prerequisites
@@ -256,14 +256,14 @@ display(course_prerequisite_df.limit(5))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 4.1 Research Project Table
+# MAGIC ### 4.1 Research Domain Table
 
 # COMMAND ----------
 
-research_project_schema = StructType([
-    StructField("project_id", StringType(), False),
+research_domain_schema = StructType([
+    StructField("domain_id", StringType(), False),
     StructField("department_id", StringType(), False),
-    StructField("project_name", StringType(), True),
+    StructField("domain_name", StringType(), True),
     StructField("start_date", DateType(), True),
     StructField("end_date", DateType(), True),
     StructField("status", StringType(), True),
@@ -271,16 +271,16 @@ research_project_schema = StructType([
     StructField("funding_source", StringType(), True)
 ])
 
-research_project_df = spark.read.csv(
-    f"{volume_path}/research_project.csv",
+research_domain_df = spark.read.csv(
+    f"{volume_path}/research_domain.csv",
     header=True,
-    schema=research_project_schema
+    schema=research_domain_schema
 )
 
-research_project_df.write.mode("overwrite").saveAsTable(f"{catalog}.{schema}.research_project")
-print(f"✓ Created table: {catalog}.{schema}.research_project")
-print(f"  Row count: {research_project_df.count()}")
-display(research_project_df.limit(5))
+research_domain_df.write.mode("overwrite").saveAsTable(f"{catalog}.{schema}.research_domain")
+print(f"✓ Created table: {catalog}.{schema}.research_domain")
+print(f"  Row count: {research_domain_df.count()}")
+display(research_domain_df.limit(5))
 
 # COMMAND ----------
 
@@ -291,7 +291,7 @@ display(research_project_df.limit(5))
 
 publication_schema = StructType([
     StructField("publication_id", StringType(), False),
-    StructField("project_id", StringType(), False),
+    StructField("domain_id", StringType(), False),
     StructField("title", StringType(), True),
     StructField("journal", StringType(), True),
     StructField("publication_date", DateType(), True),
@@ -319,7 +319,7 @@ display(publication_df.limit(5))
 
 grant_award_schema = StructType([
     StructField("grant_id", StringType(), False),
-    StructField("project_id", StringType(), False),
+    StructField("domain_id", StringType(), False),
     StructField("faculty_id", StringType(), False),
     StructField("grant_name", StringType(), True),
     StructField("agency", StringType(), True),
@@ -343,29 +343,29 @@ display(grant_award_df.limit(5))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 4.4 Project Collaboration Table
+# MAGIC ### 4.4 Domain Collaboration Table
 
 # COMMAND ----------
 
-project_collaboration_schema = StructType([
+domain_collaboration_schema = StructType([
     StructField("collab_id", StringType(), False),
-    StructField("project_id", StringType(), False),
+    StructField("domain_id", StringType(), False),
     StructField("faculty_id", StringType(), False),
     StructField("role", StringType(), True),
     StructField("start_date", DateType(), True),
     StructField("hours_per_week", DecimalType(5, 2), True)
 ])
 
-project_collaboration_df = spark.read.csv(
-    f"{volume_path}/project_collaboration.csv",
+domain_collaboration_df = spark.read.csv(
+    f"{volume_path}/domain_collaboration.csv",
     header=True,
-    schema=project_collaboration_schema
+    schema=domain_collaboration_schema
 )
 
-project_collaboration_df.write.mode("overwrite").saveAsTable(f"{catalog}.{schema}.project_collaboration")
-print(f"✓ Created table: {catalog}.{schema}.project_collaboration")
-print(f"  Row count: {project_collaboration_df.count()}")
-display(project_collaboration_df.limit(5))
+domain_collaboration_df.write.mode("overwrite").saveAsTable(f"{catalog}.{schema}.domain_collaboration")
+print(f"✓ Created table: {catalog}.{schema}.domain_collaboration")
+print(f"  Row count: {domain_collaboration_df.count()}")
+display(domain_collaboration_df.limit(5))
 
 # COMMAND ----------
 
@@ -448,13 +448,13 @@ SELECT
     d.building,
     COUNT(DISTINCT ca.assignment_id) as course_assignments,
     COUNT(DISTINCT ga.grant_id) as grant_count,
-    COUNT(DISTINCT pc.collab_id) as project_collaborations
+    COUNT(DISTINCT pc.collab_id) as domain_collaborations
 FROM {catalog}.{schema}.faculty f
 LEFT JOIN {catalog}.{schema}.department_affiliation da ON f.faculty_id = da.faculty_id AND da.is_primary = 'true'
 LEFT JOIN {catalog}.{schema}.department d ON da.department_id = d.department_id
 LEFT JOIN {catalog}.{schema}.course_assignment ca ON f.faculty_id = ca.faculty_id
 LEFT JOIN {catalog}.{schema}.grant_award ga ON f.faculty_id = ga.faculty_id
-LEFT JOIN {catalog}.{schema}.project_collaboration pc ON f.faculty_id = pc.faculty_id
+LEFT JOIN {catalog}.{schema}.domain_collaboration pc ON f.faculty_id = pc.faculty_id
 GROUP BY f.faculty_id, f.first_name, f.last_name, f.title, f.tenure_status,
          f.research_area, f.hire_date, d.department_name, d.building
 """)
@@ -471,24 +471,24 @@ print(f"✓ Created view: {catalog}.{schema}.vw_faculty_profile")
 spark.sql(f"""
 CREATE OR REPLACE VIEW {catalog}.{schema}.vw_research_overview AS
 SELECT 
-    rp.project_id,
-    rp.project_name,
-    rp.status as project_status,
-    rp.start_date,
-    rp.end_date,
-    rp.funding_amount,
-    rp.funding_source,
+    rd.domain_id,
+    rd.domain_name,
+    rd.status as domain_status,
+    rd.start_date,
+    rd.end_date,
+    rd.funding_amount,
+    rd.funding_source,
     d.department_name,
     COUNT(DISTINCT p.publication_id) as publication_count,
     SUM(p.citation_count) as total_citations,
     COUNT(DISTINCT ga.grant_id) as grant_count,
     SUM(ga.amount) as total_grant_funding
-FROM {catalog}.{schema}.research_project rp
-JOIN {catalog}.{schema}.department d ON rp.department_id = d.department_id
-LEFT JOIN {catalog}.{schema}.publication p ON rp.project_id = p.project_id
-LEFT JOIN {catalog}.{schema}.grant_award ga ON rp.project_id = ga.project_id
-GROUP BY rp.project_id, rp.project_name, rp.status, rp.start_date, rp.end_date,
-         rp.funding_amount, rp.funding_source, d.department_name
+FROM {catalog}.{schema}.research_domain rd
+JOIN {catalog}.{schema}.department d ON rd.department_id = d.department_id
+LEFT JOIN {catalog}.{schema}.publication p ON rd.domain_id = p.domain_id
+LEFT JOIN {catalog}.{schema}.grant_award ga ON rd.domain_id = ga.domain_id
+GROUP BY rd.domain_id, rd.domain_name, rd.status, rd.start_date, rd.end_date,
+         rd.funding_amount, rd.funding_source, d.department_name
 """)
 
 print(f"✓ Created view: {catalog}.{schema}.vw_research_overview")
@@ -583,10 +583,10 @@ print(f"   • {catalog}.{schema}.course")
 print(f"   • {catalog}.{schema}.enrollment")
 print(f"   • {catalog}.{schema}.course_assignment")
 print(f"   • {catalog}.{schema}.course_prerequisite")
-print(f"   • {catalog}.{schema}.research_project")
+print(f"   • {catalog}.{schema}.research_domain")
 print(f"   • {catalog}.{schema}.publication")
 print(f"   • {catalog}.{schema}.grant_award")
-print(f"   • {catalog}.{schema}.project_collaboration")
+print(f"   • {catalog}.{schema}.domain_collaboration")
 print(f"   • {catalog}.{schema}.department_affiliation")
 print("\n👁️ Views Created:")
 print(f"   • {catalog}.{schema}.vw_student_transcript")
@@ -596,9 +596,9 @@ print("\n🔗 Key Relationships:")
 print("   • Student → Enrollment → Course (1:N)")
 print("   • Faculty → Course Assignment → Course (1:N)")
 print("   • Department → Course (1:N)")
-print("   • Department → Research Project (1:N)")
-print("   • Research Project → Publication (1:N)")
-print("   • Research Project → Grant Award (1:N)")
+print("   • Department → Research Domain (1:N)")
+print("   • Research Domain → Publication (1:N)")
+print("   • Research Domain → Grant Award (1:N)")
 print("   • Faculty → Department Affiliation → Department (N:M)")
 print("\n" + "=" * 70)
 print("Ready for OntoBricks ontology mapping!")

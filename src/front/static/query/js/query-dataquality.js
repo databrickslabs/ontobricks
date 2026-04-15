@@ -98,7 +98,7 @@ window.DQExecModule = {
         if (!table) {
             showNotification(
                 backend === 'view'
-                    ? 'Delta VIEW is not configured. Set it up in Project Settings and build first.'
+                    ? 'Delta VIEW is not configured. Set it up in Domain Settings and build first.'
                     : 'LadybugDB graph is not available. Build the Digital Twin first.',
                 'warning'
             );
@@ -125,7 +125,12 @@ window.DQExecModule = {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ triplestore_table: table, backend: backend, dimensions: dimensions }),
+                body: JSON.stringify({
+                    triplestore_table: table,
+                    backend: backend,
+                    dimensions: dimensions,
+                    violation_limit: parseInt(document.getElementById('dqViolationLimit')?.value || '10'),
+                }),
             });
             const data = await resp.json();
             if (data.success && data.task_id) {
@@ -265,7 +270,12 @@ window.DQExecModule = {
         const body = document.getElementById('dqExecViolationsBody');
         document.getElementById('dqExecViolationsTitle').innerHTML =
             `<i class="bi bi-exclamation-triangle me-2"></i>${this._escHtml(r.name || 'Violations')}`;
-        let countText = `${r.violations.length} violation${r.violations.length !== 1 ? 's' : ''} found`;
+        let countText = `${r.violations.length} violation${r.violations.length !== 1 ? 's' : ''}`;
+        if (r.violation_total != null && r.violation_total > r.violations.length) {
+            countText += ` shown (${r.violation_total} total)`;
+        } else {
+            countText += ' found';
+        }
         if (r.pass_pct != null && r.total_population > 0) {
             countText += ` — ${r.pass_pct}% pass on ${r.total_population} entities`;
         }

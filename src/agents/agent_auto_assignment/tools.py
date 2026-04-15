@@ -9,6 +9,7 @@ from typing import Callable, Dict, List
 
 from agents.tools.context import ToolContext
 from agents.tools.metadata import (
+    GET_METADATA_DEF,
     tool_get_metadata,
 )
 from agents.tools.ontology import (
@@ -30,23 +31,8 @@ from agents.tools.documents import (
 
 __all__ = ["ToolContext", "TOOL_DEFINITIONS", "TOOL_HANDLERS"]
 
-# Only include get_metadata (not get_table_detail) for this agent
-# Uses imported metadata only — no Unity Catalog queries
-_METADATA_DEF = {
-    "type": "function",
-    "function": {
-        "name": "get_metadata",
-        "description": (
-            "Get the project's imported table metadata (loaded in Project settings): "
-            "table names (full catalog.schema.table), column names, types, comments. "
-            "Does NOT query Unity Catalog. Call this first to understand available data."
-        ),
-        "parameters": {"type": "object", "properties": {}, "required": []},
-    },
-}
-
 TOOL_DEFINITIONS: List[dict] = (
-    [_METADATA_DEF, GET_DOCUMENTS_CONTEXT_DEF]
+    [GET_METADATA_DEF, GET_DOCUMENTS_CONTEXT_DEF]
     + ONTOLOGY_TOOL_DEFINITIONS
     + SQL_TOOL_DEFINITIONS
     + MAPPING_TOOL_DEFINITIONS

@@ -45,6 +45,34 @@ var SigmaGraph = (function () {
     var _cachedStats = null;
     var _libsRequested = false;
 
+    // --- Group expand/collapse state ---
+    var _groupsDefs = [];          // group definitions from /dtwin/groups
+    var _collapsedGroups = new Set(); // group names currently collapsed
+    var _groupMemberMap = {};      // entityType → group name (for quick lookup)
+    var _groupsLoaded = false;
+    var _expandedInstanceMembers = new Set(); // node IDs individually expanded from a super-node
+
+    // --- Data cluster state ---
+    var _clusterAssignments = null;  // node ID → cluster integer, or null
+    var _clusterCount = 0;
+    var _clusterColorByActive = false;
+    var _clusterResolution = 1.0;
+    var _collapsedClusters = new Set();
+    var _clusterCollapseActive = false;
+
+    function _clearExpandedForGroup(groupName) {
+        if (_expandedInstanceMembers.size === 0) return;
+        var nodes = (typeof d3NodesData !== 'undefined' && d3NodesData) ? d3NodesData : [];
+        var nodeTypeMap = {};
+        nodes.forEach(function (n) { if (n && n.id) nodeTypeMap[n.id] = n.type || ''; });
+        var toRemove = [];
+        _expandedInstanceMembers.forEach(function (nid) {
+            var nType = nodeTypeMap[nid] || '';
+            if (_groupMemberMap[nType] === groupName) toRemove.push(nid);
+        });
+        toRemove.forEach(function (nid) { _expandedInstanceMembers.delete(nid); });
+    }
+
     var _GRAPH_LIB_URLS = [
         'https://d3js.org/d3.v7.min.js',
         'https://cdnjs.cloudflare.com/ajax/libs/graphology/0.26.0/graphology.umd.min.js',
@@ -102,6 +130,210 @@ var SigmaGraph = (function () {
     function _extractLocalName(uri) { return extractLocalName(uri); }
 
     // -----------------------------------------------------------
+    // Group helpers
+    // -----------------------------------------------------------
+    function _loadGroups() {
+        return fetch('/dtwin/groups')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) return;
+                _groupsDefs = data.groups || [];
+                _groupMemberMap = {};
+                _groupsDefs.forEach(function (g) {
+                    (g.memberUris || []).forEach(function (uri) { _groupMemberMap[uri] = g.name; });
+                    (g.members || []).forEach(function (m) { _groupMemberMap[m] = g.name; });
+                });
+                if (!_groupsLoaded) {
+                    _groupsDefs.forEach(function (g) { _collapsedGroups.add(g.name); });
+                    _groupsLoaded = true;
+                }
+                _populateGroupsPanel();
+            })
+            .catch(function (err) { console.warn('[SigmaGraph] groups load error:', err); });
+    }
+
+    function _nodeGroupName(nodeData) {
+        if (!nodeData) return null;
+        var id = nodeData.id || '';
+        var type = nodeData.type || nodeData.entityType || '';
+        return _groupMemberMap[id] || _groupMemberMap[type] || _groupMemberMap[_extractLocalName(id)] || _groupMemberMap[_extractLocalName(type)] || null;
+    }
+
+    function _populateGroupsPanel() {
+        var container = document.getElementById('sgGroupsChips');
+        if (!container) return;
+        if (!_groupsDefs || _groupsDefs.length === 0) {
+            container.innerHTML = '<span class="text-muted small">No groups defined.</span>';
+            return;
+        }
+        var html = '';
+        _groupsDefs.forEach(function (g) {
+            var name = g.name;
+            var collapsed = _collapsedGroups.has(name);
+            var color = g.color || '#4A90D9';
+            var count = (g.members || []).length;
+            var iconCls = collapsed ? 'bi-arrows-angle-expand' : 'bi-arrows-angle-contract';
+            html += '<button class="btn btn-sm me-1 mb-1' + (collapsed ? ' btn-outline-secondary' : ' btn-primary') + '" ' +
+                'onclick="SigmaGraph.toggleGroup(\'' + name.replace(/'/g, "\\'") + '\')" ' +
+                'title="' + (collapsed ? 'Expand' : 'Collapse') + ' group: ' + name + '">' +
+                '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + ';margin-right:4px;vertical-align:middle;"></span>' +
+                (g.icon ? g.icon + ' ' : '') +
+                (g.label || name) + ' (' + count + ') ' +
+                '<i class="bi ' + iconCls + '"></i></button>';
+        });
+        container.innerHTML = html;
+    }
+
+    // -----------------------------------------------------------
+    // Data cluster helpers
+    // -----------------------------------------------------------
+
+    var CLUSTER_COLORS = [
+        '#E63946', '#457B9D', '#2A9D8F', '#E9C46A', '#F4A261',
+        '#264653', '#A8DADC', '#8338EC', '#FF006E', '#3A86FF',
+        '#06D6A0', '#FFD166', '#118AB2', '#EF476F', '#073B4C',
+        '#9B5DE5', '#F15BB5', '#00BBF9', '#00F5D4', '#FEE440'
+    ];
+
+    function _clusterColor(clusterId) {
+        return CLUSTER_COLORS[clusterId % CLUSTER_COLORS.length];
+    }
+
+    function _detectClusters(resolution) {
+        if (!_graph || _graph.order === 0) return;
+        if (typeof graphologyLibrary === 'undefined' || !graphologyLibrary.communitiesLouvain) {
+            console.warn('[SigmaGraph] communitiesLouvain not available');
+            return;
+        }
+
+        var louvain = graphologyLibrary.communitiesLouvain;
+        var undirected;
+        try {
+            var GraphClass = graphology.Graph || graphology;
+            undirected = new GraphClass({ multi: false, type: 'undirected' });
+            _graph.forEachNode(function (node, attrs) {
+                if (!attrs._isGroup) undirected.addNode(node);
+            });
+            _graph.forEachEdge(function (edge, attrs, source, target) {
+                if (source === target) return;
+                var sa = _graph.getNodeAttributes(source);
+                var ta = _graph.getNodeAttributes(target);
+                if (sa._isGroup || ta._isGroup) return;
+                if (!undirected.hasEdge(source, target)) {
+                    undirected.addEdge(source, target);
+                }
+            });
+        } catch (e) {
+            console.error('[SigmaGraph] Error building undirected projection:', e);
+            return;
+        }
+
+        if (undirected.order === 0) return;
+
+        try {
+            _clusterAssignments = louvain.assign(undirected, {
+                nodeCommunityAttribute: '_cluster',
+                resolution: resolution || 1.0
+            });
+
+            _clusterAssignments = {};
+            var maxCluster = -1;
+            undirected.forEachNode(function (node, attrs) {
+                var c = attrs._cluster;
+                if (c === undefined) c = 0;
+                _clusterAssignments[node] = c;
+                if (c > maxCluster) maxCluster = c;
+            });
+            _clusterCount = maxCluster + 1;
+
+            _graph.forEachNode(function (node) {
+                if (_clusterAssignments[node] !== undefined) {
+                    _graph.setNodeAttribute(node, '_cluster', _clusterAssignments[node]);
+                }
+            });
+        } catch (e) {
+            console.error('[SigmaGraph] Louvain detection failed:', e);
+            _clusterAssignments = null;
+            _clusterCount = 0;
+        }
+
+        _populateClustersPanel();
+    }
+
+    function _clearClusters() {
+        _clusterAssignments = null;
+        _clusterCount = 0;
+        _clusterColorByActive = false;
+        _collapsedClusters.clear();
+        _clusterCollapseActive = false;
+        if (_graph) {
+            _graph.forEachNode(function (node) {
+                _graph.removeNodeAttribute(node, '_cluster');
+            });
+        }
+        _populateClustersPanel();
+        if (_renderer) _renderer.refresh();
+    }
+
+    function _getClusterStats() {
+        if (!_clusterAssignments) return [];
+        var stats = {};
+        for (var nodeId in _clusterAssignments) {
+            var c = _clusterAssignments[nodeId];
+            if (!stats[c]) stats[c] = { id: c, size: 0, types: {} };
+            stats[c].size++;
+            if (_graph && _graph.hasNode(nodeId)) {
+                var t = _graph.getNodeAttributes(nodeId).entityType || 'Unknown';
+                stats[c].types[t] = (stats[c].types[t] || 0) + 1;
+            }
+        }
+        var list = [];
+        for (var k in stats) list.push(stats[k]);
+        list.sort(function (a, b) { return b.size - a.size; });
+        return list;
+    }
+
+    function _populateClustersPanel() {
+        var container = document.getElementById('sgClusterList');
+        if (!container) return;
+
+        var stats = _getClusterStats();
+        if (stats.length === 0) {
+            container.innerHTML = '<span class="text-muted small">No clusters detected yet.</span>';
+            var countEl = document.getElementById('sgClusterCount');
+            if (countEl) countEl.textContent = '';
+            return;
+        }
+
+        var countEl = document.getElementById('sgClusterCount');
+        if (countEl) countEl.textContent = stats.length + ' clusters found';
+
+        var html = '';
+        stats.forEach(function (cl) {
+            var color = _clusterColor(cl.id);
+            var collapsed = _collapsedClusters.has(cl.id);
+            var topTypes = Object.keys(cl.types).sort(function (a, b) { return cl.types[b] - cl.types[a]; }).slice(0, 3);
+            var typeStr = topTypes.map(function (t) {
+                var name = t.indexOf('#') >= 0 ? t.split('#').pop() : (t.indexOf('/') >= 0 ? t.split('/').pop() : t);
+                return name + '(' + cl.types[t] + ')';
+            }).join(', ');
+
+            html += '<div class="sg-cluster-chip d-flex align-items-center gap-1 mb-1">' +
+                '<span class="sg-cluster-dot" style="background:' + color + '"></span>' +
+                '<span class="small flex-grow-1">' +
+                '<strong>Cluster #' + cl.id + '</strong> <span class="text-muted">(' + cl.size + ')</span>' +
+                '<br><span class="text-muted" style="font-size:.7rem">' + typeStr + '</span>' +
+                '</span>' +
+                '<button class="btn btn-sm py-0 px-1 ' + (collapsed ? 'btn-outline-secondary' : 'btn-outline-primary') + '" ' +
+                'onclick="SigmaGraph.toggleClusterCollapse(' + cl.id + ')" title="' + (collapsed ? 'Expand' : 'Collapse') + '">' +
+                '<i class="bi bi-' + (collapsed ? 'arrows-angle-expand' : 'arrows-angle-contract') + '"></i>' +
+                '</button>' +
+                '</div>';
+        });
+        container.innerHTML = html;
+    }
+
+    // -----------------------------------------------------------
     // Build graphology graph from the data already parsed by query.js
     // -----------------------------------------------------------
     function _buildGraph(filterIds) {
@@ -141,10 +373,171 @@ var SigmaGraph = (function () {
         _visibleEdgeTypes = new Set();
         var addedNodes = new Set();
 
+        // --- Union-Find helpers for connected-component detection ---
+        var _ufParent = {};
+        function _ufFind(x) {
+            if (_ufParent[x] === undefined) _ufParent[x] = x;
+            while (_ufParent[x] !== x) {
+                _ufParent[x] = _ufParent[_ufParent[x]];
+                x = _ufParent[x];
+            }
+            return x;
+        }
+        function _ufUnion(a, b) {
+            var ra = _ufFind(a), rb = _ufFind(b);
+            if (ra !== rb) _ufParent[ra] = rb;
+        }
+
+        // Build type-based lookup: class name/URI -> group name
+        // Groups contain class names, but graph nodes are entity instances whose
+        // `type` field holds the class name. We match on type, not on node id.
+        var _collapsedTypeToGroup = {};
+        var _collapsedInstanceToSuper = {};
+        var _superNodeIds = new Set();
+
+        if (_groupsDefs.length > 0) {
+            _groupsDefs.forEach(function (g) {
+                if (!_collapsedGroups.has(g.name)) return;
+                (g.memberUris || []).forEach(function (uri) { _collapsedTypeToGroup[uri] = g.name; });
+                (g.members || []).forEach(function (m) { _collapsedTypeToGroup[m] = g.name; });
+            });
+        }
+
+        function _groupForType(nodeType, nodeTypeUri) {
+            if (!nodeType && !nodeTypeUri) return null;
+            return _collapsedTypeToGroup[nodeType] || _collapsedTypeToGroup[nodeTypeUri] ||
+                   _collapsedTypeToGroup[_extractLocalName(nodeTypeUri || '')] || null;
+        }
+
+        function _resolveNodeId(nodeId) {
+            if (_collapsedInstanceToSuper[nodeId]) return _collapsedInstanceToSuper[nodeId];
+            return nodeId;
+        }
+
+        // --- Pre-scan: collect group member instances and run union-find ---
+        var _groupInstances = {};   // groupName -> { nodeId: node, ... }
+        var _instanceGroup = {};    // nodeId -> groupName
+
         nodes.forEach(function (n) {
             if (!n || !n.id) return;
             if (filterIds && !filterIds.has(n.id)) return;
             if (hideOrphans && !connectedIds.has(n.id)) return;
+            var gName = _groupForType(n.type || '', n.typeUri || '');
+            if (gName && !_expandedInstanceMembers.has(n.id)) {
+                if (!_groupInstances[gName]) _groupInstances[gName] = {};
+                _groupInstances[gName][n.id] = n;
+                _instanceGroup[n.id] = gName;
+            }
+        });
+
+        links.forEach(function (l) {
+            var s = typeof l.source === 'object' ? l.source.id : l.source;
+            var t = typeof l.target === 'object' ? l.target.id : l.target;
+            var gs = _instanceGroup[s], gt = _instanceGroup[t];
+            if (gs && gs === gt) _ufUnion(s, t);
+        });
+
+        // --- Build connected components and create one super-node per cluster ---
+        var _groupDefs = {};
+        _groupsDefs.forEach(function (g) { _groupDefs[g.name] = g; });
+
+        for (var gName in _groupInstances) {
+            var instances = _groupInstances[gName];
+            var components = {};
+            for (var nid in instances) {
+                var root = _ufFind(nid);
+                if (!components[root]) components[root] = [];
+                components[root].push(nid);
+            }
+            var g = _groupDefs[gName];
+            var color = (g && g.color) || '#4A90D9';
+            var groupIcon = (g && g.icon) || '📁';
+            var groupLabel = (g && g.label) || gName;
+            var compIdx = 0;
+            var compKeys = Object.keys(components);
+            var multiComponent = compKeys.length > 1;
+            compKeys.forEach(function (root) {
+                var memberIds = components[root];
+                var superNodeId = '__group__' + gName + '__' + compIdx;
+                compIdx++;
+                _superNodeIds.add(superNodeId);
+                var instanceCount = memberIds.length;
+                var label = groupIcon + ' ' + groupLabel +
+                    (multiComponent ? ' #' + compIdx : '') +
+                    ' (' + instanceCount + ')';
+                try {
+                    graph.addNode(superNodeId, {
+                        label: label,
+                        entityType: '__group__',
+                        icon: groupIcon,
+                        color: color,
+                        size: Math.min(14 + instanceCount, 24),
+                        _isGroup: true,
+                        _groupName: gName,
+                        _memberIds: memberIds,
+                        _data: { id: superNodeId, label: groupLabel, type: '__group__' }
+                    });
+                    addedNodes.add(superNodeId);
+                    _visibleTypes.add('__group__');
+                } catch (_) {}
+                memberIds.forEach(function (mid) {
+                    _collapsedInstanceToSuper[mid] = superNodeId;
+                });
+            });
+        }
+
+        // --- Cluster collapse: build super-nodes for collapsed clusters ---
+        var _clusterInstanceToSuper = {};
+        if (_clusterCollapseActive && _clusterAssignments && _collapsedClusters.size > 0) {
+            var _clusterMembers = {};
+            nodes.forEach(function (n) {
+                if (!n || !n.id) return;
+                if (filterIds && !filterIds.has(n.id)) return;
+                if (hideOrphans && !connectedIds.has(n.id)) return;
+                if (_instanceGroup[n.id]) return;
+                var cid = _clusterAssignments[n.id];
+                if (cid !== undefined && _collapsedClusters.has(cid)) {
+                    if (!_clusterMembers[cid]) _clusterMembers[cid] = [];
+                    _clusterMembers[cid].push(n.id);
+                }
+            });
+
+            for (var cid in _clusterMembers) {
+                var memberIds = _clusterMembers[cid];
+                var cidInt = parseInt(cid);
+                var color = _clusterColor(cidInt);
+                var superNodeId = '__cluster__' + cid;
+                _superNodeIds.add(superNodeId);
+                var label = '🔵 Cluster #' + cid + ' (' + memberIds.length + ')';
+                try {
+                    graph.addNode(superNodeId, {
+                        label: label,
+                        entityType: '__cluster__',
+                        color: color,
+                        size: Math.min(14 + memberIds.length, 24),
+                        _isClusterNode: true,
+                        _clusterId: cidInt,
+                        _memberIds: memberIds,
+                        _data: { id: superNodeId, label: 'Cluster #' + cid, type: '__cluster__' }
+                    });
+                    addedNodes.add(superNodeId);
+                    _visibleTypes.add('__cluster__');
+                } catch (_) {}
+                memberIds.forEach(function (mid) {
+                    _clusterInstanceToSuper[mid] = superNodeId;
+                    _collapsedInstanceToSuper[mid] = superNodeId;
+                });
+            }
+        }
+
+        // --- Add non-group nodes ---
+        nodes.forEach(function (n) {
+            if (!n || !n.id) return;
+            if (filterIds && !filterIds.has(n.id)) return;
+            if (hideOrphans && !connectedIds.has(n.id)) return;
+            if (_instanceGroup[n.id]) return;
+            if (_clusterInstanceToSuper[n.id]) return;
+
             if (addedNodes.has(n.id)) return;
             var entityType = n.type || 'Unknown';
             _visibleTypes.add(entityType);
@@ -163,15 +556,31 @@ var SigmaGraph = (function () {
             } catch (_) {}
         });
 
+        var _addedEdgeKeys = new Set();
         links.forEach(function (l) {
             var s = typeof l.source === 'object' ? l.source.id : l.source;
             var t = typeof l.target === 'object' ? l.target.id : l.target;
+
+            // Redirect edges to super-nodes for collapsed groups
+            s = _resolveNodeId(s);
+            t = _resolveNodeId(t);
+
             if (!graph.hasNode(s) || !graph.hasNode(t)) return;
+            if (s === t) return; // skip self-loops caused by collapsing
+
             var pred = l.predicate || '';
             _visibleEdgeTypes.add(pred);
             var isInferred = !!(l.provenance || l.inferred);
             var edgeColor = isInferred ? '#4ECDC4' : '#bbb';
             var edgeSize = isInferred ? 2.5 : 1.5;
+
+            // Deduplicate edges to/from super-nodes
+            var edgeKey = s + '|' + t + '|' + pred;
+            if (_superNodeIds.has(s) || _superNodeIds.has(t)) {
+                if (_addedEdgeKeys.has(edgeKey)) return;
+                _addedEdgeKeys.add(edgeKey);
+            }
+
             try {
                 graph.addEdge(s, t, {
                     label: isInferred ? pred + ' [inferred]' : pred,
@@ -192,18 +601,119 @@ var SigmaGraph = (function () {
     // -----------------------------------------------------------
     // ForceAtlas2 layout
     // -----------------------------------------------------------
-    function _applyLayout(graph) {
-        if (!graph || graph.order === 0) return;
+    var _savedPositions = null;
 
-        // Random initial positions
-        graph.forEachNode(function (node) {
-            graph.setNodeAttribute(node, 'x', Math.random() * 1000);
-            graph.setNodeAttribute(node, 'y', Math.random() * 1000);
+    function _savePositions() {
+        if (!_graph) { _savedPositions = null; return; }
+        var pos = {};
+        _graph.forEachNode(function (node, attrs) {
+            if (attrs.x !== undefined && attrs.y !== undefined) {
+                pos[node] = { x: attrs.x, y: attrs.y };
+            }
         });
+        _savedPositions = pos;
+    }
+
+    function _applyLayout(graph, isGroupToggle) {
+        if (!graph || graph.order === 0) return;
 
         var fa2 = (typeof graphologyLibrary !== 'undefined' && graphologyLibrary.layoutForceAtlas2)
             ? graphologyLibrary.layoutForceAtlas2
             : (typeof ForceAtlas2 !== 'undefined' ? ForceAtlas2 : null);
+
+        if (isGroupToggle && _savedPositions) {
+            var groupCentroids = {};
+            for (var sn in _savedPositions) {
+                if (sn.indexOf('__group__') !== 0) continue;
+                var parts = sn.split('__');
+                var gn = parts.length >= 4 ? parts[2] : '';
+                if (!gn) continue;
+                if (!groupCentroids[gn]) groupCentroids[gn] = { x: 0, y: 0, c: 0 };
+                groupCentroids[gn].x += _savedPositions[sn].x;
+                groupCentroids[gn].y += _savedPositions[sn].y;
+                groupCentroids[gn].c++;
+            }
+            for (var gn in groupCentroids) {
+                groupCentroids[gn].x /= groupCentroids[gn].c;
+                groupCentroids[gn].y /= groupCentroids[gn].c;
+            }
+
+            var newNodes = [];
+            graph.forEachNode(function (node, attrs) {
+                var saved = _savedPositions[node];
+                if (saved) {
+                    graph.setNodeAttribute(node, 'x', saved.x);
+                    graph.setNodeAttribute(node, 'y', saved.y);
+                } else {
+                    newNodes.push(node);
+                }
+            });
+
+            if (newNodes.length > 0) {
+                newNodes.forEach(function (node) {
+                    var attrs = graph.getNodeAttributes(node);
+                    var refX = 0, refY = 0, refCount = 0;
+
+                    if (attrs._isGroup && attrs._memberIds) {
+                        attrs._memberIds.forEach(function (mid) {
+                            var p = _savedPositions[mid];
+                            if (p) { refX += p.x; refY += p.y; refCount++; }
+                        });
+                    }
+
+                    if (refCount === 0) {
+                        graph.forEachNeighbor(node, function (neighbor) {
+                            var na = graph.getNodeAttributes(neighbor);
+                            if (na.x !== undefined && na.y !== undefined) {
+                                refX += na.x; refY += na.y; refCount++;
+                            }
+                        });
+                    }
+
+                    if (refCount === 0) {
+                        var nodeGroup = _groupMemberMap[attrs.entityType] || null;
+                        if (nodeGroup && groupCentroids[nodeGroup]) {
+                            refX = groupCentroids[nodeGroup].x;
+                            refY = groupCentroids[nodeGroup].y;
+                            refCount = 1;
+                        } else if (attrs._isGroup && attrs._groupName && groupCentroids[attrs._groupName]) {
+                            refX = groupCentroids[attrs._groupName].x;
+                            refY = groupCentroids[attrs._groupName].y;
+                            refCount = 1;
+                        }
+                    }
+
+                    if (refCount > 0) {
+                        var jitter = 40;
+                        graph.setNodeAttribute(node, 'x', refX / refCount + (Math.random() - 0.5) * jitter);
+                        graph.setNodeAttribute(node, 'y', refY / refCount + (Math.random() - 0.5) * jitter);
+                    } else {
+                        graph.setNodeAttribute(node, 'x', Math.random() * 1000);
+                        graph.setNodeAttribute(node, 'y', Math.random() * 1000);
+                    }
+                });
+
+                if (fa2 && fa2.assign) {
+                    fa2.assign(graph, {
+                        iterations: 30,
+                        settings: {
+                            gravity: 1,
+                            scalingRatio: 10,
+                            barnesHutOptimize: graph.order > 500,
+                            strongGravityMode: true,
+                            slowDown: 10
+                        }
+                    });
+                }
+            }
+            _savedPositions = null;
+            return;
+        }
+
+        graph.forEachNode(function (node) {
+            graph.setNodeAttribute(node, 'x', Math.random() * 1000);
+            graph.setNodeAttribute(node, 'y', Math.random() * 1000);
+        });
 
         if (fa2 && fa2.assign) {
             fa2.assign(graph, {
@@ -227,16 +737,30 @@ var SigmaGraph = (function () {
         if (loading) loading.style.display = 'none';
     }
 
-    function _render(filterIds) {
+    function _render(filterIds, isGroupToggle) {
         var container = document.getElementById('sgContainer');
         var loading = document.getElementById('sgLoading');
         if (!container) { console.warn('[SigmaGraph] container #sgContainer not found'); _hideLoading(); return; }
         _hideEmptyState();
 
+        // Ensure groups are loaded before first render
+        if (!_groupsLoaded) {
+            _loadGroups().then(function () { _render(filterIds); });
+            return;
+        }
+
         var SigmaModule = (typeof Sigma !== 'undefined') ? Sigma : null;
         if (!SigmaModule) { console.error('[SigmaGraph] Sigma library not loaded'); _hideLoading(); return; }
         var SigmaClass = (typeof SigmaModule === 'function') ? SigmaModule : (SigmaModule.Sigma || SigmaModule.default || null);
         if (!SigmaClass) { console.error('[SigmaGraph] Could not find Sigma constructor in', Object.keys(SigmaModule)); _hideLoading(); return; }
+
+        var savedCamera = null;
+        if (isGroupToggle) {
+            _savePositions();
+            if (_renderer) {
+                try { savedCamera = _renderer.getCamera().getState(); } catch (_) {}
+            }
+        }
 
         if (_renderer) {
             try { _renderer.kill(); } catch (_) {}
@@ -252,7 +776,7 @@ var SigmaGraph = (function () {
 
         console.log('[SigmaGraph] graph built:', _graph.order, 'nodes,', _graph.size, 'edges');
 
-        _applyLayout(_graph);
+        _applyLayout(_graph, isGroupToggle);
 
         if (loading) loading.style.display = 'none';
 
@@ -298,8 +822,25 @@ var SigmaGraph = (function () {
             _searchNeighbors = null;
             _selectedNode = e.node;
             _hoveredNode = null;
+            _switchToTab('sgTabDetails');
             _showNodeDetails(e.node);
             _renderer.refresh();
+        });
+
+        _renderer.on('doubleClickNode', function (e) {
+            var attrs = _graph.getNodeAttributes(e.node);
+            if (attrs && attrs._isGroup && attrs._groupName) {
+                SigmaGraph.expandInstance(e.node);
+            } else if (_expandedInstanceMembers.has(e.node)) {
+                SigmaGraph.collapseInstance(e.node);
+            } else {
+                var groupName = _nodeGroupName(attrs && attrs._data) ||
+                    _groupMemberMap[attrs && attrs.entityType] || null;
+                if (groupName && !_collapsedGroups.has(groupName)) {
+                    SigmaGraph.toggleGroup(groupName);
+                }
+            }
+            if (e.preventSigmaDefault) e.preventSigmaDefault();
         });
 
         _renderer.on('clickStage', function () {
@@ -328,13 +869,19 @@ var SigmaGraph = (function () {
         _renderer.on('clickEdge', function (e) {
             _selectedNode = null;
             _hoveredNode = null;
+            _switchToTab('sgTabDetails');
             _showEdgeDetails(e.edge);
             _renderer.refresh();
         });
 
         _updateStats();
         _populateTypes();
-        _populateSearchTypes();
+        _populateGroupsPanel();
+
+        if (savedCamera && _renderer) {
+            try { _renderer.getCamera().setState(savedCamera); } catch (_) {}
+        }
+
         console.log('[SigmaGraph] render complete');
     }
 
@@ -395,6 +942,34 @@ var SigmaGraph = (function () {
         if (_visibleTypes.size > 0 && !_visibleTypes.has(data.entityType)) {
             res.hidden = true;
             return res;
+        }
+
+        // Group super-nodes: always show label, larger, with border ring
+        if (data._isGroup) {
+            res.forceLabel = true;
+            res.labelSize = 14;
+            res.labelWeight = 'bold';
+            res.zIndex = 5;
+            res.borderColor = data.color || '#4A90D9';
+            res.borderSize = 3;
+        }
+
+        // Cluster super-nodes
+        if (data._isClusterNode) {
+            res.forceLabel = true;
+            res.labelSize = 14;
+            res.labelWeight = 'bold';
+            res.zIndex = 5;
+            res.borderColor = data.color || '#999';
+            res.borderSize = 3;
+        }
+
+        // Color by cluster mode
+        if (_clusterColorByActive && _clusterAssignments && !data._isGroup && !data._isClusterNode) {
+            var cid = _clusterAssignments[node];
+            if (cid !== undefined) {
+                res.color = _clusterColor(cid);
+            }
         }
 
         if (_highlightedSeeds && _highlightedSeeds.has(node)) {
@@ -489,6 +1064,13 @@ var SigmaGraph = (function () {
     // -----------------------------------------------------------
     // Details Panel
     // -----------------------------------------------------------
+    function _switchToTab(tabId) {
+        var tab = document.getElementById(tabId);
+        if (tab && typeof bootstrap !== 'undefined') {
+            bootstrap.Tab.getOrCreateInstance(tab).show();
+        }
+    }
+
     function _showPlaceholder() {
         var el = document.getElementById('sgDetailsContent');
         if (!el) return;
@@ -500,6 +1082,93 @@ var SigmaGraph = (function () {
         if (!el || !_graph) return;
         var attrs = _graph.getNodeAttributes(nodeId);
         var entity = attrs._data || {};
+
+        // --- Group super-node: show group info + member list ---
+        if (attrs._isGroup) {
+            var esc = (typeof escapeHtml === 'function') ? escapeHtml : _esc;
+            var gIcon = attrs.icon || '📁';
+            var gLabel = (attrs._data && attrs._data.label) || attrs._groupName || '';
+            var gColor = attrs.color || '#4A90D9';
+            var memberIds = attrs._memberIds || [];
+            var nodes = (typeof d3NodesData !== 'undefined' && d3NodesData) ? d3NodesData : [];
+            var nodeMap = {};
+            nodes.forEach(function (n) { if (n && n.id) nodeMap[n.id] = n; });
+
+            var html = '<div class="entity-detail-header">' +
+                '<span class="entity-detail-icon" style="font-size:1.6rem;">' + gIcon + '</span>' +
+                '<div class="entity-detail-title">' +
+                '<h6>' + esc(gLabel) + '</h6>' +
+                '<small class="text-muted">Group &mdash; ' + memberIds.length + ' entities</small>' +
+                '</div></div>';
+
+            html += '<div class="entity-detail-section">' +
+                '<h6><i class="bi bi-collection" style="color:' + esc(gColor) + '"></i> Included Entities</h6>';
+            if (memberIds.length === 0) {
+                html += '<p class="small text-muted mb-0">No entities in this cluster.</p>';
+            } else {
+                memberIds.forEach(function (mid) {
+                    var n = nodeMap[mid];
+                    var mLabel = n ? ((typeof getDisplayLabel === 'function') ? getDisplayLabel(n) : (n.label || _extractLocalName(mid))) : _extractLocalName(mid);
+                    var mIcon = n ? ((typeof getEntityIcon === 'function') ? getEntityIcon(n) : '📦') : '📦';
+                    var mType = n ? (n.type || '') : '';
+                    html += '<div class="entity-relationship-item">' +
+                        mIcon + ' <strong>' + esc(mLabel) + '</strong>' +
+                        (mType ? ' <span class="text-muted small">(' + esc(mType) + ')</span>' : '') +
+                        '</div>';
+                });
+            }
+            html += '</div>';
+
+            var escapedNodeId = esc(nodeId).replace(/'/g, "\\'");
+            html += '<div class="entity-detail-section">' +
+                '<button class="btn btn-sm btn-outline-warning w-100" onclick="SigmaGraph.expandInstance(\'' + escapedNodeId + '\')">' +
+                '<i class="bi bi-arrows-expand me-1"></i>Expand this cluster</button></div>';
+
+            el.innerHTML = html;
+            return;
+        }
+
+        // --- Cluster super-node: show cluster info + member list ---
+        if (attrs._isClusterNode) {
+            var esc = (typeof escapeHtml === 'function') ? escapeHtml : _esc;
+            var clusterId = attrs._clusterId;
+            var clColor = attrs.color || _clusterColor(clusterId);
+            var memberIds = attrs._memberIds || [];
+            var nodes = (typeof d3NodesData !== 'undefined' && d3NodesData) ? d3NodesData : [];
+            var nodeMap = {};
+            nodes.forEach(function (n) { if (n && n.id) nodeMap[n.id] = n; });
+
+            var html = '<div class="entity-detail-header">' +
+                '<span class="entity-detail-icon" style="font-size:1.6rem;">🔵</span>' +
+                '<div class="entity-detail-title">' +
+                '<h6>Cluster #' + clusterId + '</h6>' +
+                '<small class="text-muted">Data cluster &mdash; ' + memberIds.length + ' entities</small>' +
+                '</div></div>';
+
+            html += '<div class="entity-detail-section">' +
+                '<h6><i class="bi bi-people" style="color:' + esc(clColor) + '"></i> Members (' + memberIds.length + ')</h6>' +
+                '<div style="max-height:300px; overflow-y:auto;">';
+            memberIds.forEach(function (mid) {
+                var n = nodeMap[mid];
+                var mLabel = n ? ((typeof getDisplayLabel === 'function') ? getDisplayLabel(n) : (n.label || _extractLocalName(mid))) : _extractLocalName(mid);
+                var mIcon = n ? ((typeof getEntityIcon === 'function') ? getEntityIcon(n) : '📦') : '📦';
+                var mType = n ? (n.type || '') : '';
+                var mTypeName = mType ? (mType.indexOf('#') >= 0 ? mType.split('#').pop() : (mType.indexOf('/') >= 0 ? mType.split('/').pop() : mType)) : '';
+                html += '<div class="entity-relationship-item">' +
+                    mIcon + ' <strong>' + esc(mLabel) + '</strong>' +
+                    (mTypeName ? ' <span class="text-muted small">(' + esc(mTypeName) + ')</span>' : '') +
+                    '</div>';
+            });
+            html += '</div></div>';
+
+            var escapedNodeId = esc(nodeId).replace(/'/g, "\\'");
+            html += '<div class="entity-detail-section">' +
+                '<button class="btn btn-sm btn-outline-warning w-100" onclick="SigmaGraph.expandCluster(' + clusterId + ')">' +
+                '<i class="bi bi-arrows-expand me-1"></i>Expand this cluster</button></div>';
+
+            el.innerHTML = html;
+            return;
+        }
 
         if (typeof entityMappings !== 'undefined' && Object.keys(entityMappings).length === 0 && typeof loadEntityMappings === 'function') {
             await loadEntityMappings();
@@ -619,7 +1288,14 @@ var SigmaGraph = (function () {
             '<div class="entity-detail-item"><span class="detail-key"><i class="bi bi-box text-primary"></i> Type</span>' +
             '<span class="detail-value">' + esc(ontologyTypeName) + '</span></div>' +
             '<div class="entity-detail-item"><span class="detail-key"><i class="bi bi-key-fill text-warning"></i> ID</span>' +
-            '<span class="detail-value">' + esc(actualIdValue || 'N/A') + '</span></div></div>';
+            '<span class="detail-value">' + esc(actualIdValue || 'N/A') + '</span></div>';
+        if (_clusterAssignments && _clusterAssignments[nodeId] !== undefined) {
+            var _cid = _clusterAssignments[nodeId];
+            html += '<div class="entity-detail-item"><span class="detail-key"><i class="bi bi-bezier2 text-success"></i> Cluster</span>' +
+                '<span class="detail-value"><span class="sg-cluster-dot" style="background:' + _clusterColor(_cid) + ';width:10px;height:10px;display:inline-block;border-radius:50%;vertical-align:middle;margin-right:4px;"></span>' +
+                'Cluster #' + _cid + '</span></div>';
+        }
+        html += '</div>';
 
         var customAttrs = {};
         if (entityMapping && entityMapping.attributeMappings) {
@@ -663,6 +1339,29 @@ var SigmaGraph = (function () {
             html += '<div class="entity-detail-section"><h6><i class="bi bi-speedometer2"></i> Dashboard</h6>' +
                 '<div class="entity-detail-item"><button onclick="openDashboardModal(\'' + esc(dashUrl) + '\', \'' + esc(ontologyTypeName) + '\', \'' + esc(actualIdValue || '') + '\')" ' +
                 'class="btn btn-sm btn-outline-info w-100" title="Open dashboard"><i class="bi bi-speedometer2 me-1"></i>View Dashboard</button></div></div>';
+        }
+
+        // Cross-domain bridges
+        var bridges = (entityMapping && entityMapping.bridges) || (classInfo && classInfo.bridges) || [];
+        if (bridges.length > 0) {
+            html += '<div class="entity-detail-section"><h6><i class="bi bi-signpost-2"></i> Bridges (' + bridges.length + ')</h6>';
+            bridges.forEach(function (bridge) {
+                var tgtDom = bridge.target_domain || bridge.target_project || '';
+                var targetEntityUri = actualIdValue
+                    ? (bridge.target_class_uri || '') + '#' + actualIdValue
+                    : (bridge.target_class_uri || '');
+                var resolveUrl = '/resolve?uri=' + encodeURIComponent(targetEntityUri) +
+                    '&domain=' + encodeURIComponent(tgtDom);
+                var tooltip = bridge.label || ('Navigate to ' + (bridge.target_class_name || '') + ' in ' + tgtDom);
+                html += '<div class="entity-detail-item">' +
+                    '<a href="' + esc(resolveUrl) + '" class="btn btn-sm btn-outline-primary w-100 text-start" title="' + esc(tooltip) + '">' +
+                    '<i class="bi bi-signpost-2 me-1"></i>' +
+                    '<span class="fw-semibold">' + esc(bridge.target_class_name || '') + '</span>' +
+                    '<small class="text-muted ms-1"><i class="bi bi-folder2-open ms-1 me-1"></i>' + esc(tgtDom) + '</small>' +
+                    '<i class="bi bi-box-arrow-up-right ms-auto float-end mt-1"></i>' +
+                    '</a></div>';
+            });
+            html += '</div>';
         }
 
         var outgoingRels = (typeof d3LinksData !== 'undefined' && d3LinksData) ? d3LinksData.filter(function (l) {
@@ -851,18 +1550,6 @@ var SigmaGraph = (function () {
         relCont.innerHTML = rHtml || '<span class="text-muted small">No relationships loaded</span>';
     }
 
-    function _populateSearchTypes() {
-        var sel = document.getElementById('sgSearchEntityType');
-        if (!sel || !_graph) return;
-        var types = new Set();
-        _graph.forEachNode(function (n, a) { if (a.entityType) types.add(a.entityType); });
-        var html = '<option value="">All types</option>';
-        Array.from(types).sort().forEach(function (t) {
-            html += '<option value="' + _esc(t) + '">' + _esc(t) + '</option>';
-        });
-        sel.innerHTML = html;
-    }
-
     async function _populateFilterEntityTypes() {
         var sel = document.getElementById('sgFilterEntityType');
         if (!sel) return;
@@ -910,100 +1597,264 @@ var SigmaGraph = (function () {
         sel.innerHTML = html;
     }
 
-    function _extractShortId(uri) {
-        if (!uri) return null;
-        if (!uri.startsWith('http')) return uri;
-        var parts = uri.split('/');
-        return parts[parts.length - 1];
+    // -- Seed preview modal state ---------------------------------------
+    var _seedData = [];
+    var _seedSearchTerm = '';
+
+    var _TYPE_COLORS = [
+        '#6366F1', '#EC4899', '#14B8A6', '#F59E0B', '#EF4444',
+        '#3B82F6', '#8B5CF6', '#10B981', '#F97316', '#06B6D4',
+    ];
+    var _typeColorMap = {};
+    var _typeColorIdx = 0;
+
+    function _typeColor(typeName) {
+        if (!_typeColorMap[typeName]) {
+            _typeColorMap[typeName] = _TYPE_COLORS[_typeColorIdx % _TYPE_COLORS.length];
+            _typeColorIdx++;
+        }
+        return _typeColorMap[typeName];
     }
 
-    async function _executeGraphFilter() {
+    function _updateSeedSelectedCount() {
+        var checks = document.querySelectorAll('#sgSeedTableBody .sg-seed-check');
+        var checked = 0;
+        checks.forEach(function (c) { if (c.checked) checked++; });
+        var el = document.getElementById('sgSeedSelectedCount');
+        if (el) el.textContent = checked;
+        var btn = document.getElementById('sgSeedExploreBtn');
+        if (btn) btn.disabled = (checked === 0);
+    }
+
+    function _renderSeedTable() {
+        var tbody = document.getElementById('sgSeedTableBody');
+        if (!tbody) return;
+        var filter = _seedSearchTerm.toLowerCase();
+        var html = '';
+        for (var i = 0; i < _seedData.length; i++) {
+            var s = _seedData[i];
+            if (filter && s.label.toLowerCase().indexOf(filter) < 0 &&
+                s.type.toLowerCase().indexOf(filter) < 0 &&
+                s.uri.toLowerCase().indexOf(filter) < 0) {
+                continue;
+            }
+            var color = _typeColor(s.type);
+            var shortUri = s.uri.length > 60 ? '...' + s.uri.slice(-57) : s.uri;
+            html += '<tr>'
+                + '<td><input class="form-check-input sg-seed-check" type="checkbox" data-uri="' + _esc(s.uri) + '" onchange="SigmaGraph.updateSeedSelection()"></td>'
+                + '<td><span class="badge sg-type-badge" style="background:' + color + ';">' + _esc(s.type) + '</span></td>'
+                + '<td class="small">' + _esc(s.label) + '</td>'
+                + '<td class="small text-muted text-truncate" style="max-width:200px;" title="' + _esc(s.uri) + '">' + _esc(shortUri) + '</td>'
+                + '</tr>';
+        }
+        tbody.innerHTML = html || '<tr><td colspan="4" class="text-center text-muted small py-3">No matches</td></tr>';
+        _updateSeedSelectedCount();
+    }
+
+    function _toggleSeedSelectAll() {
+        var allCb = document.getElementById('sgSeedSelectAll');
+        var checked = allCb ? allCb.checked : true;
+        document.querySelectorAll('#sgSeedTableBody .sg-seed-check').forEach(function (c) {
+            c.checked = checked;
+        });
+        _updateSeedSelectedCount();
+    }
+
+    function _filterSeedTable() {
+        _seedSearchTerm = (document.getElementById('sgSeedQuickFilter')?.value || '').trim();
+        _renderSeedTable();
+    }
+
+    function _getSelectedSeedUris() {
+        var uris = [];
+        document.querySelectorAll('#sgSeedTableBody .sg-seed-check:checked').forEach(function (c) {
+            uris.push(c.getAttribute('data-uri'));
+        });
+        return uris;
+    }
+
+    // -- Phase 1: preview search ----------------------------------------
+    async function _executeGraphSearch() {
         var entityType = (document.getElementById('sgFilterEntityType')?.value || '').trim();
         var matchType = document.getElementById('sgFilterMatchType')?.value || 'contains';
         var searchValue = (document.getElementById('sgFilterValue')?.value || '').trim();
-        var includeRels = true;
-        var maxDepth = parseInt(document.getElementById('sgFilterDepth')?.value || '3');
 
         if (!searchValue && !entityType) return;
 
         var info = document.getElementById('sgGraphFilterInfo');
         var text = document.getElementById('sgGraphFilterInfoText');
-        if (info && text) { info.classList.remove('d-none'); text.textContent = 'Querying triple store...'; }
-
-        var loading = document.getElementById('sgLoading');
-        if (loading) loading.style.display = 'flex';
-        _hideEmptyState();
+        if (info && text) { info.classList.remove('d-none'); text.textContent = 'Searching...'; }
 
         try {
             var resp = await fetch('/dtwin/sync/filter', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    phase: 'preview',
                     entity_type: entityType,
                     field: 'any',
                     match_type: matchType,
                     value: searchValue,
-                    include_rels: includeRels,
-                    depth: maxDepth
                 }),
                 credentials: 'same-origin'
             });
             var data = await resp.json();
 
             if (!data.success) {
-                _hideLoading();
-                if (info && text) { info.classList.remove('d-none'); text.textContent = data.message || 'Filter query failed.'; }
+                if (info && text) { info.classList.remove('d-none'); text.textContent = data.message || 'Search failed.'; }
                 return;
             }
 
-            if (!data.results || data.results.length === 0) {
-                _hideLoading();
-                if (info && text) { info.classList.remove('d-none'); text.textContent = data.message || 'No entities found matching your search criteria.'; }
+            var seeds = data.seeds || [];
+            if (seeds.length === 0) {
+                if (info && text) { info.classList.remove('d-none'); text.textContent = data.message || 'No entities found.'; }
                 return;
             }
 
-            lastQueryResults = { results: data.results, columns: data.columns };
+            _seedData = seeds;
+            _seedSearchTerm = '';
+            _typeColorMap = {};
+            _typeColorIdx = 0;
+            var quickFilter = document.getElementById('sgSeedQuickFilter');
+            if (quickFilter) quickFilter.value = '';
+            var selectAll = document.getElementById('sgSeedSelectAll');
+            if (selectAll) selectAll.checked = false;
 
-            var libsOk = await _waitForGraphLibs(10000);
-            if (!libsOk) {
-                _hideLoading();
-                if (info && text) { info.classList.remove('d-none'); text.textContent = 'Graph libraries failed to load. Check your network and reload.'; }
-                return;
+            var countEl = document.getElementById('sgSeedCount');
+            if (countEl) countEl.textContent = seeds.length;
+
+            var cappedWarn = document.getElementById('sgSeedCappedWarning');
+            var totalEl = document.getElementById('sgSeedTotalCount');
+            if (data.capped && cappedWarn) {
+                if (totalEl) totalEl.textContent = data.total;
+                cappedWarn.classList.remove('d-none');
+            } else if (cappedWarn) {
+                cappedWarn.classList.add('d-none');
             }
 
-            if (typeof buildGraph === 'function') {
-                await buildGraph(data.results, data.columns);
+            _renderSeedTable();
+
+            var modalEl = document.getElementById('sgSeedPreviewModal');
+            if (modalEl) {
+                var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.show();
             }
 
-            _graphFilterActive = true;
-            _searchMatched = null;
-            _searchNeighbors = null;
-            _selectedNode = null;
-            _hoveredNode = null;
-            if (!_pendingHighlightTerm && searchValue) {
-                _pendingHighlightTerm = searchValue;
-            }
-            _render();
-
-            setTimeout(function () { _applyPendingHighlight(); }, 200);
-
-            var initialCount = data.initial_count || 0;
-            var expandedCount = data.expanded_count || 0;
-            var relatedCount = expandedCount - initialCount;
             if (info && text) {
                 info.classList.remove('d-none');
-                if (includeRels && relatedCount > 0) {
-                    text.textContent = 'Found ' + expandedCount + ' entities (' + initialCount + ' matched, ' + relatedCount + ' related at ' + maxDepth + ' level' + (maxDepth > 1 ? 's' : '') + ').';
-                } else {
-                    text.textContent = 'Found ' + initialCount + ' entities (' + data.count + ' triples).';
-                }
+                text.textContent = seeds.length + ' entities found' + (data.capped ? ' (showing first 500 of ' + data.total + ')' : '') + '. Select entities to explore.';
             }
-            var clearBtn = document.getElementById('sgClearGraphFilterBtn');
-            if (clearBtn) clearBtn.style.display = 'inline-block';
 
         } catch (err) {
-            console.error('[SigmaGraph] _executeGraphFilter error:', err);
+            console.error('[SigmaGraph] _executeGraphSearch error:', err);
+            if (info && text) { info.classList.remove('d-none'); text.textContent = 'Error: ' + err.message; }
+        }
+    }
+
+    // -- Shared expand + render pipeline ----------------------------------
+    async function _expandAndRenderGraph(uris, opts) {
+        opts = opts || {};
+        var maxDepth = parseInt(document.getElementById('sgFilterDepth')?.value || '3');
+        var maxEntities = parseInt(document.getElementById('sgMaxEntities')?.value || '5000');
+        var highlightTerm = opts.highlightTerm || (document.getElementById('sgFilterValue')?.value || '').trim();
+
+        var info = document.getElementById('sgGraphFilterInfo');
+        var text = document.getElementById('sgGraphFilterInfoText');
+        if (info && text) { info.classList.remove('d-none'); text.textContent = 'Expanding ' + uris.length + ' entities...'; }
+
+        var loading = document.getElementById('sgLoading');
+        if (loading) loading.style.display = 'flex';
+        _hideEmptyState();
+
+        var resp = await fetch('/dtwin/sync/filter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                phase: 'expand',
+                selected_uris: uris,
+                include_rels: true,
+                depth: maxDepth,
+                max_entities: maxEntities,
+            }),
+            credentials: 'same-origin'
+        });
+        var data = await resp.json();
+
+        if (!data.success) {
             _hideLoading();
+            if (info && text) { info.classList.remove('d-none'); text.textContent = data.message || 'Expansion failed.'; }
+            return null;
+        }
+
+        if (!data.results || data.results.length === 0) {
+            _hideLoading();
+            if (info && text) { info.classList.remove('d-none'); text.textContent = 'No triples found for the selected entities.'; }
+            return null;
+        }
+
+        lastQueryResults = { results: data.results, columns: data.columns };
+
+        var libsOk = await _waitForGraphLibs(10000);
+        if (!libsOk) {
+            _hideLoading();
+            if (info && text) { info.classList.remove('d-none'); text.textContent = 'Graph libraries failed to load. Check your network and reload.'; }
+            return null;
+        }
+
+        if (typeof buildGraph === 'function') {
+            await buildGraph(data.results, data.columns);
+        }
+
+        _graphFilterActive = true;
+        _searchMatched = null;
+        _searchNeighbors = null;
+        _selectedNode = null;
+        _hoveredNode = null;
+        if (highlightTerm) _pendingHighlightTerm = highlightTerm;
+        _render();
+
+        setTimeout(function () { _applyPendingHighlight(); }, 200);
+
+        var initialCount = data.initial_count || 0;
+        var expandedCount = data.expanded_count || 0;
+        var relatedCount = expandedCount - initialCount;
+        if (info && text) {
+            info.classList.remove('d-none');
+            var msg;
+            if (relatedCount > 0) {
+                msg = expandedCount + ' entities (' + initialCount + ' selected, ' + relatedCount + ' related at ' + maxDepth + ' level' + (maxDepth > 1 ? 's' : '') + ').';
+            } else {
+                msg = initialCount + ' entities (' + (data.count || 0) + ' triples).';
+            }
+            if (data.capped) {
+                msg += ' Results capped at ' + maxEntities.toLocaleString() + ' entities.';
+            }
+            text.textContent = msg;
+        }
+        var clearBtn = document.getElementById('sgClearGraphFilterBtn');
+        if (clearBtn) clearBtn.style.display = 'inline-block';
+
+        return data;
+    }
+
+    // -- Phase 2: expand selected seeds ---------------------------------
+    async function _expandSelectedSeeds() {
+        var selectedUris = _getSelectedSeedUris();
+        if (selectedUris.length === 0) return;
+
+        var modalEl = document.getElementById('sgSeedPreviewModal');
+        if (modalEl) {
+            var modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+        }
+
+        try {
+            await _expandAndRenderGraph(selectedUris);
+        } catch (err) {
+            console.error('[SigmaGraph] _expandSelectedSeeds error:', err);
+            _hideLoading();
+            var info = document.getElementById('sgGraphFilterInfo');
+            var text = document.getElementById('sgGraphFilterInfoText');
             if (info && text) { info.classList.remove('d-none'); text.textContent = 'Error: ' + err.message; }
         }
     }
@@ -1088,10 +1939,7 @@ var SigmaGraph = (function () {
             }
             placeholder.style.display = '';
         }
-        var gp = document.getElementById('sgGraphFilterPane');
-        if (gp && gp.style.display === 'none') {
-            SigmaGraph.toggleGraphFilterPane();
-        }
+        _switchToTab('sgTabFilter');
         _populateFilterEntityTypes();
     }
 
@@ -1127,7 +1975,7 @@ var SigmaGraph = (function () {
     return {
         init: init,
         reload: function () { if (_hasData()) { _render(); } else { _showEmptyState(); } },
-        refresh: function () { _render(); },
+        refresh: function (isGroupToggle) { _render(undefined, isGroupToggle); },
 
         selectEntity: function (entityId) {
             if (!_graph || !_graph.hasNode(entityId)) return;
@@ -1142,6 +1990,78 @@ var SigmaGraph = (function () {
             }
         },
 
+        focusEntityByUri: async function (uri) {
+            if (!uri) return false;
+
+            var localName = uri;
+            if (uri.indexOf('#') !== -1) localName = uri.split('#').pop();
+            else if (uri.indexOf('/') !== -1) {
+                var parts = uri.split('/');
+                localName = parts[parts.length - 1] || parts[parts.length - 2] || '';
+            }
+            if (!localName) return false;
+
+            var filterInput = document.getElementById('sgFilterValue');
+            if (filterInput) filterInput.value = localName;
+            var matchSel = document.getElementById('sgFilterMatchType');
+            if (matchSel) matchSel.value = 'contains';
+
+            var info = document.getElementById('sgGraphFilterInfo');
+            var text = document.getElementById('sgGraphFilterInfoText');
+            if (info && text) { info.classList.remove('d-none'); text.textContent = 'Searching...'; }
+
+            try {
+                var previewResp = await fetch('/dtwin/sync/filter', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        phase: 'preview',
+                        entity_type: '',
+                        field: 'any',
+                        match_type: 'contains',
+                        value: localName,
+                    }),
+                    credentials: 'same-origin'
+                });
+                var previewData = await previewResp.json();
+
+                if (!previewData.success || !(previewData.seeds || []).length) {
+                    if (info && text) { info.classList.remove('d-none'); text.textContent = previewData.message || 'No entities found.'; }
+                    return false;
+                }
+
+                var seedUris = previewData.seeds.map(function (s) { return s.uri; });
+                var data = await _expandAndRenderGraph(seedUris, { highlightTerm: localName });
+                if (!data) return false;
+
+                if (_graph) {
+                    var found = null;
+                    if (_graph.hasNode(uri)) {
+                        found = uri;
+                    } else {
+                        _graph.forEachNode(function (nodeId, attrs) {
+                            if (found) return;
+                            var nodeUri = (attrs._data && attrs._data.uri) ? attrs._data.uri : '';
+                            if (nodeUri === uri) { found = nodeId; return; }
+                            var label = (attrs._data && attrs._data.label) ? attrs._data.label : (attrs.label || '');
+                            if (label.toLowerCase() === localName.toLowerCase() || nodeId.toLowerCase() === localName.toLowerCase()) {
+                                found = nodeId;
+                            }
+                        });
+                    }
+                    if (found) {
+                        SigmaGraph.selectEntity(found);
+                    }
+                }
+                return true;
+            } catch (err) {
+                console.error('[SigmaGraph] focusEntityByUri error:', err);
+                _hideLoading();
+                if (info && text) { info.classList.remove('d-none'); text.textContent = 'Error: ' + err.message; }
+                return false;
+            }
+        },
+
         zoomIn: function () { if (_renderer) { var c = _renderer.getCamera(); c.animatedZoom({ duration: 200 }); } },
         zoomOut: function () { if (_renderer) { var c = _renderer.getCamera(); c.animatedUnzoom({ duration: 200 }); } },
         fitToView: function () { if (_renderer) { var c = _renderer.getCamera(); c.animatedReset({ duration: 300 }); } },
@@ -1151,27 +2071,17 @@ var SigmaGraph = (function () {
         toggleEdgeLabels: function () { if (_renderer) _renderer.setSetting('renderEdgeLabels', document.getElementById('sgShowEdgeLabels')?.checked !== false); },
 
         toggleTypesPanel: function () {
-            var p = document.getElementById('sgTypesPanel');
-            var b = document.getElementById('sgToggleTypesBtn');
-            if (!p) return;
-            var vis = p.style.display !== 'none';
-            p.style.display = vis ? 'none' : 'block';
-            if (b) b.classList.toggle('active', !vis);
-            if (!vis) _populateTypes();
+            _switchToTab('sgTabView');
+            _populateTypes();
+        },
+
+        toggleGroupsPanel: function () {
+            _switchToTab('sgTabView');
+            _loadGroups();
         },
 
         toggleFilterPane: function () {
-            var p = document.getElementById('sgFilterPane');
-            var b = document.getElementById('sgToggleFilterBtn');
-            if (!p) return;
-            var vis = p.style.display !== 'none';
-            if (!vis) {
-                var gp = document.getElementById('sgGraphFilterPane');
-                var gb = document.getElementById('sgToggleGraphFilterBtn');
-                if (gp && gp.style.display !== 'none') { gp.style.display = 'none'; if (gb) gb.classList.remove('active'); }
-            }
-            p.style.display = vis ? 'none' : 'flex';
-            if (b) b.classList.toggle('active', !vis);
+            _switchToTab('sgTabFind');
         },
 
         toggleType: function (type) {
@@ -1205,10 +2115,10 @@ var SigmaGraph = (function () {
 
         applySearch: function () {
             if (!_graph) return;
-            var typeFilter = document.getElementById('sgSearchEntityType')?.value || '';
+            var typeFilter = '';
             var query = (document.getElementById('sgSearchValue')?.value || '').toLowerCase().trim();
 
-            if (!typeFilter && !query) {
+            if (!query) {
                 SigmaGraph.clearSearch();
                 return;
             }
@@ -1262,8 +2172,6 @@ var SigmaGraph = (function () {
             if (clearBtn) clearBtn.style.display = 'none';
             var val = document.getElementById('sgSearchValue');
             if (val) val.value = '';
-            var sel = document.getElementById('sgSearchEntityType');
-            if (sel) sel.value = '';
             if (_renderer) {
                 _renderer.getCamera().animatedReset({ duration: 300 });
                 _renderer.refresh();
@@ -1271,22 +2179,17 @@ var SigmaGraph = (function () {
         },
 
         toggleGraphFilterPane: function () {
-            var p = document.getElementById('sgGraphFilterPane');
-            var b = document.getElementById('sgToggleGraphFilterBtn');
-            if (!p) return;
-            var vis = p.style.display !== 'none';
-            if (!vis) {
-                var fp = document.getElementById('sgFilterPane');
-                var fb = document.getElementById('sgToggleFilterBtn');
-                if (fp && fp.style.display !== 'none') { fp.style.display = 'none'; if (fb) fb.classList.remove('active'); }
-            }
-            p.style.display = vis ? 'none' : 'flex';
-            if (b) b.classList.toggle('active', !vis);
-            if (!vis) _populateFilterEntityTypes();
+            _switchToTab('sgTabFilter');
+            _populateFilterEntityTypes();
         },
 
         populateFilterEntityTypes: function () { _populateFilterEntityTypes(); },
-        executeGraphFilter: function () { _executeGraphFilter(); },
+        executeGraphFilter: function () { _executeGraphSearch(); },
+        executeGraphSearch: function () { _executeGraphSearch(); },
+        expandSelectedSeeds: function () { _expandSelectedSeeds(); },
+        toggleSeedSelectAll: function () { _toggleSeedSelectAll(); },
+        filterSeedTable: function () { _filterSeedTable(); },
+        updateSeedSelection: function () { _updateSeedSelectedCount(); },
         clearGraphFilter: function () { _clearGraphFilter(); },
         setHighlightTerm: function (term) { _pendingHighlightTerm = term || null; },
         clearHighlight: function () { _highlightedSeeds = null; _pendingHighlightTerm = null; if (_renderer) _renderer.refresh(); },
@@ -1330,6 +2233,337 @@ var SigmaGraph = (function () {
                 }
             });
             if (_renderer) _renderer.refresh();
-        }
+        },
+
+        // --- Group expand / collapse ---
+
+        expandInstance: function (superNodeId) {
+            if (!_graph || !_graph.hasNode(superNodeId)) return;
+            var attrs = _graph.getNodeAttributes(superNodeId);
+            if (!attrs || !attrs._memberIds) return;
+            attrs._memberIds.forEach(function (mid) {
+                _expandedInstanceMembers.add(mid);
+            });
+            _selectedNode = null;
+            _showPlaceholder();
+            SigmaGraph.refresh(true);
+        },
+
+        collapseInstance: function (nodeId) {
+            if (!_graph || !_graph.hasNode(nodeId)) return;
+            var attrs = _graph.getNodeAttributes(nodeId);
+            var groupName = _groupMemberMap[attrs && attrs.entityType] || null;
+            if (!groupName) return;
+
+            var component = new Set([nodeId]);
+            var queue = [nodeId];
+            while (queue.length > 0) {
+                var current = queue.shift();
+                _graph.forEachNeighbor(current, function (neighbor) {
+                    if (component.has(neighbor)) return;
+                    var na = _graph.getNodeAttributes(neighbor);
+                    var nGroup = _groupMemberMap[na && na.entityType] || null;
+                    if (nGroup === groupName && _expandedInstanceMembers.has(neighbor)) {
+                        component.add(neighbor);
+                        queue.push(neighbor);
+                    }
+                });
+            }
+
+            component.forEach(function (mid) {
+                _expandedInstanceMembers.delete(mid);
+            });
+            _selectedNode = null;
+            _showPlaceholder();
+            SigmaGraph.refresh(true);
+        },
+
+        toggleGroup: function (groupName) {
+            if (_collapsedGroups.has(groupName)) {
+                _collapsedGroups.delete(groupName);
+            } else {
+                _collapsedGroups.add(groupName);
+            }
+            _clearExpandedForGroup(groupName);
+            _selectedNode = null;
+            _showPlaceholder();
+            _populateGroupsPanel();
+            SigmaGraph.refresh(true);
+        },
+
+        collapseAllGroups: function () {
+            _groupsDefs.forEach(function (g) { _collapsedGroups.add(g.name); });
+            _expandedInstanceMembers.clear();
+            _populateGroupsPanel();
+            SigmaGraph.refresh(true);
+        },
+
+        expandAllGroups: function () {
+            _collapsedGroups.clear();
+            _expandedInstanceMembers.clear();
+            _populateGroupsPanel();
+            SigmaGraph.refresh(true);
+        },
+
+        reloadGroups: function () {
+            _loadGroups().then(function () {
+                if (_hasData()) SigmaGraph.refresh();
+            });
+        },
+
+        // --- Data cluster detection ---
+
+        detectClusters: function (resolution) {
+            if (!_graph || _graph.order === 0) {
+                if (typeof showNotification === 'function') showNotification('No graph data loaded.', 'warning');
+                return;
+            }
+            _clusterResolution = resolution || parseFloat(document.getElementById('sgClusterResolution')?.value) || 1.0;
+            _detectClusters(_clusterResolution);
+            if (_clusterAssignments && _clusterCount > 0) {
+                if (typeof showNotification === 'function') {
+                    showNotification('Detected ' + _clusterCount + ' clusters (resolution ' + _clusterResolution.toFixed(2) + ')', 'info');
+                }
+                if (_renderer) _renderer.refresh();
+            } else {
+                if (typeof showNotification === 'function') showNotification('No clusters detected.', 'warning');
+            }
+        },
+
+        clearClusters: function () {
+            _clearClusters();
+            var colorCheck = document.getElementById('sgClusterColorBy');
+            if (colorCheck) colorCheck.checked = false;
+            if (typeof showNotification === 'function') showNotification('Clusters cleared.', 'info');
+        },
+
+        toggleClusterColorBy: function () {
+            var checked = document.getElementById('sgClusterColorBy')?.checked || false;
+            _clusterColorByActive = checked;
+            if (_renderer) _renderer.refresh();
+        },
+
+        toggleClusterCollapse: function (clusterId) {
+            if (_collapsedClusters.has(clusterId)) {
+                _collapsedClusters.delete(clusterId);
+            } else {
+                _collapsedClusters.add(clusterId);
+            }
+            _clusterCollapseActive = _collapsedClusters.size > 0;
+            _populateClustersPanel();
+            SigmaGraph.refresh(true);
+        },
+
+        collapseAllClusters: function () {
+            if (!_clusterAssignments) return;
+            for (var nodeId in _clusterAssignments) {
+                _collapsedClusters.add(_clusterAssignments[nodeId]);
+            }
+            _clusterCollapseActive = true;
+            _populateClustersPanel();
+            SigmaGraph.refresh(true);
+        },
+
+        expandAllClusters: function () {
+            _collapsedClusters.clear();
+            _clusterCollapseActive = false;
+            _populateClustersPanel();
+            SigmaGraph.refresh(true);
+        },
+
+        expandCluster: function (clusterId) {
+            _collapsedClusters.delete(clusterId);
+            _clusterCollapseActive = _collapsedClusters.size > 0;
+            _selectedNode = null;
+            _showPlaceholder();
+            _populateClustersPanel();
+            SigmaGraph.refresh(true);
+        },
+
+        detectClustersBackend: async function () {
+            if (typeof showNotification === 'function') showNotification('Detecting clusters on full graph...', 'info');
+            var algorithm = document.getElementById('sgClusterAlgorithm')?.value || 'louvain';
+            var resolution = parseFloat(document.getElementById('sgClusterResolution')?.value) || 1.0;
+            try {
+                var resp = await fetch('/dtwin/clusters/detect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ algorithm: algorithm, resolution: resolution })
+                });
+                var data = await resp.json();
+                if (!data.success) {
+                    if (typeof showNotification === 'function') showNotification(data.message || 'Detection failed', 'danger');
+                    return;
+                }
+                var clusters = data.clusters || [];
+                _clusterAssignments = {};
+                _clusterCount = clusters.length;
+                clusters.forEach(function (cl) {
+                    (cl.members || []).forEach(function (uri) {
+                        _clusterAssignments[uri] = cl.id;
+                    });
+                });
+                if (_graph) {
+                    _graph.forEachNode(function (node) {
+                        if (_clusterAssignments[node] !== undefined) {
+                            _graph.setNodeAttribute(node, '_cluster', _clusterAssignments[node]);
+                        }
+                    });
+                }
+                _populateClustersPanel();
+                if (_renderer) _renderer.refresh();
+                var stats = data.stats || {};
+                if (typeof showNotification === 'function') {
+                    showNotification(
+                        'Backend: ' + _clusterCount + ' clusters detected (' +
+                        (stats.node_count || '?') + ' nodes, ' +
+                        (stats.elapsed_ms || '?') + 'ms)',
+                        'success'
+                    );
+                }
+            } catch (e) {
+                console.error('[SigmaGraph] Backend cluster detection error:', e);
+                if (typeof showNotification === 'function') showNotification('Backend detection error: ' + e.message, 'danger');
+            }
+        },
+
+        updateClusterResolutionLabel: function () {
+            var slider = document.getElementById('sgClusterResolution');
+            var label = document.getElementById('sgClusterResolutionValue');
+            if (slider && label) label.textContent = parseFloat(slider.value).toFixed(2);
+        },
+
+        openGraphSwitcher: function () { _openGraphSwitcherModal(); }
     };
 })();
+
+// =====================================================
+// GRAPH SWITCHER MODAL (global scope for onclick access)
+// =====================================================
+
+async function _openGraphSwitcherModal() {
+    var modalId = 'graphSwitcherModal';
+    var existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+
+    var currentGraph = (window.__TRIPLESTORE_CONFIG && window.__TRIPLESTORE_CONFIG.graph_name) || '';
+    var esc = (typeof escapeHtml === 'function') ? escapeHtml : function (s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+
+    var html = '<div class="modal fade" id="' + modalId + '" tabindex="-1" data-bs-backdrop="static">' +
+        '<div class="modal-dialog modal-lg modal-dialog-centered" style="max-height:50vh;">' +
+        '<div class="modal-content" style="max-height:50vh;">' +
+        '<div class="modal-header flex-shrink-0">' +
+        '<h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Switch Domain</h5>' +
+        '<button type="button" class="btn-close" data-bs-dismiss="modal"></button>' +
+        '</div>' +
+        '<div class="modal-body" style="overflow-y:auto;">' +
+        '<div class="mb-3 p-2 bg-light rounded border">' +
+        '<small class="text-muted">Current graph:</small> ' +
+        '<code class="text-primary fw-semibold">' + esc(currentGraph) + '</code>' +
+        '</div>' +
+        '<div id="graphSwitcherLoading" class="text-center py-4">' +
+        '<div class="spinner-border spinner-border-sm text-primary"></div>' +
+        '<span class="ms-2">Loading registry domains...</span>' +
+        '</div>' +
+        '<div id="graphSwitcherContent" style="display:none;">' +
+        '<div id="graphSwitcherList"></div>' +
+        '</div>' +
+        '</div></div></div></div>';
+
+    document.body.insertAdjacentHTML('beforeend', html);
+    var modal = new bootstrap.Modal(document.getElementById(modalId));
+    modal.show();
+
+    try {
+        var resp = await fetch('/settings/registry/domains', { credentials: 'same-origin' });
+        var data = await resp.json();
+
+        document.getElementById('graphSwitcherLoading').style.display = 'none';
+        document.getElementById('graphSwitcherContent').style.display = '';
+
+        var list = document.getElementById('graphSwitcherList');
+        var rows = data.domains || data.projects || [];
+        if (!data.success || !rows.length) {
+            list.innerHTML = '<div class="text-muted text-center p-3">No domains found in the registry</div>';
+            return;
+        }
+
+        var domainsHtml = '';
+        rows.forEach(function (p) {
+            var versions = p.versions || [];
+            if (versions.length === 0) return;
+
+            var versionsHtml = versions.map(function (v) {
+                var ver = (typeof v === 'object' && v !== null) ? v.version : v;
+                var isActive = (typeof v === 'object' && v !== null) && v.active;
+                var graphName = p.name + '_V' + ver;
+                var isCurrent = graphName === currentGraph;
+                var btnClass = isCurrent ? 'btn-primary disabled' : (isActive ? 'btn-outline-success' : 'btn-outline-primary');
+                var badge = isCurrent ? ' <span class="badge bg-success ms-1">current</span>'
+                    : (isActive ? ' <span class="badge bg-success-subtle text-success ms-1" style="font-size:.6rem">Active</span>' : '');
+                return '<button type="button" class="btn btn-sm ' + btnClass + ' me-1 mb-1" ' +
+                    'onclick="_graphSwitcherSelect(\'' + esc(p.name) + '\', \'' + esc(ver) + '\')" ' +
+                    'title="Graph: ' + esc(graphName) + '">' +
+                    'v' + esc(ver) + badge + '</button>';
+            }).join('');
+
+            domainsHtml += '<div class="border rounded p-2 mb-2">' +
+                '<div class="d-flex align-items-center gap-2">' +
+                '<i class="bi bi-folder2-open text-primary"></i>' +
+                '<span class="fw-semibold">' + esc(p.name) + '</span>' +
+                '</div>' +
+                (p.description ? '<div class="ms-4 mb-1"><small class="text-muted" style="font-size:.8rem">' + esc(p.description) + '</small></div>' : '') +
+                (p.base_uri ? '<div class="ms-4 mb-1"><small class="text-muted"><i class="bi bi-link-45deg me-1"></i>URI: <code>' + esc(p.base_uri) + '</code></small></div>' : '') +
+                '<div class="ms-4">' + versionsHtml + '</div>' +
+                '</div>';
+        });
+
+        list.innerHTML = domainsHtml || '<div class="text-muted text-center p-3">No domains with versions found</div>';
+    } catch (err) {
+        console.error('[GraphSwitcher] Error:', err);
+        document.getElementById('graphSwitcherLoading').innerHTML =
+            '<div class="text-danger"><i class="bi bi-exclamation-triangle"></i> Failed to load domains</div>';
+    }
+}
+
+function _closeGraphSwitcherModal() {
+    var el = document.getElementById('graphSwitcherModal');
+    if (el) {
+        var m = bootstrap.Modal.getInstance(el);
+        if (m) m.hide();
+        el.addEventListener('hidden.bs.modal', function () { el.remove(); }, { once: true });
+    }
+}
+
+async function _graphSwitcherSelect(domainName, version) {
+    var esc = (typeof escapeHtml === 'function') ? escapeHtml : function (s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+    var list = document.getElementById('graphSwitcherList');
+    if (list) {
+        list.innerHTML = '<div class="text-center py-4">' +
+            '<div class="spinner-border spinner-border-sm text-primary"></div>' +
+            '<span class="ms-2">Loading <strong>' + esc(domainName) + '</strong> v' + esc(version) + '...</span>' +
+            '</div>';
+    }
+
+    try {
+        var resp = await fetch('/domain/load-from-uc', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain: domainName, version: version })
+        });
+        var data = await resp.json();
+        if (data.success) {
+            if (typeof fetchCachedInvalidate === 'function') fetchCachedInvalidate('/navbar/state');
+            _closeGraphSwitcherModal();
+            window.location.href = '/dtwin/?section=sigmagraph';
+        } else {
+            if (list) list.innerHTML = '<div class="text-danger p-3"><i class="bi bi-exclamation-triangle me-1"></i>' +
+                esc(data.message || 'Failed to load domain') + '</div>';
+        }
+    } catch (err) {
+        console.error('[GraphSwitcher] Load error:', err);
+        if (list) list.innerHTML = '<div class="text-danger p-3"><i class="bi bi-exclamation-triangle me-1"></i>Failed to load domain</div>';
+    }
+}

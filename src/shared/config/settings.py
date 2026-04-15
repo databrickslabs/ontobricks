@@ -34,7 +34,7 @@ class Settings(BaseSettings):
         """Alias used by resolve_warehouse_id()."""
         return self.databricks_sql_warehouse_id
 
-    # Project Registry (single Volume for all projects)
+    # Domain Registry (single Volume for all domains)
     registry_volume_path: str = ""
     registry_catalog: str = ""
     registry_schema: str = ""

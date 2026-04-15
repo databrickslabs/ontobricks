@@ -1,0 +1,69 @@
+<!-- Mapping Diagnostics Section -->
+
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-shield-check me-2"></i>Mapping Diagnostics</h4>
+        <p class="text-muted mb-0 small">Validate entity and relationship mappings before building the Digital Twin</p>
+    </div>
+    <button type="button" class="btn btn-sm btn-primary" id="runDiagnosticsBtn">
+        <i class="bi bi-play-circle me-1"></i> Run Diagnostics
+    </button>
+</div>
+
+<!-- Summary Bar -->
+<div id="diagSummaryBar" class="diag-summary-bar d-none">
+    <div class="diag-summary-item diag-summary-total">
+        <span class="diag-summary-count" id="diagTotalCount">0</span>
+        <span class="diag-summary-label">Total</span>
+    </div>
+    <div class="diag-summary-item diag-summary-ok">
+        <i class="bi bi-check-circle-fill"></i>
+        <span class="diag-summary-count" id="diagOkCount">0</span>
+        <span class="diag-summary-label">OK</span>
+    </div>
+    <div class="diag-summary-item diag-summary-warn">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <span class="diag-summary-count" id="diagWarningCount">0</span>
+        <span class="diag-summary-label">Warnings</span>
+    </div>
+    <div class="diag-summary-item diag-summary-error">
+        <i class="bi bi-x-circle-fill"></i>
+        <span class="diag-summary-count" id="diagErrorCount">0</span>
+        <span class="diag-summary-label">Errors</span>
+    </div>
+</div>
+
+<!-- Loading spinner -->
+<div id="diagLoading" class="text-center py-5 d-none">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Running diagnostics...</span>
+    </div>
+    <p class="text-muted mt-2">Running diagnostics...</p>
+</div>
+
+<!-- Empty state -->
+<div id="diagEmptyState" class="text-center py-5">
+    <i class="bi bi-shield-check display-4 text-muted"></i>
+    <p class="text-muted mt-3">Click <strong>Run Diagnostics</strong> to validate all entity and relationship mappings.</p>
+</div>
+
+<!-- Results -->
+<div id="diagResults" class="d-none">
+    <!-- Entities -->
+    <div class="diag-group mb-4">
+        <h5 class="diag-group-title">
+            <i class="bi bi-box me-2"></i>Entities
+            <span class="badge bg-secondary ms-2" id="diagEntityBadge">0</span>
+        </h5>
+        <div id="diagEntitiesBody" class="diag-table-body"></div>
+    </div>
+
+    <!-- Relationships -->
+    <div class="diag-group mb-4">
+        <h5 class="diag-group-title">
+            <i class="bi bi-arrow-left-right me-2"></i>Relationships
+            <span class="badge bg-secondary ms-2" id="diagRelBadge">0</span>
+        </h5>
+        <div id="diagRelationshipsBody" class="diag-table-body"></div>
+    </div>
+</div>

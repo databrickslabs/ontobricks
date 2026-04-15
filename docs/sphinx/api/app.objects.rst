@@ -1,7 +1,7 @@
 ``back.objects`` -- Application domain objects
 ==============================================
 
-Session-scoped project state, ontology, mapping, and digital-twin query pipeline,
+Session-scoped domain state, ontology, mapping, and digital-twin query pipeline,
 Unity Catalog registry, permissions, and related services. These packages
 intentionally live outside
 ``back.core`` (which holds shared infrastructure: Databricks clients, triple
@@ -14,7 +14,7 @@ Subpackages
 .. toctree::
    :maxdepth: 1
 
-   app.objects.project
+   app.objects.domain
    app.objects.ontology
    app.objects.mapping
    app.objects.digitaltwin

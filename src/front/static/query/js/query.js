@@ -66,25 +66,37 @@ let allRelationshipTypes = new Set();
 // Configure sidebar navigation
 window.SIDEBAR_NAV_MANUAL_INIT = true;
 document.addEventListener('DOMContentLoaded', function() {
-    // Check URL for section parameter (deep-link from top banner dropdown)
     const urlParams = new URLSearchParams(window.location.search);
     const initialSection = urlParams.get('section');
+    const focusEntityUri = urlParams.get('focus');
+    const bridgeDomain = urlParams.get('domain') || urlParams.get('project');
+
+    _initQueryPage(initialSection, focusEntityUri, bridgeDomain);
+});
+
+async function _initQueryPage(initialSection, focusEntityUri, bridgeDomain) {
+    if (bridgeDomain) {
+        await _switchDomainForBridge(bridgeDomain, focusEntityUri);
+        return;
+    }
 
     SidebarNav.init({
         onSectionChange: async function(section, targetSection) {
-            // Initialize sigma.js graph view (small delay for DOM layout)
             if (section === 'sigmagraph') {
                 if (typeof SigmaGraph !== 'undefined') {
-                    setTimeout(function () { SigmaGraph.init(); }, 100);
+                    setTimeout(function () {
+                        SigmaGraph.init();
+                        if (focusEntityUri) {
+                            _applyFocusEntityWhenReady(focusEntityUri);
+                        }
+                    }, 100);
                 }
             }
-            // Initialize embedded GraphiQL playground
             if (section === 'graphql') {
                 if (typeof GraphQLPlayground !== 'undefined') {
                     setTimeout(function () { GraphQLPlayground.init(); }, 100);
                 }
             }
-            // Initialize SHACL Data Quality execution module
             if (section === 'dataquality') {
                 if (typeof DQExecModule !== 'undefined') {
                     DQExecModule.init();
@@ -96,17 +108,54 @@ document.addEventListener('DOMContentLoaded', function() {
     loadOntologyIcons();
     loadEntityMappings();
 
-    // Navigate to the requested section, or fall back to "sync" (Information)
-    const targetSection = initialSection || 'sync';
+    if (typeof loadSyncInfo === 'function') {
+        loadSyncInfo();
+    }
+
+    const targetSection = initialSection || 'sigmagraph';
     const link = document.querySelector(`[data-section="${targetSection}"]`);
     if (link) {
         setTimeout(() => link.click(), 300);
     }
-});
+}
+
+async function _switchDomainForBridge(domainName, focusUri) {
+    try {
+        const resp = await fetch('/domain/load-from-uc', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain: domainName })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            if (typeof fetchCachedInvalidate === 'function') fetchCachedInvalidate('/navbar/state');
+            console.log('[Bridge] Switched to domain:', domainName);
+            var target = '/dtwin/?section=sigmagraph';
+            if (focusUri) target += '&focus=' + encodeURIComponent(focusUri);
+            window.location.replace(target);
+        } else {
+            console.warn('[Bridge] Failed to switch domain:', data.message || data);
+        }
+    } catch (err) {
+        console.error('[Bridge] Error switching domain:', err);
+    }
+}
 
 // =====================================================
 // UTILITY FUNCTIONS
 // =====================================================
+
+function _applyFocusEntityWhenReady(uri, retries) {
+    retries = (retries === undefined) ? 20 : retries;
+    if (typeof SigmaGraph !== 'undefined' && SigmaGraph.focusEntityByUri) {
+        SigmaGraph.focusEntityByUri(uri);
+        return;
+    }
+    if (retries > 0) {
+        setTimeout(function () { _applyFocusEntityWhenReady(uri, retries - 1); }, 500);
+    }
+}
 
 function copyGeneratedSql() {
     if (!generatedSql) return;

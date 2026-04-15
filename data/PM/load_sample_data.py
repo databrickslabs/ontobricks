@@ -5,8 +5,8 @@
 # MAGIC This notebook creates and populates tables in Unity Catalog from CSV files stored in a Volume.
 # MAGIC 
 # MAGIC ## Dataset Structure
-# MAGIC - **3 Entity Tables**: Person, Department, Project
-# MAGIC - **3 Relationship Tables**: Person-Department, Department-Project, Person-Collaboration
+# MAGIC - **3 Entity Tables**: Person, Department, Domain
+# MAGIC - **3 Relationship Tables**: Person-Department, Department-Domain, Person-Collaboration
 # MAGIC 
 # MAGIC ## Prerequisites
 # MAGIC - CSV files uploaded to a Unity Catalog Volume
@@ -116,14 +116,14 @@ display(department_df)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 2.3 Project Table
+# MAGIC ### 2.3 Domain Table
 
 # COMMAND ----------
 
-# Define schema for Project table
-project_schema = StructType([
-    StructField("project_id", StringType(), False),
-    StructField("project_name", StringType(), False),
+# Define schema for Domain table
+domain_schema = StructType([
+    StructField("domain_id", StringType(), False),
+    StructField("domain_name", StringType(), False),
     StructField("start_date", DateType(), True),
     StructField("end_date", DateType(), True),
     StructField("budget", DecimalType(15, 2), True),
@@ -132,19 +132,19 @@ project_schema = StructType([
 ])
 
 # Read CSV from Volume
-project_df = spark.read.csv(
-    f"{volume_path}/project.csv",
+domain_df = spark.read.csv(
+    f"{volume_path}/domain.csv",
     header=True,
-    schema=project_schema
+    schema=domain_schema
 )
 
 # Create table
-project_df.write.mode("overwrite").saveAsTable(f"{catalog}.{schema}.project")
+domain_df.write.mode("overwrite").saveAsTable(f"{catalog}.{schema}.domain")
 
 # Display sample
-print(f"✓ Created table: {catalog}.{schema}.project")
-print(f"  Row count: {project_df.count()}")
-display(project_df)
+print(f"✓ Created table: {catalog}.{schema}.domain")
+print(f"  Row count: {domain_df.count()}")
+display(domain_df)
 
 # COMMAND ----------
 
@@ -184,33 +184,33 @@ display(person_dept_df.limit(5))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 3.2 Department-Project Relationship
+# MAGIC ### 3.2 Department-Domain Relationship
 
 # COMMAND ----------
 
-# Define schema for Department-Project relationship
-dept_project_schema = StructType([
+# Define schema for Department-Domain relationship
+dept_domain_schema = StructType([
     StructField("department_id", StringType(), False),
-    StructField("project_id", StringType(), False),
+    StructField("domain_id", StringType(), False),
     StructField("sponsorship_type", StringType(), True),
     StructField("funding_amount", DecimalType(15, 2), True),
     StructField("start_date", DateType(), True)
 ])
 
 # Read CSV from Volume
-dept_project_df = spark.read.csv(
-    f"{volume_path}/department_project.csv",
+dept_domain_df = spark.read.csv(
+    f"{volume_path}/department_domain.csv",
     header=True,
-    schema=dept_project_schema
+    schema=dept_domain_schema
 )
 
 # Create table
-dept_project_df.write.mode("overwrite").saveAsTable(f"{catalog}.{schema}.department_project")
+dept_domain_df.write.mode("overwrite").saveAsTable(f"{catalog}.{schema}.department_domain")
 
 # Display sample
-print(f"✓ Created table: {catalog}.{schema}.department_project")
-print(f"  Row count: {dept_project_df.count()}")
-display(dept_project_df.limit(5))
+print(f"✓ Created table: {catalog}.{schema}.department_domain")
+print(f"  Row count: {dept_domain_df.count()}")
+display(dept_domain_df.limit(5))
 
 # COMMAND ----------
 
@@ -224,7 +224,7 @@ person_collab_schema = StructType([
     StructField("person_id_1", StringType(), False),
     StructField("person_id_2", StringType(), False),
     StructField("collaboration_type", StringType(), True),
-    StructField("project_id", StringType(), True),
+    StructField("domain_id", StringType(), True),
     StructField("start_date", DateType(), True),
     StructField("hours_per_week", DecimalType(5, 2), True)
 ])
@@ -302,24 +302,24 @@ display(spark.sql(query1))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Query 2: Find all projects with their sponsoring departments
+# MAGIC #### Query 2: Find all domains with their sponsoring departments
 
 # COMMAND ----------
 
 query2 = f"""
 SELECT 
-    p.project_name,
-    p.status,
+    dom.domain_name,
+    dom.status,
     d.department_name,
-    dp.sponsorship_type,
-    dp.funding_amount
-FROM {catalog}.{schema}.project p
-JOIN {catalog}.{schema}.department_project dp ON p.project_id = dp.project_id
-JOIN {catalog}.{schema}.department d ON dp.department_id = d.department_id
-ORDER BY p.project_name, dp.sponsorship_type
+    dd.sponsorship_type,
+    dd.funding_amount
+FROM {catalog}.{schema}.domain dom
+JOIN {catalog}.{schema}.department_domain dd ON dom.domain_id = dd.domain_id
+JOIN {catalog}.{schema}.department d ON dd.department_id = d.department_id
+ORDER BY dom.domain_name, dd.sponsorship_type
 """
 
-print("Query 2: Projects and Sponsoring Departments")
+print("Query 2: Domains and Sponsoring Departments")
 display(spark.sql(query2))
 
 # COMMAND ----------
@@ -334,12 +334,12 @@ SELECT
     p1.first_name || ' ' || p1.last_name as person_1,
     p2.first_name || ' ' || p2.last_name as person_2,
     pc.collaboration_type,
-    pr.project_name,
+    dom.domain_name,
     pc.hours_per_week
 FROM {catalog}.{schema}.person_collaboration pc
 JOIN {catalog}.{schema}.person p1 ON pc.person_id_1 = p1.person_id
 JOIN {catalog}.{schema}.person p2 ON pc.person_id_2 = p2.person_id
-LEFT JOIN {catalog}.{schema}.project pr ON pc.project_id = pr.project_id
+LEFT JOIN {catalog}.{schema}.domain dom ON pc.domain_id = dom.domain_id
 ORDER BY p1.last_name, p2.last_name
 """
 
@@ -395,25 +395,25 @@ print(f"✓ Created view: {catalog}.{schema}.vw_person_with_department")
 
 # COMMAND ----------
 
-# Create a view for project with sponsorship details
+# Create a view for domain with sponsorship details
 spark.sql(f"""
-CREATE OR REPLACE VIEW {catalog}.{schema}.vw_project_sponsorship AS
+CREATE OR REPLACE VIEW {catalog}.{schema}.vw_domain_sponsorship AS
 SELECT 
-    p.project_id,
-    p.project_name,
-    p.status,
-    p.budget as total_budget,
+    dom.domain_id,
+    dom.domain_name,
+    dom.status,
+    dom.budget as total_budget,
     d.department_name,
-    dp.sponsorship_type,
-    dp.funding_amount,
+    dd.sponsorship_type,
+    dd.funding_amount,
     m.first_name || ' ' || m.last_name as dept_manager
-FROM {catalog}.{schema}.project p
-JOIN {catalog}.{schema}.department_project dp ON p.project_id = dp.project_id
-JOIN {catalog}.{schema}.department d ON dp.department_id = d.department_id
+FROM {catalog}.{schema}.domain dom
+JOIN {catalog}.{schema}.department_domain dd ON dom.domain_id = dd.domain_id
+JOIN {catalog}.{schema}.department d ON dd.department_id = d.department_id
 LEFT JOIN {catalog}.{schema}.person m ON d.manager_id = m.person_id
 """)
 
-print(f"✓ Created view: {catalog}.{schema}.vw_project_sponsorship")
+print(f"✓ Created view: {catalog}.{schema}.vw_domain_sponsorship")
 
 # COMMAND ----------
 
@@ -431,16 +431,16 @@ print(f"📦 Volume: {volume_path}")
 print("\n📊 Tables Created:")
 print(f"   • {catalog}.{schema}.person")
 print(f"   • {catalog}.{schema}.department")
-print(f"   • {catalog}.{schema}.project")
+print(f"   • {catalog}.{schema}.domain")
 print(f"   • {catalog}.{schema}.person_department")
-print(f"   • {catalog}.{schema}.department_project")
+print(f"   • {catalog}.{schema}.department_domain")
 print(f"   • {catalog}.{schema}.person_collaboration")
 print("\n👁️ Views Created:")
 print(f"   • {catalog}.{schema}.vw_person_with_department")
-print(f"   • {catalog}.{schema}.vw_project_sponsorship")
+print(f"   • {catalog}.{schema}.vw_domain_sponsorship")
 print("\n🔗 Relationships:")
 print("   • Person → Department (one-directional, many-to-one)")
-print("   • Department → Project (one-directional, many-to-many)")
+print("   • Department → Domain (one-directional, many-to-many)")
 print("   • Person ↔ Person (bi-directional collaboration)")
 print("\n" + "=" * 70)
 print("Ready for OntoBricks ontology mapping!")

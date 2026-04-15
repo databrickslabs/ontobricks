@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 
 
 class ReasoningService:
-    """Orchestrate all reasoning phases over a project's ontology and data.
+    """Orchestrate all reasoning phases over a domain's ontology and data.
 
     Phases (in order):
 
@@ -37,10 +37,10 @@ class ReasoningService:
 
     def __init__(
         self,
-        project_session: Any,
+        domain_session: Any,
         triplestore_backend: Any = None,
     ) -> None:
-        self._project = project_session
+        self._domain = domain_session
         self._store = triplestore_backend
 
     # -- Static helpers -------------------------------------------------------
@@ -106,16 +106,21 @@ class ReasoningService:
             logger.error("%s reasoning failed: %s", phase_name, e)
             result.stats[f"{phase_name}_error"] = str(e)
 
-    def run_full_reasoning(self, options: Optional[Dict] = None) -> ReasoningResult:
+    def run_full_reasoning(self, options: Optional[Dict] = None,
+                           progress_callback: Optional[Any] = None) -> ReasoningResult:
         """Run all enabled reasoning phases and merge results."""
         opts = options or {}
         t0 = time.time()
         result = ReasoningResult()
         mat = opts.get("materialize", False)
+        inf_limit = opts.get("inference_limit") or None
 
         phases = [
             ("tbox", "tbox", True, lambda: self.run_tbox_reasoning(), True, {}),
-            ("swrl", "swrl", True, lambda: self.run_swrl_rules(materialize=mat), True, {"rules_count": "swrl_rules_count"}),
+            ("swrl", "swrl", True, lambda: self.run_swrl_rules(
+                materialize=mat, inference_limit=inf_limit,
+                progress_callback=progress_callback,
+            ), True, {"rules_count": "swrl_rules_count"}),
             ("graph", "graph", True, lambda: self.run_graph_reasoning(opts), False, {}),
             ("decision_tables", "decision_tables", False, lambda: self.run_decision_tables(materialize=mat), False, {"tables_count": "decision_tables_count"}),
             ("sparql_rules", "sparql_rules", False, lambda: self.run_sparql_rules(materialize=mat), True, {"rules_count": "sparql_rules_count"}),
@@ -139,7 +144,7 @@ class ReasoningService:
         return result
 
     def run_tbox_reasoning(self) -> ReasoningResult:
-        """Run OWL 2 RL deductive closure on the project ontology."""
+        """Run OWL 2 RL deductive closure on the domain ontology."""
         owl_content = self._get_owl_content()
         if not owl_content:
             logger.warning("No OWL content available for T-Box reasoning")
@@ -158,7 +163,9 @@ class ReasoningService:
         reasoner = OWLRLReasoner()
         return reasoner.compute_closure(owl_content)
 
-    def run_swrl_rules(self, materialize: bool = False) -> ReasoningResult:
+    def run_swrl_rules(self, materialize: bool = False,
+                       inference_limit: Optional[int] = None,
+                       progress_callback: Optional[Any] = None) -> ReasoningResult:
         """Execute SWRL rules against the triple store."""
         rules = self._get_swrl_rules()
         if not rules:
@@ -173,7 +180,8 @@ class ReasoningService:
         engine = SWRLEngine(ontology=ontology)
         table_name = self._get_graph_name()
         return engine.execute_rules(
-            rules, self._store, table_name, materialize=materialize
+            rules, self._store, table_name, materialize=materialize,
+            inference_limit=inference_limit, progress_callback=progress_callback,
         )
 
     def run_graph_reasoning(self, options: Optional[Dict] = None) -> ReasoningResult:
@@ -675,32 +683,32 @@ class ReasoningService:
     # -- Internal helpers -------------------------------------------------
 
     def _get_owl_content(self) -> str:
-        """Retrieve generated OWL Turtle from the project session."""
-        if hasattr(self._project, "generated_owl"):
-            return self._project.generated_owl or ""
-        data = getattr(self._project, "_data", {})
+        """Retrieve generated OWL Turtle from the domain session."""
+        if hasattr(self._domain, "generated_owl"):
+            return self._domain.generated_owl or ""
+        data = getattr(self._domain, "_data", {})
         return data.get("generated", {}).get("owl", "")
 
     def _get_swrl_rules(self) -> List[Dict]:
-        if hasattr(self._project, "swrl_rules"):
-            return self._project.swrl_rules or []
-        ontology = getattr(self._project, "ontology", None)
+        if hasattr(self._domain, "swrl_rules"):
+            return self._domain.swrl_rules or []
+        ontology = getattr(self._domain, "ontology", None)
         if isinstance(ontology, dict):
             return ontology.get("swrl_rules", [])
         return []
 
     def _get_ontology_dict(self) -> Dict:
-        ontology = getattr(self._project, "ontology", None)
+        ontology = getattr(self._domain, "ontology", None)
         if isinstance(ontology, dict):
             return ontology
-        if hasattr(self._project, "_data"):
-            return self._project._data.get("ontology", {})
+        if hasattr(self._domain, "_data"):
+            return self._domain._data.get("ontology", {})
         return {}
 
     def _get_graph_name(self) -> str:
-        info = getattr(self._project, "info", None)
+        info = getattr(self._domain, "info", None)
         name = info.get("name", DEFAULT_GRAPH_NAME) if isinstance(info, dict) else DEFAULT_GRAPH_NAME
-        version = getattr(self._project, "current_version", "1") or "1"
+        version = getattr(self._domain, "current_version", "1") or "1"
         return f"{name}_V{version}"
 
     @staticmethod

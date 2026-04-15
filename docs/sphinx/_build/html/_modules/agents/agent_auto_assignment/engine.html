@@ -112,7 +112,7 @@
 
 <span class="sd">Implements an agentic loop that uses the Databricks Foundation Model API</span>
 <span class="sd">with function calling to autonomously map ontology entities and relationships</span>
-<span class="sd">to SQL queries against project tables.</span>
+<span class="sd">to SQL queries against domain tables.</span>
 
 <span class="sd">Fallback: if the LLM endpoint does not support the ``tools`` parameter the</span>
 <span class="sd">engine transparently degrades to a single-shot generation (no tool calls).</span>
@@ -180,7 +180,7 @@
 <span class="s2">TOOLS</span>
 <span class="s2">You have six tools:</span>
 <span class="s2">  • get_metadata           – get imported table schemas (full names, columns, types) — no UC query</span>
-<span class="s2">  • get_documents_context   – get imported project documents to enrich domain context — no UC query</span>
+<span class="s2">  • get_documents_context   – get imported domain documents to enrich domain context — no UC query</span>
 <span class="s2">  • get_ontology           – get entities (with attributes) and relationships to map</span>
 <span class="s2">  • execute_sql            – run a SQL query to validate it and see columns + sample data</span>
 <span class="s2">  • submit_entity_mapping       – record a validated entity mapping</span>

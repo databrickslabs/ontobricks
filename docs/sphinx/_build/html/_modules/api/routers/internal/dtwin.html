@@ -116,16 +116,22 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_BASE_URI</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">get_session_manager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">get_session_manager</span><span class="p">,</span> <span class="n">get_domain</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings</span><span class="p">,</span> <span class="n">Settings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c</span><span class="w"> </span><span class="kn">import</span> <span class="n">sparql</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_databricks_app</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksClient</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksClient</span><span class="p">,</span> <span class="n">is_databricks_app</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_triplestore</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin</span><span class="w"> </span><span class="kn">import</span> <span class="n">DigitalTwin</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProjectSnapshot</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_project</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_databricks_client</span><span class="p">,</span> <span class="n">get_databricks_credentials</span><span class="p">,</span> <span class="n">run_blocking</span><span class="p">,</span> <span class="n">effective_view_table</span><span class="p">,</span> <span class="n">effective_graph_name</span><span class="p">,</span> <span class="n">is_uri</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">DomainSnapshot</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">effective_graph_name</span><span class="p">,</span>
+    <span class="n">effective_uc_version_path</span><span class="p">,</span>
+    <span class="n">effective_view_table</span><span class="p">,</span>
+    <span class="n">get_databricks_client</span><span class="p">,</span>
+    <span class="n">get_databricks_credentials</span><span class="p">,</span>
+    <span class="n">is_uri</span><span class="p">,</span>
+    <span class="n">run_blocking</span><span class="p">,</span>
+<span class="p">)</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
@@ -152,14 +158,14 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="n">query</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No query provided&quot;</span><span class="p">)</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">project</span><span class="o">.</span><span class="n">ensure_generated_content</span><span class="p">()</span>
-    <span class="n">r2rml_content</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get_r2rml</span><span class="p">()</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span><span class="o">.</span><span class="n">ensure_generated_content</span><span class="p">()</span>
+    <span class="n">r2rml_content</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_r2rml</span><span class="p">()</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">r2rml_content</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No R2RML mapping available. Please configure ontology and mappings first.&quot;</span><span class="p">)</span>
 
-    <span class="k">return</span> <span class="k">await</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">execute_spark_query</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">r2rml_content</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">execute_spark_query</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">r2rml_content</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
 
 
 
@@ -175,24 +181,60 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="n">sparql_query</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No SPARQL query provided&quot;</span><span class="p">)</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">project</span><span class="o">.</span><span class="n">ensure_generated_content</span><span class="p">()</span>
-    <span class="n">r2rml_content</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get_r2rml</span><span class="p">()</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span><span class="o">.</span><span class="n">ensure_generated_content</span><span class="p">()</span>
+    <span class="n">r2rml_content</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_r2rml</span><span class="p">()</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">r2rml_content</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No R2RML mapping available. Please configure mappings first.&quot;</span><span class="p">)</span>
 
     <span class="n">entity_mappings</span><span class="p">,</span> <span class="n">relationship_mappings</span> <span class="o">=</span> <span class="n">sparql</span><span class="o">.</span><span class="n">extract_r2rml_mappings</span><span class="p">(</span><span class="n">r2rml_content</span><span class="p">)</span>
-    <span class="n">base_uri</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;base_uri&#39;</span><span class="p">,</span> <span class="n">DEFAULT_BASE_URI</span><span class="p">)</span>
+    <span class="n">base_uri</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;base_uri&#39;</span><span class="p">,</span> <span class="n">DEFAULT_BASE_URI</span><span class="p">)</span>
 
     <span class="n">entity_mappings</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">augment_mappings_from_config</span><span class="p">(</span>
-        <span class="n">entity_mappings</span><span class="p">,</span> <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span>
+        <span class="n">entity_mappings</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span>
     <span class="p">)</span>
     <span class="n">relationship_mappings</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">augment_relationships_from_config</span><span class="p">(</span>
-        <span class="n">relationship_mappings</span><span class="p">,</span> <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span>
+        <span class="n">relationship_mappings</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span>
     <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">sparql</span><span class="o">.</span><span class="n">translate_sparql_to_spark</span><span class="p">(</span><span class="n">sparql_query</span><span class="p">,</span> <span class="n">entity_mappings</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">relationship_mappings</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Groups (for graph expand/collapse)</span>
+<span class="c1"># ===========================================</span>
+
+<div class="viewcode-block" id="get_groups">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.get_groups">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/groups&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_groups</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return ontology entity groups for the Sigma graph expand/collapse feature.</span>
+
+<span class="sd">    Each group contains the member class names so the frontend can build</span>
+<span class="sd">    super-nodes for collapsed groups and restore member nodes on expand.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">base_uri</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;base_uri&#39;</span><span class="p">,</span> <span class="n">DEFAULT_BASE_URI</span><span class="p">)</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;#&#39;</span>
+
+    <span class="n">groups</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">domain</span><span class="o">.</span><span class="n">groups</span><span class="p">:</span>
+        <span class="n">members</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;members&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">member_uris</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">m</span> <span class="k">if</span> <span class="n">m</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;http&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="p">(</span><span class="n">base_uri</span> <span class="o">+</span> <span class="n">m</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">members</span> <span class="k">if</span> <span class="n">m</span>
+        <span class="p">]</span>
+        <span class="n">groups</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+            <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span>
+            <span class="s1">&#39;label&#39;</span><span class="p">:</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;label&#39;</span><span class="p">,</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)),</span>
+            <span class="s1">&#39;color&#39;</span><span class="p">:</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;color&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span>
+            <span class="s1">&#39;icon&#39;</span><span class="p">:</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;icon&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span>
+            <span class="s1">&#39;members&#39;</span><span class="p">:</span> <span class="n">members</span><span class="p">,</span>
+            <span class="s1">&#39;memberUris&#39;</span><span class="p">:</span> <span class="n">member_uris</span><span class="p">,</span>
+        <span class="p">})</span>
+
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;groups&#39;</span><span class="p">:</span> <span class="n">groups</span><span class="p">}</span></div>
 
 
 
@@ -224,22 +266,22 @@
     <span class="n">build_mode</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;build_mode&#39;</span><span class="p">,</span> <span class="s1">&#39;incremental&#39;</span><span class="p">)</span>
     <span class="n">force_full</span> <span class="o">=</span> <span class="n">build_mode</span> <span class="o">==</span> <span class="s1">&#39;full&#39;</span> <span class="ow">or</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;drop_existing&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
 
-    <span class="n">view_table</span> <span class="o">=</span> <span class="n">effective_view_table</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
-    <span class="n">graph_name</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+    <span class="n">view_table</span> <span class="o">=</span> <span class="n">effective_view_table</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+    <span class="n">graph_name</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
 
     <span class="n">parts</span> <span class="o">=</span> <span class="n">view_table</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;View location must be fully qualified: catalog.schema.view_name (configure in Project / Triple Store tab)&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;View location must be fully qualified: catalog.schema.view_name (configure in Domain / Triple Store tab)&quot;</span><span class="p">)</span>
 
-    <span class="n">project</span><span class="o">.</span><span class="n">ensure_generated_content</span><span class="p">()</span>
-    <span class="n">r2rml_content</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get_r2rml</span><span class="p">()</span>
+    <span class="n">domain</span><span class="o">.</span><span class="n">ensure_generated_content</span><span class="p">()</span>
+    <span class="n">r2rml_content</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_r2rml</span><span class="p">()</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">r2rml_content</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No R2RML mapping available. Please ensure ontology and assignments are configured.&quot;</span><span class="p">)</span>
 
-    <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">get_databricks_credentials</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">get_databricks_credentials</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_databricks_app</span><span class="p">():</span>
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Databricks not configured&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">token</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_databricks_app</span><span class="p">():</span>
@@ -247,22 +289,22 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="n">warehouse_id</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No SQL warehouse configured&quot;</span><span class="p">)</span>
 
-    <span class="n">config_changed</span> <span class="o">=</span> <span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">last_update</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">last_build</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="k">if</span> <span class="n">project</span><span class="o">.</span><span class="n">last_update</span> <span class="k">else</span> <span class="kc">False</span>
+    <span class="n">config_changed</span> <span class="o">=</span> <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">last_update</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">last_build</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="k">if</span> <span class="n">domain</span><span class="o">.</span><span class="n">last_update</span> <span class="k">else</span> <span class="kc">False</span>
 
-    <span class="n">project</span><span class="o">.</span><span class="n">triplestore</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;stats&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">project</span><span class="o">.</span><span class="n">last_update</span><span class="p">:</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">triplestore</span><span class="p">[</span><span class="s1">&#39;build_last_update&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">last_update</span>
+    <span class="n">domain</span><span class="o">.</span><span class="n">triplestore</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;stats&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">domain</span><span class="o">.</span><span class="n">last_update</span><span class="p">:</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">triplestore</span><span class="p">[</span><span class="s1">&#39;build_last_update&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">last_update</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span> <span class="k">as</span> <span class="n">tz</span>
-    <span class="n">project</span><span class="o">.</span><span class="n">last_build</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
-    <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">domain</span><span class="o">.</span><span class="n">last_build</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+    <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
 
-    <span class="n">base_uri</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;base_uri&#39;</span><span class="p">,</span> <span class="n">DEFAULT_BASE_URI</span><span class="p">)</span>
-    <span class="n">mapping_config</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">assignment</span>
-    <span class="n">ontology_config</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span>
-    <span class="n">stored_source_versions</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">source_versions</span> <span class="ow">or</span> <span class="p">{})</span>
-    <span class="n">delta_cfg</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">delta</span> <span class="ow">or</span> <span class="p">{}</span>
-    <span class="n">proj_snap</span> <span class="o">=</span> <span class="n">ProjectSnapshot</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+    <span class="n">base_uri</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;base_uri&#39;</span><span class="p">,</span> <span class="n">DEFAULT_BASE_URI</span><span class="p">)</span>
+    <span class="n">mapping_config</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span>
+    <span class="n">ontology_config</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span>
+    <span class="n">stored_source_versions</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">source_versions</span> <span class="ow">or</span> <span class="p">{})</span>
+    <span class="n">delta_cfg</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">delta</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="n">domain_snap</span> <span class="o">=</span> <span class="n">DomainSnapshot</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
 
     <span class="n">tm</span> <span class="o">=</span> <span class="n">get_task_manager</span><span class="p">()</span>
     <span class="n">task</span> <span class="o">=</span> <span class="n">tm</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span>
@@ -275,6 +317,7 @@
             <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;diff&#39;</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Computing incremental diff&#39;</span><span class="p">},</span>
             <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;graph&#39;</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Applying changes to LadybugDB graph&#39;</span><span class="p">},</span>
             <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;snapshot&#39;</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Refreshing snapshot table&#39;</span><span class="p">},</span>
+            <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;archive&#39;</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Archiving graph to registry&#39;</span><span class="p">},</span>
         <span class="p">]</span>
     <span class="p">)</span>
 
@@ -354,20 +397,22 @@
                 <span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">vname</span> <span class="o">=</span> <span class="n">parts</span>
                 <span class="n">view_ok</span><span class="p">,</span> <span class="n">view_msg</span> <span class="o">=</span> <span class="n">source_client</span><span class="o">.</span><span class="n">create_or_replace_view</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">vname</span><span class="p">,</span> <span class="n">spark_sql</span><span class="p">)</span>
                 <span class="k">if</span> <span class="ow">not</span> <span class="n">view_ok</span><span class="p">:</span>
-                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Failed to create VIEW </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">view_table</span><span class="p">,</span> <span class="n">view_msg</span><span class="p">)</span>
-                    <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;Failed to create VIEW: </span><span class="si">{</span><span class="n">view_msg</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+                    <span class="n">detail</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">diagnose_view_error</span><span class="p">(</span><span class="n">view_msg</span><span class="p">,</span> <span class="n">entity_mappings</span><span class="p">,</span> <span class="n">relationship_mappings</span><span class="p">)</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Failed to create VIEW </span><span class="si">%s</span><span class="s2">:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">view_table</span><span class="p">,</span> <span class="n">detail</span><span class="p">)</span>
+                    <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;Failed to create VIEW: </span><span class="si">{</span><span class="n">detail</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
                     <span class="k">return</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Created VIEW </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">view_table</span><span class="p">)</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Failed to create VIEW </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">view_table</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-                <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;Failed to create VIEW: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+                <span class="n">detail</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">diagnose_view_error</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="n">entity_mappings</span><span class="p">,</span> <span class="n">relationship_mappings</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Failed to create VIEW </span><span class="si">%s</span><span class="s2">:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">view_table</span><span class="p">,</span> <span class="n">detail</span><span class="p">)</span>
+                <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;Failed to create VIEW: </span><span class="si">{</span><span class="n">detail</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
                 <span class="k">return</span>
             <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;VIEW </span><span class="si">{</span><span class="n">view_table</span><span class="si">}</span><span class="s2"> created&quot;</span><span class="p">)</span>
 
             <span class="c1"># --- Phase 3: Diff or full load ---</span>
             <span class="n">snapshot_table</span> <span class="o">=</span> <span class="n">incr_svc</span><span class="o">.</span><span class="n">snapshot_table_name</span><span class="p">(</span>
-                <span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">info</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">),</span> <span class="n">delta_cfg</span><span class="p">,</span>
-                <span class="n">version</span><span class="o">=</span><span class="n">project</span><span class="o">.</span><span class="n">current_version</span><span class="p">,</span>
+                <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">info</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">),</span> <span class="n">delta_cfg</span><span class="p">,</span>
+                <span class="n">version</span><span class="o">=</span><span class="n">domain</span><span class="o">.</span><span class="n">current_version</span><span class="p">,</span>
             <span class="p">)</span>
 
             <span class="n">to_add</span> <span class="o">=</span> <span class="p">[]</span>
@@ -400,7 +445,7 @@
             <span class="n">tm</span><span class="o">.</span><span class="n">advance_step</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s2">&quot;Applying changes to LadybugDB graph...&quot;</span><span class="p">)</span>
 
             <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_triplestore</span> <span class="k">as</span> <span class="n">_get_ts</span>
-            <span class="n">store</span> <span class="o">=</span> <span class="n">_get_ts</span><span class="p">(</span><span class="n">proj_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
+            <span class="n">store</span> <span class="o">=</span> <span class="n">_get_ts</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
                 <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s1">&#39;Could not initialize LadybugDB backend&#39;</span><span class="p">)</span>
                 <span class="k">return</span>
@@ -479,22 +524,23 @@
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Failed to refresh snapshot (non-fatal): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
 
-            <span class="c1"># Store new source versions in project session</span>
+            <span class="c1"># Store new source versions in domain session</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">new_source_versions</span><span class="p">:</span>
-                    <span class="n">project</span><span class="o">.</span><span class="n">source_versions</span> <span class="o">=</span> <span class="n">new_source_versions</span>
-                <span class="n">project</span><span class="o">.</span><span class="n">snapshot_table</span> <span class="o">=</span> <span class="n">snapshot_table</span>
-                <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+                    <span class="n">domain</span><span class="o">.</span><span class="n">source_versions</span> <span class="o">=</span> <span class="n">new_source_versions</span>
+                <span class="n">domain</span><span class="o">.</span><span class="n">snapshot_table</span> <span class="o">=</span> <span class="n">snapshot_table</span>
+                <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not persist source versions: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
 
             <span class="c1"># Populate DT session cache so subsequent page loads avoid live I/O</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-                <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">local_db_path</span><span class="p">,</span> <span class="n">graph_volume_path</span>
+                <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">effective_uc_version_path</span><span class="p">,</span> <span class="n">resolve_ladybug_local_path</span>
+                <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">graph_volume_path</span>
 
                 <span class="n">final_count</span> <span class="o">=</span> <span class="n">total_triple_count</span> <span class="ow">or</span> <span class="n">triple_count</span>
-                <span class="n">build_stamp</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">triplestore</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;build_last_update&#39;</span><span class="p">)</span>
+                <span class="n">build_stamp</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">triplestore</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;build_last_update&#39;</span><span class="p">)</span>
 
                 <span class="n">status_cache</span> <span class="o">=</span> <span class="p">{</span>
                     <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
@@ -507,13 +553,12 @@
                     <span class="n">status_cache</span><span class="p">[</span><span class="s1">&#39;last_modified&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">build_stamp</span>
 
                 <span class="n">db_name</span> <span class="o">=</span> <span class="n">graph_name</span> <span class="ow">or</span> <span class="n">DEFAULT_GRAPH_NAME</span>
-                <span class="n">lb_cfg</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;ladybug&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="n">lb_cfg</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;triplestore&#39;</span><span class="p">):</span>
-                    <span class="n">lb_cfg</span> <span class="o">=</span> <span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">triplestore</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ladybug&#39;</span><span class="p">,</span> <span class="p">{})</span>
-                <span class="n">local_base</span> <span class="o">=</span> <span class="n">lb_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;db_path&#39;</span><span class="p">,</span> <span class="s1">&#39;/tmp/ontobricks&#39;</span><span class="p">)</span>
-                <span class="n">local_path</span> <span class="o">=</span> <span class="n">local_db_path</span><span class="p">(</span><span class="n">db_name</span><span class="p">,</span> <span class="n">local_base</span><span class="p">)</span>
-                <span class="n">uc_path</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">uc_project_path</span>
+                <span class="n">local_path</span> <span class="o">=</span> <span class="n">resolve_ladybug_local_path</span><span class="p">(</span><span class="n">db_name</span><span class="o">=</span><span class="n">db_name</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">)</span>
+                <span class="n">uc_path</span> <span class="o">=</span> <span class="n">effective_uc_version_path</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
                 <span class="n">registry_lbug_path</span> <span class="o">=</span> <span class="n">graph_volume_path</span><span class="p">(</span><span class="n">uc_path</span><span class="p">,</span> <span class="n">db_name</span><span class="p">)</span> <span class="k">if</span> <span class="n">uc_path</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+
+                <span class="n">dt</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+                <span class="n">prev_existence</span> <span class="o">=</span> <span class="n">dt</span><span class="o">.</span><span class="n">get_ts_cache</span><span class="p">(</span><span class="s1">&#39;dt_existence&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
 
                 <span class="n">existence_cache</span> <span class="o">=</span> <span class="p">{</span>
                     <span class="s1">&#39;view_exists&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
@@ -523,18 +568,40 @@
                     <span class="s1">&#39;graph_name&#39;</span><span class="p">:</span> <span class="n">graph_name</span><span class="p">,</span>
                     <span class="s1">&#39;local_lbug_exists&#39;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">local_path</span><span class="p">),</span>
                     <span class="s1">&#39;local_lbug_path&#39;</span><span class="p">:</span> <span class="n">local_path</span><span class="p">,</span>
-                    <span class="s1">&#39;registry_lbug_exists&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+                    <span class="s1">&#39;registry_lbug_exists&#39;</span><span class="p">:</span> <span class="n">prev_existence</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;registry_lbug_exists&#39;</span><span class="p">),</span>
                     <span class="s1">&#39;registry_lbug_path&#39;</span><span class="p">:</span> <span class="n">registry_lbug_path</span><span class="p">,</span>
-                    <span class="s1">&#39;last_built&#39;</span><span class="p">:</span> <span class="n">project</span><span class="o">.</span><span class="n">last_build</span><span class="p">,</span>
-                    <span class="s1">&#39;last_update&#39;</span><span class="p">:</span> <span class="n">project</span><span class="o">.</span><span class="n">last_update</span><span class="p">,</span>
+                    <span class="s1">&#39;last_built&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">last_build</span><span class="p">,</span>
+                    <span class="s1">&#39;last_update&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">last_update</span><span class="p">,</span>
                 <span class="p">}</span>
 
-                <span class="n">dt</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
                 <span class="n">dt</span><span class="o">.</span><span class="n">set_ts_cache</span><span class="p">(</span><span class="s1">&#39;status&#39;</span><span class="p">,</span> <span class="n">status_cache</span><span class="p">)</span>
                 <span class="n">dt</span><span class="o">.</span><span class="n">set_ts_cache</span><span class="p">(</span><span class="s1">&#39;dt_existence&#39;</span><span class="p">,</span> <span class="n">existence_cache</span><span class="p">)</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Build cache populated: count=</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">final_count</span><span class="p">)</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not populate DT session cache: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+            <span class="c1"># --- Phase 6: Archive LadybugDB to registry ---</span>
+            <span class="n">tm</span><span class="o">.</span><span class="n">advance_step</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s2">&quot;Archiving graph to registry...&quot;</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
+                <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.domain</span><span class="w"> </span><span class="kn">import</span> <span class="n">Domain</span>
+
+                <span class="n">uc_svc</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
+                <span class="n">archive_warning</span> <span class="o">=</span> <span class="n">Domain</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">sync_ladybug_to_volume</span><span class="p">(</span><span class="n">uc_svc</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">archive_warning</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Post-build graph archive warning: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">archive_warning</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Post-build graph archived to registry&quot;</span><span class="p">)</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">dt_obj</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+                        <span class="n">ex</span> <span class="o">=</span> <span class="n">dt_obj</span><span class="o">.</span><span class="n">get_ts_cache</span><span class="p">(</span><span class="s1">&#39;dt_existence&#39;</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">ex</span><span class="p">:</span>
+                            <span class="n">ex</span><span class="p">[</span><span class="s1">&#39;registry_lbug_exists&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                            <span class="n">dt_obj</span><span class="o">.</span><span class="n">set_ts_cache</span><span class="p">(</span><span class="s1">&#39;dt_existence&#39;</span><span class="p">,</span> <span class="n">ex</span><span class="p">)</span>
+                    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                        <span class="k">pass</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Post-build graph archive failed (non-fatal): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
 
             <span class="n">duration</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span>
 
@@ -579,10 +646,10 @@
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Load triples from the graph database and return them as query results.&quot;&quot;&quot;</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">graph_name</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">graph_name</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
 
-        <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
+        <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Graph backend not configured&#39;</span><span class="p">}</span>
 
@@ -629,12 +696,12 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">entity_type</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">value</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Please specify an entity type or search value.&#39;</span><span class="p">}</span>
 
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">graph_name</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">graph_name</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">graph_name</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Graph name not configured&#39;</span><span class="p">}</span>
 
-        <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
+        <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Graph backend not configured&#39;</span><span class="p">}</span>
 
@@ -721,11 +788,11 @@
     <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Check if ontology or assignments changed since the last build.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">DigitalTwin</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">sync_last_build_from_schedule</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">sync_last_build_from_schedule</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
 
-    <span class="n">last_update</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">last_update</span>
-    <span class="n">last_build</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">last_build</span>
+    <span class="n">last_update</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">last_update</span>
+    <span class="n">last_build</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">last_build</span>
     <span class="n">needs_rebuild</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">last_update</span> <span class="ow">and</span> <span class="n">last_build</span> <span class="ow">and</span> <span class="n">last_update</span> <span class="o">&gt;</span> <span class="n">last_build</span><span class="p">)</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;needs_rebuild&#39;</span><span class="p">:</span> <span class="n">needs_rebuild</span><span class="p">}</span></div>
 
@@ -747,8 +814,8 @@
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">_</span> <span class="o">=</span> <span class="n">refresh</span>  <span class="c1"># query param kept for backward compatibility</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">dt</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">dt</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
         <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">sync_last_build_from_schedule</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="k">return</span> <span class="k">await</span> <span class="n">dt</span><span class="o">.</span><span class="n">get_or_fetch_graph_status</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -779,22 +846,22 @@
     <span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">time</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_t</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">back.services</span><span class="w"> </span><span class="kn">import</span> <span class="n">home</span> <span class="k">as</span> <span class="n">home_service</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.project</span><span class="w"> </span><span class="kn">import</span> <span class="n">Project</span> <span class="k">as</span> <span class="n">ProjectDomain</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.domain</span><span class="w"> </span><span class="kn">import</span> <span class="n">Domain</span>
 
     <span class="n">t0</span> <span class="o">=</span> <span class="n">_t</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
 
-    <span class="n">readiness</span> <span class="o">=</span> <span class="n">home_service</span><span class="o">.</span><span class="n">validate_status</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
-    <span class="n">project_info_data</span> <span class="o">=</span> <span class="n">ProjectDomain</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">get_project_info</span><span class="p">()</span>
+    <span class="n">readiness</span> <span class="o">=</span> <span class="n">home_service</span><span class="o">.</span><span class="n">validate_status</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+    <span class="n">domain_info_data</span> <span class="o">=</span> <span class="n">Domain</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">get_domain_info</span><span class="p">()</span>
 
-    <span class="n">last_update</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">last_update</span>
-    <span class="n">last_build</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">last_build</span>
+    <span class="n">last_update</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">last_update</span>
+    <span class="n">last_build</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">last_build</span>
     <span class="n">needs_rebuild</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">last_update</span> <span class="ow">and</span> <span class="n">last_build</span> <span class="ow">and</span> <span class="n">last_update</span> <span class="o">&gt;</span> <span class="n">last_build</span><span class="p">)</span>
 
     <span class="n">t_prep</span> <span class="o">=</span> <span class="n">_t</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
 
-    <span class="n">dt</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+    <span class="n">dt</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
 
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_schedule_sync</span><span class="p">():</span>
         <span class="n">t_s</span> <span class="o">=</span> <span class="n">_t</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
@@ -819,8 +886,8 @@
         <span class="n">_dt_exist</span><span class="p">(),</span>
     <span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">project</span><span class="o">.</span><span class="n">last_build</span> <span class="ow">and</span> <span class="n">project</span><span class="o">.</span><span class="n">last_build</span> <span class="o">!=</span> <span class="n">last_build</span><span class="p">:</span>
-        <span class="n">last_build</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">last_build</span>
+    <span class="k">if</span> <span class="n">domain</span><span class="o">.</span><span class="n">last_build</span> <span class="ow">and</span> <span class="n">domain</span><span class="o">.</span><span class="n">last_build</span> <span class="o">!=</span> <span class="n">last_build</span><span class="p">:</span>
+        <span class="n">last_build</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">last_build</span>
         <span class="n">needs_rebuild</span> <span class="o">=</span> <span class="n">last_update</span> <span class="o">&gt;</span> <span class="n">last_build</span> <span class="k">if</span> <span class="n">last_update</span> <span class="ow">and</span> <span class="n">last_build</span> <span class="k">else</span> <span class="n">needs_rebuild</span>
         <span class="n">dt_exist</span><span class="p">[</span><span class="s1">&#39;last_built&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">last_build</span>
 
@@ -834,7 +901,7 @@
     <span class="k">return</span> <span class="p">{</span>
         <span class="s1">&#39;readiness&#39;</span><span class="p">:</span> <span class="n">readiness</span><span class="p">,</span>
         <span class="s1">&#39;triplestore_status&#39;</span><span class="p">:</span> <span class="n">ts_status</span><span class="p">,</span>
-        <span class="s1">&#39;project_info&#39;</span><span class="p">:</span> <span class="n">project_info_data</span><span class="p">,</span>
+        <span class="s1">&#39;domain_info&#39;</span><span class="p">:</span> <span class="n">domain_info_data</span><span class="p">,</span>
         <span class="s1">&#39;dt_existence&#39;</span><span class="p">:</span> <span class="n">dt_exist</span><span class="p">,</span>
         <span class="s1">&#39;changes&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;needs_rebuild&#39;</span><span class="p">:</span> <span class="n">needs_rebuild</span><span class="p">},</span>
     <span class="p">}</span></div>
@@ -857,8 +924,8 @@
 <span class="sd">    Returns session-cached results when available; falls back to live</span>
 <span class="sd">    Databricks checks and caches the result.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">dt</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">dt</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
     <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">sync_last_build_from_schedule</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
     <span class="k">return</span> <span class="k">await</span> <span class="n">dt</span><span class="o">.</span><span class="n">get_or_fetch_dt_existence</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span></div>
 
@@ -872,30 +939,22 @@
     <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Download the LadybugDB archive from the registry volume and extract it locally.&quot;&quot;&quot;</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">sync_from_volume</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.domain</span><span class="w"> </span><span class="kn">import</span> <span class="n">Domain</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">uc_path</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">uc_project_path</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">uc_path</span><span class="p">:</span>
-        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Registry path not configured&#39;</span><span class="p">}</span>
-
-    <span class="n">db_name</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">project</span><span class="p">)</span> <span class="ow">or</span> <span class="n">DEFAULT_GRAPH_NAME</span>
-
-    <span class="n">host</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;host&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
-    <span class="n">token</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;token&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Databricks credentials not configured&#39;</span><span class="p">}</span>
 
-    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
     <span class="n">uc</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
+    <span class="n">warning</span> <span class="o">=</span> <span class="n">Domain</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">sync_ladybug_from_volume</span><span class="p">(</span><span class="n">uc</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">warning</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;reload-from-registry failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">warning</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">warning</span><span class="p">}</span>
 
-    <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">sync_from_volume</span><span class="p">(</span><span class="n">uc</span><span class="p">,</span> <span class="n">uc_path</span><span class="p">,</span> <span class="n">db_name</span><span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;reload-from-registry failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
-        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">msg</span><span class="p">}</span>
-
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;reload-from-registry succeeded: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
-    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">msg</span><span class="p">}</span></div>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;reload-from-registry succeeded for domain &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">domain_folder</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Graph reloaded from registry&#39;</span><span class="p">}</span></div>
 
 
 
@@ -907,12 +966,12 @@
     <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Drop the incremental snapshot table to force a full rebuild on next build.&quot;&quot;&quot;</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">snapshot_table</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">snapshot_table</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">snapshot_table</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">snapshot_table</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">snapshot_table</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No snapshot table configured&#39;</span><span class="p">}</span>
 
-    <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">get_databricks_credentials</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">get_databricks_credentials</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">warehouse_id</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Databricks not configured&#39;</span><span class="p">}</span>
 
@@ -921,9 +980,9 @@
     <span class="n">incr_svc</span> <span class="o">=</span> <span class="n">IncrementalBuildService</span><span class="p">(</span><span class="n">client</span><span class="p">)</span>
     <span class="n">incr_svc</span><span class="o">.</span><span class="n">drop_snapshot</span><span class="p">(</span><span class="n">snapshot_table</span><span class="p">)</span>
 
-    <span class="n">project</span><span class="o">.</span><span class="n">snapshot_table</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
-    <span class="n">project</span><span class="o">.</span><span class="n">source_versions</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">domain</span><span class="o">.</span><span class="n">snapshot_table</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+    <span class="n">domain</span><span class="o">.</span><span class="n">source_versions</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
 
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s1">&#39;Snapshot </span><span class="si">{</span><span class="n">snapshot_table</span><span class="si">}</span><span class="s1"> dropped&#39;</span><span class="p">}</span></div>
 
@@ -943,14 +1002,14 @@
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return content statistics about the triple store.&quot;&quot;&quot;</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">graph_name</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">graph_name</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">graph_name</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Graph name not configured&#39;</span><span class="p">}</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">refresh</span><span class="p">:</span>
-            <span class="n">cached</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">get_ts_cache</span><span class="p">(</span><span class="s1">&#39;stats&#39;</span><span class="p">)</span>
+            <span class="n">cached</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">get_ts_cache</span><span class="p">(</span><span class="s1">&#39;stats&#39;</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">cached</span><span class="p">:</span>
                 <span class="n">preds</span> <span class="o">=</span> <span class="n">cached</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;top_predicates&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
                 <span class="n">has_kind</span> <span class="o">=</span> <span class="n">preds</span> <span class="ow">and</span> <span class="s1">&#39;kind&#39;</span> <span class="ow">in</span> <span class="n">preds</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -959,7 +1018,7 @@
                     <span class="k">return</span> <span class="n">cached</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Stale stats cache (missing &#39;kind&#39;); refreshing&quot;</span><span class="p">)</span>
 
-        <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
+        <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Graph backend not configured&#39;</span><span class="p">}</span>
 
@@ -975,7 +1034,7 @@
         <span class="n">type_count</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;cnt&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">entity_types</span><span class="p">)</span>
         <span class="n">relationship_count</span> <span class="o">=</span> <span class="n">total_count</span> <span class="o">-</span> <span class="n">type_count</span> <span class="o">-</span> <span class="n">label_count</span>
 
-        <span class="n">classified</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">classify_predicates</span><span class="p">(</span><span class="n">top_predicates</span><span class="p">)</span>
+        <span class="n">classified</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">classify_predicates</span><span class="p">(</span><span class="n">top_predicates</span><span class="p">)</span>
 
         <span class="n">result</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
@@ -988,7 +1047,7 @@
             <span class="s1">&#39;type_assertion_count&#39;</span><span class="p">:</span> <span class="n">type_count</span><span class="p">,</span>
             <span class="s1">&#39;relationship_count&#39;</span><span class="p">:</span> <span class="nb">max</span><span class="p">(</span><span class="n">relationship_count</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
         <span class="p">}</span>
-        <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">set_ts_cache</span><span class="p">(</span><span class="s1">&#39;stats&#39;</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+        <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">set_ts_cache</span><span class="p">(</span><span class="s1">&#39;stats&#39;</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">result</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Triplestore stats failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
@@ -1013,9 +1072,9 @@
         <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
         <span class="n">shape</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;shape&quot;</span><span class="p">,</span> <span class="p">{})</span>
         <span class="n">backend</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;backend&quot;</span><span class="p">,</span> <span class="s2">&quot;view&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span><span class="p">:</span>
-            <span class="n">triplestore_table</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="n">triplestore_table</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">triplestore_table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;triplestore_table&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
 
@@ -1026,12 +1085,12 @@
 
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c</span><span class="w"> </span><span class="kn">import</span> <span class="n">SHACLService</span>
 
-        <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+        <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Could not initialize </span><span class="si">{</span><span class="n">backend</span><span class="si">}</span><span class="s2"> backend&quot;</span><span class="p">}</span>
 
         <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span><span class="p">:</span>
-            <span class="n">graph_name</span> <span class="o">=</span> <span class="n">triplestore_table</span> <span class="ow">or</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+            <span class="n">graph_name</span> <span class="o">=</span> <span class="n">triplestore_table</span> <span class="ow">or</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
             <span class="n">triples</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">query_triples</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">triples</span><span class="p">:</span>
                 <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Graph &#39;</span><span class="si">{</span><span class="n">graph_name</span><span class="si">}</span><span class="s2">&#39; is empty. Build first.&quot;</span><span class="p">}</span>
@@ -1076,23 +1135,23 @@
     <span class="n">dimensions</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;dimensions&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
     <span class="n">requested_backend</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;backend&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;view&quot;</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">requested_backend</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span><span class="p">:</span>
-        <span class="n">triplestore_table</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">project</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="n">triplestore_table</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">triplestore_table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;triplestore_table&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">triplestore_table</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Triple store table not specified.&quot;</span><span class="p">}</span>
-    <span class="n">shapes</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">shacl_shapes</span>
+    <span class="n">shapes</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span>
     <span class="k">if</span> <span class="n">dimensions</span><span class="p">:</span>
         <span class="n">shapes</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shapes</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;category&quot;</span><span class="p">)</span> <span class="ow">in</span> <span class="n">dimensions</span><span class="p">]</span>
     <span class="n">shapes</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shapes</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)]</span>
 
-    <span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="ow">or</span> <span class="p">[]</span>
-    <span class="n">ontology_dict</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;ontology&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">ontology_dict</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;ontology&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ontology_dict</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-        <span class="n">ontology_dict</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology&#39;</span><span class="p">,</span> <span class="p">{})</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="s1">&#39;_data&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="p">{}</span>
+        <span class="n">ontology_dict</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology&#39;</span><span class="p">,</span> <span class="p">{})</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;_data&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="p">{}</span>
     <span class="n">decision_tables</span> <span class="o">=</span> <span class="p">[</span><span class="n">dt</span> <span class="k">for</span> <span class="n">dt</span> <span class="ow">in</span> <span class="n">ontology_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;decision_tables&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">dt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)]</span>
     <span class="n">aggregate_rules</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">ontology_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;aggregate_rules&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)]</span>
 
@@ -1100,7 +1159,7 @@
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;No enabled shapes, SWRL rules, decision tables or aggregate rules to check.&quot;</span><span class="p">}</span>
 
     <span class="n">total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shapes</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">swrl_rules</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">decision_tables</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">aggregate_rules</span><span class="p">)</span>
-    <span class="n">proj_snap</span> <span class="o">=</span> <span class="n">ProjectSnapshot</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+    <span class="n">domain_snap</span> <span class="o">=</span> <span class="n">DomainSnapshot</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
     <span class="n">tm</span> <span class="o">=</span> <span class="n">get_task_manager</span><span class="p">()</span>
     <span class="n">task</span> <span class="o">=</span> <span class="n">tm</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span>
         <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Data Quality Checks&quot;</span><span class="p">,</span>
@@ -1117,14 +1176,14 @@
             <span class="n">backend</span> <span class="o">=</span> <span class="n">requested_backend</span> <span class="ow">or</span> <span class="s2">&quot;view&quot;</span>
             <span class="n">tm</span><span class="o">.</span><span class="n">start_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Running </span><span class="si">{</span><span class="n">total</span><span class="si">}</span><span class="s2"> data quality checks (</span><span class="si">{</span><span class="n">backend</span><span class="si">}</span><span class="s2">)...&quot;</span><span class="p">)</span>
 
-            <span class="n">store</span> <span class="o">=</span> <span class="n">_get_ts</span><span class="p">(</span><span class="n">proj_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+            <span class="n">store</span> <span class="o">=</span> <span class="n">_get_ts</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
                 <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Could not initialize </span><span class="si">{</span><span class="n">backend</span><span class="si">}</span><span class="s2"> backend&quot;</span><span class="p">)</span>
                 <span class="k">return</span>
 
             <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span><span class="p">:</span>
                 <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">run_graph_checks</span><span class="p">(</span>
-                    <span class="n">tm</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">shapes</span><span class="p">,</span> <span class="n">store</span><span class="p">,</span> <span class="n">triplestore_table</span><span class="p">,</span> <span class="n">proj_snap</span><span class="p">,</span> <span class="n">t0</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span>
+                    <span class="n">tm</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">shapes</span><span class="p">,</span> <span class="n">store</span><span class="p">,</span> <span class="n">triplestore_table</span><span class="p">,</span> <span class="n">domain_snap</span><span class="p">,</span> <span class="n">t0</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span>
                     <span class="n">swrl_rules</span><span class="o">=</span><span class="n">swrl_rules</span><span class="p">,</span> <span class="n">ontology</span><span class="o">=</span><span class="n">ontology_dict</span><span class="p">,</span>
                     <span class="n">decision_tables</span><span class="o">=</span><span class="n">decision_tables</span><span class="p">,</span>
                     <span class="n">aggregate_rules</span><span class="o">=</span><span class="n">aggregate_rules</span><span class="p">,</span>
@@ -1167,7 +1226,7 @@
         <span class="n">params</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;params&#39;</span><span class="p">,</span> <span class="p">{})</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">triplestore_table</span><span class="p">:</span>
-            <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Triple store table not specified. Configure it in Project Settings.&#39;</span><span class="p">}</span>
+            <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Triple store table not specified. Configure it in Domain Settings.&#39;</span><span class="p">}</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">check_type</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No check type specified&#39;</span><span class="p">}</span>
 
@@ -1175,8 +1234,8 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">sql</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s1">&#39;Unsupported check type: </span><span class="si">{</span><span class="n">check_type</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">}</span>
 
-        <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;view&quot;</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;view&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;View backend not configured (check Databricks connection)&#39;</span><span class="p">}</span>
 
@@ -1224,8 +1283,8 @@
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;No quality checks to run.&#39;</span><span class="p">}</span>
 
     <span class="n">total_checks</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">checks</span><span class="p">)</span>
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">proj_snap</span> <span class="o">=</span> <span class="n">ProjectSnapshot</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain_snap</span> <span class="o">=</span> <span class="n">DomainSnapshot</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
 
     <span class="n">tm</span> <span class="o">=</span> <span class="n">get_task_manager</span><span class="p">()</span>
     <span class="n">task</span> <span class="o">=</span> <span class="n">tm</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span>
@@ -1242,7 +1301,7 @@
             <span class="n">tm</span><span class="o">.</span><span class="n">start_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Running </span><span class="si">{</span><span class="n">total_checks</span><span class="si">}</span><span class="s2"> quality checks...&quot;</span><span class="p">)</span>
 
             <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_triplestore</span> <span class="k">as</span> <span class="n">_get_ts</span>
-            <span class="n">store</span> <span class="o">=</span> <span class="n">_get_ts</span><span class="p">(</span><span class="n">proj_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;view&quot;</span><span class="p">)</span>
+            <span class="n">store</span> <span class="o">=</span> <span class="n">_get_ts</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;view&quot;</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
                 <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s1">&#39;Could not initialize view backend (check Databricks connection)&#39;</span><span class="p">)</span>
                 <span class="k">return</span>
@@ -1342,9 +1401,9 @@
         <span class="s2">&quot;aggregate_rules&quot;</span><span class="p">:</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;aggregate_rules&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
     <span class="p">}</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">project</span><span class="o">.</span><span class="n">ensure_generated_content</span><span class="p">()</span>
-    <span class="n">proj_snap</span> <span class="o">=</span> <span class="n">ProjectSnapshot</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span><span class="o">.</span><span class="n">ensure_generated_content</span><span class="p">()</span>
+    <span class="n">domain_snap</span> <span class="o">=</span> <span class="n">DomainSnapshot</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
 
     <span class="n">tm</span> <span class="o">=</span> <span class="n">get_task_manager</span><span class="p">()</span>
     <span class="n">task</span> <span class="o">=</span> <span class="n">tm</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span>
@@ -1359,14 +1418,14 @@
             <span class="n">tm</span><span class="o">.</span><span class="n">start_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
             <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="s2">&quot;Initialising triple store&quot;</span><span class="p">)</span>
 
-            <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">proj_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
+            <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">store</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Reasoning task </span><span class="si">%s</span><span class="s2">: graph store unavailable, falling back to view&quot;</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
-                <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">proj_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;view&quot;</span><span class="p">)</span>
+                <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;view&quot;</span><span class="p">)</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Reasoning task </span><span class="si">%s</span><span class="s2">: store=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">store</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span> <span class="k">if</span> <span class="n">store</span> <span class="k">else</span> <span class="s2">&quot;None&quot;</span><span class="p">)</span>
 
             <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.reasoning</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReasoningService</span>
-            <span class="n">svc</span> <span class="o">=</span> <span class="n">ReasoningService</span><span class="p">(</span><span class="n">proj_snap</span><span class="p">,</span> <span class="n">store</span><span class="p">)</span>
+            <span class="n">svc</span> <span class="o">=</span> <span class="n">ReasoningService</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">store</span><span class="p">)</span>
             <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="s2">&quot;Running inference phases&quot;</span><span class="p">)</span>
 
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
@@ -1378,24 +1437,21 @@
                 <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sparql_rules&quot;</span><span class="p">),</span> <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;aggregate_rules&quot;</span><span class="p">),</span>
             <span class="p">)</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">run_full_reasoning</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Reasoning task </span><span class="si">%s</span><span class="s2">: phases done — </span><span class="si">%d</span><span class="s2"> inferred, </span><span class="si">%d</span><span class="s2"> violations&quot;</span><span class="p">,</span>
-                        <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="p">))</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Reasoning task </span><span class="si">%s</span><span class="s2">: phases done — </span><span class="si">%d</span><span class="s2"> inferred&quot;</span><span class="p">,</span>
+                        <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">))</span>
 
             <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="mi">90</span><span class="p">,</span> <span class="s2">&quot;Finalising&quot;</span><span class="p">)</span>
 
             <span class="n">result_dict</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+            <span class="n">result_dict</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;violations&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
             <span class="kn">import</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_dt</span>
             <span class="n">result_dict</span><span class="p">[</span><span class="s2">&quot;last_run&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_dt</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
             <span class="n">result_dict</span><span class="p">[</span><span class="s2">&quot;inferred_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">)</span>
-            <span class="n">result_dict</span><span class="p">[</span><span class="s2">&quot;violations_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="p">)</span>
 
             <span class="n">tm</span><span class="o">.</span><span class="n">complete_task</span><span class="p">(</span>
                 <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
                 <span class="n">result</span><span class="o">=</span><span class="n">result_dict</span><span class="p">,</span>
-                <span class="n">message</span><span class="o">=</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;Inference complete: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">)</span><span class="si">}</span><span class="s2"> inferred, &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="p">)</span><span class="si">}</span><span class="s2"> violations&quot;</span>
-                <span class="p">),</span>
+                <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Inference complete: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">)</span><span class="si">}</span><span class="s2"> inferred&quot;</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Reasoning task </span><span class="si">%s</span><span class="s2">: completed successfully&quot;</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -1447,15 +1503,15 @@
         <span class="k">if</span> <span class="n">is_uri</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span> <span class="ow">and</span> <span class="n">is_uri</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span> <span class="ow">and</span> <span class="n">is_uri</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
     <span class="p">]</span>
 
-    <span class="n">project</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">project</span><span class="o">.</span><span class="n">ensure_generated_content</span><span class="p">()</span>
-    <span class="n">proj_snap</span> <span class="o">=</span> <span class="n">ProjectSnapshot</span><span class="p">(</span><span class="n">project</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain</span><span class="o">.</span><span class="n">ensure_generated_content</span><span class="p">()</span>
+    <span class="n">domain_snap</span> <span class="o">=</span> <span class="n">DomainSnapshot</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
 
     <span class="n">result</span> <span class="o">=</span> <span class="p">{}</span>
 
     <span class="k">if</span> <span class="n">do_delta</span> <span class="ow">and</span> <span class="n">mat_table</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">mat_table</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">))</span> <span class="o">==</span> <span class="mi">3</span> <span class="ow">and</span> <span class="n">uri_triples</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">proj_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">result</span><span class="p">[</span><span class="s2">&quot;materialize_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Databricks credentials not configured&quot;</span>
             <span class="k">else</span><span class="p">:</span>
@@ -1469,11 +1525,11 @@
 
     <span class="k">if</span> <span class="n">do_graph</span> <span class="ow">and</span> <span class="n">uri_triples</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">proj_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
+            <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">store</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">result</span><span class="p">[</span><span class="s2">&quot;materialize_graph_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Graph store not available&quot;</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">svc</span> <span class="o">=</span> <span class="n">ReasoningService</span><span class="p">(</span><span class="n">proj_snap</span><span class="p">,</span> <span class="n">store</span><span class="p">)</span>
+                <span class="n">svc</span> <span class="o">=</span> <span class="n">ReasoningService</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">store</span><span class="p">)</span>
                 <span class="n">inferred</span> <span class="o">=</span> <span class="p">[</span>
                     <span class="n">InferredTriple</span><span class="p">(</span>
                         <span class="n">subject</span><span class="o">=</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
@@ -1506,15 +1562,13 @@
 
 <span class="sd">    Clients should use the completed task payload from ``/tasks/{task_id}``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">_</span> <span class="o">=</span> <span class="n">get_project</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">_</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     <span class="k">return</span> <span class="p">{</span>
         <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
         <span class="s2">&quot;reasoning&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s2">&quot;last_run&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
             <span class="s2">&quot;inferred_count&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
-            <span class="s2">&quot;violations_count&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
             <span class="s2">&quot;inferred_triples&quot;</span><span class="p">:</span> <span class="p">[],</span>
-            <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
         <span class="p">},</span>
     <span class="p">}</span></div>
 

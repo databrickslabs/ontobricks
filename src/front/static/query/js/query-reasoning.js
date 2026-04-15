@@ -115,7 +115,17 @@ const ReasoningModule = {
             try {
                 const resp = await fetch(`/tasks/${taskId}`);
                 const data = await resp.json();
-                const task = data.task || data;
+
+                if (!data.success || !data.task) {
+                    clearInterval(this.pollTimer);
+                    this.pollTimer = null;
+                    sessionStorage.removeItem('ontobricks_reasoning_task');
+                    this.hideProgress();
+                    this.setRunning(false);
+                    return;
+                }
+
+                const task = data.task;
 
                 if (task.status === 'completed') {
                     clearInterval(this.pollTimer);

@@ -15,7 +15,7 @@
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="back.core.errors – Centralized Error Handling" href="app.core.errors.html" />
+    <link rel="next" title="back.core.helpers – Cross-cutting utility helpers" href="app.core.helpers.html" />
     <link rel="prev" title="FastAPI application (UI server)" href="app.fastapi.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -104,7 +104,7 @@
   <li><a href="../index.html">Documentation overview</a><ul>
   <li><a href="app.html">OntoBricks Application Packages</a><ul>
       <li>Previous: <a href="app.fastapi.html" title="previous chapter">FastAPI application (UI server)</a></li>
-      <li>Next: <a href="app.core.errors.html" title="next chapter"><code class="docutils literal notranslate"><span class="pre">back.core.errors</span></code> – Centralized Error Handling</a></li>
+      <li>Next: <a href="app.core.helpers.html" title="next chapter"><code class="docutils literal notranslate"><span class="pre">back.core.helpers</span></code> – Cross-cutting utility helpers</a></li>
   </ul></li>
   </ul></li>
 </ul>
@@ -153,13 +153,13 @@ re-exports symbols and is not duplicated here.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.resolve_warehouse_id">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_warehouse_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.resolve_warehouse_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.resolve_warehouse_id" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_warehouse_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.resolve_warehouse_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.resolve_warehouse_id" title="Link to this definition">¶</a></dt>
 <dd><p>Resolve the SQL Warehouse ID using a layered fallback strategy.</p>
 <p>Resolution order:</p>
 <ol class="arabic simple">
 <li><p><strong>Global config</strong> (<code class="docutils literal notranslate"><span class="pre">.global_config.json</span></code> in the registry UC Volume)
 – set by admins via the Settings page, shared across all users.</p></li>
-<li><p><strong>Session</strong> (<code class="docutils literal notranslate"><span class="pre">project.databricks['warehouse_id']</span></code>) – stored when
+<li><p><strong>Session</strong> (<code class="docutils literal notranslate"><span class="pre">domain.databricks['warehouse_id']</span></code>) – stored when
 the user selects a warehouse before the registry is configured.</p></li>
 <li><p><strong>Pydantic Settings</strong> (<code class="docutils literal notranslate"><span class="pre">settings.sql_warehouse_id</span></code>) – loaded from
 the <code class="docutils literal notranslate"><span class="pre">DATABRICKS_SQL_WAREHOUSE_ID</span></code> env var / <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code>.</p></li>
@@ -169,7 +169,7 @@ static fallback defined in <code class="docutils literal notranslate"><span clas
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>project</strong> – ProjectSession instance</p></li>
+<li><p><strong>domain</strong> – DomainSession instance</p></li>
 <li><p><strong>settings</strong> – Settings instance from FastAPI</p></li>
 </ul>
 </dd>
@@ -184,7 +184,7 @@ static fallback defined in <code class="docutils literal notranslate"><span clas
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.resolve_default_base_uri">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_default_base_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.resolve_default_base_uri"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.resolve_default_base_uri" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_default_base_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.resolve_default_base_uri"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.resolve_default_base_uri" title="Link to this definition">¶</a></dt>
 <dd><p>Resolve the default ontology base URI domain from global config.</p>
 <p>Falls back to the hard-coded default <code class="docutils literal notranslate"><span class="pre">https://databricks-ontology.com</span></code>.</p>
 <dl class="field-list simple">
@@ -196,7 +196,7 @@ static fallback defined in <code class="docutils literal notranslate"><span clas
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.resolve_default_emoji">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_default_emoji</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.resolve_default_emoji"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.resolve_default_emoji" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_default_emoji</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.resolve_default_emoji"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.resolve_default_emoji" title="Link to this definition">¶</a></dt>
 <dd><p>Resolve the default class icon from global config.</p>
 <p>Falls back to the hard-coded default <code class="docutils literal notranslate"><span class="pre">📦</span></code>.</p>
 <dl class="field-list simple">
@@ -208,14 +208,14 @@ static fallback defined in <code class="docutils literal notranslate"><span clas
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.get_databricks_client">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_databricks_client</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.get_databricks_client"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.get_databricks_client" title="Link to this definition">¶</a></dt>
-<dd><p>Get Databricks client from project session or settings.</p>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_databricks_client</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.get_databricks_client"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.get_databricks_client" title="Link to this definition">¶</a></dt>
+<dd><p>Get Databricks client from domain session or settings.</p>
 <p>In Databricks Apps mode, the SDK handles authentication automatically,
 so we don’t need explicit host/token.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>project</strong> – ProjectSession instance</p></li>
+<li><p><strong>domain</strong> – DomainSession instance</p></li>
 <li><p><strong>settings</strong> – Settings instance from FastAPI</p></li>
 </ul>
 </dd>
@@ -227,13 +227,13 @@ so we don’t need explicit host/token.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.get_databricks_credentials">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_databricks_credentials</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.get_databricks_credentials"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.get_databricks_credentials" title="Link to this definition">¶</a></dt>
-<dd><p>Get Databricks credentials from project session or settings.</p>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_databricks_credentials</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.get_databricks_credentials"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.get_databricks_credentials" title="Link to this definition">¶</a></dt>
+<dd><p>Get Databricks credentials from domain session or settings.</p>
 <p>Falls back to OAuth token resolution in Databricks App mode.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>project</strong> – ProjectSession instance</p></li>
+<li><p><strong>domain</strong> – DomainSession instance</p></li>
 <li><p><strong>settings</strong> – Settings instance from FastAPI</p></li>
 </ul>
 </dd>
@@ -248,15 +248,15 @@ so we don’t need explicit host/token.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.get_databricks_host_and_token">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_databricks_host_and_token</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.get_databricks_host_and_token"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.get_databricks_host_and_token" title="Link to this definition">¶</a></dt>
-<dd><p>Get only host and token from project session or settings.</p>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_databricks_host_and_token</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.get_databricks_host_and_token"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.get_databricks_host_and_token" title="Link to this definition">¶</a></dt>
+<dd><p>Get only host and token from domain session or settings.</p>
 <p>In Databricks App mode, auto-resolves the host via the SDK and
 obtains a short-lived OAuth token when explicit credentials are
-not stored in the project session or environment.</p>
+not stored in the domain session or environment.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>project</strong> – ProjectSession instance</p></li>
+<li><p><strong>domain</strong> – DomainSession instance</p></li>
 <li><p><strong>settings</strong> – Settings instance from FastAPI</p></li>
 </ul>
 </dd>
@@ -271,8 +271,8 @@ not stored in the project session or environment.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.require_serving_llm">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">require_serving_llm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.require_serving_llm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.require_serving_llm" title="Link to this definition">¶</a></dt>
-<dd><p>Validate host, token, and project LLM serving endpoint.</p>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">require_serving_llm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.require_serving_llm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.require_serving_llm" title="Link to this definition">¶</a></dt>
+<dd><p>Validate host, token, and domain LLM serving endpoint.</p>
 <p>Returns <code class="docutils literal notranslate"><span class="pre">(error_response,</span> <span class="pre">None)</span></code> or <code class="docutils literal notranslate"><span class="pre">(None,</span> <span class="pre">(host,</span> <span class="pre">token,</span> <span class="pre">endpoint_name))</span></code>.
 <code class="docutils literal notranslate"><span class="pre">error_response</span></code> uses <code class="docutils literal notranslate"><span class="pre">success</span></code> + <code class="docutils literal notranslate"><span class="pre">message</span></code> for JSON routes.</p>
 <dl class="field-list simple">
@@ -321,8 +321,8 @@ backslashes, which is the superset behaviour needed by all callers.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.helpers.SQLHelpers.effective_view_table">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">effective_view_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/SQLHelpers.html#SQLHelpers.effective_view_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.SQLHelpers.effective_view_table" title="Link to this definition">¶</a></dt>
-<dd><p>Fully-qualified VIEW name derived from project name, version, and delta location.</p>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">effective_view_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/SQLHelpers.html#SQLHelpers.effective_view_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.SQLHelpers.effective_view_table" title="Link to this definition">¶</a></dt>
+<dd><p>Fully-qualified VIEW name derived from domain name, version, and delta location.</p>
 <p>When <em>settings</em> is provided and the composed name is empty, falls back
 to <code class="docutils literal notranslate"><span class="pre">settings.databricks_triplestore_table</span></code>.</p>
 <dl class="field-list simple">
@@ -334,8 +334,8 @@ to <code class="docutils literal notranslate"><span class="pre">settings.databri
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.helpers.SQLHelpers.effective_graph_name">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">effective_graph_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/SQLHelpers.html#SQLHelpers.effective_graph_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.SQLHelpers.effective_graph_name" title="Link to this definition">¶</a></dt>
-<dd><p>LadybugDB graph name derived from the project name and version.</p>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">effective_graph_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/SQLHelpers.html#SQLHelpers.effective_graph_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.SQLHelpers.effective_graph_name" title="Link to this definition">¶</a></dt>
+<dd><p>LadybugDB graph name derived from the domain name and version.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
@@ -423,13 +423,13 @@ starts with a digit, <em>prefix</em> (default <code class="docutils literal notr
 
 <dl class="py function">
 <dt class="sig sig-object py" id="back.core.helpers.resolve_warehouse_id">
-<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">resolve_warehouse_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.resolve_warehouse_id" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">resolve_warehouse_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.resolve_warehouse_id" title="Link to this definition">¶</a></dt>
 <dd><p>Resolve the SQL Warehouse ID using a layered fallback strategy.</p>
 <p>Resolution order:</p>
 <ol class="arabic simple">
 <li><p><strong>Global config</strong> (<code class="docutils literal notranslate"><span class="pre">.global_config.json</span></code> in the registry UC Volume)
 – set by admins via the Settings page, shared across all users.</p></li>
-<li><p><strong>Session</strong> (<code class="docutils literal notranslate"><span class="pre">project.databricks['warehouse_id']</span></code>) – stored when
+<li><p><strong>Session</strong> (<code class="docutils literal notranslate"><span class="pre">domain.databricks['warehouse_id']</span></code>) – stored when
 the user selects a warehouse before the registry is configured.</p></li>
 <li><p><strong>Pydantic Settings</strong> (<code class="docutils literal notranslate"><span class="pre">settings.sql_warehouse_id</span></code>) – loaded from
 the <code class="docutils literal notranslate"><span class="pre">DATABRICKS_SQL_WAREHOUSE_ID</span></code> env var / <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code>.</p></li>
@@ -439,7 +439,7 @@ static fallback defined in <code class="docutils literal notranslate"><span clas
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>project</strong> – ProjectSession instance</p></li>
+<li><p><strong>domain</strong> – DomainSession instance</p></li>
 <li><p><strong>settings</strong> – Settings instance from FastAPI</p></li>
 </ul>
 </dd>
@@ -454,7 +454,7 @@ static fallback defined in <code class="docutils literal notranslate"><span clas
 
 <dl class="py function">
 <dt class="sig sig-object py" id="back.core.helpers.resolve_default_base_uri">
-<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">resolve_default_base_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.resolve_default_base_uri" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">resolve_default_base_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.resolve_default_base_uri" title="Link to this definition">¶</a></dt>
 <dd><p>Resolve the default ontology base URI domain from global config.</p>
 <p>Falls back to the hard-coded default <code class="docutils literal notranslate"><span class="pre">https://databricks-ontology.com</span></code>.</p>
 <dl class="field-list simple">
@@ -466,7 +466,7 @@ static fallback defined in <code class="docutils literal notranslate"><span clas
 
 <dl class="py function">
 <dt class="sig sig-object py" id="back.core.helpers.resolve_default_emoji">
-<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">resolve_default_emoji</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.resolve_default_emoji" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">resolve_default_emoji</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.resolve_default_emoji" title="Link to this definition">¶</a></dt>
 <dd><p>Resolve the default class icon from global config.</p>
 <p>Falls back to the hard-coded default <code class="docutils literal notranslate"><span class="pre">📦</span></code>.</p>
 <dl class="field-list simple">
@@ -478,14 +478,14 @@ static fallback defined in <code class="docutils literal notranslate"><span clas
 
 <dl class="py function">
 <dt class="sig sig-object py" id="back.core.helpers.get_databricks_client">
-<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">get_databricks_client</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.get_databricks_client" title="Link to this definition">¶</a></dt>
-<dd><p>Get Databricks client from project session or settings.</p>
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">get_databricks_client</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.get_databricks_client" title="Link to this definition">¶</a></dt>
+<dd><p>Get Databricks client from domain session or settings.</p>
 <p>In Databricks Apps mode, the SDK handles authentication automatically,
 so we don’t need explicit host/token.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>project</strong> – ProjectSession instance</p></li>
+<li><p><strong>domain</strong> – DomainSession instance</p></li>
 <li><p><strong>settings</strong> – Settings instance from FastAPI</p></li>
 </ul>
 </dd>
@@ -497,13 +497,13 @@ so we don’t need explicit host/token.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="back.core.helpers.get_databricks_credentials">
-<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">get_databricks_credentials</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.get_databricks_credentials" title="Link to this definition">¶</a></dt>
-<dd><p>Get Databricks credentials from project session or settings.</p>
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">get_databricks_credentials</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.get_databricks_credentials" title="Link to this definition">¶</a></dt>
+<dd><p>Get Databricks credentials from domain session or settings.</p>
 <p>Falls back to OAuth token resolution in Databricks App mode.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>project</strong> – ProjectSession instance</p></li>
+<li><p><strong>domain</strong> – DomainSession instance</p></li>
 <li><p><strong>settings</strong> – Settings instance from FastAPI</p></li>
 </ul>
 </dd>
@@ -518,15 +518,15 @@ so we don’t need explicit host/token.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="back.core.helpers.get_databricks_host_and_token">
-<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">get_databricks_host_and_token</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.get_databricks_host_and_token" title="Link to this definition">¶</a></dt>
-<dd><p>Get only host and token from project session or settings.</p>
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">get_databricks_host_and_token</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.get_databricks_host_and_token" title="Link to this definition">¶</a></dt>
+<dd><p>Get only host and token from domain session or settings.</p>
 <p>In Databricks App mode, auto-resolves the host via the SDK and
 obtains a short-lived OAuth token when explicit credentials are
-not stored in the project session or environment.</p>
+not stored in the domain session or environment.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>project</strong> – ProjectSession instance</p></li>
+<li><p><strong>domain</strong> – DomainSession instance</p></li>
 <li><p><strong>settings</strong> – Settings instance from FastAPI</p></li>
 </ul>
 </dd>
@@ -541,13 +541,43 @@ not stored in the project session or environment.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="back.core.helpers.require_serving_llm">
-<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">require_serving_llm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.require_serving_llm" title="Link to this definition">¶</a></dt>
-<dd><p>Validate host, token, and project LLM serving endpoint.</p>
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">require_serving_llm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.require_serving_llm" title="Link to this definition">¶</a></dt>
+<dd><p>Validate host, token, and domain LLM serving endpoint.</p>
 <p>Returns <code class="docutils literal notranslate"><span class="pre">(error_response,</span> <span class="pre">None)</span></code> or <code class="docutils literal notranslate"><span class="pre">(None,</span> <span class="pre">(host,</span> <span class="pre">token,</span> <span class="pre">endpoint_name))</span></code>.
 <code class="docutils literal notranslate"><span class="pre">error_response</span></code> uses <code class="docutils literal notranslate"><span class="pre">success</span></code> + <code class="docutils literal notranslate"><span class="pre">message</span></code> for JSON routes.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>] | None, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>] | None]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.helpers.effective_uc_version_path">
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">effective_uc_version_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#effective_uc_version_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.effective_uc_version_path" title="Link to this definition">¶</a></dt>
+<dd><p>Return the version-scoped UC Volume path, with domain-level fallback.</p>
+<p>Prefers <code class="docutils literal notranslate"><span class="pre">uc_version_path</span></code> (<code class="docutils literal notranslate"><span class="pre">/Volumes/.../V{N}</span></code>) but falls back to
+<code class="docutils literal notranslate"><span class="pre">uc_domain_path</span></code> (<code class="docutils literal notranslate"><span class="pre">/Volumes/.../domains/{name}</span></code>) for legacy layouts,
+and returns an empty string when neither is available.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.helpers.resolve_ladybug_local_path">
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">resolve_ladybug_local_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#resolve_ladybug_local_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.resolve_ladybug_local_path" title="Link to this definition">¶</a></dt>
+<dd><p>Return the local file-system path for a LadybugDB archive.</p>
+<p>Extracts the <code class="docutils literal notranslate"><span class="pre">db_path</span></code> from the domain’s ladybug / triplestore
+configuration, falling back to <code class="docutils literal notranslate"><span class="pre">/tmp/ontobricks</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>db_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -585,8 +615,8 @@ backslashes, which is the superset behaviour needed by all callers.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="back.core.helpers.effective_view_table">
-<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">effective_view_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.effective_view_table" title="Link to this definition">¶</a></dt>
-<dd><p>Fully-qualified VIEW name derived from project name, version, and delta location.</p>
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">effective_view_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.effective_view_table" title="Link to this definition">¶</a></dt>
+<dd><p>Fully-qualified VIEW name derived from domain name, version, and delta location.</p>
 <p>When <em>settings</em> is provided and the composed name is empty, falls back
 to <code class="docutils literal notranslate"><span class="pre">settings.databricks_triplestore_table</span></code>.</p>
 <dl class="field-list simple">
@@ -598,8 +628,8 @@ to <code class="docutils literal notranslate"><span class="pre">settings.databri
 
 <dl class="py function">
 <dt class="sig sig-object py" id="back.core.helpers.effective_graph_name">
-<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">effective_graph_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.effective_graph_name" title="Link to this definition">¶</a></dt>
-<dd><p>LadybugDB graph name derived from the project name and version.</p>
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">effective_graph_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.effective_graph_name" title="Link to this definition">¶</a></dt>
+<dd><p>LadybugDB graph name derived from the domain name and version.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
@@ -1186,6 +1216,7 @@ all modules share the same hierarchy.</p>
 <h2>Subpackages<a class="headerlink" href="#subpackages" title="Link to this heading">¶</a></h2>
 <div class="toctree-wrapper compound">
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="app.core.helpers.html"><code class="docutils literal notranslate"><span class="pre">back.core.helpers</span></code> – Cross-cutting utility helpers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="app.core.errors.html"><code class="docutils literal notranslate"><span class="pre">back.core.errors</span></code> – Centralized Error Handling</a></li>
 <li class="toctree-l1"><a class="reference internal" href="app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
 <li class="toctree-l1"><a class="reference internal" href="app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>

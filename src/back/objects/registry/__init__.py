@@ -1,4 +1,4 @@
-"""Registry — project registry, permissions, and scheduled builds."""
+"""Registry — domain registry, permissions, and scheduled builds."""
 from back.objects.registry.service import (
     RegistryCfg,
     RegistryService,
@@ -10,6 +10,12 @@ from back.objects.registry.permissions import (
     ROLE_EDITOR,
     ROLE_VIEWER,
     ROLE_NONE,
+)
+from back.objects.registry.registry_cache import (
+    invalidate_registry_cache,
+    get_registry_cache_snapshot,
+    get_registry_cache_ttl,
+    set_registry_cache_ttl,
 )
 
 __all__ = [
@@ -23,6 +29,10 @@ __all__ = [
     "ROLE_NONE",
     "BuildScheduler",
     "get_scheduler",
+    "invalidate_registry_cache",
+    "get_registry_cache_snapshot",
+    "get_registry_cache_ttl",
+    "set_registry_cache_ttl",
 ]
 
 

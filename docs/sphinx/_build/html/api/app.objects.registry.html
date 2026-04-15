@@ -121,15 +121,18 @@
 <section id="module-back.objects.registry.service">
 <span id="registry-service"></span><h2>Registry Service<a class="headerlink" href="#module-back.objects.registry.service" title="Link to this heading">¶</a></h2>
 <p>Registry Service for OntoBricks.</p>
-<p>Centralises all project-registry management (config resolution, path
-construction, project CRUD, version management) behind a single
+<p>Centralises all domain-registry management (config resolution, path
+construction, domain CRUD, version management) behind a single
 <code class="docutils literal notranslate"><span class="pre">RegistryService</span></code> class and a lightweight <code class="docutils literal notranslate"><span class="pre">RegistryCfg</span></code> dataclass.</p>
+<p>New registries store domain folders under <code class="docutils literal notranslate"><span class="pre">/domains/</span></code>.  For backward
+compatibility, if the new folder does not exist but the legacy
+<code class="docutils literal notranslate"><span class="pre">/projects/</span></code> folder does, the service transparently falls back to it.</p>
 <p>Usage in a route handler:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span><span class="p">,</span> <span class="n">RegistryService</span>
 
-<span class="n">cfg</span>  <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_project</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-<span class="n">svc</span>  <span class="o">=</span> <span class="n">RegistryService</span><span class="o">.</span><span class="n">from_context</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-<span class="n">ok</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">list_projects</span><span class="p">()</span>
+<span class="n">cfg</span>  <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+<span class="n">svc</span>  <span class="o">=</span> <span class="n">RegistryService</span><span class="o">.</span><span class="n">from_context</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+<span class="n">ok</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">list_domains</span><span class="p">()</span>
 </pre></div>
 </div>
 <dl class="py class">
@@ -176,9 +179,9 @@ construction, project CRUD, version management) behind a single
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryCfg.from_project">
-<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_project</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryCfg.from_project"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryCfg.from_project" title="Link to this definition">¶</a></dt>
-<dd><p>Build from a <em>ProjectSession</em> and <em>Settings</em> with env-var fallbacks.</p>
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryCfg.from_domain">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryCfg.from_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryCfg.from_domain" title="Link to this definition">¶</a></dt>
+<dd><p>Build from a <em>DomainSession</em> and <em>Settings</em> with env-var fallbacks.</p>
 <p>When the app is deployed with a Volume resource the injected path
 (<code class="docutils literal notranslate"><span class="pre">settings.registry_volume_path</span></code>) takes highest priority so that
 admin-level Databricks App resource configuration always wins.</p>
@@ -247,7 +250,7 @@ admin-level Databricks App resource configuration always wins.</p>
 </dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.from_context">
-<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_context</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.from_context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.from_context" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_context</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.from_context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.from_context" title="Link to this definition">¶</a></dt>
 <dd><p>One-call factory: resolve config + build VolumeFileService.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
@@ -267,6 +270,12 @@ admin-level Databricks App resource configuration always wins.</p>
 <dd><p>Expose the underlying VolumeFileService for callers that need it.</p>
 </dd></dl>
 
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.cache_key">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">cache_key</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.registry.service.RegistryService.cache_key" title="Link to this definition">¶</a></dt>
+<dd><p>Build a cache key from the registry config triplet.</p>
+</dd></dl>
+
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.volume_root">
 <span class="sig-name descname"><span class="pre">volume_root</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.volume_root"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.volume_root" title="Link to this definition">¶</a></dt>
@@ -278,8 +287,8 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.projects_path">
-<span class="sig-name descname"><span class="pre">projects_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.projects_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.projects_path" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.domains_path">
+<span class="sig-name descname"><span class="pre">domains_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.domains_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.domains_path" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
@@ -288,11 +297,28 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.project_path">
-<span class="sig-name descname"><span class="pre">project_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.project_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.project_path" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.domain_path">
+<span class="sig-name descname"><span class="pre">domain_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.domain_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.domain_path" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>folder</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.version_path">
+<span class="sig-name descname"><span class="pre">version_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.version_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.version_path" title="Link to this definition">¶</a></dt>
+<dd><p>Return the version directory: <code class="docutils literal notranslate"><span class="pre">.../domains/{folder}/V{version}</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>folder</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
@@ -384,9 +410,9 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_projects">
-<span class="sig-name descname"><span class="pre">list_projects</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_projects"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_projects" title="Link to this definition">¶</a></dt>
-<dd><p>Return sorted project folder names (hidden dirs excluded).</p>
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_domains">
+<span class="sig-name descname"><span class="pre">list_domains</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_domains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_domains" title="Link to this definition">¶</a></dt>
+<dd><p>Return sorted domain folder names (hidden dirs excluded).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>], <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
@@ -395,11 +421,37 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_project_details">
-<span class="sig-name descname"><span class="pre">list_project_details</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_project_details"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_project_details" title="Link to this definition">¶</a></dt>
-<dd><p>List projects with description and version list.</p>
-<p>For each project folder the latest version file is opened to
-extract the description from <code class="docutils literal notranslate"><span class="pre">info.description</span></code>.</p>
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_domains_cached">
+<span class="sig-name descname"><span class="pre">list_domains_cached</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_domains_cached"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_domains_cached" title="Link to this definition">¶</a></dt>
+<dd><p>Like <a class="reference internal" href="#back.objects.registry.service.RegistryService.list_domains" title="back.objects.registry.service.RegistryService.list_domains"><code class="xref py py-meth docutils literal notranslate"><span class="pre">list_domains()</span></code></a> but with an in-memory TTL cache.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>], <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.domain_exists">
+<span class="sig-name descname"><span class="pre">domain_exists</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.domain_exists"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.domain_exists" title="Link to this definition">¶</a></dt>
+<dd><p>Check whether a domain folder already exists in the registry.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>folder</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_domain_details">
+<span class="sig-name descname"><span class="pre">list_domain_details</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_domain_details"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_domain_details" title="Link to this definition">¶</a></dt>
+<dd><p>List domains with name, URI, description and version list.</p>
+<p>For each domain folder the latest version file is opened to
+extract the description from <code class="docutils literal notranslate"><span class="pre">info.description</span></code> and the base URI
+from the ontology section.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]], <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
@@ -408,12 +460,23 @@ extract the description from <code class="docutils literal notranslate"><span cl
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_mcp_projects">
-<span class="sig-name descname"><span class="pre">list_mcp_projects</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">require_ontology</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_mcp_projects"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_mcp_projects" title="Link to this definition">¶</a></dt>
-<dd><p>List projects that have an MCP-enabled version.</p>
-<p>Returns <code class="docutils literal notranslate"><span class="pre">(ok,</span> <span class="pre">projects,</span> <span class="pre">message)</span></code> where each project is
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_domain_details_cached">
+<span class="sig-name descname"><span class="pre">list_domain_details_cached</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_domain_details_cached"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_domain_details_cached" title="Link to this definition">¶</a></dt>
+<dd><p>Like <a class="reference internal" href="#back.objects.registry.service.RegistryService.list_domain_details" title="back.objects.registry.service.RegistryService.list_domain_details"><code class="xref py py-meth docutils literal notranslate"><span class="pre">list_domain_details()</span></code></a> but with an in-memory TTL cache.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]], <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_mcp_domains">
+<span class="sig-name descname"><span class="pre">list_mcp_domains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">require_ontology</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_mcp_domains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_mcp_domains" title="Link to this definition">¶</a></dt>
+<dd><p>List domains that have an MCP-enabled version.</p>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">(ok,</span> <span class="pre">domains,</span> <span class="pre">message)</span></code> where each domain is
 <code class="docutils literal notranslate"><span class="pre">{&quot;name&quot;:</span> <span class="pre">...,</span> <span class="pre">&quot;description&quot;:</span> <span class="pre">...}</span></code>.  When <em>require_ontology</em> is
-<code class="docutils literal notranslate"><span class="pre">True</span></code> only projects whose MCP version has a non-empty <code class="docutils literal notranslate"><span class="pre">classes</span></code>
+<code class="docutils literal notranslate"><span class="pre">True</span></code> only domains whose MCP version has a non-empty <code class="docutils literal notranslate"><span class="pre">classes</span></code>
 list are included.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -426,9 +489,9 @@ list are included.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.delete_project">
-<span class="sig-name descname"><span class="pre">delete_project</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.delete_project"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.delete_project" title="Link to this definition">¶</a></dt>
-<dd><p>Delete a project directory and all its contents.</p>
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.delete_domain">
+<span class="sig-name descname"><span class="pre">delete_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.delete_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.delete_domain" title="Link to this definition">¶</a></dt>
+<dd><p>Delete a domain directory and all its contents.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>folder</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
@@ -456,7 +519,8 @@ list are included.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_versions">
 <span class="sig-name descname"><span class="pre">list_versions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_versions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_versions" title="Link to this definition">¶</a></dt>
-<dd><p>Return version strings (e.g. <code class="docutils literal notranslate"><span class="pre">['2',</span> <span class="pre">'1']</span></code>) for a project folder.</p>
+<dd><p>Return version strings (e.g. <code class="docutils literal notranslate"><span class="pre">['2',</span> <span class="pre">'1']</span></code>) for a domain folder.</p>
+<p>Scans <code class="docutils literal notranslate"><span class="pre">V{N}/</span></code> subdirectories inside the domain folder.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>folder</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
@@ -536,7 +600,7 @@ list are included.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.delete_version">
 <span class="sig-name descname"><span class="pre">delete_version</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.delete_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.delete_version" title="Link to this definition">¶</a></dt>
-<dd><p>Delete a single version file.</p>
+<dd><p>Delete an entire version directory (<code class="docutils literal notranslate"><span class="pre">V{version}/</span></code>) and its contents.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -551,8 +615,8 @@ list are included.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.load_latest_project_data">
-<span class="sig-name descname"><span class="pre">load_latest_project_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.load_latest_project_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.load_latest_project_data" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.load_latest_domain_data">
+<span class="sig-name descname"><span class="pre">load_latest_domain_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.load_latest_domain_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.load_latest_domain_data" title="Link to this definition">¶</a></dt>
 <dd><p>Load the latest version for <em>folder</em>.</p>
 <p>Returns <code class="docutils literal notranslate"><span class="pre">(ok,</span> <span class="pre">data_dict,</span> <span class="pre">version_str,</span> <span class="pre">error_msg)</span></code>.</p>
 <dl class="field-list simple">
@@ -582,8 +646,8 @@ version has the flag set.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.load_mcp_project_data">
-<span class="sig-name descname"><span class="pre">load_mcp_project_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.load_mcp_project_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.load_mcp_project_data" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.load_mcp_domain_data">
+<span class="sig-name descname"><span class="pre">load_mcp_domain_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.load_mcp_domain_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.load_mcp_domain_data" title="Link to this definition">¶</a></dt>
 <dd><p>Load the MCP-enabled version for <em>folder</em>.</p>
 <p>Falls back to the latest version when no version has
 <code class="docutils literal notranslate"><span class="pre">mcp_enabled</span></code> set.</p>
@@ -594,6 +658,56 @@ version has the flag set.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.copy_version_documents">
+<span class="sig-name descname"><span class="pre">copy_version_documents</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src_version</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst_version</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.copy_version_documents"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.copy_version_documents" title="Link to this definition">¶</a></dt>
+<dd><p>Copy all documents from one version directory to another.</p>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">(copied_count,</span> <span class="pre">error_messages)</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>folder</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>src_version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>dst_version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.migrate_domain_layout">
+<span class="sig-name descname"><span class="pre">migrate_domain_layout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.migrate_domain_layout"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.migrate_domain_layout" title="Link to this definition">¶</a></dt>
+<dd><p>Migrate a single domain from the flat layout to the versioned layout.</p>
+<p>Flat layout (old):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">domains</span><span class="o">/</span><span class="p">{</span><span class="n">folder</span><span class="p">}</span><span class="o">/</span><span class="n">v1</span><span class="o">.</span><span class="n">json</span>
+<span class="n">domains</span><span class="o">/</span><span class="p">{</span><span class="n">folder</span><span class="p">}</span><span class="o">/</span><span class="n">v2</span><span class="o">.</span><span class="n">json</span>
+<span class="n">domains</span><span class="o">/</span><span class="p">{</span><span class="n">folder</span><span class="p">}</span><span class="o">/</span><span class="n">documents</span><span class="o">/</span>
+<span class="n">domains</span><span class="o">/</span><span class="p">{</span><span class="n">folder</span><span class="p">}</span><span class="o">/</span><span class="n">ontobricks_</span><span class="o">*.</span><span class="n">lbug</span><span class="o">.</span><span class="n">tar</span><span class="o">.</span><span class="n">gz</span>
+</pre></div>
+</div>
+<p>Versioned layout (new):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">domains</span><span class="o">/</span><span class="p">{</span><span class="n">folder</span><span class="p">}</span><span class="o">/</span><span class="n">V1</span><span class="o">/</span><span class="n">V1</span><span class="o">.</span><span class="n">json</span>
+<span class="n">domains</span><span class="o">/</span><span class="p">{</span><span class="n">folder</span><span class="p">}</span><span class="o">/</span><span class="n">V1</span><span class="o">/</span><span class="n">documents</span><span class="o">/</span>
+<span class="n">domains</span><span class="o">/</span><span class="p">{</span><span class="n">folder</span><span class="p">}</span><span class="o">/</span><span class="n">V1</span><span class="o">/</span><span class="n">ontobricks_</span><span class="o">*.</span><span class="n">lbug</span><span class="o">.</span><span class="n">tar</span><span class="o">.</span><span class="n">gz</span>
+<span class="n">domains</span><span class="o">/</span><span class="p">{</span><span class="n">folder</span><span class="p">}</span><span class="o">/</span><span class="n">V2</span><span class="o">/</span><span class="n">V2</span><span class="o">.</span><span class="n">json</span>
+<span class="n">domains</span><span class="o">/</span><span class="p">{</span><span class="n">folder</span><span class="p">}</span><span class="o">/</span><span class="n">V2</span><span class="o">/</span><span class="n">documents</span><span class="o">/</span>
+<span class="n">domains</span><span class="o">/</span><span class="p">{</span><span class="n">folder</span><span class="p">}</span><span class="o">/</span><span class="n">V2</span><span class="o">/</span><span class="n">ontobricks_</span><span class="o">*.</span><span class="n">lbug</span><span class="o">.</span><span class="n">tar</span><span class="o">.</span><span class="n">gz</span>
+</pre></div>
+</div>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">(ok,</span> <span class="pre">message)</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>folder</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -918,15 +1032,15 @@ were not available at startup).</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.registry.scheduler.BuildScheduler.get_schedule_history">
-<span class="sig-name descname"><span class="pre">get_schedule_history</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">project_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/scheduler.html#BuildScheduler.get_schedule_history"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.scheduler.BuildScheduler.get_schedule_history" title="Link to this definition">¶</a></dt>
-<dd><p>Return the run history for a single project, newest first.</p>
+<span class="sig-name descname"><span class="pre">get_schedule_history</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/scheduler.html#BuildScheduler.get_schedule_history"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.scheduler.BuildScheduler.get_schedule_history" title="Link to this definition">¶</a></dt>
+<dd><p>Return the run history for a single domain, newest first.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>registry_cfg</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
-<li><p><strong>project_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -937,15 +1051,15 @@ were not available at startup).</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.registry.scheduler.BuildScheduler.save_schedule">
-<span class="sig-name descname"><span class="pre">save_schedule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">project_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">interval_minutes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">drop_existing</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enabled</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'latest'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/scheduler.html#BuildScheduler.save_schedule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.scheduler.BuildScheduler.save_schedule" title="Link to this definition">¶</a></dt>
-<dd><p>Create or update a schedule for <em>project_name</em>.</p>
+<span class="sig-name descname"><span class="pre">save_schedule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">interval_minutes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">drop_existing</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enabled</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'latest'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/scheduler.html#BuildScheduler.save_schedule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.scheduler.BuildScheduler.save_schedule" title="Link to this definition">¶</a></dt>
+<dd><p>Create or update a schedule for <em>domain_name</em>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>registry_cfg</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
-<li><p><strong>project_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>interval_minutes</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
 <li><p><strong>drop_existing</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
 <li><p><strong>enabled</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
@@ -960,15 +1074,15 @@ were not available at startup).</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.registry.scheduler.BuildScheduler.remove_schedule">
-<span class="sig-name descname"><span class="pre">remove_schedule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">project_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/scheduler.html#BuildScheduler.remove_schedule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.scheduler.BuildScheduler.remove_schedule" title="Link to this definition">¶</a></dt>
-<dd><p>Delete a schedule for <em>project_name</em>.</p>
+<span class="sig-name descname"><span class="pre">remove_schedule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/scheduler.html#BuildScheduler.remove_schedule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.scheduler.BuildScheduler.remove_schedule" title="Link to this definition">¶</a></dt>
+<dd><p>Delete a schedule for <em>domain_name</em>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>registry_cfg</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
-<li><p><strong>project_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>

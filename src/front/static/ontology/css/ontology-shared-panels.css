@@ -134,8 +134,11 @@
     flex-shrink: 0;
 }
 
-/* Resize handle - always second to last */
-.detail-panel-resize-handle {
+/* Resize handle ordering - always second to last in the flex container */
+.sidebar-section .detail-panel-resize-handle,
+#ontology-map-container .detail-panel-resize-handle,
+#ontology-entities-container .detail-panel-resize-handle,
+#ontology-relationships-container .detail-panel-resize-handle {
     order: 998;
 }
 
@@ -313,23 +316,7 @@
     margin-bottom: 0.75rem !important;
 }
 
-/* Emoji picker styles */
-.shared-detail-panel .emoji-picker-container {
-    position: relative;
-    z-index: 1060;
-}
-
-.shared-detail-panel .emoji-picker-grid {
-    max-height: 150px;
-    overflow-y: auto;
-}
-
-.shared-detail-panel .emoji-btn {
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    font-size: 1rem;
-}
+/* Emoji picker styles moved to global/css/emoji-picker.css */
 
 /* Attributes container */
 .shared-detail-panel #sharedEntityAttributes {

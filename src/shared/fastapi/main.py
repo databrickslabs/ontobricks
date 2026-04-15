@@ -49,8 +49,8 @@ tags_metadata = [
                        "Queries are translated to SQL and executed on Databricks.",
     },
     {
-        "name": "Project",
-        "description": "Project management - Save, load, import/export complete project configurations "
+        "name": "Domain",
+        "description": "Domain management - Save, load, import/export complete domain configurations "
                        "including ontology, mappings, and settings.",
     },
     {
@@ -76,7 +76,7 @@ into a Delta triple store for visual exploration and quality validation.
 - 🔗 **Data Mapping** - Map ontology concepts to Databricks tables
 - 🔍 **SPARQL Queries** - Query data using W3C standard SPARQL
 - 📊 **Digital Twin Knowledge Graph** - Interactive sigma.js WebGL graph exploration with SPARQL-based quality checks
-- 📦 **Project Management** - Save/load projects to Unity Catalog volumes
+- 📦 **Domain Management** - Save/load domains to Unity Catalog volumes
 - 🔮 **GraphQL API** - Auto-generated typed schema from ontology with nested entity traversal
 
 ## Quick Start
@@ -219,15 +219,15 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         settings = get_settings()
         from back.objects.registry import permission_service
         from back.core.helpers import get_databricks_host_and_token
-        from back.objects.session import get_project, SessionManager
+        from back.objects.session import get_domain, SessionManager
 
         session_mgr = SessionManager(request)
-        project = get_project(session_mgr)
-        host, token = get_databricks_host_and_token(project, settings)
+        domain = get_domain(session_mgr)
+        host, token = get_databricks_host_and_token(domain, settings)
         user_token = request.headers.get("x-forwarded-access-token", "")
 
         from back.objects.registry import RegistryCfg
-        registry_cfg = RegistryCfg.from_project(project, settings).as_dict()
+        registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
 
         return permission_service.get_user_role(
             email, host, token, registry_cfg, settings.ontobricks_app_name,

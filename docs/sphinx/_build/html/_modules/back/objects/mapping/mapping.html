@@ -134,10 +134,10 @@
 <div class="viewcode-block" id="Mapping">
 <a class="viewcode-back" href="../../../../api/app.objects.mapping.html#back.objects.mapping.mapping.Mapping">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Mapping</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Centralizes mapping operations for a project session.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Centralizes mapping operations for a domain session.&quot;&quot;&quot;</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">project</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_project</span> <span class="o">=</span> <span class="n">project</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span> <span class="o">=</span> <span class="n">domain</span>
 
 <div class="viewcode-block" id="Mapping.auto_assign_with_agent">
 <a class="viewcode-back" href="../../../../api/app.objects.mapping.html#back.objects.mapping.mapping.Mapping.auto_assign_with_agent">[docs]</a>
@@ -159,7 +159,7 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Run ``agent_auto_assignment`` (blocking).</span>
 
 <span class="sd">        ``client`` is typically a :class:`~back.core.databricks.DatabricksClient`</span>
-<span class="sd">        built with the project warehouse. Call from a background thread when</span>
+<span class="sd">        built with the domain warehouse. Call from a background thread when</span>
 <span class="sd">        started from HTTP.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">agents.agent_auto_assignment</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_agent</span>
@@ -195,11 +195,11 @@
         <span class="n">override</span> <span class="o">=</span> <span class="n">schema_context_override</span> <span class="ow">or</span> <span class="p">{}</span>
         <span class="k">if</span> <span class="n">override</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">):</span>
             <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">override</span><span class="p">),</span> <span class="kc">None</span>
-        <span class="n">tables</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="o">.</span><span class="n">catalog_metadata</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">tables</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="o">.</span><span class="n">catalog_metadata</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">,</span> <span class="p">[])</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tables</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">(</span>
                 <span class="p">{},</span>
-                <span class="s2">&quot;No metadata loaded. Please load metadata first in Project settings.&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;No metadata loaded. Please load metadata first in Settings.&quot;</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="n">tables</span><span class="p">},</span> <span class="kc">None</span></div>
 
@@ -251,8 +251,8 @@
 <div class="viewcode-block" id="Mapping.add_or_update_entity_mapping">
 <a class="viewcode-back" href="../../../../api/app.objects.mapping.html#back.objects.mapping.mapping.Mapping.add_or_update_entity_mapping">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">add_or_update_entity_mapping</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span>
-        <span class="n">mappings</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">()</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span>
+        <span class="n">mappings</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">()</span>
         <span class="n">new_mapping</span> <span class="o">=</span> <span class="n">Mapping</span><span class="o">.</span><span class="n">build_entity_mapping</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
 
         <span class="n">was_update</span> <span class="o">=</span> <span class="kc">False</span>
@@ -267,9 +267,9 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">was_update</span><span class="p">:</span>
             <span class="n">mappings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_mapping</span><span class="p">)</span>
 
-        <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;entities&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mappings</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">clear_generated_content</span><span class="p">()</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;entities&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mappings</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">clear_generated_content</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
 
         <span class="k">return</span> <span class="n">was_update</span><span class="p">,</span> <span class="n">new_mapping</span></div>
 
@@ -277,15 +277,15 @@
 <div class="viewcode-block" id="Mapping.delete_entity_mapping">
 <a class="viewcode-back" href="../../../../api/app.objects.mapping.html#back.objects.mapping.mapping.Mapping.delete_entity_mapping">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">delete_entity_mapping</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ontology_class</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span>
-        <span class="n">mappings</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">()</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span>
+        <span class="n">mappings</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">()</span>
         <span class="n">original_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">mappings</span><span class="p">)</span>
         <span class="n">mappings</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">mappings</span> <span class="k">if</span> <span class="n">m</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology_class&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">ontology_class</span><span class="p">]</span>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">mappings</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">original_len</span><span class="p">:</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;entities&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mappings</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">clear_generated_content</span><span class="p">()</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;entities&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mappings</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">clear_generated_content</span><span class="p">()</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
             <span class="k">return</span> <span class="kc">True</span>
         <span class="k">return</span> <span class="kc">False</span></div>
 
@@ -293,8 +293,8 @@
 <div class="viewcode-block" id="Mapping.add_or_update_relationship_mapping">
 <a class="viewcode-back" href="../../../../api/app.objects.mapping.html#back.objects.mapping.mapping.Mapping.add_or_update_relationship_mapping">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">add_or_update_relationship_mapping</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span>
-        <span class="n">mappings</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">()</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span>
+        <span class="n">mappings</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">()</span>
         <span class="n">new_mapping</span> <span class="o">=</span> <span class="n">Mapping</span><span class="o">.</span><span class="n">build_relationship_mapping</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
 
         <span class="n">was_update</span> <span class="o">=</span> <span class="kc">False</span>
@@ -309,9 +309,9 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">was_update</span><span class="p">:</span>
             <span class="n">mappings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_mapping</span><span class="p">)</span>
 
-        <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;relationships&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mappings</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">clear_generated_content</span><span class="p">()</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;relationships&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mappings</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">clear_generated_content</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
 
         <span class="k">return</span> <span class="n">was_update</span><span class="p">,</span> <span class="n">new_mapping</span></div>
 
@@ -319,15 +319,15 @@
 <div class="viewcode-block" id="Mapping.delete_relationship_mapping">
 <a class="viewcode-back" href="../../../../api/app.objects.mapping.html#back.objects.mapping.mapping.Mapping.delete_relationship_mapping">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">delete_relationship_mapping</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">property_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span>
-        <span class="n">mappings</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">()</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span>
+        <span class="n">mappings</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">()</span>
         <span class="n">original_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">mappings</span><span class="p">)</span>
         <span class="n">mappings</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">mappings</span> <span class="k">if</span> <span class="n">m</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">property_uri</span><span class="p">]</span>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">mappings</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">original_len</span><span class="p">:</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;relationships&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mappings</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">clear_generated_content</span><span class="p">()</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;relationships&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mappings</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">clear_generated_content</span><span class="p">()</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
             <span class="k">return</span> <span class="kc">True</span>
         <span class="k">return</span> <span class="kc">False</span></div>
 
@@ -335,34 +335,34 @@
 <div class="viewcode-block" id="Mapping.save_mapping_config">
 <a class="viewcode-back" href="../../../../api/app.objects.mapping.html#back.objects.mapping.mapping.Mapping.save_mapping_config">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">save_mapping_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mapping_config</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;entities&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapping_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;entities&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapping_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
             <span class="s2">&quot;entities&quot;</span><span class="p">,</span> <span class="n">mapping_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;data_source_mappings&quot;</span><span class="p">,</span> <span class="p">[])</span>
         <span class="p">)</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;relationships&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapping_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;relationships&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapping_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
             <span class="s2">&quot;relationships&quot;</span><span class="p">,</span> <span class="n">mapping_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;relationship_mappings&quot;</span><span class="p">,</span> <span class="p">[])</span>
         <span class="p">)</span>
         <span class="k">if</span> <span class="n">mapping_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;r2rml_output&quot;</span><span class="p">):</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;r2rml_output&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapping_config</span><span class="p">[</span><span class="s2">&quot;r2rml_output&quot;</span><span class="p">]</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;r2rml_output&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapping_config</span><span class="p">[</span><span class="s2">&quot;r2rml_output&quot;</span><span class="p">]</span>
 
-        <span class="n">project</span><span class="o">.</span><span class="n">clear_generated_content</span><span class="p">()</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">clear_generated_content</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
 
         <span class="k">return</span> <span class="p">{</span>
-            <span class="s2">&quot;entities&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">()),</span>
-            <span class="s2">&quot;relationships&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">()),</span>
+            <span class="s2">&quot;entities&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">()),</span>
+            <span class="s2">&quot;relationships&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">()),</span>
         <span class="p">}</span></div>
 
 
 <div class="viewcode-block" id="Mapping.reset_mapping">
 <a class="viewcode-back" href="../../../../api/app.objects.mapping.html#back.objects.mapping.mapping.Mapping.reset_mapping">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">reset_mapping</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;entities&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;relationships&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;r2rml_output&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">clear_generated_content</span><span class="p">()</span>
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span></div>
+        <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;entities&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;relationships&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;r2rml_output&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">clear_generated_content</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span></div>
 
 
 <div class="viewcode-block" id="Mapping.generate_r2rml">
@@ -380,17 +380,17 @@
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c</span><span class="w"> </span><span class="kn">import</span> <span class="n">R2RMLGenerator</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span> <span class="k">as</span> <span class="n">_VE</span>
 
-        <span class="n">project</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">project</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">():</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">():</span>
             <span class="k">raise</span> <span class="n">_VE</span><span class="p">(</span><span class="s2">&quot;No entity mappings configured&quot;</span><span class="p">)</span>
 
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">base_uri</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="n">DEFAULT_BASE_URI</span><span class="p">)</span>
+            <span class="n">base_uri</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="n">DEFAULT_BASE_URI</span><span class="p">)</span>
             <span class="n">generator</span> <span class="o">=</span> <span class="n">R2RMLGenerator</span><span class="p">(</span><span class="n">base_uri</span><span class="p">)</span>
-            <span class="n">r2rml_content</span> <span class="o">=</span> <span class="n">generator</span><span class="o">.</span><span class="n">generate_mapping</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">,</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="p">)</span>
+            <span class="n">r2rml_content</span> <span class="o">=</span> <span class="n">generator</span><span class="o">.</span><span class="n">generate_mapping</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="p">)</span>
 
-            <span class="n">project</span><span class="o">.</span><span class="n">set_r2rml</span><span class="p">(</span><span class="n">r2rml_content</span><span class="p">)</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">set_r2rml</span><span class="p">(</span><span class="n">r2rml_content</span><span class="p">)</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
 
             <span class="k">return</span> <span class="n">r2rml_content</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -406,15 +406,15 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">parse_r2rml</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r2rml_content</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c</span><span class="w"> </span><span class="kn">import</span> <span class="n">R2RMLParser</span>
 
-        <span class="n">project</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span>
         <span class="n">parser</span> <span class="o">=</span> <span class="n">R2RMLParser</span><span class="p">()</span>
         <span class="n">result</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">r2rml_content</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;success&quot;</span><span class="p">):</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;entities&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;entity_mappings&quot;</span><span class="p">,</span> <span class="p">[])</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;relationships&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;relationship_mappings&quot;</span><span class="p">,</span> <span class="p">[])</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;r2rml_output&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">r2rml_content</span>
-            <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;entities&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;entity_mappings&quot;</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;relationships&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;relationship_mappings&quot;</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;r2rml_output&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">r2rml_content</span>
+            <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
 
         <span class="k">return</span> <span class="n">result</span></div>
 
@@ -422,10 +422,10 @@
 <div class="viewcode-block" id="Mapping.get_mapping_stats">
 <a class="viewcode-back" href="../../../../api/app.objects.mapping.html#back.objects.mapping.mapping.Mapping.get_mapping_stats">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_mapping_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span>
         <span class="k">return</span> <span class="p">{</span>
-            <span class="s2">&quot;entities&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">()),</span>
-            <span class="s2">&quot;relationships&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">project</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">()),</span>
+            <span class="s2">&quot;entities&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">()),</span>
+            <span class="s2">&quot;relationships&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">get_relationship_mappings</span><span class="p">()),</span>
         <span class="p">}</span></div>
 
 
@@ -454,8 +454,10 @@
 <div class="viewcode-block" id="Mapping.fetch_documents_for_agent">
 <a class="viewcode-back" href="../../../../api/app.objects.mapping.html#back.objects.mapping.mapping.Mapping.fetch_documents_for_agent">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">fetch_documents_for_agent</span><span class="p">(</span><span class="n">project</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-        <span class="n">base_path</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">uc_project_path</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">fetch_documents_for_agent</span><span class="p">(</span><span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">effective_uc_version_path</span>
+
+        <span class="n">base_path</span> <span class="o">=</span> <span class="n">effective_uc_version_path</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">base_path</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;fetch_documents_for_agent: no registry path — skipping documents&quot;</span><span class="p">)</span>
             <span class="k">return</span> <span class="p">[]</span>
@@ -594,7 +596,10 @@
                 <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;save_mappings_to_session: session file missing — using in-memory ref&quot;</span><span class="p">)</span>
                 <span class="n">data</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">session_ref</span><span class="p">)</span> <span class="k">if</span> <span class="n">session_ref</span> <span class="k">else</span> <span class="p">{}</span>
 
-            <span class="n">assignment</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;project_data&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;assignment&quot;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="k">if</span> <span class="s2">&quot;domain_data&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">data</span> <span class="ow">and</span> <span class="s2">&quot;project_data&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+                <span class="n">data</span><span class="p">[</span><span class="s2">&quot;domain_data&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;project_data&quot;</span><span class="p">)</span>
+            <span class="n">bucket</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;domain_data&quot;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="n">assignment</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;assignment&quot;</span><span class="p">,</span> <span class="p">{})</span>
 
             <span class="k">if</span> <span class="n">entity_mappings</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">existing_entity_mappings</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -638,8 +643,8 @@
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">assignment</span><span class="p">[</span><span class="s2">&quot;relationships&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">relationship_mappings</span>
 
-            <span class="n">project_node</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;project_data&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;project&quot;</span><span class="p">,</span> <span class="p">{})</span>
-            <span class="n">project_node</span><span class="p">[</span><span class="s2">&quot;assignment_changed&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">domain_node</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;domain&quot;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="n">domain_node</span><span class="p">[</span><span class="s2">&quot;assignment_changed&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
 
             <span class="n">session_path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="nb">str</span><span class="p">))</span>
             <span class="n">e_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">assignment</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;entities&quot;</span><span class="p">,</span> <span class="p">[]))</span>
@@ -721,9 +726,9 @@
 <div class="viewcode-block" id="Mapping.toggle_exclude_items">
 <a class="viewcode-back" href="../../../../api/app.objects.mapping.html#back.objects.mapping.mapping.Mapping.toggle_exclude_items">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">toggle_exclude_items</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">uris</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">excluded</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">item_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-        <span class="n">project</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span>
         <span class="n">uri_set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">uris</span><span class="p">)</span>
-        <span class="n">assignment</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">assignment</span>
+        <span class="n">assignment</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span>
 
         <span class="n">changed</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="k">if</span> <span class="n">item_type</span> <span class="o">==</span> <span class="s2">&quot;entity&quot;</span><span class="p">:</span>
@@ -752,13 +757,13 @@
                 <span class="n">changed</span> <span class="o">+=</span> <span class="mi">1</span>
 
         <span class="k">if</span> <span class="n">item_type</span> <span class="o">==</span> <span class="s2">&quot;entity&quot;</span><span class="p">:</span>
-            <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="p">[]):</span>
                 <span class="bp">cls</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;excluded&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">prop</span> <span class="ow">in</span> <span class="n">project</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="k">for</span> <span class="n">prop</span> <span class="ow">in</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="p">[]):</span>
                 <span class="n">prop</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;excluded&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
 
-        <span class="n">project</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">changed</span></div>
 
 
@@ -849,7 +854,265 @@
         <span class="k">if</span> <span class="n">unmapped_attr_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">issues</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">unmapped_attr_count</span><span class="si">}</span><span class="s1"> attribute(s) not assigned&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">issues</span></div>
-</div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Diagnostics</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="Mapping.run_diagnostics">
+<a class="viewcode-back" href="../../../../api/app.objects.mapping.html#back.objects.mapping.mapping.Mapping.run_diagnostics">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_diagnostics</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run comprehensive validation on all entity and relationship mappings.</span>
+
+<span class="sd">        Checks column existence in source SQL, entity-relationship</span>
+<span class="sd">        cross-references, and ontology consistency.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin</span><span class="w"> </span><span class="kn">import</span> <span class="n">DigitalTwin</span>
+
+        <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span>
+        <span class="n">ontology</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="n">assignment</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span> <span class="ow">or</span> <span class="p">{}</span>
+
+        <span class="n">ont_classes</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;uri&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span> <span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;classes&#39;</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;uri&#39;</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="n">ont_class_names</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span> <span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;classes&#39;</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="n">ont_props</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;uri&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span> <span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;properties&#39;</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;uri&#39;</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="n">ont_prop_names</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span> <span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;properties&#39;</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span>
+        <span class="p">}</span>
+
+        <span class="n">entities</span> <span class="o">=</span> <span class="n">assignment</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;entities&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">relationships</span> <span class="o">=</span> <span class="n">assignment</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;relationships&#39;</span><span class="p">,</span> <span class="p">[])</span>
+
+        <span class="n">entity_lookup</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">entities</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">m</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;excluded&#39;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span>
+                <span class="n">m</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;table&#39;</span><span class="p">),</span>
+                <span class="n">m</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class_label&#39;</span><span class="p">),</span>
+                <span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class_label&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span>
+                <span class="n">m</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class&#39;</span><span class="p">),</span>
+            <span class="p">):</span>
+                <span class="k">if</span> <span class="n">key</span><span class="p">:</span>
+                    <span class="n">entity_lookup</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">m</span>
+            <span class="n">class_uri</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">class_uri</span><span class="p">:</span>
+                <span class="n">local</span> <span class="o">=</span> <span class="n">class_uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;#&#39;</span> <span class="ow">in</span> <span class="n">class_uri</span> <span class="k">else</span> <span class="n">class_uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">local</span><span class="p">:</span>
+                    <span class="n">entity_lookup</span><span class="p">[</span><span class="n">local</span><span class="p">]</span> <span class="o">=</span> <span class="n">m</span>
+                    <span class="n">entity_lookup</span><span class="p">[</span><span class="n">local</span><span class="o">.</span><span class="n">lower</span><span class="p">()]</span> <span class="o">=</span> <span class="n">m</span>
+
+        <span class="n">entity_results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">ent</span> <span class="ow">in</span> <span class="n">entities</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;excluded&#39;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">label</span> <span class="o">=</span> <span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class_label&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class&#39;</span><span class="p">,</span> <span class="s1">&#39;Unknown&#39;</span><span class="p">)</span>
+            <span class="n">class_uri</span> <span class="o">=</span> <span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="n">sql_query</span> <span class="o">=</span> <span class="p">(</span><span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sql_query&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="n">table</span> <span class="o">=</span> <span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;table&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span>
+            <span class="n">source</span> <span class="o">=</span> <span class="n">sql_query</span> <span class="ow">or</span> <span class="n">table</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span>
+            <span class="n">id_col</span> <span class="o">=</span> <span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;id_column&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="n">label_col</span> <span class="o">=</span> <span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;label_column&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="n">attr_map</span> <span class="o">=</span> <span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;attribute_mappings&#39;</span><span class="p">,</span> <span class="p">{})</span>
+
+            <span class="n">checks</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">available_cols</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_extract_select_columns</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span> <span class="k">if</span> <span class="n">sql_query</span> <span class="k">else</span> <span class="kc">None</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">source</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;source&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;error&#39;</span><span class="p">,</span> <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="s1">&#39;No SQL query or table defined&#39;</span><span class="p">})</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;source&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span> <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s1">&#39;Source defined&#39;</span><span class="p">})</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">id_col</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;id_column&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;error&#39;</span><span class="p">,</span> <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="s1">&#39;No ID column defined&#39;</span><span class="p">})</span>
+            <span class="k">elif</span> <span class="n">available_cols</span> <span class="ow">and</span> <span class="n">id_col</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">available_cols</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;id_column&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;error&#39;</span><span class="p">,</span>
+                               <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Column &#39;</span><span class="si">{</span><span class="n">id_col</span><span class="si">}</span><span class="s2">&#39; not in source output </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">available_cols</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">})</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;id_column&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span> <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Column &#39;</span><span class="si">{</span><span class="n">id_col</span><span class="si">}</span><span class="s2">&#39; found&quot;</span><span class="p">})</span>
+
+            <span class="k">if</span> <span class="n">label_col</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">available_cols</span> <span class="ow">and</span> <span class="n">label_col</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">available_cols</span><span class="p">:</span>
+                    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;label_column&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;error&#39;</span><span class="p">,</span>
+                                   <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Column &#39;</span><span class="si">{</span><span class="n">label_col</span><span class="si">}</span><span class="s2">&#39; not in source output </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">available_cols</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">})</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;label_column&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span> <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Column &#39;</span><span class="si">{</span><span class="n">label_col</span><span class="si">}</span><span class="s2">&#39; found&quot;</span><span class="p">})</span>
+
+            <span class="k">for</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">col_name</span> <span class="ow">in</span> <span class="n">attr_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">col_name</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="n">available_cols</span> <span class="ow">and</span> <span class="n">col_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">available_cols</span><span class="p">:</span>
+                    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s1">&#39;attribute:</span><span class="si">{</span><span class="n">attr_name</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;error&#39;</span><span class="p">,</span>
+                                   <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Column &#39;</span><span class="si">{</span><span class="n">col_name</span><span class="si">}</span><span class="s2">&#39; not in source output </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">available_cols</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">})</span>
+                <span class="k">elif</span> <span class="n">available_cols</span><span class="p">:</span>
+                    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s1">&#39;attribute:</span><span class="si">{</span><span class="n">attr_name</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span>
+                                   <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Column &#39;</span><span class="si">{</span><span class="n">col_name</span><span class="si">}</span><span class="s2">&#39; found&quot;</span><span class="p">})</span>
+
+            <span class="k">if</span> <span class="n">class_uri</span> <span class="ow">and</span> <span class="n">class_uri</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ont_classes</span><span class="p">:</span>
+                <span class="n">local</span> <span class="o">=</span> <span class="n">class_uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;#&#39;</span> <span class="ow">in</span> <span class="n">class_uri</span> <span class="k">else</span> <span class="n">class_uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">local</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ont_class_names</span><span class="p">:</span>
+                    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;ontology_class&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;warning&#39;</span><span class="p">,</span>
+                                   <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Class &#39;</span><span class="si">{</span><span class="n">class_uri</span><span class="si">}</span><span class="s2">&#39; not found in ontology&quot;</span><span class="p">})</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;ontology_class&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span> <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Class &#39;</span><span class="si">{</span><span class="n">local</span><span class="si">}</span><span class="s2">&#39; found&quot;</span><span class="p">})</span>
+            <span class="k">elif</span> <span class="n">class_uri</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;ontology_class&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span>
+                               <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Class &#39;</span><span class="si">{</span><span class="n">class_uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="s1">&#39;#&#39;</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">class_uri</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="n">class_uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39; found&quot;</span><span class="p">})</span>
+
+            <span class="n">worst</span> <span class="o">=</span> <span class="s1">&#39;ok&#39;</span>
+            <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">checks</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">c</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;error&#39;</span><span class="p">:</span>
+                    <span class="n">worst</span> <span class="o">=</span> <span class="s1">&#39;error&#39;</span>
+                    <span class="k">break</span>
+                <span class="k">if</span> <span class="n">c</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;warning&#39;</span><span class="p">:</span>
+                    <span class="n">worst</span> <span class="o">=</span> <span class="s1">&#39;warning&#39;</span>
+
+            <span class="n">entity_results</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                <span class="s1">&#39;ontology_class&#39;</span><span class="p">:</span> <span class="n">class_uri</span><span class="p">,</span>
+                <span class="s1">&#39;label&#39;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
+                <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="n">worst</span><span class="p">,</span>
+                <span class="s1">&#39;source&#39;</span><span class="p">:</span> <span class="n">source</span><span class="p">,</span>
+                <span class="s1">&#39;available_columns&#39;</span><span class="p">:</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">available_cols</span><span class="p">)</span> <span class="k">if</span> <span class="n">available_cols</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="s1">&#39;checks&#39;</span><span class="p">:</span> <span class="n">checks</span><span class="p">,</span>
+            <span class="p">})</span>
+
+        <span class="n">rel_results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">rel</span> <span class="ow">in</span> <span class="n">relationships</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;excluded&#39;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">prop_uri</span> <span class="o">=</span> <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;property&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="n">prop_label</span> <span class="o">=</span> <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;property_label&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">prop_uri</span>
+            <span class="n">sql_query</span> <span class="o">=</span> <span class="p">(</span><span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sql_query&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="n">src_class</span> <span class="o">=</span> <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;source_class&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="n">src_label</span> <span class="o">=</span> <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;source_class_label&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="n">tgt_class</span> <span class="o">=</span> <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_class&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="n">tgt_label</span> <span class="o">=</span> <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_class_label&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="n">src_id_col</span> <span class="o">=</span> <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;source_id_column&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;source_column&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="n">tgt_id_col</span> <span class="o">=</span> <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_id_column&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_column&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+
+            <span class="n">checks</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">available_cols</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_extract_select_columns</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span> <span class="k">if</span> <span class="n">sql_query</span> <span class="k">else</span> <span class="kc">None</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">sql_query</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;source&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;error&#39;</span><span class="p">,</span> <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="s1">&#39;No SQL query defined&#39;</span><span class="p">})</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;source&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span> <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="s1">&#39;SQL query defined&#39;</span><span class="p">})</span>
+
+            <span class="k">if</span> <span class="n">src_id_col</span> <span class="ow">and</span> <span class="n">available_cols</span> <span class="ow">and</span> <span class="n">src_id_col</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">available_cols</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;source_id_column&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;error&#39;</span><span class="p">,</span>
+                               <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Column &#39;</span><span class="si">{</span><span class="n">src_id_col</span><span class="si">}</span><span class="s2">&#39; not in source output </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">available_cols</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">})</span>
+            <span class="k">elif</span> <span class="n">src_id_col</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;source_id_column&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span>
+                               <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Column &#39;</span><span class="si">{</span><span class="n">src_id_col</span><span class="si">}</span><span class="s2">&#39; found&quot;</span><span class="p">})</span>
+
+            <span class="k">if</span> <span class="n">tgt_id_col</span> <span class="ow">and</span> <span class="n">available_cols</span> <span class="ow">and</span> <span class="n">tgt_id_col</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">available_cols</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;target_id_column&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;error&#39;</span><span class="p">,</span>
+                               <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Column &#39;</span><span class="si">{</span><span class="n">tgt_id_col</span><span class="si">}</span><span class="s2">&#39; not in source output </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">available_cols</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">})</span>
+            <span class="k">elif</span> <span class="n">tgt_id_col</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;target_id_column&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span>
+                               <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Column &#39;</span><span class="si">{</span><span class="n">tgt_id_col</span><span class="si">}</span><span class="s2">&#39; found&quot;</span><span class="p">})</span>
+
+            <span class="n">resolved_src</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_entity</span><span class="p">(</span><span class="n">entity_lookup</span><span class="p">,</span> <span class="n">src_class</span><span class="p">,</span> <span class="n">src_label</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">resolved_src</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;source_entity&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span>
+                               <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Resolves to entity &#39;</span><span class="si">{</span><span class="n">resolved_src</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class_label&#39;</span><span class="p">)</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">resolved_src</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;?&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">})</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="n">src_label</span> <span class="ow">or</span> <span class="n">src_class</span> <span class="ow">or</span> <span class="s1">&#39;(empty)&#39;</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;source_entity&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;error&#39;</span><span class="p">,</span>
+                               <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Source entity &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; not found in entity mappings&quot;</span><span class="p">})</span>
+
+            <span class="n">resolved_tgt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_entity</span><span class="p">(</span><span class="n">entity_lookup</span><span class="p">,</span> <span class="n">tgt_class</span><span class="p">,</span> <span class="n">tgt_label</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">resolved_tgt</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;target_entity&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span>
+                               <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Resolves to entity &#39;</span><span class="si">{</span><span class="n">resolved_tgt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class_label&#39;</span><span class="p">)</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">resolved_tgt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;?&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">})</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="n">tgt_label</span> <span class="ow">or</span> <span class="n">tgt_class</span> <span class="ow">or</span> <span class="s1">&#39;(empty)&#39;</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;target_entity&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;error&#39;</span><span class="p">,</span>
+                               <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Target entity &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; not found in entity mappings&quot;</span><span class="p">})</span>
+
+            <span class="n">ont_prop</span> <span class="o">=</span> <span class="n">ont_props</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">prop_uri</span><span class="p">)</span> <span class="ow">or</span> <span class="n">ont_prop_names</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">prop_label</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">ont_prop</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;ontology_property&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span>
+                               <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Property &#39;</span><span class="si">{</span><span class="n">ont_prop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">prop_uri</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39; found&quot;</span><span class="p">})</span>
+                <span class="n">ont_domain</span> <span class="o">=</span> <span class="n">ont_prop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;domain&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+                <span class="n">ont_range</span> <span class="o">=</span> <span class="n">ont_prop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;range&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">ont_domain</span> <span class="ow">and</span> <span class="n">resolved_src</span><span class="p">:</span>
+                    <span class="n">src_name</span> <span class="o">=</span> <span class="p">(</span><span class="n">resolved_src</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class_label&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                    <span class="n">src_uri</span> <span class="o">=</span> <span class="n">resolved_src</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">ont_domain</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">!=</span> <span class="n">src_name</span> <span class="ow">and</span> <span class="n">ont_domain</span> <span class="o">!=</span> <span class="n">src_uri</span><span class="p">:</span>
+                        <span class="n">local_src</span> <span class="o">=</span> <span class="n">src_uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;#&#39;</span> <span class="ow">in</span> <span class="n">src_uri</span> <span class="k">else</span> <span class="n">src_uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                        <span class="k">if</span> <span class="n">ont_domain</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">!=</span> <span class="n">local_src</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+                            <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;domain_match&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;warning&#39;</span><span class="p">,</span>
+                                           <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Ontology domain is &#39;</span><span class="si">{</span><span class="n">ont_domain</span><span class="si">}</span><span class="s2">&#39; but source entity is &#39;</span><span class="si">{</span><span class="n">src_name</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">local_src</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">})</span>
+                <span class="k">if</span> <span class="n">ont_range</span> <span class="ow">and</span> <span class="n">resolved_tgt</span><span class="p">:</span>
+                    <span class="n">tgt_name</span> <span class="o">=</span> <span class="p">(</span><span class="n">resolved_tgt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class_label&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                    <span class="n">tgt_uri</span> <span class="o">=</span> <span class="n">resolved_tgt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ontology_class&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">ont_range</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">!=</span> <span class="n">tgt_name</span> <span class="ow">and</span> <span class="n">ont_range</span> <span class="o">!=</span> <span class="n">tgt_uri</span><span class="p">:</span>
+                        <span class="n">local_tgt</span> <span class="o">=</span> <span class="n">tgt_uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;#&#39;</span> <span class="ow">in</span> <span class="n">tgt_uri</span> <span class="k">else</span> <span class="n">tgt_uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                        <span class="k">if</span> <span class="n">ont_range</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">!=</span> <span class="n">local_tgt</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+                            <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;range_match&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;warning&#39;</span><span class="p">,</span>
+                                           <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Ontology range is &#39;</span><span class="si">{</span><span class="n">ont_range</span><span class="si">}</span><span class="s2">&#39; but target entity is &#39;</span><span class="si">{</span><span class="n">tgt_name</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">local_tgt</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">})</span>
+            <span class="k">elif</span> <span class="n">prop_uri</span><span class="p">:</span>
+                <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;check&#39;</span><span class="p">:</span> <span class="s1">&#39;ontology_property&#39;</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;warning&#39;</span><span class="p">,</span>
+                               <span class="s1">&#39;detail&#39;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Property &#39;</span><span class="si">{</span><span class="n">prop_uri</span><span class="si">}</span><span class="s2">&#39; not found in ontology&quot;</span><span class="p">})</span>
+
+            <span class="n">worst</span> <span class="o">=</span> <span class="s1">&#39;ok&#39;</span>
+            <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">checks</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">c</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;error&#39;</span><span class="p">:</span>
+                    <span class="n">worst</span> <span class="o">=</span> <span class="s1">&#39;error&#39;</span>
+                    <span class="k">break</span>
+                <span class="k">if</span> <span class="n">c</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;warning&#39;</span><span class="p">:</span>
+                    <span class="n">worst</span> <span class="o">=</span> <span class="s1">&#39;warning&#39;</span>
+
+            <span class="n">rel_results</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                <span class="s1">&#39;property&#39;</span><span class="p">:</span> <span class="n">prop_uri</span><span class="p">,</span>
+                <span class="s1">&#39;label&#39;</span><span class="p">:</span> <span class="n">prop_label</span><span class="p">,</span>
+                <span class="s1">&#39;source_class&#39;</span><span class="p">:</span> <span class="n">src_label</span> <span class="ow">or</span> <span class="n">src_class</span><span class="p">,</span>
+                <span class="s1">&#39;target_class&#39;</span><span class="p">:</span> <span class="n">tgt_label</span> <span class="ow">or</span> <span class="n">tgt_class</span><span class="p">,</span>
+                <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="n">worst</span><span class="p">,</span>
+                <span class="s1">&#39;checks&#39;</span><span class="p">:</span> <span class="n">checks</span><span class="p">,</span>
+            <span class="p">})</span>
+
+        <span class="n">ok</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entity_results</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ok&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rel_results</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ok&#39;</span><span class="p">)</span>
+        <span class="n">warnings</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entity_results</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;warning&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rel_results</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;warning&#39;</span><span class="p">)</span>
+        <span class="n">errors</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entity_results</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;error&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rel_results</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;error&#39;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s1">&#39;entities&#39;</span><span class="p">:</span> <span class="n">entity_results</span><span class="p">,</span>
+            <span class="s1">&#39;relationships&#39;</span><span class="p">:</span> <span class="n">rel_results</span><span class="p">,</span>
+            <span class="s1">&#39;summary&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;total&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">entity_results</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">rel_results</span><span class="p">),</span>
+                <span class="s1">&#39;ok&#39;</span><span class="p">:</span> <span class="n">ok</span><span class="p">,</span>
+                <span class="s1">&#39;warnings&#39;</span><span class="p">:</span> <span class="n">warnings</span><span class="p">,</span>
+                <span class="s1">&#39;errors&#39;</span><span class="p">:</span> <span class="n">errors</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">}</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_entity</span><span class="p">(</span>
+        <span class="n">entity_lookup</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">],</span>
+        <span class="n">class_ref</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">label_ref</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve a class reference to an entity mapping using multiple keys.&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="n">class_ref</span><span class="p">,</span> <span class="n">label_ref</span><span class="p">,</span> <span class="p">(</span><span class="n">label_ref</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()):</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">and</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">entity_lookup</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">entity_lookup</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">class_ref</span><span class="p">:</span>
+            <span class="n">local</span> <span class="o">=</span> <span class="n">class_ref</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;#&#39;</span> <span class="ow">in</span> <span class="n">class_ref</span> <span class="k">else</span> <span class="n">class_ref</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="n">local</span><span class="p">,</span> <span class="n">local</span><span class="o">.</span><span class="n">lower</span><span class="p">()):</span>
+                <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">entity_lookup</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">entity_lookup</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
 
 </pre></div>
 

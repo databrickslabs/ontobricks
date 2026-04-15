@@ -1,12 +1,9 @@
 """R2RML parsing service for extracting mappings from R2RML content."""
 import re
 from rdflib import Graph, Namespace
-from rdflib.namespace import RDF, RDFS
+from rdflib.namespace import RDF
 
-from back.core.logging import get_logger
 from back.core.errors import ValidationError
-
-logger = get_logger(__name__)
 
 
 class R2RMLParser:

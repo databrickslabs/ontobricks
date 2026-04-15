@@ -1,6 +1,6 @@
 [project]
 name = "ontobricks"
-version = "0.1.0"
+version = "0.1.1"
 description = "Ontology Management Tool for Databricks"
 requires-python = ">=3.10"
 dependencies = [
@@ -25,6 +25,7 @@ dependencies = [
     "apscheduler>=3.10,<4",
     "owlrl>=7.0.0",
     "pyshacl>=0.26.0",
+    "networkx>=3.0",
 ]
 
 [dependency-groups]
@@ -46,6 +47,7 @@ packages = ["src/back", "src/front", "src/shared", "src/agents", "src/api"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+asyncio_mode = "auto"
 
 [build-system]
 requires = ["hatchling"]

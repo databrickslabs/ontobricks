@@ -15,6 +15,7 @@ from rdflib import Graph
 
 from back.core.logging import get_logger
 from back.core.industry.constants import FIBO_BASE_URL
+from shared.config.constants import HTTP_USER_AGENT
 
 logger = get_logger(__name__)
 
@@ -178,7 +179,7 @@ class FiboImportService:
                 resp = requests.get(
                     url,
                     timeout=FiboImportService._REQUEST_TIMEOUT,
-                    headers={"User-Agent": "OntoBricks/1.0", "Accept": "*/*"},
+                    headers={"User-Agent": HTTP_USER_AGENT, "Accept": "*/*"},
                     allow_redirects=True,
                 )
                 if resp.status_code == 200:
@@ -307,7 +308,7 @@ class FiboImportService:
         from back.objects.ontology import Ontology
 
         result = Ontology.parse_owl(turtle_content, extract_advanced=True)
-        ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions = result
+        ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions, _groups = result
 
         stats = {
             "classes": len(classes),

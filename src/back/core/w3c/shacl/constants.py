@@ -82,4 +82,4 @@ XSD_TO_SPARK_TYPE = {
     "xsd:dateTime": "TIMESTAMP",
 }
 
-RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
+from back.core.triplestore.constants import RDFS_LABEL  # noqa: F401

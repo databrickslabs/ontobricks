@@ -84,45 +84,33 @@ class SQLWarehouse:
             logger.exception("Error executing statement: %s", exc)
             raise
 
+    def _create_or_replace(
+        self, kind: str, catalog: str, schema: str, name: str, select_sql: str,
+    ) -> Tuple[bool, str]:
+        """Shared DDL wrapper for VIEW and TABLE creation."""
+        fqn = f"`{catalog}`.`{schema}`.`{name}`"
+        try:
+            ddl = f"CREATE OR REPLACE {kind} {fqn} AS\n{select_sql}"
+            logger.info("Creating %s: %s", kind.lower(), fqn)
+            logger.debug("DDL length: %d chars", len(ddl))
+            self.execute_statement(ddl)
+            logger.info("SUCCESS: %s %s created", kind, fqn)
+            return True, f"{kind} {fqn} created successfully"
+        except Exception as exc:
+            logger.exception("ERROR creating %s: %s", kind.lower(), exc)
+            return False, f"Failed to create {kind.lower()}: {exc}"
+
     def create_or_replace_view(
         self, catalog: str, schema: str, view_name: str, select_sql: str
     ) -> Tuple[bool, str]:
-        """``CREATE OR REPLACE VIEW`` wrapper.
-
-        Returns:
-            ``(success, message)`` tuple.
-        """
-        fqn = f"`{catalog}`.`{schema}`.`{view_name}`"
-        try:
-            ddl = f"CREATE OR REPLACE VIEW {fqn} AS\n{select_sql}"
-            logger.info("Creating view: %s", fqn)
-            logger.debug("DDL length: %d chars", len(ddl))
-            self.execute_statement(ddl)
-            logger.info("SUCCESS: View %s created", fqn)
-            return True, f"View {fqn} created successfully"
-        except Exception as exc:
-            logger.exception("ERROR creating view: %s", exc)
-            return False, f"Failed to create view: {exc}"
+        """``CREATE OR REPLACE VIEW`` wrapper."""
+        return self._create_or_replace("VIEW", catalog, schema, view_name, select_sql)
 
     def create_or_replace_table_from_query(
         self, catalog: str, schema: str, table_name: str, select_sql: str
     ) -> Tuple[bool, str]:
-        """``CREATE OR REPLACE TABLE ... AS SELECT`` (CTAS) wrapper.
-
-        Returns:
-            ``(success, message)`` tuple.
-        """
-        fqn = f"`{catalog}`.`{schema}`.`{table_name}`"
-        try:
-            ddl = f"CREATE OR REPLACE TABLE {fqn} AS\n{select_sql}"
-            logger.info("Creating table: %s", fqn)
-            logger.debug("DDL length: %d chars", len(ddl))
-            self.execute_statement(ddl)
-            logger.info("SUCCESS: Table %s created", fqn)
-            return True, f"Table {fqn} created successfully"
-        except Exception as exc:
-            logger.exception("ERROR creating table: %s", exc)
-            return False, f"Failed to create table: {exc}"
+        """``CREATE OR REPLACE TABLE ... AS SELECT`` (CTAS) wrapper."""
+        return self._create_or_replace("TABLE", catalog, schema, table_name, select_sql)
 
     def get_warehouses(self) -> List[Dict[str, str]]:
         """List available SQL Warehouses.

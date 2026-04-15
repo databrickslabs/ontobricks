@@ -1,7 +1,6 @@
 """Shared constants for the Databricks integration layer."""
 
 _OAUTH_TOKEN_TTL = 3000  # 50 minutes (tokens usually last 1 hour)
-_REST_TIMEOUT = 10
 _SQL_SOCKET_TIMEOUT = 30
 _REQUEST_TIMEOUT = 30
 

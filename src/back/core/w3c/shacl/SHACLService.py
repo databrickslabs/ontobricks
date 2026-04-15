@@ -10,6 +10,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
+from back.core.triplestore.constants import RDF_TYPE
 from back.core.w3c.shacl.constants import QUALITY_CATEGORIES, RDFS_LABEL, XSD_TO_SPARK_TYPE
 from back.core.w3c.shacl.SHACLGenerator import SHACLGenerator
 from back.core.w3c.shacl.SHACLParser import SHACLParser
@@ -18,7 +19,7 @@ logger = get_logger(__name__)
 
 
 class SHACLService:
-    """Manage SHACL shapes for a project's data-quality rules.
+    """Manage SHACL shapes for a domain's data-quality rules.
 
     Constructor receives the base URI for the ontology so that the
     generator can produce correct shape URIs.
@@ -859,7 +860,6 @@ class SHACLService:
         Returns:
             SQL string, or ``None`` if the shape cannot be translated.
         """
-        RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
         shacl_type = shape.get("shacl_type", "")
         params = shape.get("parameters", {})
         cls_uri = shape.get("target_class_uri", "")
@@ -933,7 +933,6 @@ class SHACLService:
         Each triple is ``{"subject": ..., "predicate": ..., "object": ...}``.
         Returns a list of violation dicts (empty if no violations).
         """
-        RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
         shacl_type = shape.get("shacl_type", "")
         params = shape.get("parameters", {})
         cls_uri = shape.get("target_class_uri", "")

@@ -1102,7 +1102,7 @@ function getEntityIcon(entity) {
     const searchText = `${type} ${label} ${id}`;
     if (searchText.includes('person') || searchText.includes('employee') || searchText.includes('user')) return '👤';
     if (searchText.includes('department') || searchText.includes('organization') || searchText.includes('org')) return '🏢';
-    if (searchText.includes('project')) return '📋';
+    if (searchText.includes('domain')) return '📋';
     if (searchText.includes('document') || searchText.includes('file')) return '📄';
     if (searchText.includes('location') || searchText.includes('place')) return '📍';
     if (searchText.includes('event') || searchText.includes('meeting')) return '📅';

@@ -124,7 +124,7 @@
 <div class="viewcode-block" id="ReasoningService">
 <a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.ReasoningService.ReasoningService">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">ReasoningService</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Orchestrate all reasoning phases over a project&#39;s ontology and data.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Orchestrate all reasoning phases over a domain&#39;s ontology and data.</span>
 
 <span class="sd">    Phases (in order):</span>
 
@@ -148,10 +148,10 @@
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
-        <span class="n">project_session</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">domain_session</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
         <span class="n">triplestore_backend</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_project</span> <span class="o">=</span> <span class="n">project_session</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span> <span class="o">=</span> <span class="n">domain_session</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_store</span> <span class="o">=</span> <span class="n">triplestore_backend</span>
 
     <span class="c1"># -- Static helpers -------------------------------------------------------</span>
@@ -187,12 +187,14 @@
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Execute a single reasoning phase and fold its output into *result*.</span>
 
+<span class="sd">        Only inferred triples are collected; violations are intentionally</span>
+<span class="sd">        ignored — they belong to the Data Quality pipeline.</span>
+
 <span class="sd">        Args:</span>
 <span class="sd">            phase_name: Prefix for stat keys (e.g. ``&quot;tbox&quot;``).</span>
 <span class="sd">            runner: Zero-arg callable that returns a :class:`ReasoningResult`.</span>
-<span class="sd">            merge: If *True*, call ``result.merge(phase_result)`` which adds</span>
-<span class="sd">                both inferred triples and violations.  If *False*, only extend</span>
-<span class="sd">                ``inferred_triples``.</span>
+<span class="sd">            merge: If *True*, merge inferred triples from the phase result.</span>
+<span class="sd">                If *False*, only extend ``inferred_triples``.</span>
 <span class="sd">            extra_stat_keys: Additional stat keys to copy (source key in phase</span>
 <span class="sd">                stats -&gt; destination key in result stats).</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -200,17 +202,11 @@
             <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
             <span class="n">phase_result</span> <span class="o">=</span> <span class="n">runner</span><span class="p">()</span>
             <span class="n">ps</span> <span class="o">=</span> <span class="n">phase_result</span><span class="o">.</span><span class="n">stats</span> <span class="ow">or</span> <span class="p">{}</span>
-            <span class="k">if</span> <span class="n">merge</span><span class="p">:</span>
-                <span class="n">result</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">phase_result</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">phase_result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">)</span>
-                <span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">phase_result</span><span class="o">.</span><span class="n">violations</span><span class="p">)</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">phase_result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">)</span>
             <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">phase_name</span><span class="si">}</span><span class="s2">_duration_seconds&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
             <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">phase_name</span><span class="si">}</span><span class="s2">_inferred_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ps</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
                 <span class="s2">&quot;inferred_count&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">phase_result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">),</span>
             <span class="p">)</span>
-            <span class="k">if</span> <span class="n">phase_result</span><span class="o">.</span><span class="n">violations</span><span class="p">:</span>
-                <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">phase_name</span><span class="si">}</span><span class="s2">_violations_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">phase_result</span><span class="o">.</span><span class="n">violations</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">src_key</span><span class="p">,</span> <span class="n">dst_key</span> <span class="ow">in</span> <span class="p">(</span><span class="n">extra_stat_keys</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
                 <span class="k">if</span> <span class="n">src_key</span> <span class="ow">in</span> <span class="n">ps</span><span class="p">:</span>
                     <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="n">dst_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">ps</span><span class="p">[</span><span class="n">src_key</span><span class="p">]</span>
@@ -252,7 +248,6 @@
 
         <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;total_duration_seconds&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
         <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;total_inferred&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">)</span>
-        <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;total_violations&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="p">)</span>
         <span class="n">result</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">&quot;duplicates_removed&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">duplicates_removed</span>
         <span class="k">return</span> <span class="n">result</span></div>
 
@@ -260,7 +255,7 @@
 <div class="viewcode-block" id="ReasoningService.run_tbox_reasoning">
 <a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.ReasoningService.ReasoningService.run_tbox_reasoning">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">run_tbox_reasoning</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ReasoningResult</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run OWL 2 RL deductive closure on the project ontology.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run OWL 2 RL deductive closure on the domain ontology.&quot;&quot;&quot;</span>
         <span class="n">owl_content</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_owl_content</span><span class="p">()</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">owl_content</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;No OWL content available for T-Box reasoning&quot;</span><span class="p">)</span>
@@ -821,32 +816,32 @@
     <span class="c1"># -- Internal helpers -------------------------------------------------</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_owl_content</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Retrieve generated OWL Turtle from the project session.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;generated_owl&quot;</span><span class="p">):</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="o">.</span><span class="n">generated_owl</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
-        <span class="n">data</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;_data&quot;</span><span class="p">,</span> <span class="p">{})</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Retrieve generated OWL Turtle from the domain session.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="p">,</span> <span class="s2">&quot;generated_owl&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="o">.</span><span class="n">generated_owl</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="p">,</span> <span class="s2">&quot;_data&quot;</span><span class="p">,</span> <span class="p">{})</span>
         <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;generated&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;owl&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_swrl_rules</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
-        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;swrl_rules&quot;</span><span class="p">):</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="ow">or</span> <span class="p">[]</span>
-        <span class="n">ontology</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="p">,</span> <span class="s2">&quot;swrl_rules&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="n">ontology</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="p">,</span> <span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ontology</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;swrl_rules&quot;</span><span class="p">,</span> <span class="p">[])</span>
         <span class="k">return</span> <span class="p">[]</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_ontology_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
-        <span class="n">ontology</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">ontology</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="p">,</span> <span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ontology</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">ontology</span>
-        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;_data&quot;</span><span class="p">):</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="p">,</span> <span class="s2">&quot;_data&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="p">{})</span>
         <span class="k">return</span> <span class="p">{}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_graph_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="n">info</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">info</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="p">,</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="n">name</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">info</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="n">DEFAULT_GRAPH_NAME</span>
-        <span class="n">version</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_project</span><span class="p">,</span> <span class="s2">&quot;current_version&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;1&quot;</span>
+        <span class="n">version</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="p">,</span> <span class="s2">&quot;current_version&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;1&quot;</span>
         <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_V</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">&quot;</span>
 
     <span class="nd">@staticmethod</span>

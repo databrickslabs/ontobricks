@@ -3,7 +3,7 @@ OntoBricks Auto-Mapping Agent Engine.
 
 Implements an agentic loop that uses the Databricks Foundation Model API
 with function calling to autonomously map ontology entities and relationships
-to SQL queries against project tables.
+to SQL queries against domain tables.
 
 Fallback: if the LLM endpoint does not support the ``tools`` parameter the
 engine transparently degrades to a single-shot generation (no tool calls).
@@ -68,7 +68,7 @@ and relationships to SQL queries against Databricks tables.
 TOOLS
 You have six tools:
   • get_metadata           – get imported table schemas (full names, columns, types) — no UC query
-  • get_documents_context   – get imported project documents to enrich domain context — no UC query
+  • get_documents_context   – get imported domain documents to enrich domain context — no UC query
   • get_ontology           – get entities (with attributes) and relationships to map
   • execute_sql            – run a SQL query to validate it and see columns + sample data
   • submit_entity_mapping       – record a validated entity mapping

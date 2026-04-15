@@ -135,11 +135,11 @@ are always defined before the types that reference them.</p>
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphql.GraphQLSchemaBuilder.</span></span><span class="sig-name descname"><span class="pre">GraphQLSchemaBuilder</span></span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
 <p>Build and cache Strawberry GraphQL schemas from ontology metadata.</p>
-<p>A single instance manages a per-project cache so that repeated
+<p>A single instance manages a per-domain cache so that repeated
 calls with the same ontology fingerprint return the same schema.</p>
 <p>Usage:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">builder</span> <span class="o">=</span> <span class="n">GraphQLSchemaBuilder</span><span class="p">()</span>
-<span class="n">result</span>  <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">build_for_project</span><span class="p">(</span><span class="n">classes</span><span class="p">,</span> <span class="n">props</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="s2">&quot;my_project&quot;</span><span class="p">)</span>
+<span class="n">result</span>  <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">build_for_domain</span><span class="p">(</span><span class="n">classes</span><span class="p">,</span> <span class="n">props</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="s2">&quot;my_domain&quot;</span><span class="p">)</span>
 <span class="k">if</span> <span class="n">result</span><span class="p">:</span>
     <span class="n">schema</span><span class="p">,</span> <span class="n">metadata</span> <span class="o">=</span> <span class="n">result</span>
 </pre></div>
@@ -147,8 +147,8 @@ calls with the same ontology fingerprint return the same schema.</p>
 <dl class="field-list simple">
 </dl>
 <dl class="py method">
-<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.build_for_project">
-<span class="sig-name descname"><span class="pre">build_for_project</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ontology_classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">project_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder.build_for_project"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.build_for_project" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.build_for_domain">
+<span class="sig-name descname"><span class="pre">build_for_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ontology_classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder.build_for_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.build_for_domain" title="Link to this definition">¶</a></dt>
 <dd><p>Build (or return cached) a Strawberry Schema from ontology metadata.</p>
 <p>Returns <code class="docutils literal notranslate"><span class="pre">(schema,</span> <span class="pre">metadata)</span></code> or <code class="docutils literal notranslate"><span class="pre">None</span></code> if the ontology is empty.</p>
 <dl class="field-list simple">
@@ -157,7 +157,7 @@ calls with the same ontology fingerprint return the same schema.</p>
 <li><p><strong>ontology_classes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
 <li><p><strong>ontology_properties</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
 <li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>project_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -168,11 +168,11 @@ calls with the same ontology fingerprint return the same schema.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.invalidate_cache">
-<span class="sig-name descname"><span class="pre">invalidate_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder.invalidate_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.invalidate_cache" title="Link to this definition">¶</a></dt>
-<dd><p>Remove a project’s cached schema.</p>
+<span class="sig-name descname"><span class="pre">invalidate_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#GraphQLSchemaBuilder.invalidate_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.invalidate_cache" title="Link to this definition">¶</a></dt>
+<dd><p>Remove a domain’s cached schema.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>project_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+<dd class="field-odd"><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p>None</p>
@@ -273,8 +273,8 @@ calls with the same ontology fingerprint return the same schema.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.build_schema_for_project">
-<span class="sig-prename descclassname"><span class="pre">back.core.graphql.GraphQLSchemaBuilder.</span></span><span class="sig-name descname"><span class="pre">build_schema_for_project</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ontology_classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">project_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#build_schema_for_project"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.build_schema_for_project" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.build_schema_for_domain">
+<span class="sig-prename descclassname"><span class="pre">back.core.graphql.GraphQLSchemaBuilder.</span></span><span class="sig-name descname"><span class="pre">build_schema_for_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ontology_classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#build_schema_for_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.build_schema_for_domain" title="Link to this definition">¶</a></dt>
 <dd><p>Module-level delegate — uses the default <code class="docutils literal notranslate"><span class="pre">GraphQLSchemaBuilder</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -282,7 +282,7 @@ calls with the same ontology fingerprint return the same schema.</p>
 <li><p><strong>ontology_classes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
 <li><p><strong>ontology_properties</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
 <li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>project_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -293,11 +293,11 @@ calls with the same ontology fingerprint return the same schema.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="back.core.graphql.GraphQLSchemaBuilder.invalidate_cache">
-<span class="sig-prename descclassname"><span class="pre">back.core.graphql.GraphQLSchemaBuilder.</span></span><span class="sig-name descname"><span class="pre">invalidate_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">project_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#invalidate_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.invalidate_cache" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">back.core.graphql.GraphQLSchemaBuilder.</span></span><span class="sig-name descname"><span class="pre">invalidate_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphql/GraphQLSchemaBuilder.html#invalidate_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphql.GraphQLSchemaBuilder.invalidate_cache" title="Link to this definition">¶</a></dt>
 <dd><p>Module-level delegate — invalidates on the default builder.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>project_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+<dd class="field-odd"><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p>None</p>

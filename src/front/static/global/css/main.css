@@ -83,8 +83,8 @@ body {
 
 .navbar .dropdown-menu .dropdown-item {
     color: rgba(255, 255, 255, 0.88);
-    font-size: 1rem;
-    padding: 0.5rem 1.1rem;
+    font-size: 0.875rem;
+    padding: 0.4rem 1rem;
     transition: background-color 0.15s ease, color 0.15s ease;
     border-radius: 0.25rem;
     margin: 0 0.3rem;
@@ -113,16 +113,41 @@ body {
 
 .navbar .dropdown-menu .dropdown-header {
     color: rgba(255, 255, 255, 0.45);
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 600;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    padding: 0.55rem 1.1rem 0.25rem;
+    padding: 0.45rem 1rem 0.2rem;
 }
 
 .navbar .dropdown-menu .dropdown-divider {
     border-color: rgba(255, 255, 255, 0.1);
     margin: 0.35rem 0.8rem;
+}
+
+/* Hover-activated flyout sub-menus inside navbar dropdowns */
+.navbar .dropdown-menu .dropend {
+    position: relative;
+}
+.navbar .dropdown-menu .dropend > .dropdown-menu {
+    position: absolute;
+    top: 0;
+    left: 100%;
+    margin-top: 0;
+    margin-left: 0.125rem;
+    background-color: var(--db-dark);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    min-width: 14rem;
+}
+.navbar .dropdown-menu .dropend:hover > .dropdown-menu {
+    display: block;
+}
+.navbar .dropdown-menu .dropend > .dropdown-toggle::after {
+    float: right;
+    margin-top: 0.35em;
+    vertical-align: middle;
 }
 
 .navbar-brand {
@@ -156,7 +181,7 @@ body {
     color: var(--db-primary) !important;
 }
 
-/* Disabled navigation items (requires project saved to UC) */
+/* Disabled navigation items (requires domain saved to UC) */
 .navbar .nav-link.nav-disabled {
     opacity: 0.4;
     pointer-events: none;
@@ -213,7 +238,7 @@ body {
 /* ==========================================================================
    Full-page Project Loading Overlay
    ========================================================================== */
-.project-loading-overlay {
+.domain-loading-overlay {
     position: fixed;
     inset: 0;
     background: rgba(27, 28, 29, 0.88);
@@ -226,12 +251,12 @@ body {
     transition: opacity 0.25s ease;
 }
 
-.project-loading-overlay .ob-spinner-svg {
+.domain-loading-overlay .ob-spinner-svg {
     width: 72px;
     height: 72px;
 }
 
-.project-loading-overlay .ob-spinner-label {
+.domain-loading-overlay .ob-spinner-label {
     color: rgba(255, 255, 255, 0.75);
     font-size: 1rem;
     margin-top: 1rem;
@@ -554,7 +579,7 @@ body.read-only-mode #ontologyName,
 body.read-only-mode #baseUri,
 body.read-only-mode #information-section input,
 body.read-only-mode #information-section textarea,
-body.read-only-mode #information-section select:not(#projectVersionSelect) {
+body.read-only-mode #information-section select:not(#domainVersionSelect) {
     pointer-events: none !important;
     background-color: #e9ecef !important;
     opacity: 0.7 !important;
@@ -562,7 +587,7 @@ body.read-only-mode #information-section select:not(#projectVersionSelect) {
 }
 
 /* Version selector should always be enabled to allow switching versions */
-body.read-only-mode #projectVersionSelect {
+body.read-only-mode #domainVersionSelect {
     pointer-events: auto !important;
     background-color: #fff !important;
     opacity: 1 !important;

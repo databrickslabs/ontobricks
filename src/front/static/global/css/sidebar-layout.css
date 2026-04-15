@@ -106,7 +106,7 @@ body.full-width-layout {
     color: #000;
 }
 
-/* Disabled sidebar items (requires project saved to UC) */
+/* Disabled sidebar items (requires domain saved to UC) */
 .sidebar-nav .nav-link.sidebar-disabled {
     opacity: 0.4;
     pointer-events: none;

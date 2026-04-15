@@ -13,7 +13,7 @@ const UCFileDialog = {
     currentWarehouseId: null,
     
     /**
-     * Get the default warehouse ID from project config
+     * Get the default warehouse ID from domain / app config
      * @returns {Promise<string|null>} The default warehouse ID or null
      */
     getDefaultWarehouseId: async function() {

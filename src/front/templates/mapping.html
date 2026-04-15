@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='mapping/css/mapping-design.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='mapping/css/mapping-shared.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='mapping/css/mapping-manual.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='mapping/css/mapping-diagnostics.css') }}?v={{ asset_version }}">
 {% endblock %}
 
 {% block content %}
@@ -28,6 +29,7 @@
 <script src="{{ url_for('static', filename='mapping/js/mapping-r2rml.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='mapping/js/mapping-manual.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='mapping/js/mapping-autoassign.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='mapping/js/mapping-diagnostics.js') }}?v={{ asset_version }}"></script>
 
 <!-- Pre-render section switcher (must load synchronously before DOM renders) -->
 <script src="{{ url_for('static', filename='mapping/js/mapping-init-section.js') }}?v={{ asset_version }}"></script>
@@ -60,6 +62,11 @@
             <!-- Auto-Map Section -->
             <div id="autoassign-section" class="sidebar-section">
                 {% include "partials/mapping/_mapping_autoassign.html" %}
+            </div>
+
+            <!-- Diagnostics Section -->
+            <div id="diagnostics-section" class="sidebar-section">
+                {% include "partials/mapping/_mapping_diagnostics.html" %}
             </div>
             
             <!-- R2RML Section -->

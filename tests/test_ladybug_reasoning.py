@@ -135,18 +135,18 @@ class TestReasoningServiceIntegration:
     def test_run_tbox_with_owl_content(self):
         from back.core.reasoning.ReasoningService import ReasoningService
 
-        project = MagicMock()
-        project.generated_owl = (
+        domain = MagicMock()
+        domain.generated_owl = (
             "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n"
             "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
             "@prefix ex: <http://example.org/> .\n"
             "ex:A a owl:Class .\n"
             "ex:B a owl:Class ; rdfs:subClassOf ex:A .\n"
         )
-        project.swrl_rules = []
-        project.ontology = {"properties": []}
+        domain.swrl_rules = []
+        domain.ontology = {"properties": []}
 
-        svc = ReasoningService(project)
+        svc = ReasoningService(domain)
         result = svc.run_tbox_reasoning()
         assert result.stats.get("phase") == "tbox"
         assert result.stats.get("original_count", 0) > 0
@@ -154,28 +154,28 @@ class TestReasoningServiceIntegration:
     def test_run_swrl_skipped_without_rules(self):
         from back.core.reasoning.ReasoningService import ReasoningService
 
-        project = MagicMock()
-        project.swrl_rules = []
-        project.ontology = {}
+        domain = MagicMock()
+        domain.swrl_rules = []
+        domain.ontology = {}
 
-        svc = ReasoningService(project, MagicMock())
+        svc = ReasoningService(domain, MagicMock())
         result = svc.run_swrl_rules()
         assert result.stats.get("skipped") is True
 
     def test_run_full_reasoning_tbox_only(self):
         from back.core.reasoning.ReasoningService import ReasoningService
 
-        project = MagicMock()
-        project.generated_owl = (
+        domain = MagicMock()
+        domain.generated_owl = (
             "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n"
             "@prefix ex: <http://example.org/> .\n"
             "ex:A a owl:Class .\n"
         )
-        project.swrl_rules = []
-        project.ontology = {"properties": [], "base_uri": "http://example.org/"}
-        project.info = {"name": "test"}
-        project._data = {"ontology": project.ontology}
+        domain.swrl_rules = []
+        domain.ontology = {"properties": [], "base_uri": "http://example.org/"}
+        domain.info = {"name": "test"}
+        domain._data = {"ontology": domain.ontology}
 
-        svc = ReasoningService(project)
+        svc = ReasoningService(domain)
         result = svc.run_full_reasoning({"tbox": True, "swrl": False, "graph": False})
         assert "total_duration_seconds" in result.stats

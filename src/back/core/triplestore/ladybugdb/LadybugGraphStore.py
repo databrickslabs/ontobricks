@@ -1,9 +1,12 @@
 """LadybugDB graph-model triple store backend.
 
-Uses typed node tables and relationship tables derived from the project
+Uses typed node tables and relationship tables derived from the domain
 ontology.  Falls back to the flat-model base class for operations that
 do not have a graph-specific implementation.
 """
+import csv
+import os
+import tempfile
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from back.core.logging import get_logger
@@ -14,6 +17,8 @@ from back.core.helpers import validate_table_name
 from shared.config.constants import DEFAULT_GRAPH_NAME
 
 logger = get_logger(__name__)
+
+_BULK_GRAPH_THRESHOLD = 50
 
 
 class LadybugGraphStore(LadybugFlatStore):
@@ -137,7 +142,11 @@ class LadybugGraphStore(LadybugFlatStore):
         batch_size: int,
         on_progress: Optional[Callable[[int, int], None]],
     ) -> int:
-        """Insert triples using the true graph model."""
+        """Insert triples using the true graph model.
+
+        Uses COPY FROM CSV for bulk loading when the triple count
+        exceeds the threshold; falls back to row-by-row otherwise.
+        """
         from back.core.triplestore.ladybugdb.GraphSchemaBuilder import GraphSchemaBuilder
 
         schema = self._graph_schema
@@ -147,12 +156,199 @@ class LadybugGraphStore(LadybugFlatStore):
             triples, schema,
         )
 
+        total_node_count = sum(len(nodes) for nodes in node_inserts.values())
+        use_bulk = (total_node_count + len(rel_inserts)) >= _BULK_GRAPH_THRESHOLD
+
+        if use_bulk:
+            try:
+                return self._bulk_insert_graph(
+                    schema, conn, node_inserts, rel_inserts, attr_updates,
+                    len(triples), on_progress,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Bulk graph COPY FROM failed, falling back to row-by-row: %s", exc,
+                )
+
+        return self._row_insert_graph(
+            schema, conn, node_inserts, rel_inserts, attr_updates,
+            batch_size, len(triples), on_progress,
+        )
+
+    def _bulk_insert_graph(
+        self,
+        schema: GraphSchema,
+        conn,
+        node_inserts: Dict[str, List[Dict[str, Any]]],
+        rel_inserts: List[Dict[str, Any]],
+        attr_updates: Dict[str, List[Dict[str, str]]],
+        total_triples: int,
+        on_progress: Optional[Callable[[int, int], None]],
+    ) -> int:
+        """Bulk load nodes and relationships via COPY FROM CSV files."""
+        import time
+        t0 = time.monotonic()
+
+        tmp_files: List[str] = []
+        try:
+            all_node_uris = self._collect_all_node_uris(
+                node_inserts, rel_inserts, schema,
+            )
+
+            steps_done = 0
+            total_steps = len(node_inserts) + len(set(r["rel_table"] for r in rel_inserts))
+            if total_steps == 0:
+                total_steps = 1
+
+            for tbl_name, nodes in node_inserts.items():
+                if tbl_name == schema.fallback_node_table and not nodes:
+                    steps_done += 1
+                    continue
+
+                extra_nodes = all_node_uris.get(tbl_name, [])
+                merged = self._merge_node_lists(nodes, extra_nodes)
+                if not merged:
+                    steps_done += 1
+                    continue
+
+                node_def = schema.node_tables.get(tbl_name)
+                prop_cols = (
+                    [GraphSchema.safe_identifier(p) for p in node_def.properties]
+                    if node_def
+                    else []
+                )
+
+                csv_path = tempfile.mktemp(suffix=".csv", prefix=f"ob_node_{tbl_name}_")
+                tmp_files.append(csv_path)
+
+                with open(csv_path, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    seen: Set[str] = set()
+                    for node in merged:
+                        uri = node["uri"]
+                        if uri in seen:
+                            continue
+                        seen.add(uri)
+                        row = [uri, node.get("label", "") or ""]
+                        row.extend("" for _ in prop_cols)
+                        writer.writerow(row)
+
+                conn.execute(f'COPY {tbl_name} FROM "{csv_path}" (header=false)')
+                steps_done += 1
+                if on_progress:
+                    on_progress(
+                        int(steps_done / total_steps * 80), 100,
+                    )
+
+            rels_by_table: Dict[str, List[Dict[str, Any]]] = {}
+            for rel in rel_inserts:
+                rels_by_table.setdefault(rel["rel_table"], []).append(rel)
+
+            for rel_tbl, rels in rels_by_table.items():
+                csv_path = tempfile.mktemp(suffix=".csv", prefix=f"ob_rel_{rel_tbl}_")
+                tmp_files.append(csv_path)
+
+                with open(csv_path, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    for rel in rels:
+                        writer.writerow([rel["from_uri"], rel["to_uri"]])
+
+                try:
+                    conn.execute(f'COPY {rel_tbl} FROM "{csv_path}" (header=false)')
+                except Exception as exc:
+                    logger.warning(
+                        "Bulk COPY for relationship table %s failed: %s", rel_tbl, exc,
+                    )
+                steps_done += 1
+                if on_progress:
+                    on_progress(
+                        int(steps_done / total_steps * 80), 100,
+                    )
+
+            attr_applied = self._apply_attr_updates(
+                schema, conn, node_inserts, attr_updates,
+            )
+
+            if on_progress:
+                on_progress(100, 100)
+
+            elapsed = time.monotonic() - t0
+            total_nodes = sum(
+                len(set(n["uri"] for n in nodes))
+                for nodes in node_inserts.values()
+            )
+            logger.info(
+                "Bulk graph insert: %d nodes, %d relationships, %d attributes in %.1fs",
+                total_nodes, len(rel_inserts), attr_applied, elapsed,
+            )
+            return total_triples
+        finally:
+            for f in tmp_files:
+                try:
+                    os.unlink(f)
+                except OSError:
+                    pass
+
+    @staticmethod
+    def _collect_all_node_uris(
+        node_inserts: Dict[str, List[Dict[str, Any]]],
+        rel_inserts: List[Dict[str, Any]],
+        schema: GraphSchema,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Collect relationship endpoint URIs that need placeholder nodes."""
+        known_uris: Set[str] = set()
+        for nodes in node_inserts.values():
+            for n in nodes:
+                known_uris.add(n["uri"])
+
+        extra: Dict[str, List[Dict[str, Any]]] = {}
+        for rel in rel_inserts:
+            rel_def = schema.rel_tables.get(rel["rel_table"])
+            if not rel_def:
+                continue
+            for uri_key, tbl in [
+                ("from_uri", rel_def.from_table),
+                ("to_uri", rel_def.to_table),
+            ]:
+                uri = rel[uri_key]
+                if uri not in known_uris:
+                    extra.setdefault(tbl, []).append({"uri": uri, "label": ""})
+                    known_uris.add(uri)
+        return extra
+
+    @staticmethod
+    def _merge_node_lists(
+        primary: List[Dict[str, Any]],
+        extra: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Merge primary and extra node lists, deduplicating by URI."""
+        if not extra:
+            return primary
+        seen = {n["uri"] for n in primary}
+        merged = list(primary)
+        for n in extra:
+            if n["uri"] not in seen:
+                merged.append(n)
+                seen.add(n["uri"])
+        return merged
+
+    def _row_insert_graph(
+        self,
+        schema: GraphSchema,
+        conn,
+        node_inserts: Dict[str, List[Dict[str, Any]]],
+        rel_inserts: List[Dict[str, Any]],
+        attr_updates: Dict[str, List[Dict[str, str]]],
+        batch_size: int,
+        total_triples: int,
+        on_progress: Optional[Callable[[int, int], None]],
+    ) -> int:
+        """Row-by-row insert fallback for small batches or COPY FROM failures."""
         total_ops = (
             sum(len(nodes) for nodes in node_inserts.values())
             + len(rel_inserts)
         )
         completed = 0
-
         created_uris: Set[str] = set()
 
         for table_name, nodes in node_inserts.items():
@@ -213,6 +409,27 @@ class LadybugGraphStore(LadybugFlatStore):
             if on_progress and completed % batch_size == 0:
                 on_progress(completed, total_ops)
 
+        attr_applied = self._apply_attr_updates(
+            schema, conn, node_inserts, attr_updates,
+        )
+
+        if on_progress:
+            on_progress(total_ops, total_ops)
+
+        logger.info(
+            "Graph insert (row-by-row): %d nodes, %d relationships, %d attributes",
+            len(created_uris), len(rel_inserts), attr_applied,
+        )
+        return total_triples
+
+    @staticmethod
+    def _apply_attr_updates(
+        schema: GraphSchema,
+        conn,
+        node_inserts: Dict[str, List[Dict[str, Any]]],
+        attr_updates: Dict[str, List[Dict[str, str]]],
+    ) -> int:
+        """Apply datatype-property SET updates (kept row-by-row)."""
         attr_applied = 0
         for subj_uri, attrs in attr_updates.items():
             subj_table = None
@@ -247,15 +464,7 @@ class LadybugGraphStore(LadybugFlatStore):
                     attr_applied += len(set_parts)
                 except Exception as e:
                     logger.debug("Attr update failed for %s: %s", subj_uri[:60], e)
-
-        if on_progress:
-            on_progress(total_ops, total_ops)
-
-        logger.info(
-            "Graph insert: %d nodes, %d relationships, %d attributes",
-            len(created_uris), len(rel_inserts), attr_applied,
-        )
-        return len(triples)
+        return attr_applied
 
     def delete_triples(
         self,
@@ -410,6 +619,51 @@ class LadybugGraphStore(LadybugFlatStore):
         if self.use_graph_model:
             return self._find_subjects_by_type_graph(type_uri, limit, offset, search)
         return super().find_subjects_by_type(table_name, type_uri, limit, offset, search)
+
+    def get_entity_metadata(
+        self, table_name: str, subjects: List[str]
+    ) -> List[Dict[str, str]]:
+        if not subjects:
+            return []
+        if not self.use_graph_model:
+            return super().get_entity_metadata(table_name, subjects)
+
+        schema = self._graph_schema
+        conn = self._get_connection()
+        subj_list = list(subjects)
+        types: Dict[str, str] = {}
+        labels: Dict[str, str] = {}
+
+        for tbl_name, node_def in schema.node_tables.items():
+            if tbl_name == schema.fallback_node_table:
+                continue
+            try:
+                rows = conn.execute(
+                    f"MATCH (n:{tbl_name}) WHERE n.uri IN $subjects "
+                    f"RETURN n.uri AS uri, n.label AS label",
+                    parameters={"subjects": subj_list},
+                )
+                for row in rows:
+                    types.setdefault(row[0], node_def.class_uri)
+                    if row[1]:
+                        labels.setdefault(row[0], row[1])
+            except Exception:
+                pass
+
+        found = set(types.keys())
+        remaining = [u for u in subj_list if u not in found]
+        if remaining:
+            flat_meta = super().get_entity_metadata(table_name, remaining)
+            for m in flat_meta:
+                types.setdefault(m["uri"], m["type"])
+                if m["label"]:
+                    labels.setdefault(m["uri"], m["label"])
+
+        return [
+            {"uri": uri, "type": types.get(uri, ""), "label": labels.get(uri, "")}
+            for uri in subjects
+            if uri in types
+        ]
 
     def get_triples_for_subjects(
         self, table_name: str, subjects: List[str]
@@ -604,6 +858,25 @@ class LadybugGraphStore(LadybugFlatStore):
                 pass
         return total
 
+    @staticmethod
+    def _rows_to_node_triples(
+        rows, node_def, prop_cols: List[str],
+    ) -> List[Dict[str, str]]:
+        """Convert query rows into (s, p, o) triple dicts for a node table."""
+        triples: List[Dict[str, str]] = []
+        for row in rows:
+            uri = row[0]
+            triples.append({"subject": uri, "predicate": RDF_TYPE, "object": node_def.class_uri})
+            if row[1]:
+                triples.append({"subject": uri, "predicate": RDFS_LABEL, "object": row[1]})
+            for idx, col in enumerate(prop_cols):
+                val_idx = idx + 2
+                if val_idx < len(row) and row[val_idx]:
+                    pred_uri = node_def.property_uris.get(col, "")
+                    if pred_uri:
+                        triples.append({"subject": uri, "predicate": pred_uri, "object": str(row[val_idx])})
+        return triples
+
     def _materialize_all_triples(self) -> List[Dict[str, str]]:
         """Reconstruct (s, p, o) triples from the graph model."""
         schema = self._graph_schema
@@ -619,17 +892,7 @@ class LadybugGraphStore(LadybugFlatStore):
                 r = conn.execute(
                     f"MATCH (n:{tbl_name}) RETURN n.uri AS uri, n.label AS label{extra_returns}"
                 )
-                for row in r:
-                    uri = row[0]
-                    triples.append({"subject": uri, "predicate": RDF_TYPE, "object": node_def.class_uri})
-                    if row[1]:
-                        triples.append({"subject": uri, "predicate": RDFS_LABEL, "object": row[1]})
-                    for idx, col in enumerate(prop_cols):
-                        val_idx = idx + 2
-                        if val_idx < len(row) and row[val_idx]:
-                            pred_uri = node_def.property_uris.get(col, "")
-                            if pred_uri:
-                                triples.append({"subject": uri, "predicate": pred_uri, "object": str(row[val_idx])})
+                triples.extend(self._rows_to_node_triples(r, node_def, prop_cols))
             except Exception as exc:
                 logger.warning("Materialize node table '%s' failed: %s", tbl_name, exc)
 
@@ -749,17 +1012,7 @@ class LadybugGraphStore(LadybugFlatStore):
                     f"RETURN n.uri AS uri, n.label AS label{extra_returns}",
                     parameters={"subjects": subjects},
                 )
-                for row in r:
-                    uri = row[0]
-                    triples.append({"subject": uri, "predicate": RDF_TYPE, "object": node_def.class_uri})
-                    if row[1]:
-                        triples.append({"subject": uri, "predicate": RDFS_LABEL, "object": row[1]})
-                    for idx, col in enumerate(prop_cols):
-                        val_idx = idx + 2
-                        if val_idx < len(row) and row[val_idx]:
-                            pred_uri = node_def.property_uris.get(col, "")
-                            if pred_uri:
-                                triples.append({"subject": uri, "predicate": pred_uri, "object": str(row[val_idx])})
+                triples.extend(self._rows_to_node_triples(r, node_def, prop_cols))
             except Exception as e:
                 logger.debug("Graph triples query failed for %s: %s", tbl_name, e)
 

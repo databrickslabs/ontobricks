@@ -123,6 +123,7 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.registry_cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_registry_cache_ttl</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
@@ -192,6 +193,8 @@
                     <span class="n">_sched</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;registry_cfg&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span> <span class="o">=</span> <span class="n">data</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_cache_ts</span> <span class="o">=</span> <span class="n">now</span>
+                <span class="k">if</span> <span class="s2">&quot;registry_cache_ttl&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+                    <span class="n">set_registry_cache_ttl</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;registry_cache_ttl&quot;</span><span class="p">]))</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Loaded global config from </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
                 <span class="k">return</span> <span class="n">data</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Global config not found or empty at </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
@@ -317,9 +320,33 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_save</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;default_emoji&quot;</span><span class="p">:</span> <span class="n">emoji</span><span class="p">})</span></div>
 
 
-    <span class="c1"># ------------------------------------------------------------------</span>
-    <span class="c1"># Cache management</span>
-    <span class="c1"># ------------------------------------------------------------------</span>
+<div class="viewcode-block" id="GlobalConfigService.get_registry_cache_ttl">
+<a class="viewcode-back" href="../../../../api/app.objects.session.html#back.objects.session.global_config.GlobalConfigService.get_registry_cache_ttl">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_registry_cache_ttl</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the configured registry cache TTL in seconds.&quot;&quot;&quot;</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="s2">&quot;registry_cache_ttl&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">val</span> <span class="ow">and</span> <span class="nb">str</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+            <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.registry_cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_registry_cache_ttl</span>
+        <span class="k">return</span> <span class="n">get_registry_cache_ttl</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="GlobalConfigService.set_registry_cache_ttl">
+<a class="viewcode-back" href="../../../../api/app.objects.session.html#back.objects.session.global_config.GlobalConfigService.set_registry_cache_ttl">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">set_registry_cache_ttl</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="n">ttl</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Persist a new registry cache TTL (seconds) in the global config file.&quot;&quot;&quot;</span>
+        <span class="n">ttl</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">ttl</span><span class="p">))</span>
+        <span class="n">set_registry_cache_ttl</span><span class="p">(</span><span class="n">ttl</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_save</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;registry_cache_ttl&quot;</span><span class="p">:</span> <span class="n">ttl</span><span class="p">})</span></div>
+
 
     <span class="c1"># ------------------------------------------------------------------</span>
     <span class="c1"># Helpers</span>
@@ -332,6 +359,7 @@
             <span class="s2">&quot;warehouse_id&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
             <span class="s2">&quot;default_base_uri&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
             <span class="s2">&quot;default_emoji&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;registry_cache_ttl&quot;</span><span class="p">:</span> <span class="mi">300</span><span class="p">,</span>
         <span class="p">}</span></div>
 
 

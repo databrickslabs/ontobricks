@@ -4,19 +4,19 @@ Digital Twin External REST API
 Provides programmatic access to the triple store: status, insights,
 build trigger, and triple retrieval.
 
-Project registry listing, versions, design status, and artifacts (OWL, R2RML, Spark SQL) live under
-``/api/v1/projects`` and ``/api/v1/project/...`` (see ``api.routers.projects``).
+Domain registry listing, versions, design status, and artifacts (OWL, R2RML, Spark SQL) live under
+``/api/v1/domains`` and ``/api/v1/domain/...`` (see ``api.routers.domains``).
 
-All endpoints accept an optional ``project_name`` query parameter.
-When supplied the API loads the named project from the registry
-instead of relying on the current browser session.  An optional
-``project_version`` parameter can be combined with ``project_name``
-to target a specific version; when omitted, the latest version is used.
+All endpoints accept an optional domain query parameter (``domain_name``,
+with legacy alias ``project_name``). When supplied the API loads the named
+domain from the registry instead of relying on the current browser session.
+An optional version parameter (``domain_version``, legacy ``project_version``)
+targets a specific version; when omitted, the latest version is used.
 
-Use ``GET /api/v1/project/versions?project_name=...`` to discover available versions.
+Use ``GET /api/v1/domain/versions?domain_name=...`` to discover available versions.
 """
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
@@ -27,7 +27,7 @@ from shared.config.settings import get_settings, Settings
 from back.core.triplestore import get_triplestore
 from back.core.helpers import get_databricks_credentials, sql_escape, effective_view_table, effective_graph_name, is_uri
 from back.objects.digitaltwin import DigitalTwin
-from back.objects.digitaltwin.models import ProjectSnapshot
+from back.objects.digitaltwin.models import DomainSnapshot
 
 # Tests may patch ``api.routers.digitaltwin`` for registry resolution helpers.
 _resolve_registry = DigitalTwin.resolve_registry
@@ -189,7 +189,7 @@ class InferenceResultResponse(BaseModel):
 @router.get(
     "/registry",
     summary="Get registry configuration",
-    description="Return the project registry location (catalog.schema.volume). "
+    description="Return the domain registry location (catalog.schema.volume). "
                 "Reads from the current session if available, otherwise from "
                 "environment variables (REGISTRY_CATALOG, REGISTRY_SCHEMA, REGISTRY_VOLUME).",
 )
@@ -219,19 +219,27 @@ async def dt_registry(
                 "and how many triples it currently contains.",
 )
 async def dt_status(
-    project_name: Optional[str] = Query(None, description="Project name in the registry (uses current session project if omitted)"),
-    project_version: Optional[str] = Query(None, description="Project version to load (uses latest version if omitted)"),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_version", "project_version"),
+        description="Domain version to load (uses latest version if omitted)",
+    ),
     registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
     registry_schema: Optional[str] = Query(None, description="Override registry schema"),
     registry_volume: Optional[str] = Query(None, description="Override registry volume"),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    project = DigitalTwin.resolve_project(project_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, project_version)
-    view_table = effective_view_table(project, settings).strip()
-    graph_name = effective_graph_name(project)
+    domain = DigitalTwin.resolve_domain(domain_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, domain_version)
+    view_table = effective_view_table(domain, settings).strip()
+    graph_name = effective_graph_name(domain)
 
-    graph_store = get_triplestore(project, settings, backend="graph")
+    graph_store = get_triplestore(domain, settings, backend="graph")
     if not graph_store:
         return StatusResponse(success=True, view_table=view_table, graph_name=graph_name,
                               reason='Graph backend not configured')
@@ -265,21 +273,29 @@ async def dt_status(
                 "label/relationship totals.",
 )
 async def dt_stats(
-    project_name: Optional[str] = Query(None, description="Project name in the registry (uses current session project if omitted)"),
-    project_version: Optional[str] = Query(None, description="Project version to load (uses latest version if omitted)"),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_version", "project_version"),
+        description="Domain version to load (uses latest version if omitted)",
+    ),
     registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
     registry_schema: Optional[str] = Query(None, description="Override registry schema"),
     registry_volume: Optional[str] = Query(None, description="Override registry volume"),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    project = DigitalTwin.resolve_project(project_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, project_version)
-    graph_name = effective_graph_name(project)
+    domain = DigitalTwin.resolve_domain(domain_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, domain_version)
+    graph_name = effective_graph_name(domain)
 
     if not graph_name:
         raise ValidationError("Graph name not configured")
 
-    store = get_triplestore(project, settings, backend="graph")
+    store = get_triplestore(domain, settings, backend="graph")
     if not store:
         raise ValidationError("Graph backend not configured")
 
@@ -322,8 +338,16 @@ async def dt_stats(
 )
 async def dt_build(
     body: BuildRequest = BuildRequest(),
-    project_name: Optional[str] = Query(None, description="Project name in the registry (uses current session project if omitted)"),
-    project_version: Optional[str] = Query(None, description="Project version to load (uses latest version if omitted)"),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_version", "project_version"),
+        description="Domain version to load (uses latest version if omitted)",
+    ),
     registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
     registry_schema: Optional[str] = Query(None, description="Override registry schema"),
     registry_volume: Optional[str] = Query(None, description="Override registry volume"),
@@ -335,9 +359,9 @@ async def dt_build(
     from back.core.w3c import sparql
     from back.core.databricks import DatabricksClient
 
-    project = DigitalTwin.resolve_project(project_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, project_version)
-    view_table = effective_view_table(project, settings).strip()
-    graph_name = effective_graph_name(project)
+    domain = DigitalTwin.resolve_domain(domain_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, domain_version)
+    view_table = effective_view_table(domain, settings).strip()
+    graph_name = effective_graph_name(domain)
     if not view_table:
         raise ValidationError("View location not configured")
 
@@ -345,25 +369,25 @@ async def dt_build(
     if len(parts) != 3:
         raise ValidationError("View must be fully qualified: catalog.schema.view_name")
 
-    project.ensure_generated_content()
-    r2rml = project.get_r2rml()
+    domain.ensure_generated_content()
+    r2rml = domain.get_r2rml()
     if not r2rml:
         raise ValidationError("No R2RML mapping available")
 
-    host, token, warehouse_id = get_databricks_credentials(project, settings)
+    host, token, warehouse_id = get_databricks_credentials(domain, settings)
     if not host or not token:
         raise ValidationError("Databricks not configured")
     if not warehouse_id:
         raise ValidationError("No SQL warehouse configured")
 
-    base_uri = project.ontology.get('base_uri', DEFAULT_BASE_URI)
-    mapping_config = project.assignment
-    ontology_config = project.ontology
+    base_uri = domain.ontology.get('base_uri', DEFAULT_BASE_URI)
+    mapping_config = domain.assignment
+    ontology_config = domain.ontology
 
-    snap = ProjectSnapshot(project)
+    snap = DomainSnapshot(domain)
     force_full = body.build_mode == 'full' or body.drop_existing
-    stored_source_versions = dict(project.source_versions or {})
-    delta_cfg = project.delta or {}
+    stored_source_versions = dict(domain.source_versions or {})
+    delta_cfg = domain.delta or {}
 
     tm = get_task_manager()
     task = tm.create_task(name="Digital Twin Build (API)", task_type="triplestore_sync",
@@ -397,7 +421,7 @@ async def dt_build(
             from back.core.triplestore import IncrementalBuildService
             incr_svc = IncrementalBuildService(src)
             snapshot_table = incr_svc.snapshot_table_name(
-                (project.info or {}).get('name', DEFAULT_GRAPH_NAME), delta_cfg,
+                (domain.info or {}).get('name', DEFAULT_GRAPH_NAME), delta_cfg,
                 version=snap.current_version,
             )
 
@@ -476,9 +500,9 @@ async def dt_build(
 
             try:
                 if new_source_versions:
-                    project.source_versions = new_source_versions
-                project.snapshot_table = snapshot_table
-                project.save()
+                    domain.source_versions = new_source_versions
+                domain.snapshot_table = snapshot_table
+                domain.save()
             except Exception:
                 pass
 
@@ -534,8 +558,16 @@ async def dt_triples_find(
     depth: int = 1,
     limit: int = 1000,
     offset: int = 0,
-    project_name: Optional[str] = Query(None, description="Project name in the registry (uses current session project if omitted)"),
-    project_version: Optional[str] = Query(None, description="Project version to load (uses latest version if omitted)"),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_version", "project_version"),
+        description="Domain version to load (uses latest version if omitted)",
+    ),
     registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
     registry_schema: Optional[str] = Query(None, description="Override registry schema"),
     registry_volume: Optional[str] = Query(None, description="Override registry volume"),
@@ -548,12 +580,12 @@ async def dt_triples_find(
     limit = max(1, min(limit, 10000))
     offset = max(0, offset)
 
-    project = DigitalTwin.resolve_project(project_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, project_version)
-    table = effective_graph_name(project)
+    domain = DigitalTwin.resolve_domain(domain_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, domain_version)
+    table = effective_graph_name(domain)
     if not table:
         raise ValidationError("Graph name not configured")
 
-    store = get_triplestore(project, settings, backend="graph")
+    store = get_triplestore(domain, settings, backend="graph")
     if not store:
         raise ValidationError("Graph backend not configured")
 
@@ -651,22 +683,30 @@ async def dt_triples(
     limit: int = 1000,
     offset: int = 0,
     backend: Optional[str] = Query("graph", description="Backend: 'view' or 'graph' (default graph)"),
-    project_name: Optional[str] = Query(None, description="Project name in the registry (uses current session project if omitted)"),
-    project_version: Optional[str] = Query(None, description="Project version to load (uses latest version if omitted)"),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_version", "project_version"),
+        description="Domain version to load (uses latest version if omitted)",
+    ),
     registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
     registry_schema: Optional[str] = Query(None, description="Override registry schema"),
     registry_volume: Optional[str] = Query(None, description="Override registry volume"),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    project = DigitalTwin.resolve_project(project_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, project_version)
+    domain = DigitalTwin.resolve_domain(domain_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, domain_version)
     be = backend or "graph"
-    table = (effective_view_table(project, settings).strip() if be == "view"
-             else effective_graph_name(project))
+    table = (effective_view_table(domain, settings).strip() if be == "view"
+             else effective_graph_name(domain))
     if not table:
         raise ValidationError("Triple store not configured")
 
-    store = get_triplestore(project, settings, backend=be)
+    store = get_triplestore(domain, settings, backend=be)
     if not store:
         raise ValidationError("Backend not configured")
 
@@ -722,8 +762,16 @@ async def dt_triples(
 )
 async def dt_dataquality_start(
     body: DataQualityRequest = DataQualityRequest(),
-    project_name: Optional[str] = Query(None, description="Project name in the registry (uses current session project if omitted)"),
-    project_version: Optional[str] = Query(None, description="Project version to load (uses latest version if omitted)"),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_version", "project_version"),
+        description="Domain version to load (uses latest version if omitted)",
+    ),
     registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
     registry_schema: Optional[str] = Query(None, description="Override registry schema"),
     registry_volume: Optional[str] = Query(None, description="Override registry volume"),
@@ -732,20 +780,20 @@ async def dt_dataquality_start(
 ):
     import threading
     from back.core.task_manager import get_task_manager
-    project = DigitalTwin.resolve_project(
-        project_name, session_mgr, settings,
-        registry_catalog, registry_schema, registry_volume, project_version,
+    domain = DigitalTwin.resolve_domain(
+        domain_name, session_mgr, settings,
+        registry_catalog, registry_schema, registry_volume, domain_version,
     )
 
-    shapes = project.shacl_shapes
+    shapes = domain.shacl_shapes
     if body.category:
         shapes = [s for s in shapes if s.get("category") == body.category]
     shapes = [s for s in shapes if s.get("enabled", True)]
 
-    swrl_rules = project.swrl_rules or []
-    ontology_dict = getattr(project, 'ontology', None)
+    swrl_rules = domain.swrl_rules or []
+    ontology_dict = getattr(domain, 'ontology', None)
     if not isinstance(ontology_dict, dict):
-        ontology_dict = project._data.get('ontology', {}) if hasattr(project, '_data') else {}
+        ontology_dict = domain._data.get('ontology', {}) if hasattr(domain, '_data') else {}
 
     if not shapes and not swrl_rules:
         return DataQualityStartedResponse(
@@ -754,14 +802,14 @@ async def dt_dataquality_start(
             + (f" (category={body.category})" if body.category else ""),
         )
 
-    view_table = effective_view_table(project, settings).strip()
-    graph_name = effective_graph_name(project)
+    view_table = effective_view_table(domain, settings).strip()
+    graph_name = effective_graph_name(domain)
     triplestore_table = graph_name if body.backend == "graph" else view_table
     if not triplestore_table:
         raise ValidationError("Triple store not configured")
 
     total = len(shapes) + len(swrl_rules)
-    proj_snap = DigitalTwin.make_snapshot(project)
+    domain_snap = DigitalTwin.make_snapshot(domain)
 
     tm = get_task_manager()
     task = tm.create_task(
@@ -780,14 +828,14 @@ async def dt_dataquality_start(
         try:
             tm.start_task(task.id, f"Running {total} data quality checks ({requested_backend})...")
 
-            store = _get_ts(proj_snap, settings, backend=requested_backend)
+            store = _get_ts(domain_snap, settings, backend=requested_backend)
             if not store:
                 tm.fail_task(task.id, f"Could not initialize {requested_backend} backend")
                 return
 
             if requested_backend == "graph":
                 DigitalTwin.run_graph_checks(
-                    tm, task, shapes, store, triplestore_table, proj_snap, t0, total,
+                    tm, task, shapes, store, triplestore_table, domain_snap, t0, total,
                     swrl_rules=swrl_rules, ontology=ontology_dict,
                 )
             else:
@@ -841,8 +889,16 @@ async def dt_dataquality_progress(task_id: str):
 )
 async def dt_inference_start(
     body: InferenceRequest = InferenceRequest(),
-    project_name: Optional[str] = Query(None, description="Project name in the registry (uses current session project if omitted)"),
-    project_version: Optional[str] = Query(None, description="Project version to load (uses latest version if omitted)"),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_version", "project_version"),
+        description="Domain version to load (uses latest version if omitted)",
+    ),
     registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
     registry_schema: Optional[str] = Query(None, description="Override registry schema"),
     registry_volume: Optional[str] = Query(None, description="Override registry volume"),
@@ -853,12 +909,12 @@ async def dt_inference_start(
     from back.core.task_manager import get_task_manager
     from back.core.helpers import get_databricks_client
 
-    project = DigitalTwin.resolve_project(
-        project_name, session_mgr, settings,
-        registry_catalog, registry_schema, registry_volume, project_version,
+    domain = DigitalTwin.resolve_domain(
+        domain_name, session_mgr, settings,
+        registry_catalog, registry_schema, registry_volume, domain_version,
     )
-    project.ensure_generated_content()
-    proj_snap = DigitalTwin.make_snapshot(project)
+    domain.ensure_generated_content()
+    domain_snap = DigitalTwin.make_snapshot(domain)
 
     options = {
         "tbox": body.tbox,
@@ -886,13 +942,13 @@ async def dt_inference_start(
             tm.start_task(task.id)
             tm.update_progress(task.id, 10, "Initialising triple store")
 
-            store = get_triplestore(proj_snap, settings, backend="graph")
+            store = get_triplestore(domain_snap, settings, backend="graph")
             if store is None:
                 logger.info("API inference task %s: graph store unavailable, falling back to view", task.id)
-                store = get_triplestore(proj_snap, settings, backend="view")
+                store = get_triplestore(domain_snap, settings, backend="view")
 
             from back.core.reasoning import ReasoningService
-            svc = ReasoningService(proj_snap, store)
+            svc = ReasoningService(domain_snap, store)
             tm.update_progress(task.id, 30, "Running inference phases")
 
             logger.info(
@@ -903,7 +959,12 @@ async def dt_inference_start(
                 options["decision_tables"],
                 options["sparql_rules"], options["aggregate_rules"],
             )
-            result = svc.run_full_reasoning(options)
+
+            def _swrl_progress(idx, total, rule_name):
+                pct = 30 + int((idx / max(total, 1)) * 50)
+                tm.update_progress(task.id, pct, f"SWRL {idx + 1}/{total}: {rule_name}")
+
+            result = svc.run_full_reasoning(options, progress_callback=_swrl_progress)
             logger.info(
                 "API inference task %s: done — %d inferred, %d violations",
                 task.id, len(result.inferred_triples), len(result.violations),
@@ -920,13 +981,13 @@ async def dt_inference_start(
             if options.get("append_graph") and result.inferred_triples:
                 tm.update_progress(task.id, 92, "Appending inferred triples to graph...")
                 try:
-                    graph_store = get_triplestore(proj_snap, settings, backend="graph")
+                    graph_store = get_triplestore(domain_snap, settings, backend="graph")
                     if graph_store is None:
                         logger.warning("API inference %s: cannot append to graph — store unavailable", task.id)
                         result_dict["append_graph_error"] = "Graph store not available"
                     else:
                         from back.core.reasoning.models import ReasoningResult as _RR
-                        append_count = ReasoningService(proj_snap, graph_store).materialize_inferred(
+                        append_count = ReasoningService(domain_snap, graph_store).materialize_inferred(
                             _RR(inferred_triples=result.inferred_triples)
                         )
                         result_dict["append_graph_count"] = append_count
@@ -946,7 +1007,7 @@ async def dt_inference_start(
                 ]
                 if triples:
                     try:
-                        client = get_databricks_client(proj_snap, settings)
+                        client = get_databricks_client(domain_snap, settings)
                         if client is None:
                             logger.warning("API inference %s: cannot materialise — no credentials", task.id)
                         else:
@@ -989,21 +1050,29 @@ async def dt_inference_start(
     "/inference/results",
     response_model=InferenceResultResponse,
     summary="Get inference results (stub)",
-    description="Inference results are not persisted in the project session. "
+    description="Inference results are not persisted in the domain session. "
                 "Poll ``GET /digitaltwin/inference/{task_id}`` for the completed run payload.",
 )
 async def dt_inference_results(
-    project_name: Optional[str] = Query(None, description="Project name in the registry (uses current session project if omitted)"),
-    project_version: Optional[str] = Query(None, description="Project version to load (uses latest version if omitted)"),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_version", "project_version"),
+        description="Domain version to load (uses latest version if omitted)",
+    ),
     registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
     registry_schema: Optional[str] = Query(None, description="Override registry schema"),
     registry_volume: Optional[str] = Query(None, description="Override registry volume"),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    _ = DigitalTwin.resolve_project(
-        project_name, session_mgr, settings,
-        registry_catalog, registry_schema, registry_volume, project_version,
+    _ = DigitalTwin.resolve_domain(
+        domain_name, session_mgr, settings,
+        registry_catalog, registry_schema, registry_volume, domain_version,
     )
     return InferenceResultResponse(
         success=True,

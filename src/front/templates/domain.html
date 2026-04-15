@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Domain - OntoBricks{% endblock %}
+
+{% block extra_css %}
+<!-- Domain module styles (extracted from partials) -->
+<link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-metadata.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-validation.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="sidebar-layout">
+        <!-- Left Sidebar Menu (driven by menu_config.json) -->
+        <div class="sidebar-nav">
+            {% set sidebar_menu = get_menu('domain') %}
+            {% include "partials/layout/_sidebar_nav.html" %}
+        </div>
+        
+        <!-- Right Content Area -->
+        <div class="sidebar-content">
+            <!-- Information Section -->
+            <div id="information-section" class="sidebar-section active">
+                {% include "partials/domain/_domain_information.html" %}
+            </div>
+            
+            <!-- Data Sources Section -->
+            <div id="metadata-section" class="sidebar-section">
+                {% include "partials/domain/_domain_metadata.html" %}
+            </div>
+            
+            <!-- Validation Section -->
+            <div id="validation-section" class="sidebar-section">
+                {% include "partials/domain/_domain_validation.html" %}
+            </div>
+            
+            <!-- Versions Section -->
+            <div id="versions-section" class="sidebar-section">
+                {% include "partials/domain/_domain_versions.html" %}
+            </div>
+
+            <!-- Documents Section -->
+            <div id="documents-section" class="sidebar-section">
+                {% include "partials/domain/_domain_documents.html" %}
+            </div>
+
+            <!-- OWL Content Section -->
+            <div id="owl-content-section" class="sidebar-section">
+                {% include "partials/domain/_domain_owl_content.html" %}
+            </div>
+            
+            <!-- R2RML Section -->
+            <div id="r2rml-section" class="sidebar-section">
+                {% include "partials/domain/_domain_r2rml.html" %}
+            </div>
+
+            <!-- Build / Sync Section -->
+            <div id="sync-section" class="sidebar-section">
+                {% include "partials/dtwin/_query_sync.html" %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden file input for loading domains from file -->
+<input type="file" id="domainFileInput" accept=".json" class="file-input-hidden" onchange="handleDomainFileUpload(this)">
+
+<!-- Triplestore config injected from session for Build section -->
+<script id="triplestore-config" type="application/json">
+{
+    "view_table": "{{ view_table|default('', true) }}",
+    "graph_name": "{{ graph_name|default('', true) }}",
+    "cache": {{ triplestore_cache|default({})|tojson }}
+}
+</script>
+
+<!-- Domain page JavaScript (extracted from templates) -->
+<script src="{{ url_for('static', filename='domain/js/domain.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='domain/js/domain-information.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='domain/js/domain-metadata.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='domain/js/domain-validation.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='domain/js/domain-actions.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='domain/js/domain-versions.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='domain/js/domain-documents.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='domain/js/domain-owl-content.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='domain/js/domain-r2rml.js') }}?v={{ asset_version }}"></script>
+<!-- Build section (sync) -->
+<script>
+(function() {
+    var el = document.getElementById('triplestore-config');
+    if (el) {
+        try { window.__TRIPLESTORE_CONFIG = JSON.parse(el.textContent); }
+        catch (e) { window.__TRIPLESTORE_CONFIG = {}; }
+    }
+})();
+</script>
+<script src="{{ url_for('static', filename='query/js/query-sync.js') }}?v={{ asset_version }}"></script>
+{% endblock %}

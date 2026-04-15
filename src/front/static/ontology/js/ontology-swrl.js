@@ -306,7 +306,7 @@ window.SwrlModule = {
 
     async _fetchMapLayout() {
         try {
-            const resp = await fetch('/project/map-layout', { credentials: 'same-origin' });
+            const resp = await fetch('/domain/map-layout', { credentials: 'same-origin' });
             const data = await resp.json();
             return (data.success && data.layout) ? data.layout : null;
         } catch { return null; }
