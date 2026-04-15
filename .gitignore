@@ -55,3 +55,6 @@ mlartifacts/
 src/.coding_rules.md
 .cursorrules
 /src/.databricks/sync-snapshots
+
+# Data folder
+/data/
