@@ -83,6 +83,7 @@ These packages are used by the MCP server (`src/mcp-server/`) which runs as a se
 | **Graphology** | 0.26.0 | Robust graph data model and algorithm library (used with Sigma.js) | MIT | [graphology.github.io](https://graphology.github.io/) |
 | **Graphology Library** | 0.8.0 | Standard library bundle for Graphology (includes ForceAtlas2 layout and Louvain community detection) | MIT | [cdn.jsdelivr.net/npm/graphology-library](https://cdn.jsdelivr.net/npm/graphology-library@0.8.0/) |
 | **Grid.js** | latest | Advanced table plugin with sorting, searching, and pagination | MIT | [unpkg.com/gridjs](https://unpkg.com/gridjs/dist/gridjs.umd.js) |
+| **Chart.js** | 4.x | Simple yet flexible charting library (doughnut gauges on Cockpit) | MIT | [cdn.jsdelivr.net/npm/chart.js@4](https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js) |
 
 ---
 
@@ -261,7 +262,7 @@ new gridjs.Grid({
 
 | License | Packages |
 |---------|----------|
-| **MIT** | FastAPI, pydantic, pydantic-settings, Bootstrap, Bootstrap Icons, Sigma.js, Graphology, Grid.js, OntoViz, strawberry-graphql, real_ladybug, pytest, pytest-asyncio, pytest-cov, black, flake8 |
+| **MIT** | FastAPI, pydantic, pydantic-settings, Bootstrap, Bootstrap Icons, Sigma.js, Graphology, Grid.js, Chart.js, OntoViz, strawberry-graphql, real_ladybug, pytest, pytest-asyncio, pytest-cov, black, flake8 |
 | **BSD-3-Clause** | Uvicorn, Starlette, Jinja2, itsdangerous, RDFLib, python-dotenv, httpx, NetworkX |
 | **Apache-2.0** | databricks-sql-connector, databricks-sdk, pyarrow, python-multipart, aiofiles, requests, fastmcp, MLflow, pyshacl, responses, playwright |
 | **BSD-2-Clause** | Sphinx |

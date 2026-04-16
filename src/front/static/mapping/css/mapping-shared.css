@@ -3,6 +3,23 @@
  * Extracted from mapping templates per code_instructions.txt
  */
 
+/* ── Mapping information loading overlay ─────── */
+.mapping-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(248, 249, 250, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+/* Summary tiles now use shared .ob-kpi-tile from components.css */
+
 /* SQL Wizard Table Selection Styles */
 .wizard-table-item {
     padding: 2px 0;

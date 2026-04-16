@@ -34,7 +34,7 @@
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="mb-1"><i class="bi bi-info-circle me-2"></i>Digital Twin Information</h4>
-            <p class="text-muted mb-0 small">Triple store status, build execution, and content insights</p>
+            <p class="text-muted mb-0 small">Triple store status and build execution</p>
         </div>
         <div class="d-flex align-items-center gap-2">
             <span id="syncStatusText" class="text-muted small"></span>
@@ -72,24 +72,7 @@
         </div>
     </div>
 
-    <!-- Tabbed Interface -->
-    <ul class="nav nav-tabs ob-nav-tabs-gap" id="syncTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="sync-tab-status" data-bs-toggle="tab" data-bs-target="#sync-pane-status"
-                    type="button" role="tab" aria-controls="sync-pane-status" aria-selected="true">
-                <i class="bi bi-clipboard-check"></i> Status
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link disabled" id="sync-tab-insights" data-bs-toggle="tab" data-bs-target="#sync-pane-insights"
-                    type="button" role="tab" aria-controls="sync-pane-insights" aria-selected="false"
-                    title="Build the triple store first">
-                <i class="bi bi-bar-chart-line"></i> Insights
-            </button>
-        </li>
-    </ul>
-
-    <!-- Progress (outside tabs so it's visible from any tab) -->
+    <!-- Progress -->
     <div id="syncProgressArea" class="mt-2 mb-2 d-none">
             <div class="progress mb-2 ob-progress-md">
             <div class="progress-bar progress-bar-striped progress-bar-animated sync-progress-bar-start" id="syncProgressBar"
@@ -98,43 +81,54 @@
         <small class="text-muted" id="syncProgressStep"></small>
     </div>
 
-    <div class="tab-content ob-tab-content" id="syncTabContent">
+    <!-- Status Content -->
+    <div id="syncStatusContent">
 
-        <!-- Status Tab (merged Status + Build) -->
-        <div class="tab-pane fade show active" id="sync-pane-status" role="tabpanel" aria-labelledby="sync-tab-status">
-
-            <!-- Readiness -->
-            <div class="card mb-3" id="syncReadinessCard">
-                <div class="card-body">
-                    <h6 class="mb-3 fw-semibold"><i class="bi bi-clipboard-check me-1"></i> Readiness Status</h6>
-                    <div id="syncReadinessLoading" class="text-center py-3 d-none"></div>
-                    <div id="syncReadinessContent" class="d-none">
-                        <div class="row g-2 mb-2">
-                            <div class="col-md-6">
-                                <div class="border rounded p-3" id="syncOntologyStatus">
-                                    <div class="d-flex align-items-center mb-1">
-                                        <i class="bi bi-diagram-3 me-2 fs-5" id="syncOntologyIcon"></i>
-                                        <strong>Ontology</strong>
-                                        <span class="ms-auto badge" id="syncOntologyBadge"></span>
-                                    </div>
-                                    <div class="small text-muted" id="syncOntologyDetail"></div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="border rounded p-3" id="syncAssignmentStatus">
-                                    <div class="d-flex align-items-center mb-1">
-                                        <i class="bi bi-link-45deg me-2 fs-5" id="syncAssignmentIcon"></i>
-                                        <strong>Assignments</strong>
-                                        <span class="ms-auto badge" id="syncAssignmentBadge"></span>
-                                    </div>
-                                    <div class="small text-muted" id="syncAssignmentDetail"></div>
-                                </div>
+            <!-- Readiness tiles -->
+            <div id="syncReadinessCard" class="mb-3">
+                <h6 class="mb-3 fw-semibold"><i class="bi bi-clipboard-check me-1"></i> Readiness Status</h6>
+                <div id="syncReadinessLoading" class="text-center py-3 d-none"></div>
+                <div id="syncReadinessContent" class="d-none">
+                    <div class="row g-2 mb-2">
+                        <div class="col">
+                            <div class="ob-kpi-tile" id="syncTileEntities">
+                                <div class="ob-kpi-tile-icon"><i class="bi bi-box"></i></div>
+                                <div class="ob-kpi-tile-value" id="syncTileEntitiesValue">-</div>
+                                <div class="ob-kpi-tile-label">Entities</div>
                             </div>
                         </div>
-                        <div class="alert alert-warning small mb-0 mt-2 d-none" id="syncNotReadyAlert">
-                            <i class="bi bi-exclamation-triangle me-1"></i>
-                            <span id="syncNotReadyMessage">Both Ontology and Assignments must be ready before you can build or load data.</span>
+                        <div class="col">
+                            <div class="ob-kpi-tile" id="syncTileAttributes">
+                                <div class="ob-kpi-tile-icon"><i class="bi bi-list-ul"></i></div>
+                                <div class="ob-kpi-tile-value" id="syncTileAttributesValue">-</div>
+                                <div class="ob-kpi-tile-label">Attributes</div>
+                            </div>
                         </div>
+                        <div class="col">
+                            <div class="ob-kpi-tile" id="syncTileRelationships">
+                                <div class="ob-kpi-tile-icon"><i class="bi bi-arrow-left-right"></i></div>
+                                <div class="ob-kpi-tile-value" id="syncTileRelationshipsValue">-</div>
+                                <div class="ob-kpi-tile-label">Relationships</div>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="ob-kpi-tile" id="syncTileMappedEntities">
+                                <div class="ob-kpi-tile-icon"><i class="bi bi-link-45deg"></i></div>
+                                <div class="ob-kpi-tile-value" id="syncTileMappedEntitiesValue">-</div>
+                                <div class="ob-kpi-tile-label">Mapped Entities</div>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="ob-kpi-tile" id="syncTileMappedRels">
+                                <div class="ob-kpi-tile-icon"><i class="bi bi-diagram-2"></i></div>
+                                <div class="ob-kpi-tile-value" id="syncTileMappedRelsValue">-</div>
+                                <div class="ob-kpi-tile-label">Mapped Rel.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-warning small mb-0 mt-2 d-none" id="syncNotReadyAlert">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <span id="syncNotReadyMessage">Both Ontology and Assignments must be ready before you can build or load data.</span>
                     </div>
                 </div>
             </div>
@@ -240,50 +234,5 @@
                     <div id="syncResultContent"></div>
                 </div>
             </div>
-        </div>
-
-        <!-- Insights Tab -->
-        <div class="tab-pane fade" id="sync-pane-insights" role="tabpanel" aria-labelledby="sync-tab-insights">
-
-            <!-- Loading spinner -->
-            <div id="insightsLoading" class="text-center py-4 d-none">
-                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
-                <span class="text-muted small">Loading triple store insights...</span>
-            </div>
-
-            <!-- Stats content -->
-            <div id="insightsContent" class="d-none">
-                <!-- Summary cards -->
-                <div class="row g-2 mb-3" id="insightsSummaryRow"></div>
-
-                <!-- Entity types table -->
-                <div class="card mb-3">
-                    <div class="card-body p-2">
-                        <h6 class="fw-semibold mb-2"><i class="bi bi-diagram-3 me-1"></i>Entity Types</h6>
-                        <div id="insightsEntityTypes" class="small"></div>
-                    </div>
-                </div>
-
-                <!-- Relationships table -->
-                <div class="card mb-3">
-                    <div class="card-body p-2">
-                        <h6 class="fw-semibold mb-2"><i class="bi bi-diagram-2 me-1"></i>Relationships</h6>
-                        <div id="insightsRelationships" class="small"></div>
-                    </div>
-                </div>
-
-                <!-- Attributes table -->
-                <div class="card mb-3">
-                    <div class="card-body p-2">
-                        <h6 class="fw-semibold mb-2"><i class="bi bi-list-ul me-1"></i>Attributes</h6>
-                        <div id="insightsAttributes" class="small"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Error area -->
-            <div id="insightsError" class="d-none"></div>
-        </div>
-
     </div>
 </div>

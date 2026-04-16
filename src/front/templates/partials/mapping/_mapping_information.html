@@ -1,7 +1,7 @@
 <!-- Mapping Information Section -->
 
 <!-- Loading placeholder (shown until JS loads data) -->
-<div id="mappingLoadingPlaceholder" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(248, 249, 250, 0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;">
+<div id="mappingLoadingPlaceholder" class="mapping-loading-overlay">
     <div class="ob-loading-spinner">
         <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
             <g class="ob-ring">
@@ -29,14 +29,14 @@
 </div>
 
 <!-- Full content (hidden until loaded) -->
-<div id="mappingLoadedContent" style="display: none;">
+<div id="mappingLoadedContent" class="d-none">
 
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="mb-1"><i class="bi bi-diagram-2 me-2"></i>Mapping Summary</h4>
         <p class="text-muted mb-0 small">Overview of mappings between ontology and data sources</p>
     </div>
-    <button type="button" class="btn btn-sm btn-outline-danger ontology-edit-btn" id="resetMappingsBtn" onclick="confirmResetMappings()">
+    <button type="button" class="btn btn-sm btn-outline-danger ontology-edit-btn" id="resetMappingsBtn">
         <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
     </button>
 </div>
@@ -69,74 +69,59 @@
     </div>
 </div>
 
-<!-- Mapping Summary Card -->
+<!-- Mapping Summary Tiles + Gauges -->
+<div class="row g-3 mb-4">
+    <div class="col">
+        <div class="ob-kpi-tile">
+            <div class="ob-kpi-tile-icon"><i class="bi bi-box"></i></div>
+            <canvas id="gaugeMapEntities" width="130" height="72"></canvas>
+            <div class="small text-muted mt-1"><span id="entityMappingCount">0 / 0</span></div>
+            <div class="ob-kpi-tile-label">Entities Mapped</div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="ob-kpi-tile">
+            <div class="ob-kpi-tile-icon"><i class="bi bi-tags"></i></div>
+            <canvas id="gaugeMapAttributes" width="130" height="72"></canvas>
+            <div class="small text-muted mt-1"><span id="attributeMappingCount">0 / 0</span></div>
+            <div class="ob-kpi-tile-label">Attributes Mapped</div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="ob-kpi-tile">
+            <div class="ob-kpi-tile-icon"><i class="bi bi-arrow-left-right"></i></div>
+            <canvas id="gaugeMapRelationships" width="130" height="72"></canvas>
+            <div class="small text-muted mt-1"><span id="relationshipMappingCount">0 / 0</span></div>
+            <div class="ob-kpi-tile-label">Relationships Mapped</div>
+        </div>
+    </div>
+</div>
+
+<!-- Status -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div id="mappingStatusMessage" class="text-muted small">
+        <i class="bi bi-info-circle"></i> Load or create entity and relationship to get started.
+    </div>
+    <span id="mappingStatusBadge" class="badge bg-secondary">Not Started</span>
+</div>
+
+<!-- Detail Lists: Entities & Relationships -->
 <div class="card mb-4">
     <div class="card-body">
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="me-3">
-                            <i class="bi bi-box fs-2 text-muted"></i>
-                        </div>
-                        <div>
-                            <h5 class="mb-0" id="entityMappingCount">0 / 0</h5>
-                            <small class="text-muted">Entities Mapped</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="me-3">
-                            <i class="bi bi-arrow-left-right fs-2 text-muted"></i>
-                        </div>
-                        <div>
-                            <h5 class="mb-0" id="relationshipMappingCount">0 / 0</h5>
-                            <small class="text-muted">Relationships Mapped</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="me-3">
-                            <i class="bi bi-tags fs-2 text-muted"></i>
-                        </div>
-                        <div>
-                            <h5 class="mb-0" id="attributeMappingCount">0 / 0</h5>
-                            <small class="text-muted">Attributes Mapped</small>
-                        </div>
-                    </div>
+        <div class="row" id="summaryDetailGrid">
+            <div class="col-md-6">
+                <h6 class="text-muted mb-2"><i class="bi bi-box"></i> Entities</h6>
+                <div class="summary-detail-list" id="entityDetailList">
+                    <div class="text-muted small fst-italic">No ontology loaded</div>
                 </div>
             </div>
-            
-            <!-- Detail Lists: Entities & Relationships -->
-            <div class="row mt-3" id="summaryDetailGrid">
-                <div class="col-md-6">
-                    <h6 class="text-muted mb-2"><i class="bi bi-box"></i> Entities</h6>
-                    <div class="summary-detail-list" id="entityDetailList">
-                        <div class="text-muted small fst-italic">No ontology loaded</div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <h6 class="text-muted mb-2"><i class="bi bi-arrow-left-right"></i> Relationships</h6>
-                    <div class="summary-detail-list" id="relationshipDetailList">
-                        <div class="text-muted small fst-italic">No ontology loaded</div>
-                    </div>
+            <div class="col-md-6">
+                <h6 class="text-muted mb-2"><i class="bi bi-arrow-left-right"></i> Relationships</h6>
+                <div class="summary-detail-list" id="relationshipDetailList">
+                    <div class="text-muted small fst-italic">No ontology loaded</div>
                 </div>
             </div>
-
-            <!-- Progress bar -->
-            <div class="progress mapping-progress mt-3">
-                <div class="progress-bar" id="mappingProgressBar" role="progressbar" style="width: 0%"></div>
-            </div>
-            <div class="d-flex justify-content-between mt-2">
-                <small class="text-muted" id="mappingProgressText">0% complete</small>
-                <span id="mappingStatusBadge" class="badge bg-secondary">Not Started</span>
-            </div>
-
-            <!-- Status -->
-            <div id="mappingStatusMessage" class="text-muted small mt-3 pt-3 border-top">
-                <i class="bi bi-info-circle"></i> Load or create entity and relationship to get started.
-            </div>
+        </div>
     </div>
 </div>
 

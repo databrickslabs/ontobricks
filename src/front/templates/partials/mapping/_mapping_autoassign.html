@@ -25,33 +25,30 @@
             <strong>Auto-Map</strong> will automatically generate SQL queries and map columns for all unmapped entities and relationships using the AI wizard.
         </div>
         
-        <!-- Status Summary -->
-        <div class="row mb-4">
-            <div class="col-md-4">
-                <div class="card border">
-                    <div class="card-body text-center">
-                        <i class="bi bi-box fs-2 text-primary mb-2 d-block"></i>
-                        <h5 class="mb-1" id="autoAssignEntityCount">0 / 0</h5>
-                        <small class="text-muted">Entities Mapped</small>
-                    </div>
+        <!-- Status Summary Tiles + Gauges -->
+        <div class="row g-3 mb-4">
+            <div class="col">
+                <div class="ob-kpi-tile">
+                    <div class="ob-kpi-tile-icon"><i class="bi bi-box"></i></div>
+                    <canvas id="gaugeAutoEntities" width="130" height="72"></canvas>
+                    <div class="small text-muted mt-1"><span id="autoAssignEntityCount">0 / 0</span></div>
+                    <div class="ob-kpi-tile-label">Entities Mapped</div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card border">
-                    <div class="card-body text-center">
-                        <i class="bi bi-arrow-left-right fs-2 text-primary mb-2 d-block"></i>
-                        <h5 class="mb-1" id="autoAssignRelCount">0 / 0</h5>
-                        <small class="text-muted">Relationships Mapped</small>
-                    </div>
+            <div class="col">
+                <div class="ob-kpi-tile">
+                    <div class="ob-kpi-tile-icon"><i class="bi bi-tags"></i></div>
+                    <canvas id="gaugeAutoAttributes" width="130" height="72"></canvas>
+                    <div class="small text-muted mt-1"><span id="autoAssignAttrCount">0 / 0</span></div>
+                    <div class="ob-kpi-tile-label">Attributes Mapped</div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card border" id="autoAssignAttrCard" style="display: none;">
-                    <div class="card-body text-center">
-                        <i class="bi bi-tags fs-2 text-warning mb-2 d-block"></i>
-                        <h5 class="mb-1 text-warning" id="autoAssignAttrCount">0</h5>
-                        <small class="text-muted">Entities with Missing Attributes</small>
-                    </div>
+            <div class="col">
+                <div class="ob-kpi-tile">
+                    <div class="ob-kpi-tile-icon"><i class="bi bi-arrow-left-right"></i></div>
+                    <canvas id="gaugeAutoRelationships" width="130" height="72"></canvas>
+                    <div class="small text-muted mt-1"><span id="autoAssignRelCount">0 / 0</span></div>
+                    <div class="ob-kpi-tile-label">Relationships Mapped</div>
                 </div>
             </div>
         </div>

@@ -192,29 +192,39 @@ window.AutoAssignModule = {
         const assignedRelCount = properties.length - unassignedRels.length;
         const entityCountEl = document.getElementById('autoAssignEntityCount');
         const relCountEl = document.getElementById('autoAssignRelCount');
-        if (entityCountEl) {
-            entityCountEl.textContent = `${assignedEntityCount} / ${classes.length}`;
-            entityCountEl.className = assignedEntityCount === classes.length && classes.length > 0
-                ? 'mb-1 text-success' : 'mb-1';
-        }
-        if (relCountEl) {
-            relCountEl.textContent = `${assignedRelCount} / ${properties.length}`;
-            relCountEl.className = assignedRelCount === properties.length && properties.length > 0
-                ? 'mb-1 text-success' : 'mb-1';
-        }
-        
-        // Update attribute card
-        const attrCard = document.getElementById('autoAssignAttrCard');
         const attrCountEl = document.getElementById('autoAssignAttrCount');
         const reassignBtn = document.getElementById('reassignAttrsBtn');
-        
-        if (entitiesWithMissingAttrs.length > 0) {
-            if (attrCard) attrCard.style.display = 'block';
-            if (attrCountEl) attrCountEl.textContent = entitiesWithMissingAttrs.length;
-            if (reassignBtn) reassignBtn.style.display = 'inline-block';
-        } else {
-            if (attrCard) attrCard.style.display = 'none';
-            if (reassignBtn) reassignBtn.style.display = 'none';
+
+        if (entityCountEl) entityCountEl.textContent = `${assignedEntityCount} / ${classes.length}`;
+        if (relCountEl) relCountEl.textContent = `${assignedRelCount} / ${properties.length}`;
+
+        // Compute attribute completion across mapped entities
+        let totalAttributes = 0;
+        let mappedAttributes = 0;
+        for (const cls of classes) {
+            const dataProps = cls.dataProperties || [];
+            if (dataProps.length === 0) continue;
+            totalAttributes += dataProps.length;
+            const em = mappingByClass[cls.uri] || {};
+            const attrMap = em.attribute_mappings || {};
+            for (const dp of dataProps) {
+                const name = dp.name || dp.localName || '';
+                if (name && attrMap[name]) mappedAttributes++;
+            }
+        }
+        if (attrCountEl) attrCountEl.textContent = `${mappedAttributes} / ${totalAttributes}`;
+
+        // Draw gauges (reuses _drawMappingGauge from mapping-information.js)
+        const entityPct = classes.length > 0 ? (assignedEntityCount / classes.length) * 100 : null;
+        const attrPct = totalAttributes > 0 ? (mappedAttributes / totalAttributes) * 100 : null;
+        const relPct = properties.length > 0 ? (assignedRelCount / properties.length) * 100 : null;
+        _drawMappingGauge('gaugeAutoEntities', entityPct);
+        _drawMappingGauge('gaugeAutoAttributes', attrPct);
+        _drawMappingGauge('gaugeAutoRelationships', relPct);
+
+        // Show re-assign button when entities have missing attributes
+        if (reassignBtn) {
+            reassignBtn.style.display = entitiesWithMissingAttrs.length > 0 ? 'inline-block' : 'none';
         }
         
         const startBtn = document.getElementById('startAutoAssignBtn');
@@ -291,16 +301,13 @@ window.AutoAssignModule = {
         if (res && res.live_stats) {
             const entityCountEl = document.getElementById('autoAssignEntityCount');
             const relCountEl = document.getElementById('autoAssignRelCount');
-            if (entityCountEl) {
-                entityCountEl.textContent = `${res.entities_assigned} / ${res.entities_total}`;
-                entityCountEl.className = res.entities_assigned >= res.entities_total && res.entities_total > 0
-                    ? 'mb-1 text-success' : 'mb-1';
-            }
-            if (relCountEl) {
-                relCountEl.textContent = `${res.relationships_assigned} / ${res.relationships_total}`;
-                relCountEl.className = res.relationships_assigned >= res.relationships_total && res.relationships_total > 0
-                    ? 'mb-1 text-success' : 'mb-1';
-            }
+            if (entityCountEl) entityCountEl.textContent = `${res.entities_assigned} / ${res.entities_total}`;
+            if (relCountEl) relCountEl.textContent = `${res.relationships_assigned} / ${res.relationships_total}`;
+
+            const ePct = res.entities_total > 0 ? (res.entities_assigned / res.entities_total) * 100 : null;
+            const rPct = res.relationships_total > 0 ? (res.relationships_assigned / res.relationships_total) * 100 : null;
+            _drawMappingGauge('gaugeAutoEntities', ePct);
+            _drawMappingGauge('gaugeAutoRelationships', rPct);
         }
     },
     

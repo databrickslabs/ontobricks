@@ -40,3 +40,5 @@
 #sync-section .ob-btn-compact {
     font-size: 0.7rem;
 }
+
+/* Readiness tiles now use shared .ob-kpi-tile from components.css */

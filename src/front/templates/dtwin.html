@@ -26,6 +26,11 @@
         
         <!-- Right Content Area -->
         <div class="sidebar-content">
+            <!-- Insight Section -->
+            <div id="insight-section" class="sidebar-section">
+                {% include "partials/dtwin/_query_insights.html" %}
+            </div>
+
             <!-- Data Quality Section (SHACL) -->
             <div id="dataquality-section" class="sidebar-section">
                 {% include "partials/dtwin/_query_dataquality.html" %}

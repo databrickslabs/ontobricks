@@ -2,45 +2,28 @@
  * OntoBricks - Mapping Diagnostics CSS
  */
 
-/* Summary bar */
-.diag-summary-bar {
-    display: flex;
-    gap: 1.5rem;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1.25rem;
-    border-radius: 0.5rem;
-    background: #f8f9fa;
+/* KPI tiles now use shared .ob-kpi-tile from components.css */
+
+/* ── Accordion overrides ────────────────── */
+.diag-accordion-item {
     border: 1px solid #dee2e6;
-}
-
-.diag-summary-item {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.9rem;
-}
-
-.diag-summary-count {
-    font-weight: 700;
-    font-size: 1.1rem;
-}
-
-.diag-summary-label {
-    color: #6c757d;
-}
-
-.diag-summary-ok .diag-summary-count { color: #198754; }
-.diag-summary-warn .diag-summary-count { color: #ffc107; }
-.diag-summary-error .diag-summary-count { color: #dc3545; }
-
-/* Group titles */
-.diag-group-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #495057;
+    border-radius: 0.5rem !important;
     margin-bottom: 0.75rem;
-    padding-bottom: 0.4rem;
-    border-bottom: 1px solid #e9ecef;
+    overflow: hidden;
+}
+.diag-accordion-btn {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #495057;
+    padding: 0.65rem 1rem;
+}
+.diag-accordion-btn:not(.collapsed) {
+    background: #f8f9fa;
+    color: #212529;
+    box-shadow: none;
+}
+.diag-accordion-btn:focus {
+    box-shadow: none;
 }
 
 /* Collapsible item rows */

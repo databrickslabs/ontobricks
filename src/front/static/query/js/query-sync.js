@@ -66,42 +66,20 @@ function _applyReadiness(data) {
     var assignmentReady = !!data.mapping_valid;
     var ontologyStats = data.ontology_stats || {};
     var assignmentStats = data.mapping_stats || {};
-    var ontologyIssues = data.ontology_issues || [];
-    var assignmentIssues = data.mapping_issues || [];
 
-    var ontIcon = document.getElementById('syncOntologyIcon');
-    var ontBadge = document.getElementById('syncOntologyBadge');
-    var ontDetail = document.getElementById('syncOntologyDetail');
-    var ontCard = document.getElementById('syncOntologyStatus');
+    var entities = ontologyStats.classes || 0;
+    var attributes = ontologyStats.attributes || 0;
+    var relationships = ontologyStats.object_properties || ontologyStats.properties || 0;
+    var mappedEntities = assignmentStats.entities || 0;
+    var mappedRels = assignmentStats.relationships || 0;
 
-    if (ontologyReady) {
-        if (ontIcon) ontIcon.className = 'bi bi-diagram-3 me-2 fs-5 text-success';
-        if (ontBadge) { ontBadge.className = 'ms-auto badge bg-success'; ontBadge.textContent = 'Ready'; }
-        if (ontCard) ontCard.className = 'border rounded p-3 border-success';
-        if (ontDetail) ontDetail.textContent = (ontologyStats.classes || 0) + ' classes, ' + (ontologyStats.properties || 0) + ' properties';
-    } else {
-        if (ontIcon) ontIcon.className = 'bi bi-diagram-3 me-2 fs-5 text-danger';
-        if (ontBadge) { ontBadge.className = 'ms-auto badge bg-danger'; ontBadge.textContent = 'Not Ready'; }
-        if (ontCard) ontCard.className = 'border rounded p-3 border-danger';
-        if (ontDetail) ontDetail.textContent = ontologyIssues.length > 0 ? ontologyIssues.join('. ') : 'No ontology loaded';
-    }
-
-    var assIcon = document.getElementById('syncAssignmentIcon');
-    var assBadge = document.getElementById('syncAssignmentBadge');
-    var assDetail = document.getElementById('syncAssignmentDetail');
-    var assCard = document.getElementById('syncAssignmentStatus');
-
-    if (assignmentReady) {
-        if (assIcon) assIcon.className = 'bi bi-link-45deg me-2 fs-5 text-success';
-        if (assBadge) { assBadge.className = 'ms-auto badge bg-success'; assBadge.textContent = 'Ready'; }
-        if (assCard) assCard.className = 'border rounded p-3 border-success';
-        if (assDetail) assDetail.textContent = (assignmentStats.entities || 0) + ' entities, ' + (assignmentStats.relationships || 0) + ' relationships mapped';
-    } else {
-        if (assIcon) assIcon.className = 'bi bi-link-45deg me-2 fs-5 text-danger';
-        if (assBadge) { assBadge.className = 'ms-auto badge bg-danger'; assBadge.textContent = 'Not Ready'; }
-        if (assCard) assCard.className = 'border rounded p-3 border-danger';
-        if (assDetail) assDetail.textContent = assignmentIssues.length > 0 ? assignmentIssues.join('. ') : 'No assignments configured';
-    }
+    _setSyncTile('syncTileEntities', entities, entities > 0 ? 'success' : 'muted');
+    _setSyncTile('syncTileAttributes', attributes, attributes > 0 ? 'success' : 'muted');
+    _setSyncTile('syncTileRelationships', relationships, relationships > 0 ? 'success' : 'muted');
+    _setSyncTile('syncTileMappedEntities', mappedEntities,
+        assignmentReady ? 'success' : mappedEntities > 0 ? 'warning' : 'danger');
+    _setSyncTile('syncTileMappedRels', mappedRels,
+        assignmentReady ? 'success' : mappedRels > 0 ? 'warning' : 'danger');
 
     syncIsReady = ontologyReady && assignmentReady;
 
@@ -120,6 +98,14 @@ function _applyReadiness(data) {
     var contentEl = document.getElementById('syncReadinessContent');
     if (loadingEl) loadingEl.classList.add('d-none');
     if (contentEl) contentEl.classList.remove('d-none');
+}
+
+function _setSyncTile(tileId, value, state) {
+    var tile = document.getElementById(tileId);
+    if (!tile) return;
+    tile.className = 'ob-kpi-tile' + (state ? ' tile-' + state : '');
+    var valEl = document.getElementById(tileId + 'Value');
+    if (valEl) valEl.textContent = value;
 }
 
 /**
@@ -351,7 +337,7 @@ async function checkTripleStoreStatus(refresh) {
     updateInsightsTab();
 
     if (refresh) {
-        insightsLoaded = false;
+        window._obInsights.loaded = false;
         var insightsTab = document.getElementById('sync-tab-insights');
         if (insightsTab && insightsTab.classList.contains('active')) {
             loadInsights();
@@ -656,8 +642,8 @@ async function monitorSyncTask(taskId) {
                 updateDataMenus();
                 updateInsightsTab();
 
-                // Invalidate cached insights so they reload on next tab click
-                insightsLoaded = false;
+                // Invalidate cached insights so they reload on next section click
+                window._obInsights.loaded = false;
 
                 // Refresh the table status display with the new row count (force DB)
                 checkTripleStoreStatus(true);
@@ -903,38 +889,40 @@ async function loadTripleStore(options = {}) {
 }
 
 /**
- * Enable or disable the Insights tab based on whether the triple store has data.
+ * Update the standalone Insight section visibility based on triple store data.
  */
 function updateInsightsTab() {
-    const tab = document.getElementById('sync-tab-insights');
-    if (!tab) return;
-    if (tripleStoreHasData) {
-        tab.classList.remove('disabled');
-        tab.removeAttribute('title');
-    } else {
-        tab.classList.add('disabled');
-        tab.setAttribute('title', 'Build the triple store first');
+    const noData = document.getElementById('insightNoData');
+    if (noData) {
+        if (tripleStoreHasData) {
+            noData.classList.add('d-none');
+        } else {
+            noData.classList.remove('d-none');
+        }
     }
 }
 
-/** Whether insights have already been loaded for this page session */
-let insightsLoaded = false;
+/** Shared insight state — also referenced by query.js */
+window._obInsights = window._obInsights || { loaded: false };
 
 /**
- * Fetch and render triple store insights.
+ * Fetch and render triple store insights (standalone section on /dtwin/).
  */
 async function loadInsights() {
-    const loading = document.getElementById('insightsLoading');
-    const content = document.getElementById('insightsContent');
-    const errorEl = document.getElementById('insightsError');
+    const loading = document.getElementById('insightSectionLoading');
+    const content = document.getElementById('insightSectionContent');
+    const errorEl = document.getElementById('insightSectionError');
+    const noData  = document.getElementById('insightNoData');
     if (loading) loading.classList.remove('d-none');
     if (content) content.classList.add('d-none');
     if (errorEl) errorEl.classList.add('d-none');
+    if (noData)  noData.classList.add('d-none');
 
     try {
         const resp = await fetch('/dtwin/sync/stats', { credentials: 'same-origin' });
         const data = await resp.json();
         if (!data.success) {
+            if (noData) noData.classList.remove('d-none');
             if (errorEl) {
                 errorEl.innerHTML = '<div class="alert alert-warning small mb-0 py-1 px-2">' +
                     '<i class="bi bi-exclamation-triangle me-1"></i>' + (data.message || 'Failed to load insights') +
@@ -944,7 +932,7 @@ async function loadInsights() {
             return;
         }
         renderInsights(data);
-        insightsLoaded = true;
+        window._obInsights.loaded = true;
         if (content) content.classList.remove('d-none');
     } catch (e) {
         console.error('[Insights] Error:', e);
@@ -968,10 +956,6 @@ let _insightsRelPage = 0;
 let _insightsRelData = [];
 let _insightsRelMax = 1;
 
-let _insightsAttrPage = 0;
-let _insightsAttrData = [];
-let _insightsAttrMax = 1;
-
 /**
  * Build the insights UI from the stats data.
  */
@@ -988,9 +972,10 @@ function renderInsights(data) {
         ];
         summaryRow.innerHTML = cards.map(c =>
             '<div class="col-md-4 col-lg-2">' +
-            '  <div class="border rounded p-2 text-center h-100">' +
-            '    <div class="fs-5 fw-bold text-' + c.color + '"><i class="bi ' + c.icon + ' me-1"></i>' + c.value + '</div>' +
-            '    <small class="text-muted">' + c.label + '</small>' +
+            '  <div class="ob-kpi-tile">' +
+            '    <div class="ob-kpi-tile-icon text-' + c.color + '"><i class="bi ' + c.icon + '"></i></div>' +
+            '    <div class="ob-kpi-tile-value">' + c.value + '</div>' +
+            '    <div class="ob-kpi-tile-label">' + c.label + '</div>' +
             '  </div>' +
             '</div>'
         ).join('');
@@ -1003,13 +988,9 @@ function renderInsights(data) {
 
     var allPreds = data.top_predicates || [];
     _insightsRelData = allPreds.filter(function (p) { return p.kind === 'relationship'; });
-    _insightsAttrData = allPreds.filter(function (p) { return p.kind !== 'relationship'; });
     _insightsRelMax = _insightsRelData.length > 0 ? _insightsRelData[0].count : 1;
-    _insightsAttrMax = _insightsAttrData.length > 0 ? _insightsAttrData[0].count : 1;
     _insightsRelPage = 0;
-    _insightsAttrPage = 0;
     _renderRelPage();
-    _renderAttrPage();
 }
 
 function _renderEntityPage() {
@@ -1044,11 +1025,6 @@ function _renderEntityPage() {
 function _renderRelPage() {
     _renderPredTable('insightsRelationships', _insightsRelData, _insightsRelPage,
                      _insightsRelMax, 'rel', 'bg-primary', 'No relationships found.');
-}
-
-function _renderAttrPage() {
-    _renderPredTable('insightsAttributes', _insightsAttrData, _insightsAttrPage,
-                     _insightsAttrMax, 'attr', 'bg-warning', 'No attributes found.');
 }
 
 function _renderPredTable(divId, items, currentPage, maxCount, section, barClass, emptyMsg) {
@@ -1106,10 +1082,6 @@ function _insightsGoTo(section, page) {
         const maxPage = Math.ceil(_insightsRelData.length / INSIGHTS_PAGE_SIZE) - 1;
         _insightsRelPage = Math.max(0, Math.min(page, maxPage));
         _renderRelPage();
-    } else if (section === 'attr') {
-        const maxPage = Math.ceil(_insightsAttrData.length / INSIGHTS_PAGE_SIZE) - 1;
-        _insightsAttrPage = Math.max(0, Math.min(page, maxPage));
-        _renderAttrPage();
     }
 }
 
@@ -1208,11 +1180,12 @@ async function dropSnapshotTable() {
 
 // Initialize on page load with a single consolidated API call
 document.addEventListener('DOMContentLoaded', async function() {
-    // Load insights when the Insights tab is shown
-    const insightsTab = document.getElementById('sync-tab-insights');
-    if (insightsTab) {
-        insightsTab.addEventListener('shown.bs.tab', function () {
-            if (!insightsLoaded) loadInsights();
+    // Wire the standalone Insight section refresh button
+    const insightRefreshBtn = document.getElementById('insightRefreshBtn');
+    if (insightRefreshBtn) {
+        insightRefreshBtn.addEventListener('click', function () {
+            window._obInsights.loaded = false;
+            loadInsights();
         });
     }
 

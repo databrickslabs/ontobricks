@@ -1,10 +1,10 @@
 <!-- JS: /static/domain/js/domain-validation.js -->
 <!-- CSS: /static/domain/css/domain-validation.css -->
 <!-- Domain validation section -->
-<div class="content-section" style="position: relative;">
+<div class="content-section validation-section-wrapper">
 
     <!-- Loading overlay (shown until validation check completes) -->
-    <div id="validationLoadingOverlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(248, 249, 250, 0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;">
+    <div id="validationLoadingOverlay" class="validation-loading-overlay">
         <div class="ob-loading-spinner">
             <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
                 <g class="ob-ring">
@@ -33,10 +33,10 @@
 
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="mb-1"><i class="bi bi-shield-check me-2"></i>Domain Status</h4>
+            <h4 class="mb-1"><i class="bi bi-speedometer2 me-2"></i>Cockpit</h4>
             <p class="text-muted mb-0 small">Overall health and readiness of your domain</p>
         </div>
-        <button class="btn btn-sm btn-outline-secondary" onclick="loadValidationDetails()">
+        <button class="btn btn-sm btn-outline-secondary" id="validationRefreshBtn">
             <i class="bi bi-arrow-clockwise me-1"></i> Refresh
         </button>
     </div>
@@ -44,10 +44,10 @@
     <!-- Overall Project Health Banner -->
     <div id="domainHealthBanner" class="validation-health-banner mb-4" style="display: none;"></div>
 
-    <!-- Project Assets Row -->
-    <div class="row g-3 mb-3">
+    <!-- Project Assets & Versions Row -->
+    <div class="row g-3 mb-4">
         <!-- Data Sources -->
-        <div class="col-md-6">
+        <div class="col">
             <div class="validation-tile" id="metadataTile">
                 <div class="validation-tile-icon" id="metadataTileIcon">
                     <i class="bi bi-database"></i>
@@ -59,7 +59,7 @@
             </div>
         </div>
         <!-- Documents -->
-        <div class="col-md-6">
+        <div class="col">
             <div class="validation-tile" id="documentsTile">
                 <div class="validation-tile-icon" id="documentsTileIcon">
                     <i class="bi bi-file-earmark-text"></i>
@@ -70,12 +70,8 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Versions Row -->
-    <div class="row g-3 mb-4">
         <!-- Versions -->
-        <div class="col-md-4">
+        <div class="col">
             <div class="validation-tile" id="versionsTile">
                 <div class="validation-tile-icon">
                     <i class="bi bi-clock-history"></i>
@@ -87,7 +83,7 @@
             </div>
         </div>
         <!-- Current Version -->
-        <div class="col-md-4">
+        <div class="col">
             <div class="validation-tile" id="currentVersionTile">
                 <div class="validation-tile-icon">
                     <i class="bi bi-tag"></i>
@@ -99,7 +95,7 @@
             </div>
         </div>
         <!-- Active Version -->
-        <div class="col-md-4">
+        <div class="col">
             <div class="validation-tile" id="activeVersionTile">
                 <div class="validation-tile-icon">
                     <i class="bi bi-check-circle"></i>
@@ -112,90 +108,82 @@
         </div>
     </div>
 
-    <!-- Detailed Cards (1-column) -->
+    <!-- Ontology & Mapping Detail Cards -->
     <div class="row g-3 mb-4">
-        <!-- Ontology Detail Cards (split) -->
-        <div class="col-md-6" id="ontologyValidationCard">
+        <!-- Ontology Detail Cards -->
+        <div class="col" id="ontologyValidationCard">
             <div class="card validation-detail-card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center py-2">
                     <span><i class="bi bi-diagram-3 me-1"></i> Ontology — Entities</span>
                     <span id="ontologyValidationBadge" class="badge bg-secondary">Checking...</span>
                 </div>
-                <div class="card-body py-2 px-3">
-                    <div class="text-center mb-2" id="ontologyStats">
-                        <div class="validation-metric compact">
-                            <div class="validation-metric-value" id="ontologyClassCount">-</div>
-                            <div class="validation-metric-label">Entities</div>
-                        </div>
+                <div class="card-body py-2 px-3 d-flex flex-column justify-content-center">
+                    <div class="text-center" id="ontologyStats">
+                        <div class="cockpit-ontology-value" id="ontologyClassCount">-</div>
+                        <div class="validation-metric-label">Entities</div>
                     </div>
                     <div id="ontologyIssues" class="mb-1"></div>
                     <div id="ontologyWarnings"></div>
                 </div>
             </div>
         </div>
-        <div class="col-md-6">
+        <div class="col">
             <div class="card validation-detail-card h-100" id="ontologyRelCard">
                 <div class="card-header d-flex justify-content-between align-items-center py-2">
                     <span><i class="bi bi-diagram-3 me-1"></i> Ontology — Relationships</span>
                     <span id="ontologyRelValidationBadge" class="badge bg-secondary">Checking...</span>
                 </div>
-                <div class="card-body py-2 px-3">
-                    <div class="text-center mb-2">
-                        <div class="validation-metric compact">
-                            <div class="validation-metric-value" id="ontologyPropertyCount">-</div>
-                            <div class="validation-metric-label">Relationships</div>
-                        </div>
+                <div class="card-body py-2 px-3 d-flex flex-column justify-content-center">
+                    <div class="text-center">
+                        <div class="cockpit-ontology-value" id="ontologyPropertyCount">-</div>
+                        <div class="validation-metric-label">Relationships</div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Mapping Detail Cards (split: entities, relationships, completion) -->
-        <div class="col-md-4" id="mappingValidationCard">
+        <!-- Mapping Detail Cards (gauges) -->
+        <div class="col" id="mappingValidationCard">
             <div class="card validation-detail-card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center py-2">
                     <span><i class="bi bi-link-45deg me-1"></i> Mapping — Entities</span>
                     <span id="mappingValidationBadge" class="badge bg-secondary">Checking...</span>
                 </div>
                 <div class="card-body py-2 px-3">
-                    <div class="text-center mb-2" id="mappingStats">
-                        <div class="validation-metric compact">
-                            <div class="validation-metric-value"><span id="mappedEntitiesCount">-</span><span class="validation-metric-total"> / <span id="totalEntitiesCount">-</span></span></div>
-                            <div class="validation-metric-label">Entities Mapped</div>
-                            <span id="ignoredEntitiesLabel" class="badge bg-secondary bg-opacity-25 text-secondary mt-1" style="display:none; font-size:.7rem;"><i class="bi bi-eye-slash me-1"></i></span>
-                        </div>
+                    <div class="text-center">
+                        <canvas id="gaugeMappingEntities" width="130" height="72"></canvas>
+                        <div class="small text-muted mt-1"><span id="mappedEntitiesCount">-</span> / <span id="totalEntitiesCount">-</span> mapped</div>
+                        <span id="ignoredEntitiesLabel" class="badge bg-secondary bg-opacity-25 text-secondary mt-1" style="display:none; font-size:.7rem;"><i class="bi bi-eye-slash me-1"></i></span>
                     </div>
                     <div id="mappingIssues" class="mb-1"></div>
                     <div id="mappingWarnings"></div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col">
             <div class="card validation-detail-card h-100" id="mappingRelCard">
                 <div class="card-header d-flex justify-content-between align-items-center py-2">
-                    <span><i class="bi bi-link-45deg me-1"></i> Mapping — Relationships</span>
+                    <span><i class="bi bi-link-45deg me-1"></i> Mapping — Rel.</span>
                     <span id="mappingRelValidationBadge" class="badge bg-secondary">Checking...</span>
                 </div>
                 <div class="card-body py-2 px-3">
-                    <div class="text-center mb-2">
-                        <div class="validation-metric compact">
-                            <div class="validation-metric-value"><span id="mappedRelationshipsCount">-</span><span class="validation-metric-total"> / <span id="totalRelationshipsCount">-</span></span></div>
-                            <div class="validation-metric-label">Rel. Mapped</div>
-                            <span id="ignoredRelationshipsLabel" class="badge bg-secondary bg-opacity-25 text-secondary mt-1" style="display:none; font-size:.7rem;"><i class="bi bi-eye-slash me-1"></i></span>
-                        </div>
+                    <div class="text-center">
+                        <canvas id="gaugeMappingRels" width="130" height="72"></canvas>
+                        <div class="small text-muted mt-1"><span id="mappedRelationshipsCount">-</span> / <span id="totalRelationshipsCount">-</span> mapped</div>
+                        <span id="ignoredRelationshipsLabel" class="badge bg-secondary bg-opacity-25 text-secondary mt-1" style="display:none; font-size:.7rem;"><i class="bi bi-eye-slash me-1"></i></span>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col">
             <div class="card validation-detail-card h-100" id="mappingCompletionCard">
                 <div class="card-header d-flex justify-content-between align-items-center py-2">
-                    <span><i class="bi bi-check2-circle me-1"></i> Mapping — Completion</span>
-                    <small class="fw-semibold" id="mappingCompletionPercent">0%</small>
+                    <span><i class="bi bi-check2-circle me-1"></i> Completion</span>
+                    <span id="mappingCompletionBadge" class="badge bg-secondary">0%</span>
                 </div>
                 <div class="card-body py-2 px-3">
-                    <div class="progress mt-2" style="height: 6px;">
-                        <div id="mappingProgressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                    <div class="text-center">
+                        <canvas id="gaugeMappingCompletion" width="130" height="72"></canvas>
                     </div>
                 </div>
             </div>

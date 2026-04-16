@@ -102,6 +102,11 @@ async function _initQueryPage(initialSection, focusEntityUri, bridgeDomain) {
                     DQExecModule.init();
                 }
             }
+            if (section === 'insight') {
+                if (typeof loadInsights === 'function' && !(window._obInsights || {}).loaded) {
+                    loadInsights();
+                }
+            }
         }
     });
     

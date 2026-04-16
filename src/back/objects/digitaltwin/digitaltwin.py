@@ -974,9 +974,15 @@ class DigitalTwin:
 
     @staticmethod
     def _enrich_with_population(result: dict, total_population: Optional[int]) -> dict:
-        """Add total_population and pass_pct to a check result dict."""
+        """Add total_population and pass_pct to a check result dict.
+
+        Uses ``violation_total`` (the true, uncapped count) when present,
+        falling back to ``len(violations)`` only when the full result set
+        was returned without truncation.
+        """
         if total_population is not None and total_population > 0:
-            violation_count = len(result.get("violations") or [])
+            vt = result.get("violation_total")
+            violation_count = vt if vt is not None else len(result.get("violations") or [])
             pass_pct = max(0.0, round(
                 ((total_population - violation_count) / total_population) * 100, 1,
             ))
@@ -990,6 +996,47 @@ class DigitalTwin:
                     f"{pass_pct}% pass on {total_population} entities"
                 )
         return result
+
+    @staticmethod
+    def _count_violations_sql(store, sql: str) -> Optional[int]:
+        """Run a ``COUNT(*)`` over a violation SQL to get the true total.
+
+        Only called when the ``LIMIT``-ed result hit the cap, so the
+        extra round-trip only happens when needed.
+        """
+        try:
+            count_sql = f"SELECT COUNT(*) AS cnt FROM ({sql.rstrip().rstrip(';')})"
+            rows = store.execute_query(count_sql)
+            if rows:
+                return int(rows[0].get("cnt", 0))
+        except Exception as exc:
+            logger.warning("COUNT(*) fallback failed: %s", exc)
+        return None
+
+    @staticmethod
+    def _apply_sql_violation_limit(store, sql: str, violation_limit, row_mapper=None):
+        """Execute a violation SQL with optional LIMIT, count the true total, and truncate.
+
+        Returns ``(violations, violation_total, status, message)`` or raises
+        on unrecoverable query errors.
+
+        *row_mapper* converts raw rows to violation dicts.  Defaults to
+        identity (pass rows through unchanged).
+        """
+        unlimited_sql = sql
+        if violation_limit is not None:
+            sql = sql.rstrip().rstrip(";") + f" LIMIT {violation_limit + 1}"
+        rows = store.execute_query(sql) or []
+        violations = [row_mapper(r) for r in rows] if row_mapper else list(rows)
+        violation_total = len(violations)
+        if violation_limit is not None and violation_total > violation_limit:
+            true_count = DigitalTwin._count_violations_sql(store, unlimited_sql)
+            if true_count is not None:
+                violation_total = true_count
+            violations = violations[:violation_limit]
+        status = "error" if violation_total > 0 else "success"
+        msg = f"{violation_total} violations found" if violation_total else "No violations"
+        return violations, violation_total, status, msg
 
     @staticmethod
     def _load_predicates_from_table(store, table: str) -> set:
@@ -1105,17 +1152,10 @@ class DigitalTwin:
                 })
                 continue
 
-            limited_sql = sql
-            if violation_limit:
-                limited_sql = f"{sql.rstrip().rstrip(';')}\nLIMIT {violation_limit + 1}"
-
             try:
-                violations = store.execute_query(limited_sql) or []
-                violation_total = len(violations)
-                if violation_limit and len(violations) > violation_limit:
-                    violations = violations[:violation_limit]
-                status = "error" if violations else "success"
-                msg = f"{violation_total} violations found" if violations else "No violations"
+                violations, violation_total, status, msg = DigitalTwin._apply_sql_violation_limit(
+                    store, sql, violation_limit,
+                )
                 result = {
                     "name": label, "category": cat, "shape_id": shape.get("id"),
                     "status": status, "message": msg,
@@ -1180,21 +1220,20 @@ class DigitalTwin:
             if not sql:
                 results.append({"name": label, "category": "structural", "shape_id": f"swrl:{rule.get('name', idx)}", "status": "info", "message": "Cannot translate to SQL", "violations": [], "sql": ""})
                 continue
-            if violation_limit is not None:
-                sql = sql.rstrip().rstrip(";") + f" LIMIT {violation_limit + 1}"
+            _s_mapper = lambda r: {"s": r.get("s", "")}
             try:
                 t_rule = time.time()
-                rows = store.execute_query(sql) or []
-                violations = [{"s": r.get("s", "")} for r in rows]
-                violation_total = len(violations)
-                if violation_limit is not None and len(violations) > violation_limit:
-                    violations = violations[:violation_limit]
+                violations, violation_total, status, msg = DigitalTwin._apply_sql_violation_limit(
+                    store, sql, violation_limit, row_mapper=_s_mapper,
+                )
                 elapsed_rule = time.time() - t_rule
-                status = "error" if violations else "success"
-                msg = f"{len(violations)} violations found" if violations else "No violations"
-                result = {"name": label, "category": "structural", "shape_id": f"swrl:{rule.get('name', idx)}", "status": status, "message": msg, "violations": violations, "sql": "", "severity": "sh:Violation"}
-                if violation_limit is not None and violation_total > violation_limit:
-                    result["violation_total"] = violation_total
+                result = {
+                    "name": label, "category": "structural",
+                    "shape_id": f"swrl:{rule.get('name', idx)}",
+                    "status": status, "message": msg,
+                    "violations": violations, "sql": "",
+                    "severity": "sh:Violation", "violation_total": violation_total,
+                }
                 pop = None
                 if violations:
                     pop = DigitalTwin._swrl_antecedent_population_sql(translator, store, triplestore_table, params)
@@ -1226,21 +1265,20 @@ class DigitalTwin:
             if not sql:
                 results.append({"name": dt_name, "category": "conformance", "shape_id": f"dt:{dt.get('name', idx)}", "status": "info", "message": "Cannot translate to SQL", "violations": [], "sql": ""})
                 continue
-            if violation_limit is not None:
-                sql = sql.rstrip().rstrip(";") + f" LIMIT {violation_limit + 1}"
+            _s_mapper = lambda r: {"s": r.get("s", "")}
             try:
                 t_rule = time.time()
-                rows = store.execute_query(sql) or []
-                violations = [{"s": r.get("s", "")} for r in rows]
-                violation_total = len(violations)
-                if violation_limit is not None and len(violations) > violation_limit:
-                    violations = violations[:violation_limit]
+                violations, violation_total, status, msg = DigitalTwin._apply_sql_violation_limit(
+                    store, sql, violation_limit, row_mapper=_s_mapper,
+                )
                 elapsed_rule = time.time() - t_rule
-                status = "error" if violations else "success"
-                msg = f"{len(violations)} violations found" if violations else "No violations"
-                result = {"name": dt_name, "category": "conformance", "shape_id": f"dt:{dt.get('name', idx)}", "status": status, "message": msg, "violations": violations, "sql": sql, "severity": "sh:Violation"}
-                if violation_limit is not None and violation_total > violation_limit:
-                    result["violation_total"] = violation_total
+                result = {
+                    "name": dt_name, "category": "conformance",
+                    "shape_id": f"dt:{dt.get('name', idx)}",
+                    "status": status, "message": msg,
+                    "violations": violations, "sql": sql,
+                    "severity": "sh:Violation", "violation_total": violation_total,
+                }
                 pop = None
                 if violations:
                     class_uri = resolved.get("target_class_uri", "")
@@ -1274,21 +1312,20 @@ class DigitalTwin:
             if not sql:
                 results.append({"name": agg_name, "category": "conformance", "shape_id": f"agg:{rule.get('name', idx)}", "status": "info", "message": "Cannot translate to SQL", "violations": [], "sql": ""})
                 continue
-            if violation_limit is not None:
-                sql = sql.rstrip().rstrip(";") + f" LIMIT {violation_limit + 1}"
+            _agg_mapper = lambda r: {"s": r.get("s", ""), "agg_val": r.get("agg_val", "")}
             try:
                 t_rule = time.time()
-                rows = store.execute_query(sql) or []
-                violations = [{"s": r.get("s", ""), "agg_val": r.get("agg_val", "")} for r in rows]
-                violation_total = len(violations)
-                if violation_limit is not None and len(violations) > violation_limit:
-                    violations = violations[:violation_limit]
+                violations, violation_total, status, msg = DigitalTwin._apply_sql_violation_limit(
+                    store, sql, violation_limit, row_mapper=_agg_mapper,
+                )
                 elapsed_rule = time.time() - t_rule
-                status = "error" if violations else "success"
-                msg = f"{len(violations)} violations found" if violations else "No violations"
-                result = {"name": agg_name, "category": "conformance", "shape_id": f"agg:{rule.get('name', idx)}", "status": status, "message": msg, "violations": violations, "sql": sql, "severity": "sh:Violation"}
-                if violation_limit is not None and violation_total > violation_limit:
-                    result["violation_total"] = violation_total
+                result = {
+                    "name": agg_name, "category": "conformance",
+                    "shape_id": f"agg:{rule.get('name', idx)}",
+                    "status": status, "message": msg,
+                    "violations": violations, "sql": sql,
+                    "severity": "sh:Violation", "violation_total": violation_total,
+                }
                 pop = None
                 if violations:
                     class_uri = resolved.get("target_class_uri", "")
@@ -1388,28 +1425,30 @@ class DigitalTwin:
             if not query:
                 results.append({"name": label, "category": "structural", "shape_id": f"swrl:{rule.get('name', idx)}", "status": "info", "message": "Cannot translate to Cypher", "violations": [], "sql": ""})
                 continue
-            if violation_limit is not None:
-                query = query.rstrip() + f"\nLIMIT {violation_limit + 1}"
             try:
                 t_rule = time.time()
                 conn = store._get_connection()
                 rows = conn.execute(query)
                 violations = [{"s": str(row[0])} for row in rows]
                 violation_total = len(violations)
-                if violation_limit is not None and len(violations) > violation_limit:
+                if violation_limit is not None and violation_total > violation_limit:
                     violations = violations[:violation_limit]
                 elapsed_rule = time.time() - t_rule
-                status = "error" if violations else "success"
-                msg = f"{len(violations)} violations found" if violations else "No violations"
-                result = {"name": label, "category": "structural", "shape_id": f"swrl:{rule.get('name', idx)}", "status": status, "message": msg, "violations": violations, "sql": "", "severity": "sh:Violation"}
-                if violation_limit is not None and violation_total > violation_limit:
-                    result["violation_total"] = violation_total
+                status = "error" if violation_total > 0 else "success"
+                msg = f"{violation_total} violations found" if violation_total else "No violations"
+                result = {
+                    "name": label, "category": "structural",
+                    "shape_id": f"swrl:{rule.get('name', idx)}",
+                    "status": status, "message": msg,
+                    "violations": violations, "sql": "",
+                    "severity": "sh:Violation", "violation_total": violation_total,
+                }
                 pop = None
                 if violations:
                     class_uri = DigitalTwin._swrl_target_class_uri(rule, base_uri, uri_map)
                     if triples is not None and class_uri:
                         pop = DigitalTwin._count_class_population_graph(triples, class_uri, pop_cache)
-                    if pop is not None and pop < len(violations):
+                    if pop is not None and pop < violation_total:
                         pop = None
                 DigitalTwin._enrich_with_population(result, pop)
                 logger.info("SWRL rule '%s': %d violations (%.2fs)", label, violation_total, elapsed_rule)
@@ -1441,28 +1480,30 @@ class DigitalTwin:
             if not query:
                 results.append({"name": dt_name, "category": "conformance", "shape_id": f"dt:{dt.get('name', idx)}", "status": "info", "message": "Cannot translate to Cypher", "violations": [], "sql": ""})
                 continue
-            if violation_limit is not None:
-                query = query.rstrip() + f"\nLIMIT {violation_limit + 1}"
             try:
                 t_rule = time.time()
                 conn = store._get_connection()
                 rows = conn.execute(query)
                 violations = [{"s": str(row[0])} for row in rows]
                 violation_total = len(violations)
-                if violation_limit is not None and len(violations) > violation_limit:
+                if violation_limit is not None and violation_total > violation_limit:
                     violations = violations[:violation_limit]
                 elapsed_rule = time.time() - t_rule
-                status = "error" if violations else "success"
-                msg = f"{len(violations)} violations found" if violations else "No violations"
-                result = {"name": dt_name, "category": "conformance", "shape_id": f"dt:{dt.get('name', idx)}", "status": status, "message": msg, "violations": violations, "sql": "", "severity": "sh:Violation"}
-                if violation_limit is not None and violation_total > violation_limit:
-                    result["violation_total"] = violation_total
+                status = "error" if violation_total > 0 else "success"
+                msg = f"{violation_total} violations found" if violation_total else "No violations"
+                result = {
+                    "name": dt_name, "category": "conformance",
+                    "shape_id": f"dt:{dt.get('name', idx)}",
+                    "status": status, "message": msg,
+                    "violations": violations, "sql": "",
+                    "severity": "sh:Violation", "violation_total": violation_total,
+                }
                 pop = None
                 if violations:
                     class_uri = resolved.get("target_class_uri", "")
                     if triples is not None and class_uri:
                         pop = DigitalTwin._count_class_population_graph(triples, class_uri, pop_cache)
-                    if pop is not None and pop < len(violations):
+                    if pop is not None and pop < violation_total:
                         pop = None
                 DigitalTwin._enrich_with_population(result, pop)
                 logger.info("DT rule '%s': %d violations (%.2fs)", dt_name, violation_total, elapsed_rule)
@@ -1493,28 +1534,30 @@ class DigitalTwin:
             if not query:
                 results.append({"name": agg_name, "category": "conformance", "shape_id": f"agg:{rule.get('name', idx)}", "status": "info", "message": "Cannot translate to Cypher", "violations": [], "sql": ""})
                 continue
-            if violation_limit is not None:
-                query = query.rstrip() + f"\nLIMIT {violation_limit + 1}"
             try:
                 t_rule = time.time()
                 conn = store._get_connection()
                 rows = conn.execute(query)
                 violations = [{"s": str(row[0]), "agg_val": str(row[1]) if len(row) > 1 else ""} for row in rows]
                 violation_total = len(violations)
-                if violation_limit is not None and len(violations) > violation_limit:
+                if violation_limit is not None and violation_total > violation_limit:
                     violations = violations[:violation_limit]
                 elapsed_rule = time.time() - t_rule
-                status = "error" if violations else "success"
-                msg = f"{len(violations)} violations found" if violations else "No violations"
-                result = {"name": agg_name, "category": "conformance", "shape_id": f"agg:{rule.get('name', idx)}", "status": status, "message": msg, "violations": violations, "sql": "", "severity": "sh:Violation"}
-                if violation_limit is not None and violation_total > violation_limit:
-                    result["violation_total"] = violation_total
+                status = "error" if violation_total > 0 else "success"
+                msg = f"{violation_total} violations found" if violation_total else "No violations"
+                result = {
+                    "name": agg_name, "category": "conformance",
+                    "shape_id": f"agg:{rule.get('name', idx)}",
+                    "status": status, "message": msg,
+                    "violations": violations, "sql": "",
+                    "severity": "sh:Violation", "violation_total": violation_total,
+                }
                 pop = None
                 if violations:
                     class_uri = resolved.get("target_class_uri", "")
                     if triples is not None and class_uri:
                         pop = DigitalTwin._count_class_population_graph(triples, class_uri, pop_cache)
-                    if pop is not None and pop < len(violations):
+                    if pop is not None and pop < violation_total:
                         pop = None
                 DigitalTwin._enrich_with_population(result, pop)
                 logger.info("Agg rule '%s': %d violations (%.2fs)", agg_name, violation_total, elapsed_rule)

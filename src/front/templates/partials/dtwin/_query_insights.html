@@ -1,0 +1,62 @@
+<!-- CSS: /static/query/css/query-sync.css (shared) -->
+<!-- JS: /static/query/js/query-sync.js (shared — loadInsights, renderInsights) -->
+<!-- Digital Twin Insights — standalone section on /dtwin/ -->
+<div class="content-section">
+
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-bar-chart-line me-2"></i>Digital Twin Insights</h4>
+            <p class="text-muted mb-0 small">Content overview of the triple store: entity types and relationships</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="insightRefreshBtn"
+                    title="Reload insights from the triple store">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- No data placeholder -->
+    <div id="insightNoData" class="d-none">
+        <div class="alert alert-info small mb-0">
+            <i class="bi bi-info-circle me-1"></i>
+            No triple store data available. Build the Digital Twin from the
+            <strong>Domain &rarr; Build</strong> page first.
+        </div>
+    </div>
+
+    <!-- Loading spinner -->
+    <div id="insightSectionLoading" class="text-center py-4 d-none">
+        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+        <span class="text-muted small">Loading triple store insights...</span>
+    </div>
+
+    <!-- Stats content (reuses the same IDs as the sync-pane version) -->
+    <div id="insightSectionContent" class="d-none">
+        <!-- Summary cards -->
+        <div class="row g-2 mb-3" id="insightsSummaryRow"></div>
+
+        <!-- Entity types + Relationships side by side -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body p-2">
+                        <h6 class="fw-semibold mb-2"><i class="bi bi-diagram-3 me-1"></i>Entity Types</h6>
+                        <div id="insightsEntityTypes" class="small"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body p-2">
+                        <h6 class="fw-semibold mb-2"><i class="bi bi-diagram-2 me-1"></i>Relationships</h6>
+                        <div id="insightsRelationships" class="small"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error area -->
+    <div id="insightSectionError" class="d-none"></div>
+</div>

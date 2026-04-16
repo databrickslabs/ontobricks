@@ -3,6 +3,24 @@
  * Styles for the Project Validation dashboard
  */
 
+/* ── Section wrapper & loading overlay ────────── */
+.validation-section-wrapper {
+    position: relative;
+}
+.validation-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(248, 249, 250, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
 /* ── Health banner ───────────────────────────── */
 .validation-health-banner {
     border-radius: 0.5rem;
@@ -57,12 +75,16 @@
     color: #6c757d;
     transition: background 0.2s, color 0.2s;
 }
+.validation-tile-body {
+    min-width: 0;
+}
 .validation-tile-label {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: #6c757d;
     line-height: 1.2;
+    white-space: nowrap;
 }
 .validation-tile-status {
     font-size: 0.85rem;
@@ -113,6 +135,20 @@
 }
 .validation-tile.tile-muted .validation-tile-status {
     color: #6c757d;
+}
+
+/* ── Cockpit ontology counters ──────────────── */
+.cockpit-ontology-value {
+    font-size: 2.2rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #212529;
+}
+
+/* ── Cockpit gauges ─────────────────────────── */
+.validation-detail-card canvas {
+    display: block;
+    margin: 0 auto;
 }
 
 /* ── Detail cards ────────────────────────────── */

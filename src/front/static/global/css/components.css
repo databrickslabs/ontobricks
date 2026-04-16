@@ -259,6 +259,79 @@
 }
 
 /* ==========================================================================
+   KPI Tiles – shared vertical tile component (icon · value · label)
+   Used on: DT Sync, DT Insights, Mapping Summary, Mapping Auto-Map,
+            Mapping Diagnostics.
+   ========================================================================== */
+.ob-kpi-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.75rem 0.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid #dee2e6;
+    background: #fff;
+    text-align: center;
+    height: 100%;
+    transition: border-color 0.2s;
+}
+.ob-kpi-tile-icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    background: #f1f3f5;
+    color: #6c757d;
+    transition: background 0.2s, color 0.2s;
+}
+.ob-kpi-tile-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #212529;
+}
+.ob-kpi-tile-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6c757d;
+    white-space: nowrap;
+}
+.ob-kpi-tile canvas {
+    display: block;
+    margin: 0 auto;
+}
+.ob-kpi-tile .small.text-muted {
+    font-size: 0.78rem;
+}
+
+/* State variants */
+.ob-kpi-tile.tile-success  { border-color: rgba(25, 135, 84, 0.35); }
+.ob-kpi-tile.tile-success .ob-kpi-tile-icon  { background: rgba(25, 135, 84, 0.1);  color: #198754; }
+.ob-kpi-tile.tile-success .ob-kpi-tile-value { color: #198754; }
+
+.ob-kpi-tile.tile-danger   { border-color: rgba(220, 53, 69, 0.35); }
+.ob-kpi-tile.tile-danger .ob-kpi-tile-icon   { background: rgba(220, 53, 69, 0.1);  color: #dc3545; }
+.ob-kpi-tile.tile-danger .ob-kpi-tile-value  { color: #dc3545; }
+
+.ob-kpi-tile.tile-warning  { border-color: rgba(255, 193, 7, 0.4); }
+.ob-kpi-tile.tile-warning .ob-kpi-tile-icon  { background: rgba(255, 193, 7, 0.12); color: #997404; }
+.ob-kpi-tile.tile-warning .ob-kpi-tile-value { color: #997404; }
+
+.ob-kpi-tile.tile-muted    { border-color: #dee2e6; }
+.ob-kpi-tile.tile-muted .ob-kpi-tile-icon    { background: #f1f3f5; color: #6c757d; }
+
+/* Accent border variants (for diagnostics-style tiles) */
+.ob-kpi-tile.tile-accent-success { border-bottom: 3px solid #198754; }
+.ob-kpi-tile.tile-accent-warning { border-bottom: 3px solid #ffc107; }
+.ob-kpi-tile.tile-accent-danger  { border-bottom: 3px solid #dc3545; }
+
+
+/* ==========================================================================
    Home Page Workflow Steps
    ========================================================================== */
 .workflow-container {

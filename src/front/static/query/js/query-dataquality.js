@@ -389,7 +389,8 @@ window.DQExecModule = {
         if (!scored.length) return null;
         const scores = scored.map(r => {
             if (r.pass_pct != null && r.total_population > 0) return r.pass_pct;
-            const violCount = (r.violations && r.violations.length) || 0;
+            const violCount = r.violation_total != null ? r.violation_total
+                : ((r.violations && r.violations.length) || 0);
             return violCount === 0 ? 100 : 0;
         });
         return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10;

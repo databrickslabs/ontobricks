@@ -130,8 +130,8 @@
                         },
                         {
                             "id": "validation",
-                            "label": "Status",
-                            "icon": "bi-shield-check",
+                            "label": "Cockpit",
+                            "icon": "bi-speedometer2",
                             "default": false,
                             "requires": "domain_saved"
                         },
@@ -429,6 +429,20 @@
             "status_indicator": null,
             "navbar_actions": [],
             "groups": [
+                {
+                    "id": "digitaltwin-insight",
+                    "title": "Insight",
+                    "icon": "bi-bar-chart-line",
+                    "items": [
+                        {
+                            "id": "insight",
+                            "label": "Overview",
+                            "icon": "bi-bar-chart-line",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
                 {
                     "id": "digitaltwin-data",
                     "title": "Navigation",

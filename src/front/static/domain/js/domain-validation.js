@@ -209,6 +209,63 @@ function updateOntologyCard(data) {
         : '';
 }
 
+/* ── Cockpit gauge helper ─────────────────────── */
+var _cockpitGauges = {};
+
+function _drawCockpitGauge(canvasId, score) {
+    if (_cockpitGauges[canvasId]) {
+        _cockpitGauges[canvasId].destroy();
+        delete _cockpitGauges[canvasId];
+    }
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+
+    if (score == null) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.parentElement.style.opacity = '0.3';
+        return;
+    }
+    canvas.parentElement.style.opacity = '1';
+
+    var val = Math.max(0, Math.min(100, Math.round(score)));
+    var color = val === 100 ? '#198754' : val >= 80 ? '#ffc107' : '#dc3545';
+    var remaining = 100 - val;
+
+    _cockpitGauges[canvasId] = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [val, remaining],
+                backgroundColor: [color, '#e9ecef'],
+                borderWidth: 0,
+                circumference: 180,
+                rotation: 270,
+            }]
+        },
+        options: {
+            responsive: false,
+            cutout: '70%',
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            layout: { padding: 0 },
+        },
+        plugins: [{
+            id: 'cockpitGaugeLabel',
+            afterDraw: function(chart) {
+                var c = chart.ctx, w = chart.width, h = chart.height;
+                var cx = w / 2, cy = h - 4;
+                c.save();
+                c.textAlign = 'center';
+                c.textBaseline = 'bottom';
+                c.font = 'bold 14px system-ui, sans-serif';
+                c.fillStyle = color;
+                c.fillText(val + '%', cx, cy);
+                c.restore();
+            }
+        }],
+    });
+}
+
 /* ── Mapping detail cards (split: entities, relationships, completion) ── */
 function updateMappingCard(data) {
     var wrapper = document.getElementById('mappingValidationCard');
@@ -217,8 +274,7 @@ function updateMappingCard(data) {
     var relCard = document.getElementById('mappingRelCard');
     var relBadge = document.getElementById('mappingRelValidationBadge');
     var compCard = document.getElementById('mappingCompletionCard');
-    var progressBar = document.getElementById('mappingProgressBar');
-    var completionPercent = document.getElementById('mappingCompletionPercent');
+    var compBadge = document.getElementById('mappingCompletionBadge');
     var issuesDiv = document.getElementById('mappingIssues');
     var warningsDiv = document.getElementById('mappingWarnings');
 
@@ -254,14 +310,19 @@ function updateMappingCard(data) {
         }
     }
 
-    var percent = 0;
+    var entityPct = totalClasses > 0 ? (entityMappings / totalClasses) * 100 : null;
+    var relPct = totalProperties > 0 ? (relMappings / totalProperties) * 100 : null;
     var totalItems = totalClasses + totalProperties;
-    if (totalItems > 0) percent = Math.round(((entityMappings + relMappings) / totalItems) * 100);
-    if (progressBar) {
-        progressBar.style.width = percent + '%';
-        progressBar.className = 'progress-bar' + (percent === 100 ? ' bg-success' : percent >= 50 ? ' bg-warning' : ' bg-danger');
+    var overallPct = totalItems > 0 ? ((entityMappings + relMappings) / totalItems) * 100 : null;
+
+    _drawCockpitGauge('gaugeMappingEntities', entityPct);
+    _drawCockpitGauge('gaugeMappingRels', relPct);
+    _drawCockpitGauge('gaugeMappingCompletion', overallPct);
+
+    if (compBadge) {
+        var pctText = overallPct != null ? Math.round(overallPct) + '%' : '—';
+        compBadge.textContent = pctText;
     }
-    if (completionPercent) completionPercent.textContent = percent + '%';
 
     var validClass = data.mapping_valid ? 'validation-card-valid' : 'validation-card-invalid';
     var badgeClass = data.mapping_valid ? 'badge bg-success' : 'badge bg-danger';
@@ -440,6 +501,10 @@ function updateMissingItems(data) {
 
 /* ── Bootstrap on section activation ──────────── */
 document.addEventListener('DOMContentLoaded', function() {
+    var refreshBtn = document.getElementById('validationRefreshBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() { loadValidationDetails(); });
+    }
     var urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('section') === 'validation') {
         loadValidationDetails();

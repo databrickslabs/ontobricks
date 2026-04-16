@@ -80,6 +80,17 @@
         '</div>';
     }
 
+    function _updateBadge(badgeId, items) {
+        var el = document.getElementById(badgeId);
+        if (!el) return;
+        var errors = items.filter(function (i) { return i.status === 'error'; }).length;
+        var warnings = items.filter(function (i) { return i.status === 'warning'; }).length;
+        el.textContent = items.length;
+        el.className = 'badge ms-2 ' + (
+            errors > 0 ? 'bg-danger' : warnings > 0 ? 'bg-warning text-dark' : 'bg-success'
+        );
+    }
+
     function _showSection(id, visible) {
         var el = document.getElementById(id);
         if (el) el.classList.toggle('d-none', !visible);
@@ -88,7 +99,7 @@
     async function runDiagnostics() {
         _showSection('diagEmptyState', false);
         _showSection('diagResults', false);
-        _showSection('diagSummaryBar', false);
+        _showSection('diagKpiTiles', false);
         _showSection('diagLoading', true);
 
         try {
@@ -104,15 +115,18 @@
             document.getElementById('diagWarningCount').textContent = summary.warnings || 0;
             document.getElementById('diagErrorCount').textContent = summary.errors || 0;
 
-            var entHtml = (data.entities || []).map(_renderEntityRow).join('');
-            document.getElementById('diagEntitiesBody').innerHTML = entHtml || '<p class="text-muted p-3">No entity mappings found.</p>';
-            document.getElementById('diagEntityBadge').textContent = (data.entities || []).length;
+            var entities = data.entities || [];
+            var rels = data.relationships || [];
 
-            var relHtml = (data.relationships || []).map(_renderRelRow).join('');
-            document.getElementById('diagRelationshipsBody').innerHTML = relHtml || '<p class="text-muted p-3">No relationship mappings found.</p>';
-            document.getElementById('diagRelBadge').textContent = (data.relationships || []).length;
+            document.getElementById('diagEntitiesBody').innerHTML =
+                entities.map(_renderEntityRow).join('') || '<p class="text-muted p-3">No entity mappings found.</p>';
+            _updateBadge('diagEntityBadge', entities);
 
-            _showSection('diagSummaryBar', true);
+            document.getElementById('diagRelationshipsBody').innerHTML =
+                rels.map(_renderRelRow).join('') || '<p class="text-muted p-3">No relationship mappings found.</p>';
+            _updateBadge('diagRelBadge', rels);
+
+            _showSection('diagKpiTiles', true);
             _showSection('diagResults', true);
 
         } catch (err) {

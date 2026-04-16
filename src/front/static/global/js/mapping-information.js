@@ -55,7 +55,7 @@ function updateTaxonomyStatus() {
     const placeholder = document.getElementById('mappingLoadingPlaceholder');
     const content = document.getElementById('mappingLoadedContent');
     if (placeholder) placeholder.style.display = 'none';
-    if (content) content.style.display = '';
+    if (content) content.classList.remove('d-none');
 
     updateMetadataStatus();
 
@@ -98,18 +98,71 @@ function updateMenuState(enabled) {
     });
 }
 
-// Update mapping completion status
+var _mappingGauges = {};
+
+function _drawMappingGauge(canvasId, score) {
+    if (_mappingGauges[canvasId]) {
+        _mappingGauges[canvasId].destroy();
+        delete _mappingGauges[canvasId];
+    }
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+
+    if (score == null) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.parentElement.style.opacity = '0.3';
+        return;
+    }
+    canvas.parentElement.style.opacity = '1';
+
+    var val = Math.max(0, Math.min(100, Math.round(score)));
+    var color = val === 100 ? '#198754' : val >= 80 ? '#ffc107' : '#dc3545';
+    var remaining = 100 - val;
+
+    _mappingGauges[canvasId] = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [val, remaining],
+                backgroundColor: [color, '#e9ecef'],
+                borderWidth: 0,
+                circumference: 180,
+                rotation: 270,
+            }]
+        },
+        options: {
+            responsive: false,
+            cutout: '70%',
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            layout: { padding: 0 },
+        },
+        plugins: [{
+            id: 'mappingGaugeLabel',
+            afterDraw: function(chart) {
+                var c = chart.ctx, w = chart.width, h = chart.height;
+                var cx = w / 2, cy = h - 4;
+                c.save();
+                c.textAlign = 'center';
+                c.textBaseline = 'bottom';
+                c.font = 'bold 14px system-ui, sans-serif';
+                c.fillStyle = color;
+                c.fillText(val + '%', cx, cy);
+                c.restore();
+            }
+        }],
+    });
+}
+
 function updateMappingCompletionStatus() {
     const placeholder = document.getElementById('mappingLoadingPlaceholder');
     const content = document.getElementById('mappingLoadedContent');
     if (placeholder) placeholder.style.display = 'none';
-    if (content) content.style.display = '';
+    if (content) content.classList.remove('d-none');
 
     const entityCountEl = document.getElementById('entityMappingCount');
     const relationshipCountEl = document.getElementById('relationshipMappingCount');
     const attributeCountEl = document.getElementById('attributeMappingCount');
-    const progressBar = document.getElementById('mappingProgressBar');
-    const progressText = document.getElementById('mappingProgressText');
     const statusBadge = document.getElementById('mappingStatusBadge');
     const statusMessage = document.getElementById('mappingStatusMessage');
     
@@ -117,9 +170,9 @@ function updateMappingCompletionStatus() {
         entityCountEl.textContent = '0 / 0';
         relationshipCountEl.textContent = '0 / 0';
         if (attributeCountEl) attributeCountEl.textContent = '0 / 0';
-        progressBar.style.width = '0%';
-        progressBar.className = 'progress-bar bg-secondary';
-        progressText.textContent = '0% complete';
+        _drawMappingGauge('gaugeMapEntities', null);
+        _drawMappingGauge('gaugeMapAttributes', null);
+        _drawMappingGauge('gaugeMapRelationships', null);
         statusBadge.textContent = 'No Ontology';
         statusBadge.className = 'badge bg-secondary';
         statusMessage.innerHTML = '<i class="bi bi-exclamation-triangle text-warning"></i> Please load an ontology first from the Ontology page.';
@@ -191,18 +244,20 @@ function updateMappingCompletionStatus() {
     relationshipCountEl.textContent = `${mappedProperties} / ${totalProperties}`;
     if (attributeCountEl) attributeCountEl.textContent = `${mappedAttributes} / ${totalAttributes}`;
 
+    // Draw gauges
+    const entityPct = totalClasses > 0 ? (mappedClasses / totalClasses) * 100 : null;
+    const attrPct = totalAttributes > 0 ? (mappedAttributes / totalAttributes) * 100 : null;
+    const relPct = totalProperties > 0 ? (mappedProperties / totalProperties) * 100 : null;
+    _drawMappingGauge('gaugeMapEntities', entityPct);
+    _drawMappingGauge('gaugeMapAttributes', attrPct);
+    _drawMappingGauge('gaugeMapRelationships', relPct);
+
     // Populate entity/relationship detail lists
     renderSummaryDetailLists(mappingByClass, allObjectProperties, excludedClassNames);
     
-    // Calculate progress (include attributes)
+    // Determine status
     const totalItems = totalClasses + totalProperties + totalAttributes;
     const mappedItems = mappedClasses + mappedProperties + mappedAttributes;
-    const percent = totalItems > 0 ? Math.round((mappedItems / totalItems) * 100) : 0;
-    
-    progressBar.style.width = `${percent}%`;
-    progressText.textContent = `${percent}% complete`;
-    
-    // Determine status
     const entitiesComplete = mappedClasses >= totalClasses;
     const propsComplete = mappedProperties >= totalProperties;
     const attrsComplete = mappedAttributes >= totalAttributes;
@@ -210,17 +265,14 @@ function updateMappingCompletionStatus() {
     const isValidated = MappingState.mappingValidated && isComplete;
     
     if (isValidated) {
-        progressBar.className = 'progress-bar bg-success';
         statusBadge.textContent = 'Valid';
         statusBadge.className = 'badge bg-success';
         statusMessage.innerHTML = '<i class="bi bi-check-circle text-success"></i> All mappings complete. R2RML is ready.';
     } else if (isComplete) {
-        progressBar.className = 'progress-bar bg-success';
         statusBadge.textContent = 'Complete';
         statusBadge.className = 'badge bg-success';
         statusMessage.innerHTML = '<i class="bi bi-check-circle text-success"></i> All entities, relationships, and attributes are mapped.';
     } else if (mappedItems > 0) {
-        progressBar.className = 'progress-bar bg-info';
         statusBadge.textContent = 'In Progress';
         statusBadge.className = 'badge bg-info';
         
@@ -230,7 +282,6 @@ function updateMappingCompletionStatus() {
         if (mappedAttributes < totalAttributes) missing.push(`${totalAttributes - mappedAttributes} attributes`);
         statusMessage.innerHTML = `<i class="bi bi-hourglass-split text-info"></i> Mapping in progress. Still need: ${missing.join(', ')}.`;
     } else {
-        progressBar.className = 'progress-bar bg-secondary';
         statusBadge.textContent = 'Not Started';
         statusBadge.className = 'badge bg-secondary';
         statusMessage.innerHTML = '<i class="bi bi-info-circle"></i> No mappings yet. Go to Entities to start mapping classes to tables.';
@@ -790,8 +841,12 @@ async function exportR2RMLToUC() {
     });
 }
 
-// Initialize Import/Export buttons
+// Initialize Import/Export buttons and wire reset button
 setupImportExportButtons();
+var _resetBtn = document.getElementById('resetMappingsBtn');
+if (_resetBtn) {
+    _resetBtn.addEventListener('click', function() { confirmResetMappings(); });
+}
 
 // Expose functions to global scope for mapping-core.js
 window.updateTaxonomyStatus = updateTaxonomyStatus;

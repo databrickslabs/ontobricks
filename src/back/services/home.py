@@ -126,12 +126,17 @@ def _compute_validation(domain) -> Dict[str, Any]:
     mapped_entity_count = len(active_classes) - len(unmapped_ent)
     mapped_rel_count = len(active_props) - len(unmapped_rel)
 
+    datatype_props = [p for p in all_properties if p.get('type') != 'ObjectProperty']
+    object_props = [p for p in all_properties if p.get('type') == 'ObjectProperty']
+
     return {
         'ontology_valid': ontology_valid,
         'ontology_issues': ontology_issues,
         'ontology_stats': {
             'classes': len(all_classes),
-            'properties': len(all_properties)
+            'properties': len(all_properties),
+            'attributes': len(datatype_props),
+            'object_properties': len(object_props),
         },
         'ontology_changed': domain.ontology_changed,
         'mapping_valid': mapping_valid,
@@ -300,6 +305,8 @@ async def get_detailed_validation(domain, settings, warehouse_id: str = "") -> D
     dname = domain_info.get('name', 'NewDomain')
     dversion = domain.current_version or '1'
 
+    detail_datatype_props = [p for p in all_properties if p.get('type') != 'ObjectProperty']
+
     return {
         'success': True,
         # Flat format expected by the JavaScript
@@ -308,7 +315,9 @@ async def get_detailed_validation(domain, settings, warehouse_id: str = "") -> D
         'mapping_complete': mapping_complete,
         'ontology_stats': {
             'classes': len(all_classes),
-            'properties': len(active_props)
+            'properties': len(active_props),
+            'attributes': len(detail_datatype_props),
+            'object_properties': len(active_props),
         },
         'mapping_stats': {
             'entities': mapped_entity_count,

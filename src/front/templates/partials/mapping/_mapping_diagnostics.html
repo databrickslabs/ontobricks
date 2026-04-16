@@ -1,4 +1,6 @@
 <!-- Mapping Diagnostics Section -->
+<!-- JS: /static/mapping/js/mapping-diagnostics.js -->
+<!-- CSS: /static/mapping/css/mapping-diagnostics.css -->
 
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div>
@@ -10,26 +12,35 @@
     </button>
 </div>
 
-<!-- Summary Bar -->
-<div id="diagSummaryBar" class="diag-summary-bar d-none">
-    <div class="diag-summary-item diag-summary-total">
-        <span class="diag-summary-count" id="diagTotalCount">0</span>
-        <span class="diag-summary-label">Total</span>
+<!-- KPI Tiles -->
+<div id="diagKpiTiles" class="row g-3 mb-4 d-none">
+    <div class="col">
+        <div class="ob-kpi-tile">
+            <div class="ob-kpi-tile-icon"><i class="bi bi-list-check"></i></div>
+            <div class="ob-kpi-tile-value" id="diagTotalCount">0</div>
+            <div class="ob-kpi-tile-label">Total Checks</div>
+        </div>
     </div>
-    <div class="diag-summary-item diag-summary-ok">
-        <i class="bi bi-check-circle-fill"></i>
-        <span class="diag-summary-count" id="diagOkCount">0</span>
-        <span class="diag-summary-label">OK</span>
+    <div class="col">
+        <div class="ob-kpi-tile tile-accent-success">
+            <div class="ob-kpi-tile-icon text-success"><i class="bi bi-check-circle-fill"></i></div>
+            <div class="ob-kpi-tile-value text-success" id="diagOkCount">0</div>
+            <div class="ob-kpi-tile-label">Passed</div>
+        </div>
     </div>
-    <div class="diag-summary-item diag-summary-warn">
-        <i class="bi bi-exclamation-triangle-fill"></i>
-        <span class="diag-summary-count" id="diagWarningCount">0</span>
-        <span class="diag-summary-label">Warnings</span>
+    <div class="col">
+        <div class="ob-kpi-tile tile-accent-warning">
+            <div class="ob-kpi-tile-icon text-warning"><i class="bi bi-exclamation-triangle-fill"></i></div>
+            <div class="ob-kpi-tile-value text-warning" id="diagWarningCount">0</div>
+            <div class="ob-kpi-tile-label">Warnings</div>
+        </div>
     </div>
-    <div class="diag-summary-item diag-summary-error">
-        <i class="bi bi-x-circle-fill"></i>
-        <span class="diag-summary-count" id="diagErrorCount">0</span>
-        <span class="diag-summary-label">Errors</span>
+    <div class="col">
+        <div class="ob-kpi-tile tile-accent-danger">
+            <div class="ob-kpi-tile-icon text-danger"><i class="bi bi-x-circle-fill"></i></div>
+            <div class="ob-kpi-tile-value text-danger" id="diagErrorCount">0</div>
+            <div class="ob-kpi-tile-label">Errors</div>
+        </div>
     </div>
 </div>
 
@@ -49,21 +60,37 @@
 
 <!-- Results -->
 <div id="diagResults" class="d-none">
-    <!-- Entities -->
-    <div class="diag-group mb-4">
-        <h5 class="diag-group-title">
-            <i class="bi bi-box me-2"></i>Entities
-            <span class="badge bg-secondary ms-2" id="diagEntityBadge">0</span>
-        </h5>
-        <div id="diagEntitiesBody" class="diag-table-body"></div>
-    </div>
+    <div class="accordion" id="diagAccordion">
+        <!-- Entities -->
+        <div class="accordion-item diag-accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button diag-accordion-btn" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#diagEntitiesCollapse"
+                        aria-expanded="true" aria-controls="diagEntitiesCollapse">
+                    <i class="bi bi-box me-2"></i>Entities
+                    <span class="badge bg-secondary ms-2" id="diagEntityBadge">0</span>
+                </button>
+            </h2>
+            <div id="diagEntitiesCollapse" class="accordion-collapse collapse show"
+                 data-bs-parent="#diagAccordion">
+                <div class="accordion-body p-0" id="diagEntitiesBody"></div>
+            </div>
+        </div>
 
-    <!-- Relationships -->
-    <div class="diag-group mb-4">
-        <h5 class="diag-group-title">
-            <i class="bi bi-arrow-left-right me-2"></i>Relationships
-            <span class="badge bg-secondary ms-2" id="diagRelBadge">0</span>
-        </h5>
-        <div id="diagRelationshipsBody" class="diag-table-body"></div>
+        <!-- Relationships -->
+        <div class="accordion-item diag-accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed diag-accordion-btn" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#diagRelCollapse"
+                        aria-expanded="false" aria-controls="diagRelCollapse">
+                    <i class="bi bi-arrow-left-right me-2"></i>Relationships
+                    <span class="badge bg-secondary ms-2" id="diagRelBadge">0</span>
+                </button>
+            </h2>
+            <div id="diagRelCollapse" class="accordion-collapse collapse"
+                 data-bs-parent="#diagAccordion">
+                <div class="accordion-body p-0" id="diagRelationshipsBody"></div>
+            </div>
+        </div>
     </div>
 </div>
