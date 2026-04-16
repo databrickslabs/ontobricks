@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <!-- Domain module styles (extracted from partials) -->
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-sync.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-metadata.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-validation.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}">

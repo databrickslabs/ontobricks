@@ -64,3 +64,33 @@
 .br-toggle-enabled {
     cursor: pointer;
 }
+
+.br-disabled-badge {
+    font-size: 0.6rem;
+}
+
+.br-row-logic-label {
+    font-size: 0.72rem;
+}
+
+.br-row-logic-hint {
+    font-size: 0.68rem;
+}
+
+.dt-grid-num-col {
+    width: 40px;
+}
+
+.dt-grid-action-col {
+    width: 36px;
+}
+
+.dt-logic-row-cell {
+    border: none;
+    background: transparent;
+}
+
+.dt-logic-badge {
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+}

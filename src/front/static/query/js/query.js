@@ -80,15 +80,15 @@ async function _initQueryPage(initialSection, focusEntityUri, bridgeDomain) {
         return;
     }
 
+    var pendingFocus = focusEntityUri;
+
     SidebarNav.init({
         onSectionChange: async function(section, targetSection) {
             if (section === 'sigmagraph') {
                 if (typeof SigmaGraph !== 'undefined') {
                     setTimeout(function () {
-                        SigmaGraph.init();
-                        if (focusEntityUri) {
-                            _applyFocusEntityWhenReady(focusEntityUri);
-                        }
+                        SigmaGraph.init(pendingFocus || undefined);
+                        pendingFocus = null;
                     }, 100);
                 }
             }
@@ -115,7 +115,11 @@ async function _initQueryPage(initialSection, focusEntityUri, bridgeDomain) {
     const targetSection = initialSection || 'sigmagraph';
     const link = document.querySelector(`[data-section="${targetSection}"]`);
     if (link) {
-        setTimeout(() => link.click(), 300);
+        if (focusEntityUri && targetSection === 'sigmagraph') {
+            link.click();
+        } else {
+            setTimeout(() => link.click(), 300);
+        }
     }
 }
 

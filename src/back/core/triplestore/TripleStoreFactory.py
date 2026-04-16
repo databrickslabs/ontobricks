@@ -13,7 +13,7 @@ from back.core.helpers import (
     resolve_warehouse_id,
 )
 from back.core.logging import get_logger
-from shared.config.constants import DEFAULT_GRAPH_NAME
+from shared.config.constants import DEFAULT_GRAPH_NAME, DEFAULT_LADYBUG_PATH
 
 logger = get_logger(__name__)
 
@@ -128,10 +128,7 @@ class TripleStoreFactory:
     ) -> Optional[Any]:
         """Instantiate a LadybugDB store, choosing graph or flat model."""
         try:
-            lb_cfg = getattr(domain, 'ladybug', None) or {}
-            if not lb_cfg and hasattr(domain, 'triplestore'):
-                lb_cfg = (domain.triplestore or {}).get('ladybug', {})
-            db_path = lb_cfg.get("db_path", "/tmp/ontobricks")
+            db_path = DEFAULT_LADYBUG_PATH
             base_name = (domain.info or {}).get("name", DEFAULT_GRAPH_NAME)
             version = getattr(domain, 'current_version', '1') or '1'
             db_name = f"{base_name}_V{version}"

@@ -47,7 +47,7 @@ def mock_session_mgr():
 @pytest.fixture
 def domain_session(mock_session_mgr):
     """Create a DomainSession with a mock session manager."""
-    from back.objects.session.domain_session import DomainSession
+    from back.objects.session.DomainSession import DomainSession
     return DomainSession(mock_session_mgr)
 
 

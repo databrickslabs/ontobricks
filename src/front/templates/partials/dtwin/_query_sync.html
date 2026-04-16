@@ -1,9 +1,10 @@
+<!-- CSS: /static/query/css/query-sync.css -->
 <!-- JS: /static/query/js/query-sync.js -->
 <!-- Triple Store Sync Section -->
-<div class="content-section" style="position: relative;">
+<div class="content-section sync-content-section">
 
     <!-- Loading overlay (shown until readiness check completes) -->
-    <div id="syncLoadingOverlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(248, 249, 250, 0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;">
+    <div id="syncLoadingOverlay" class="sync-loading-overlay">
         <div class="ob-loading-spinner">
             <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
                 <g class="ob-ring">
@@ -37,11 +38,11 @@
         </div>
         <div class="d-flex align-items-center gap-2">
             <span id="syncStatusText" class="text-muted small"></span>
-            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="checkTripleStoreStatus(true)"
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-sync-action="refresh-triple-store"
                     title="Refresh status from the triple store">
                 <i class="bi bi-arrow-clockwise me-1"></i>Refresh
             </button>
-            <button type="button" class="btn btn-sm btn-outline-primary" id="syncStartBtn" onclick="startTripleStoreSync()" disabled>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="syncStartBtn" data-sync-action="start-triple-store-sync" disabled>
                 <i class="bi bi-arrow-repeat me-1"></i> Build
             </button>
         </div>
@@ -72,7 +73,7 @@
     </div>
 
     <!-- Tabbed Interface -->
-    <ul class="nav nav-tabs" id="syncTabs" role="tablist" style="gap: 2px;">
+    <ul class="nav nav-tabs ob-nav-tabs-gap" id="syncTabs" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="sync-tab-status" data-bs-toggle="tab" data-bs-target="#sync-pane-status"
                     type="button" role="tab" aria-controls="sync-pane-status" aria-selected="true">
@@ -89,10 +90,10 @@
     </ul>
 
     <!-- Progress (outside tabs so it's visible from any tab) -->
-    <div id="syncProgressArea" class="mt-2 mb-2" style="display: none;">
-        <div class="progress mb-2" style="height: 20px;">
-            <div class="progress-bar progress-bar-striped progress-bar-animated" id="syncProgressBar"
-                 role="progressbar" style="width: 0%;">0%</div>
+    <div id="syncProgressArea" class="mt-2 mb-2 d-none">
+            <div class="progress mb-2 ob-progress-md">
+            <div class="progress-bar progress-bar-striped progress-bar-animated sync-progress-bar-start" id="syncProgressBar"
+                 role="progressbar">0%</div>
         </div>
         <small class="text-muted" id="syncProgressStep"></small>
     </div>
@@ -106,8 +107,8 @@
             <div class="card mb-3" id="syncReadinessCard">
                 <div class="card-body">
                     <h6 class="mb-3 fw-semibold"><i class="bi bi-clipboard-check me-1"></i> Readiness Status</h6>
-                    <div id="syncReadinessLoading" class="text-center py-3" style="display: none;"></div>
-                    <div id="syncReadinessContent" style="display: none;">
+                    <div id="syncReadinessLoading" class="text-center py-3 d-none"></div>
+                    <div id="syncReadinessContent" class="d-none">
                         <div class="row g-2 mb-2">
                             <div class="col-md-6">
                                 <div class="border rounded p-3" id="syncOntologyStatus">
@@ -130,7 +131,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="alert alert-warning small mb-0 mt-2" id="syncNotReadyAlert" style="display: none;">
+                        <div class="alert alert-warning small mb-0 mt-2 d-none" id="syncNotReadyAlert">
                             <i class="bi bi-exclamation-triangle me-1"></i>
                             <span id="syncNotReadyMessage">Both Ontology and Assignments must be ready before you can build or load data.</span>
                         </div>
@@ -147,7 +148,7 @@
                     <input type="hidden" id="syncTriplestoreTable">
 
                     <!-- Global info row -->
-                    <div id="dtGlobalInfo" style="display:none;">
+                    <div id="dtGlobalInfo" class="d-none">
                         <div class="small mb-3">
                             <div class="d-flex align-items-center gap-1 mb-1">
                                 <i class="bi bi-clock-history text-muted"></i>
@@ -160,33 +161,32 @@
                                 <span id="dtLastUpdate" class="ms-1 text-muted">&mdash;</span>
                             </div>
                         </div>
-                        <div id="tripleStoreStatusArea" style="display:none;"></div>
+                        <div id="tripleStoreStatusArea" class="d-none"></div>
                     </div>
 
-                    <!-- Two-column layout: Zero-Copy | Graph DB -->
-                    <div id="dtColumnsArea" style="display:none;">
+                    <!-- Two-column layout: Triple-Store | Graph DB -->
+                    <div id="dtColumnsArea" class="d-none">
                         <div class="row g-3">
-                            <!-- Zero-Copy Digital Twin -->
+                            <!-- Triple-Store Digital Twin -->
                             <div class="col-md-6">
                                 <div class="border rounded p-3 h-100" id="dtZeroCopyCard">
                                     <div class="d-flex align-items-center mb-2">
                                         <i class="bi bi-eye fs-5 me-2 text-primary"></i>
-                                        <strong>Zero-Copy Digital Twin</strong>
+                                        <strong>Triple-Store Digital Twin</strong>
                                         <span id="dtExistView" class="ms-auto"></span>
                                     </div>
                                     <div class="small">
                                         <div class="text-muted mb-1">Unity Catalog VIEW</div>
                                         <code id="dtViewName" class="d-block text-break">N/A</code>
                                     </div>
-                                    <div class="small mt-2" id="dtSnapshotArea" style="display:none;">
+                                    <div class="small mt-2 d-none" id="dtSnapshotArea">
                                         <div class="text-muted mb-1">Incremental Snapshot</div>
                                         <div class="d-flex justify-content-between align-items-center">
-                                            <code id="dtSnapshotName" class="text-break" style="font-size:.75em;"></code>
+                                            <code id="dtSnapshotName" class="text-break ob-code-tiny"></code>
                                             <span class="d-flex align-items-center gap-1">
                                                 <span id="dtExistSnapshot"></span>
-                                                <button id="dtDropSnapshot" class="btn btn-outline-danger btn-sm py-0 px-1"
-                                                        style="font-size:.7rem; display:none;"
-                                                        onclick="dropSnapshotTable()"
+                                                <button type="button" id="dtDropSnapshot" class="btn btn-outline-danger btn-sm py-0 px-1 ob-btn-compact d-none"
+                                                        data-sync-action="drop-snapshot-table"
                                                         title="Drop snapshot to force a full rebuild on next build">
                                                     <i class="bi bi-trash me-1"></i>Drop
                                                 </button>
@@ -206,13 +206,13 @@
                                     <div class="small">
                                         <div class="text-muted mb-1">Local graph database</div>
                                         <div class="mb-1">
-                                            <code id="dtLocalPath" class="d-block text-break text-muted" style="font-size:.75em;"></code>
+                                            <code id="dtLocalPath" class="d-block text-break text-muted ob-code-tiny"></code>
                                         </div>
                                         <div class="d-flex justify-content-between align-items-center">
                                             <span class="text-muted">Registry archive</span>
                                             <span class="d-flex align-items-center gap-1">
                                                 <span id="dtExistRegistry"></span>
-                                                <button id="dtReloadFromRegistry" class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:.7rem; display:none;" onclick="reloadGraphFromRegistry()" title="Download the graph archive from the registry and restore it locally">
+                                                <button type="button" id="dtReloadFromRegistry" class="btn btn-outline-secondary btn-sm py-0 px-1 ob-btn-compact d-none" data-sync-action="reload-graph-from-registry" title="Download the graph archive from the registry and restore it locally">
                                                     <i class="bi bi-cloud-arrow-down me-1"></i>Reload
                                                 </button>
                                             </span>
@@ -223,10 +223,10 @@
                         </div>
                     </div>
 
-                    <div id="ladybugSyncInfo" class="mt-2" style="display:none;">
+                    <div id="ladybugSyncInfo" class="mt-2 d-none">
                         <small class="text-muted">
                             <i class="bi bi-info-circle me-1"></i>
-                            Building creates a zero-copy VIEW in Unity Catalog and populates the LadybugDB graph.
+                            Building creates a Triple-Store VIEW in Unity Catalog and populates the Graph DB.
                             The graph is synced to / from the registry volume on domain save / load.
                         </small>
                     </div>
@@ -234,7 +234,7 @@
             </div>
 
             <!-- Last Sync Result -->
-            <div class="card" id="syncResultCard" style="display: none;">
+            <div class="card d-none" id="syncResultCard">
                 <div class="card-body">
                     <h6 class="card-title"><i class="bi bi-check-circle text-success me-1"></i>Sync Result</h6>
                     <div id="syncResultContent"></div>
@@ -246,13 +246,13 @@
         <div class="tab-pane fade" id="sync-pane-insights" role="tabpanel" aria-labelledby="sync-tab-insights">
 
             <!-- Loading spinner -->
-            <div id="insightsLoading" class="text-center py-4" style="display:none;">
+            <div id="insightsLoading" class="text-center py-4 d-none">
                 <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
                 <span class="text-muted small">Loading triple store insights...</span>
             </div>
 
             <!-- Stats content -->
-            <div id="insightsContent" style="display:none;">
+            <div id="insightsContent" class="d-none">
                 <!-- Summary cards -->
                 <div class="row g-2 mb-3" id="insightsSummaryRow"></div>
 
@@ -282,7 +282,7 @@
             </div>
 
             <!-- Error area -->
-            <div id="insightsError" style="display:none;"></div>
+            <div id="insightsError" class="d-none"></div>
         </div>
 
     </div>

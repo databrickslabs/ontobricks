@@ -423,8 +423,8 @@ src/
 │       ├── digitaltwin/                # Digital Twin domain (DigitalTwin.py, models.py)
 │       ├── session/                    # Session management
 │       │   ├── middleware.py           # File-based session middleware (cookie + ASGI)
-│       │   ├── manager.py              # Request-scoped session get/set/delete wrapper
-│       │   ├── domain_session.py       # DomainSession (current OntoBricks domain payload)
+│       │   ├── SessionManager.py       # Request-scoped session get/set/delete wrapper
+│       │   ├── DomainSession.py       # DomainSession (current OntoBricks domain payload)
 │       │   └── global_config.py        # Instance-level GlobalConfigService
 │       └── registry/                   # Registry, permissions & scheduled builds
 │           ├── service.py              # RegistryService + RegistryCfg
@@ -651,7 +651,7 @@ The session middleware maintains state using a **unified domain session** patter
 
 **Session Service Pattern:**
 
-The `DomainSession` class (`src/back/objects/session/domain_session.py`) provides:
+The `DomainSession` class (`src/back/objects/session/DomainSession.py`) provides:
 - Unified access to all domain data
 - Automatic migration from legacy session keys
 - Export/import for file persistence
@@ -2451,14 +2451,14 @@ def delete_triples(self, table_name, triples, batch_size=500, on_progress=None) 
 
 #### 4. Modified Files
 
-- **`src/back/objects/session/domain_session.py`** — add `source_versions` and `snapshot_table` to
+- **`src/back/objects/session/DomainSession.py`** — add `source_versions` and `snapshot_table` to
   `domain.triplestore` in the empty domain template and properties.
 - **`TripleStoreBackend.py`** — add abstract `delete_triples` method.
 - **`LadybugFlatStore.py`** — implement `delete_triples` for flat model.
 - **`LadybugGraphStore.py`** — implement `delete_triples` for graph model.
 - **`src/api/routers/internal/dtwin.py`** — `start_triplestore_sync` gains `incremental` mode (delegating to `IncrementalBuildService` when conditions are met); extend `/sync/status`, `/sync/changes`, and `/sync/dt-existence` with incremental metadata.
 - **`src/back/objects/registry/scheduler.py`** — `_run_scheduled_build` uses incremental path.
-- **`src/front/templates/partials/dtwin/_query_sync.html`** — add snapshot info in Zero-Copy Digital Twin card.
+- **`src/front/templates/partials/dtwin/_query_sync.html`** — add snapshot info in Triple-Store Digital Twin card.
 - **`src/front/static/query/js/query-sync.js`** — render snapshot existence/status.
 
 #### 5. Sync Options (UI)
@@ -2481,7 +2481,7 @@ Incremental sync gracefully falls back to full rebuild when:
 
 #### 7. Digital Twin Info Page
 
-The Zero-Copy Digital Twin card gains a new line below the VIEW name:
+The Triple-Store Digital Twin card gains a new line below the VIEW name:
 
 ```
 Unity Catalog VIEW

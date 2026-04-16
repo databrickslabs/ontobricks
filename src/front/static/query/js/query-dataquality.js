@@ -5,6 +5,7 @@
 window.DQExecModule = {
     results: [],
     _pollTimer: null,
+    _templateUiBound: false,
 
     CATEGORIES: [
         'completeness', 'cardinality', 'uniqueness',
@@ -14,6 +15,52 @@ window.DQExecModule = {
     init() {
         this._initBackendToggle();
         this._updateTripleStoreLabel();
+        this._bindTemplateUiOnce();
+    },
+
+    _bindTemplateUiOnce() {
+        if (this._templateUiBound) return;
+        const root = document.getElementById('dataquality-section');
+        if (!root) return;
+        this._templateUiBound = true;
+
+        root.addEventListener('click', (e) => {
+            const resBtn = e.target.closest('[data-dq-result]');
+            if (resBtn && root.contains(resBtn)) {
+                const sid = decodeURIComponent(resBtn.getAttribute('data-shape-id') || '');
+                const kind = resBtn.getAttribute('data-dq-result');
+                if (kind === 'sql') this.showSql(sid);
+                else if (kind === 'viol') this.showViolations(sid);
+                return;
+            }
+
+            const t = e.target.closest('[data-dq-action]');
+            if (!t || !root.contains(t)) return;
+            const act = t.getAttribute('data-dq-action');
+            if (act === 'open-graph-switcher') {
+                e.preventDefault();
+                if (typeof _openGraphSwitcherModal === 'function') _openGraphSwitcherModal();
+                return;
+            }
+            if (act === 'run-all-checks') {
+                e.preventDefault();
+                this.runAllChecks();
+                return;
+            }
+            if (act === 'toggle-all-dims') {
+                e.preventDefault();
+                this.toggleAllDimensions(t.getAttribute('data-dq-checked') === '1');
+                return;
+            }
+            if (act === 'hide-query-viewer') {
+                e.preventDefault();
+                this.hideQueryViewer();
+            }
+        });
+
+        root.querySelectorAll('input[data-dimension]').forEach((cb) => {
+            cb.addEventListener('change', () => this._syncTile(cb));
+        });
     },
 
     _syncTile(checkbox) {
@@ -51,7 +98,7 @@ window.DQExecModule = {
         }
         if (!cfg.graph_name && graphBtn) {
             graphBtn.classList.add('disabled');
-            graphBtn.setAttribute('title', 'No LadybugDB graph available');
+            graphBtn.setAttribute('title', 'No Graph DB available');
         }
 
         if (!cfg.graph_name && cfg.view_table) {
@@ -99,7 +146,7 @@ window.DQExecModule = {
             showNotification(
                 backend === 'view'
                     ? 'Delta VIEW is not configured. Set it up in Domain Settings and build first.'
-                    : 'LadybugDB graph is not available. Build the Digital Twin first.',
+                    : 'Graph DB is not available. Build the Digital Twin first.',
                 'warning'
             );
             return;
@@ -113,9 +160,9 @@ window.DQExecModule = {
 
         this._setDimensionsDisabled(true);
 
-        document.getElementById('dqExecInitMessage').style.display = 'none';
-        document.getElementById('dqExecResults').style.display = 'none';
-        document.getElementById('dqExecProgressArea').style.display = '';
+        document.getElementById('dqExecInitMessage').classList.add('d-none');
+        document.getElementById('dqExecResults').classList.add('d-none');
+        document.getElementById('dqExecProgressArea').classList.remove('d-none');
         document.getElementById('dqExecProgressBar').style.width = '0%';
         document.getElementById('dqExecProgressBar').textContent = '0%';
         document.getElementById('dqExecProgressStep').textContent = 'Starting data quality checks...';
@@ -175,7 +222,7 @@ window.DQExecModule = {
     },
 
     _showResults(result) {
-        document.getElementById('dqExecProgressArea').style.display = 'none';
+        document.getElementById('dqExecProgressArea').classList.add('d-none');
         this._setDimensionsDisabled(false);
 
         const reportTab = document.getElementById('dq-tab-report');
@@ -217,7 +264,7 @@ window.DQExecModule = {
             if (btn) btn.classList.remove('collapsed');
         }
 
-        document.getElementById('dqExecResults').style.display = '';
+        document.getElementById('dqExecResults').classList.remove('d-none');
         this._renderGauges();
     },
 
@@ -228,11 +275,12 @@ window.DQExecModule = {
             : 'bi-info-circle-fill text-info';
         const violCount = (r.violations && r.violations.length) || 0;
         const shapeId = r.shape_id || '';
+        const sidEnc = encodeURIComponent(shapeId || '');
         const sqlBtn = r.sql
-            ? `<button class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="DQExecModule.showSql('${this._escAttr(shapeId)}')" title="View SQL"><i class="bi bi-code-slash"></i></button>`
+            ? `<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" data-dq-result="sql" data-shape-id="${sidEnc}" title="View SQL"><i class="bi bi-code-slash"></i></button>`
             : '';
         const violBtn = violCount > 0
-            ? `<button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="DQExecModule.showViolations('${this._escAttr(shapeId)}')" title="View violations"><i class="bi bi-list-ul"></i> ${violCount}</button>`
+            ? `<button type="button" class="btn btn-outline-danger btn-sm py-0 px-1" data-dq-result="viol" data-shape-id="${sidEnc}" title="View violations"><i class="bi bi-list-ul"></i> ${violCount}</button>`
             : '';
 
         const hasPop = r.pass_pct != null && r.total_population > 0;
@@ -255,11 +303,11 @@ window.DQExecModule = {
         const r = this.results.find(r => r.shape_id === shapeId);
         if (!r || !r.sql) return;
         document.getElementById('dqExecQueryCode').textContent = r.sql;
-        document.getElementById('dqExecQueryViewer').style.display = '';
+        document.getElementById('dqExecQueryViewer').classList.remove('d-none');
     },
 
     hideQueryViewer() {
-        document.getElementById('dqExecQueryViewer').style.display = 'none';
+        document.getElementById('dqExecQueryViewer').classList.add('d-none');
     },
 
     showViolations(shapeId) {
@@ -286,7 +334,7 @@ window.DQExecModule = {
         const subjectCol = ['s', 'focus_node', 'subject'].find(k => cols.includes(k)) || cols[0];
 
         header.innerHTML = cols.map(c => `<th>${this._escHtml(c)}</th>`).join('')
-            + '<th class="text-center" style="width:40px"></th>';
+            + '<th class="text-center dq-violations-actions-col"></th>';
 
         body.innerHTML = '';
         r.violations.forEach(row => {
@@ -364,7 +412,11 @@ window.DQExecModule = {
             if (score != null) hasAny = true;
             this._drawGauge(canvasId, score);
         }
-        document.getElementById('dqGaugesArea').style.display = hasAny ? '' : 'none';
+        const ga = document.getElementById('dqGaugesArea');
+        if (ga) {
+            if (hasAny) ga.classList.remove('d-none');
+            else ga.classList.add('d-none');
+        }
     },
 
     _drawGauge(canvasId, score) {
@@ -433,11 +485,11 @@ window.DQExecModule = {
     },
 
     _showError(msg) {
-        document.getElementById('dqExecProgressArea').style.display = 'none';
+        document.getElementById('dqExecProgressArea').classList.add('d-none');
         this._setDimensionsDisabled(false);
         const reportTab = document.getElementById('dq-tab-report');
         if (reportTab) bootstrap.Tab.getOrCreateInstance(reportTab).show();
-        document.getElementById('dqExecInitMessage').style.display = '';
+        document.getElementById('dqExecInitMessage').classList.remove('d-none');
         document.getElementById('dqExecInitMessage').innerHTML =
             `<i class="bi bi-exclamation-triangle text-danger fs-1 d-block mb-2"></i><p class="text-danger">${this._escHtml(msg)}</p>`;
     },

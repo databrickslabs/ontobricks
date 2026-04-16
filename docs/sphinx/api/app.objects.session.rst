@@ -12,15 +12,15 @@ Middleware
 Session manager
 ---------------
 
-.. automodule:: back.objects.session.manager
+.. automodule:: back.objects.session.SessionManager
    :members:
    :undoc-members:
    :show-inheritance:
 
-Project session
----------------
+Domain session
+--------------
 
-.. automodule:: back.objects.session.project_session
+.. automodule:: back.objects.session.DomainSession
    :members:
    :undoc-members:
    :show-inheritance:

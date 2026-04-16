@@ -48,7 +48,7 @@ SPARQL
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: back.core.w3c.sparql.ProjectQueryService
+.. automodule:: back.core.w3c.sparql.DomainQueryService
    :members:
    :undoc-members:
    :show-inheritance:

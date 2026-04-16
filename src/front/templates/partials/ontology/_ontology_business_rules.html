@@ -6,8 +6,8 @@
         <h4 class="mb-1"><i class="bi bi-lightning me-2"></i>Business Rules</h4>
         <p class="text-muted mb-0 small">Define inference and business rules across multiple rule paradigms</p>
     </div>
-    <button class="btn btn-sm btn-outline-primary ontology-edit-btn" id="brAddBtn"
-            onclick="BusinessRulesModule.addRuleForActiveTab()">
+    <button type="button" class="btn btn-sm btn-outline-primary ontology-edit-btn" id="brAddBtn"
+            data-br-action="add-rule">
         <i class="bi bi-plus-lg me-1"></i> Add Rule
     </button>
 </div>
@@ -59,7 +59,7 @@
                     <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
                     <p class="mt-2 mb-0 small">Loading rules&hellip;</p>
                 </div>
-                <div id="swrlRulesList" style="display:none">
+                <div id="swrlRulesList" class="d-none">
                     <div class="text-center py-4 text-muted" id="noSwrlRulesMessage">
                         <i class="bi bi-lightning icon-lg"></i>
                         <p class="mt-2 mb-0">No SWRL rules defined</p>
@@ -125,13 +125,13 @@
                     <i class="bi bi-lightning me-2"></i>Add SWRL Rule
                 </h5>
                 <div class="d-flex align-items-center gap-2">
-                    <button class="btn btn-sm btn-outline-secondary" onclick="SwrlModule.zoomIn()" title="Zoom in">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-swrl-action="zoomIn" title="Zoom in">
                         <i class="bi bi-zoom-in"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="SwrlModule.zoomOut()" title="Zoom out">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-swrl-action="zoomOut" title="Zoom out">
                         <i class="bi bi-zoom-out"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="SwrlModule.fitToView()" title="Fit to view">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-swrl-action="fitToView" title="Fit to view">
                         <i class="bi bi-arrows-fullscreen"></i>
                     </button>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -195,11 +195,10 @@
                                 </div>
                             </div>
                             <div class="form-check form-switch mb-2">
-                                <input class="form-check-input" type="checkbox" id="swrlRawToggle"
-                                       onchange="SwrlModule.toggleRawMode()">
+                                <input class="form-check-input" type="checkbox" id="swrlRawToggle">
                                 <label class="form-check-label small" for="swrlRawToggle">Advanced: edit raw SWRL</label>
                             </div>
-                            <div id="swrlRawEditor" style="display:none">
+                            <div id="swrlRawEditor" class="d-none">
                                 <div class="mb-2">
                                     <label class="form-label small mb-1">Antecedent (IF)</label>
                                     <textarea class="form-control form-control-sm font-monospace" id="swrlRawAntecedent" rows="2"></textarea>
@@ -212,7 +211,7 @@
                         </div>
                         <div class="swrl-pane-footer">
                             <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                            <button type="button" class="btn btn-success btn-sm" id="swrlSaveBtn" onclick="SwrlModule.saveRule()">
+                            <button type="button" class="btn btn-success btn-sm" id="swrlSaveBtn" data-swrl-action="saveRule">
                                 <i class="bi bi-check-lg me-1"></i> Save Rule
                             </button>
                         </div>
@@ -222,14 +221,14 @@
         </div>
     </div>
 </div>
-<div class="swrl-context-menu" id="swrlContextMenu" style="display:none">
-    <div class="swrl-ctx-item swrl-ctx-if" onclick="SwrlModule.ctxAddToIf()">
+<div class="swrl-context-menu d-none" id="swrlContextMenu">
+    <div class="swrl-ctx-item swrl-ctx-if" data-swrl-ctx="if">
         <i class="bi bi-plus-circle me-2"></i> Add to IF
     </div>
-    <div class="swrl-ctx-item swrl-ctx-then" onclick="SwrlModule.ctxAddToThen()">
+    <div class="swrl-ctx-item swrl-ctx-then" data-swrl-ctx="then">
         <i class="bi bi-plus-circle me-2"></i> Add to THEN
     </div>
-    <div class="swrl-ctx-item swrl-ctx-remove" onclick="SwrlModule.ctxRemove()" style="display:none">
+    <div class="swrl-ctx-item swrl-ctx-remove d-none" data-swrl-ctx="remove">
         <i class="bi bi-x-circle me-2"></i> Remove
     </div>
 </div>
@@ -251,7 +250,7 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label small fw-semibold">Target Entity <span class="text-danger">*</span></label>
-                        <select class="form-select form-select-sm" id="dtTargetClass" onchange="BusinessRulesModule._dtTargetClassChanged()">
+                        <select class="form-select form-select-sm" id="dtTargetClass">
                             <option value="">Select entity&hellip;</option>
                         </select>
                     </div>
@@ -270,32 +269,31 @@
                         <strong class="small">Conditions &amp; Actions</strong>
                         <div class="btn-group btn-group-sm" id="dtRowLogicToggle" role="group" aria-label="Row logic">
                             <input type="radio" class="btn-check" name="dtRowLogic" id="dtRowLogicOr" value="or"
-                                   onchange="BusinessRulesModule._dtRowLogicChanged()" checked>
-                            <label class="btn btn-outline-primary btn-sm py-0 px-2" for="dtRowLogicOr" style="font-size:.72rem">
+                                   checked>
+                            <label class="btn btn-outline-primary btn-sm py-0 px-2 br-row-logic-label" for="dtRowLogicOr">
                                 OR
                             </label>
-                            <input type="radio" class="btn-check" name="dtRowLogic" id="dtRowLogicAnd" value="and"
-                                   onchange="BusinessRulesModule._dtRowLogicChanged()">
-                            <label class="btn btn-outline-primary btn-sm py-0 px-2" for="dtRowLogicAnd" style="font-size:.72rem">
+                            <input type="radio" class="btn-check" name="dtRowLogic" id="dtRowLogicAnd" value="and">
+                            <label class="btn btn-outline-primary btn-sm py-0 px-2 br-row-logic-label" for="dtRowLogicAnd">
                                 AND
                             </label>
                         </div>
-                        <small class="text-muted" id="dtRowLogicHint" style="font-size:.68rem">
+                        <small class="text-muted br-row-logic-hint" id="dtRowLogicHint">
                             Rows match if <strong>any</strong> row fires
                         </small>
                     </div>
                     <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-secondary" onclick="BusinessRulesModule.dtAddColumn()">
+                        <button type="button" class="btn btn-outline-secondary" data-br-action="dt-add-column">
                             <i class="bi bi-plus-circle me-1"></i>Column
                         </button>
-                        <button class="btn btn-outline-secondary" onclick="BusinessRulesModule.dtAddRow()">
+                        <button type="button" class="btn btn-outline-secondary" data-br-action="dt-add-row">
                             <i class="bi bi-plus-circle me-1"></i>Row
                         </button>
                     </div>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered mb-0" id="dtGrid">
-                        <thead id="dtGridHead"><tr><th class="text-center small text-muted" style="width:40px">#</th></tr></thead>
+                        <thead id="dtGridHead"><tr><th class="text-center small text-muted dt-grid-num-col">#</th></tr></thead>
                         <tbody id="dtGridBody"></tbody>
                     </table>
                 </div>
@@ -308,8 +306,7 @@
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <select class="form-select form-select-sm" id="dtOutputAction"
-                                    onchange="BusinessRulesModule._dtSyncOutputValue()">
+                            <select class="form-select form-select-sm" id="dtOutputAction">
                                 <option value="set_value">Set value</option>
                                 <option value="assign_class">Assign class</option>
                             </select>
@@ -323,7 +320,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-success btn-sm" onclick="BusinessRulesModule.dtSave()">
+                <button type="button" class="btn btn-success btn-sm" data-br-action="dt-save">
                     <i class="bi bi-check-lg me-1"></i>Save
                 </button>
             </div>
@@ -357,14 +354,14 @@
                         Use <code>CONSTRUCT { ... } WHERE { ... }</code> syntax. Variables start with <code>?</code>.
                     </div>
                 </div>
-                <div id="sparqlValidationMsg" style="display:none"></div>
+                <div id="sparqlValidationMsg" class="d-none"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="BusinessRulesModule.sparqlValidate()">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-br-action="sparql-validate">
                     <i class="bi bi-check2-circle me-1"></i>Validate
                 </button>
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-success btn-sm" onclick="BusinessRulesModule.sparqlSave()">
+                <button type="button" class="btn btn-success btn-sm" data-br-action="sparql-save">
                     <i class="bi bi-check-lg me-1"></i>Save
                 </button>
             </div>
@@ -388,7 +385,7 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Target Entity <span class="text-danger">*</span></label>
-                    <select class="form-select form-select-sm" id="aggTargetClass" onchange="BusinessRulesModule._aggTargetClassChanged()">
+                    <select class="form-select form-select-sm" id="aggTargetClass">
                         <option value="">Select entity&hellip;</option>
                     </select>
                 </div>
@@ -442,7 +439,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-success btn-sm" onclick="BusinessRulesModule.aggSave()">
+                <button type="button" class="btn btn-success btn-sm" data-br-action="agg-save">
                     <i class="bi bi-check-lg me-1"></i>Save
                 </button>
             </div>

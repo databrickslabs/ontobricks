@@ -31,7 +31,7 @@ def _volume_docs_path(ctx: ToolContext) -> Optional[str]:
     c = RegistryCfg.from_dict(reg)
     folder = ctx.domain_folder or ""
     if not folder:
-        from back.objects.session.domain_session import sanitize_domain_folder
+        from back.objects.session.DomainSession import sanitize_domain_folder
 
         folder = sanitize_domain_folder(ctx.domain_name or "untitled_domain")
     version = ctx.domain_version or "1"

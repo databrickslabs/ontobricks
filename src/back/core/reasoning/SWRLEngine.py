@@ -11,6 +11,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
+from back.core.w3c.rdf_utils import uri_local_name
 from back.core.reasoning.models import InferredTriple, ReasoningResult
 
 logger = get_logger(__name__)
@@ -208,7 +209,7 @@ class SWRLEngine:
             name = prop.get("name", "") or prop.get("localName", "")
             uri = prop.get("uri", "")
             if data_ns and uri and not uri.startswith(data_ns):
-                local = uri.rsplit("#", 1)[-1] if "#" in uri else uri.rsplit("/", 1)[-1]
+                local = uri_local_name(uri)
                 uri = data_ns + local
             elif not uri and name:
                 uri = data_ns + name if data_ns else base_uri + sep + name

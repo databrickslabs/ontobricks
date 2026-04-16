@@ -21,7 +21,7 @@ from back.core.w3c.shacl.constants import QUALITY_CATEGORIES
 if TYPE_CHECKING:
     from agents.agent_auto_icon_assign.engine import AgentResult as IconAssignAgentResult
     from agents.agent_owl_generator.engine import AgentResult
-    from back.objects.session.domain_session import DomainSession
+    from back.objects.session.DomainSession import DomainSession
 
 IndustryKind = Literal["fibo", "cdisc", "iof"]
 

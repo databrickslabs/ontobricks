@@ -28,19 +28,19 @@
         </p>
 
         <div class="d-flex align-items-center gap-2 mb-2">
-            <span class="fw-semibold small" style="color:#475569">Base URL</span>
-            <code id="apiBaseUrl" class="user-select-all" style="font-size:.85rem; color:#1e293b"></code>
-            <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="copyApiBaseUrl()" title="Copy">
+            <span class="fw-semibold small api-field-label">Base URL</span>
+            <code id="apiBaseUrl" class="user-select-all api-base-url-code"></code>
+            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" id="api-copy-base-url-btn" data-action="copy-base-url" title="Copy">
                 <i class="bi bi-clipboard"></i>
             </button>
         </div>
         <div class="d-flex flex-wrap align-items-center gap-2 mb-0">
-            <span class="fw-semibold small" style="color:#475569; white-space:nowrap">Domain</span>
-            <select class="form-select form-select-sm" id="apiDomainName" style="max-width:280px; font-size:.85rem;">
+            <span class="fw-semibold small api-field-label api-no-wrap">Domain</span>
+            <select class="form-select form-select-sm api-domain-select" id="apiDomainName">
                 <option value="">Loading domains...</option>
             </select>
-            <span class="fw-semibold small" style="color:#475569; white-space:nowrap">Version</span>
-            <select class="form-select form-select-sm" id="apiDomainVersion" style="max-width:140px; font-size:.85rem;">
+            <span class="fw-semibold small api-field-label api-no-wrap">Version</span>
+            <select class="form-select form-select-sm api-version-select" id="apiDomainVersion">
                 <option value="">latest</option>
             </select>
             <small class="text-muted">Used as <code>domain_name</code> / <code>domain_version</code> for <strong>Try it</strong> requests below</small>
@@ -51,19 +51,19 @@
 
         <!-- GET /domains -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/domains</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/domains</code>
                 <small class="text-muted">List registry domains</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Returns all domains stored in the registry with their name and description.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
-                <p class="small mb-2" style="color:#64748b">None</p>
+                <p class="small mb-2 api-param-none">None</p>
 
                 <h6 class="small fw-semibold mb-1">Sample Response</h6>
 <pre class="small mb-2"><code>{
@@ -73,23 +73,23 @@
     { "name": "supply_chain", "description": "Supply chain knowledge graph" }
   ]
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/domains', this)">
+                <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/domains">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
         <!-- GET /domain/versions -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/domain/versions</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/domain/versions</code>
                 <small class="text-muted">List domain versions</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Returns all versions available for a given domain in the registry,
                     sorted from latest to oldest.
@@ -113,23 +113,23 @@
   ],
   "latest_version": "3"
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/domain/versions', this)">
+                <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/domain/versions">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
         <!-- GET /domain/design-status -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/domain/design-status</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/domain/design-status</code>
                 <small class="text-muted">Design readiness status</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Returns the readiness status of the domain's <strong>ontology</strong>,
                     <strong>data sources</strong>, and <strong>mapping</strong> (entity, relationship,
@@ -174,23 +174,23 @@
   },
   "build_ready": true
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/domain/design-status', this)">
+                <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/domain/design-status">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
         <!-- GET /domain/ontology -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/domain/ontology</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/domain/ontology</code>
                 <small class="text-muted">Get ontology (OWL/Turtle)</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Returns the domain's ontology serialized as OWL in Turtle format.
                     Includes the full OWL document, base URI, and class/property counts.
@@ -213,23 +213,23 @@
   "class_count": 5,
   "property_count": 12
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/domain/ontology', this)">
+                <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/domain/ontology">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
         <!-- GET /domain/r2rml -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/domain/r2rml</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/domain/r2rml</code>
                 <small class="text-muted">Get R2RML mapping</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Returns the domain's R2RML mapping document in Turtle format.
                     R2RML defines how relational tables map to RDF triples &mdash;
@@ -253,23 +253,23 @@
   "entity_count": 5,
   "relationship_count": 4
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/domain/r2rml', this)">
+                <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/domain/r2rml">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
         <!-- GET /domain/sparksql -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/domain/sparksql</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/domain/sparksql</code>
                 <small class="text-muted">Get generated Spark SQL</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Returns the Spark SQL query generated from the domain's R2RML mappings.
                     This is the SQL that produces <code>(subject, predicate, object)</code> triples
@@ -292,10 +292,10 @@
   "base_uri": "https://ontobricks.com/ontology/",
   "dialect": "spark"
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/domain/sparksql', this)">
+                <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/domain/sparksql">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
@@ -316,21 +316,21 @@
 
         <!-- GET /registry -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/registry</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/registry</code>
                 <small class="text-muted">Get registry configuration</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Returns the registry location (catalog, schema, volume) for the domain.
                     Reads from the current session if available, otherwise from environment variables.
                     Used by external clients (e.g. MCP server) for registry discovery.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
-                <p class="small mb-2" style="color:#64748b">None</p>
+                <p class="small mb-2 api-param-none">None</p>
 
                 <h6 class="small fw-semibold mb-1">Sample Response</h6>
 <pre class="small mb-2"><code>{
@@ -339,23 +339,23 @@
   "volume": "OntoBricksRegistry",
   "configured": true
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/digitaltwin/registry', this)">
+                <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/digitaltwin/registry">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
         <!-- GET /status -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/status</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/status</code>
                 <small class="text-muted">Triple store status</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Returns whether the triple store is configured, which backend is active,
                     whether the table exists and contains data, and its row count.
@@ -378,23 +378,23 @@
   "count": 4230,
   "last_modified": "2026-02-25T10:30:00"
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/digitaltwin/status', this)">
+                <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/digitaltwin/status">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
         <!-- GET /stats -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/stats</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/stats</code>
                 <small class="text-muted">Content insights</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Aggregated statistics about the triple store contents: entity type breakdown,
                     predicate frequency, label and relationship counts.
@@ -425,23 +425,23 @@
   "type_assertion_count": 700,
   "relationship_count": 2680
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/digitaltwin/stats', this)">
+                <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/digitaltwin/stats">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
         <!-- POST /build -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-primary">POST</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/build</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/build</code>
                 <small class="text-muted">Start a build</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Trigger an asynchronous build that generates all triples from the current
                     ontology and mapping configuration and writes them to the configured triple store.
@@ -486,14 +486,14 @@ Content-Type: application/json
 
         <!-- GET /build/{task_id} -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/build/{task_id}</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/build/{task_id}</code>
                 <small class="text-muted">Poll build progress</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Check the progress of a previously started build. Returns the current status,
                     progress percentage, and final result once completed.
@@ -530,14 +530,14 @@ Content-Type: application/json
 
         <!-- GET /triples/find -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/triples/find</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/triples/find</code>
                 <small class="text-muted">Find &amp; traverse</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Search for entities by type and/or label text, then traverse their relationships
                     up to N levels deep (BFS graph walk). Returns all triples discovered during traversal,
@@ -604,26 +604,26 @@ Content-Type: application/json
                         </div>
                     </div>
                 </div>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryFindEndpoint(this)">
+                <button class="btn btn-sm btn-outline-primary" data-action="find-run">
                     <i class="bi bi-play-fill"></i> Run search
                 </button>
-                <button class="btn btn-sm btn-outline-secondary ms-1" onclick="clearFindForm()">
+                <button class="btn btn-sm btn-outline-secondary ms-1" data-action="find-clear">
                     <i class="bi bi-x-lg"></i> Clear
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
         <!-- GET /triples -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/triples</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/triples</code>
                 <small class="text-muted">Retrieve triples</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Query triples from the triple store with optional filters.
                     Supports filtering by entity type, predicate, subject/object text search, and pagination.
@@ -685,26 +685,26 @@ Content-Type: application/json
                         <input type="number" class="form-control form-control-sm" id="apiTripleOffset" placeholder="Offset" value="0">
                     </div>
                 </div>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryTriplesEndpoint(this)">
+                <button class="btn btn-sm btn-outline-primary" data-action="triples-run">
                     <i class="bi bi-play-fill"></i> Run query
                 </button>
-                <button class="btn btn-sm btn-outline-secondary ms-1" onclick="clearTriplesForm()">
+                <button class="btn btn-sm btn-outline-secondary ms-1" data-action="triples-clear">
                     <i class="bi bi-x-lg"></i> Clear
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
         <!-- POST /dataquality/start -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-primary">POST</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/dataquality/start</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/dataquality/start</code>
                 <small class="text-muted">Run data quality checks</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Start SHACL-based data quality checks as an asynchronous task.
                     Evaluates all enabled SHACL shapes (or a filtered category) against the triple store.
@@ -729,7 +729,7 @@ Content-Type: application/json
                         </tr>
                         <tr>
                             <td><code>backend</code></td><td>string</td><td><code>"graph"</code></td>
-                            <td><code>"view"</code> (SQL via Databricks) or <code>"graph"</code> (in-memory via LadybugDB)</td>
+                            <td><code>"view"</code> (SQL via Databricks) or <code>"graph"</code> (in-memory via Graph DB)</td>
                         </tr>
                     </tbody>
                 </table>
@@ -752,14 +752,14 @@ Content-Type: application/json
 
         <!-- GET /dataquality/{task_id} -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/dataquality/{task_id}</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/dataquality/{task_id}</code>
                 <small class="text-muted">Poll data quality progress</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Check the progress of a previously started data quality check.
                     Returns the current status, progress percentage, and per-shape results once completed.
@@ -792,14 +792,14 @@ Content-Type: application/json
 
         <!-- POST /inference/start -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-primary">POST</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/inference/start</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/inference/start</code>
                 <small class="text-muted">Run inference</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Start OWL 2 RL inference, SWRL rule execution, graph reasoning,
                     and constraint checking as an asynchronous task. Each phase can be toggled independently.
@@ -853,14 +853,14 @@ Content-Type: application/json
 
         <!-- GET /inference/{task_id} -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/inference/{task_id}</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/inference/{task_id}</code>
                 <small class="text-muted">Poll inference progress</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Check the progress of a previously started inference task.
                     Returns status, progress percentage, and full results when completed.
@@ -896,14 +896,14 @@ Content-Type: application/json
 
         <!-- GET /inference/results -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/digitaltwin/inference/results</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/inference/results</code>
                 <small class="text-muted">Get inference results</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Return cached inference results from the last completed inference run.
                     Includes inferred triple counts, constraint violation counts, and detailed per-phase statistics.
@@ -930,10 +930,10 @@ Content-Type: application/json
     "violations": [...]
   }
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/digitaltwin/inference/results', this)">
+                <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/digitaltwin/inference/results">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
@@ -941,7 +941,7 @@ Content-Type: application/json
 
     <!-- Authentication note -->
     <div class="card border-0 ob-api-note mt-4">
-        <div class="card-body py-2 px-3 small" style="color:#475569">
+        <div class="card-body py-2 px-3 small api-info-note-text">
             <i class="bi bi-info-circle me-1"></i>
             All endpoints accept a <code>domain_name</code> query parameter to select a domain
             from the registry. If omitted, the current session's domain is used. When called from
@@ -967,20 +967,20 @@ Content-Type: application/json
 
         <!-- GET /graphql — List domains -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/graphql</code>
                 <small class="text-muted">List GraphQL-enabled domains</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Returns domains that are marked <em>Active</em> and have a populated ontology &mdash;
                     the prerequisites for auto-generating a GraphQL schema.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
-                <p class="small mb-2" style="color:#64748b">None</p>
+                <p class="small mb-2 api-param-none">None</p>
 
                 <h6 class="small fw-semibold mb-1">Sample Response</h6>
 <pre class="small mb-2"><code>{
@@ -989,23 +989,23 @@ Content-Type: application/json
     { "name": "customer_360", "description": "Customer 360 knowledge graph" }
   ]
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryApiEndpoint('/api/v1/graphql', this)">
+                <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/graphql">
                     <i class="bi bi-play-fill"></i> Try it
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
         <!-- GET /graphql/{domain_name} — GraphiQL Playground -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql/{domain_name}</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/graphql/{domain_name}</code>
                 <small class="text-muted">GraphiQL playground</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Opens the interactive GraphiQL IDE for the selected domain.
                     The schema is auto-generated from the ontology &mdash; every class becomes a
@@ -1019,7 +1019,7 @@ Content-Type: application/json
                     </tbody>
                 </table>
 
-                <button class="btn btn-sm btn-outline-primary" onclick="openGraphiQL()">
+                <button class="btn btn-sm btn-outline-primary" data-action="graphiql-open">
                     <i class="bi bi-box-arrow-up-right"></i> Open GraphiQL
                 </button>
             </div>
@@ -1027,14 +1027,14 @@ Content-Type: application/json
 
         <!-- POST /graphql/{domain_name} — Execute query -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-primary">POST</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql/{domain_name}</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/graphql/{domain_name}</code>
                 <small class="text-muted">Execute GraphQL query</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Execute a GraphQL query against the domain's knowledge graph.
                     The schema is derived from the ontology; clients request exactly the fields
@@ -1085,8 +1085,8 @@ Content-Type: application/json
 
                 <!-- Interactive GraphQL query form -->
                 <h6 class="small fw-semibold mb-1">Try it</h6>
-                <textarea class="form-control form-control-sm mb-2 font-monospace" id="apiGraphqlQuery"
-                          rows="6" spellcheck="false" style="font-size:.8rem; tab-size:2"
+                <textarea class="form-control form-control-sm mb-2 font-monospace api-graphql-query" id="apiGraphqlQuery"
+                          rows="6" spellcheck="false"
                           placeholder="Enter a GraphQL query...">{
   customers(limit: 5) {
     id
@@ -1094,26 +1094,26 @@ Content-Type: application/json
     label
   }
 }</textarea>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryGraphqlQuery(this)">
+                <button class="btn btn-sm btn-outline-primary" data-action="graphql-run">
                     <i class="bi bi-play-fill"></i> Run query
                 </button>
-                <button class="btn btn-sm btn-outline-secondary ms-1" onclick="openGraphiQL()">
+                <button class="btn btn-sm btn-outline-secondary ms-1" data-action="graphiql-open">
                     <i class="bi bi-box-arrow-up-right"></i> Open GraphiQL
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
         <!-- GET /graphql/{domain_name}/schema — SDL introspection -->
         <div class="card ob-api-card">
-            <div class="card-header d-flex align-items-center gap-2 py-2 px-3" style="cursor:pointer"
-                 onclick="toggleApiCard(this)">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
-                <code class="flex-grow-1" style="font-size:.85rem">/api/v1/graphql/{domain_name}/schema</code>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/graphql/{domain_name}/schema</code>
                 <small class="text-muted">Schema introspection (SDL)</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>
             </div>
-            <div class="card-body px-3 py-2" style="display:none">
+            <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Returns the auto-generated GraphQL schema in SDL (Schema Definition Language) format.
                     The schema reflects the domain's ontology: each class is a type, each data property
@@ -1131,10 +1131,10 @@ Content-Type: application/json
 <pre class="small mb-2"><code>{
   "sdl": "type Customer {\n  id: ID!\n  uri: String!\n  label: String\n  firstname: String\n  lastname: String\n  email: String\n  hasInteraction: [Interaction!]\n}\n\ntype Interaction {\n  id: ID!\n  uri: String!\n  label: String\n  date: String\n}\n\ntype Query {\n  customers(limit: Int! = 50, offset: Int! = 0, search: String = null): [Customer!]!\n  customer(id: ID!): Customer\n  interactions(limit: Int! = 50, offset: Int! = 0, search: String = null): [Interaction!]!\n  interaction(id: ID!): Interaction\n}"
 }</code></pre>
-                <button class="btn btn-sm btn-outline-primary" onclick="tryGraphqlSchema(this)">
+                <button class="btn btn-sm btn-outline-primary" data-action="graphql-schema">
                     <i class="bi bi-play-fill"></i> View schema
                 </button>
-                <div class="ob-api-response mt-2" style="display:none"></div>
+                <div class="ob-api-response mt-2 d-none"></div>
             </div>
         </div>
 
@@ -1142,7 +1142,7 @@ Content-Type: application/json
 
     <!-- GraphQL note -->
     <div class="card border-0 ob-api-note mt-4">
-        <div class="card-body py-2 px-3 small" style="color:#475569">
+        <div class="card-body py-2 px-3 small api-info-note-text">
             <i class="bi bi-info-circle me-1"></i>
             The GraphQL schema is <strong>auto-generated</strong> from the domain's ontology.
             Change the ontology and the schema updates automatically &mdash; no hand-written types needed.

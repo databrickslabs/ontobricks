@@ -1,0 +1,42 @@
+/**
+ * OntoBricks — query-sync.css
+ * Triple store / Digital Twin build (sync) section — extracted from _query_sync.html
+ */
+
+#sync-section .sync-content-section {
+    position: relative;
+}
+
+#syncLoadingOverlay.sync-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(248, 249, 250, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+#syncTabs.ob-nav-tabs-gap {
+    gap: 2px;
+}
+
+#syncProgressArea .progress.ob-progress-md {
+    height: 20px;
+}
+
+#syncProgressBar.sync-progress-bar-start {
+    width: 0%;
+}
+
+#sync-section .ob-code-tiny {
+    font-size: 0.75em;
+}
+
+#sync-section .ob-btn-compact {
+    font-size: 0.7rem;
+}

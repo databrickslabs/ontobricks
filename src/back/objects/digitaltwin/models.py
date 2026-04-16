@@ -15,7 +15,6 @@ class DomainSnapshot:
         self.info = dict(domain.info or {})
         self.databricks = dict(domain.databricks or {})
         self.delta = dict(getattr(domain, 'delta', None) or {})
-        self.ladybug = dict(getattr(domain, 'ladybug', None) or {})
         self.triplestore = dict(getattr(domain, 'triplestore', None) or {})
         self.settings = dict(getattr(domain, 'settings', None) or {})
         self.current_version = getattr(domain, 'current_version', '1') or '1'

@@ -1,7 +1,11 @@
 /* Digital Twin API card styles */
 
 .ob-api-card { border-color: #e2e8f0; }
-.ob-api-card .card-header { background: #fafbfc; border-bottom: 1px solid #e2e8f0; }
+.ob-api-card .card-header {
+    background: #fafbfc;
+    border-bottom: 1px solid #e2e8f0;
+    cursor: pointer;
+}
 .ob-api-card .card-header:hover { background: #f1f5f9; }
 .ob-api-card .card-header code { color: #1e293b; }
 .ob-api-chevron { transition: transform .2s ease; }
@@ -28,3 +32,22 @@
     background: transparent !important; color: #f1f5f9 !important;
 }
 .ob-api-note { background: #f8fafc; border: 1px solid #e2e8f0; }
+
+/* ------------------------------------------------------------------ */
+/* External API docs (_query_api.html) — typography                  */
+/* ------------------------------------------------------------------ */
+
+.api-field-label { color: #475569; }
+.api-base-url-code { font-size: 0.85rem; color: #1e293b; }
+.api-no-wrap { white-space: nowrap; }
+.api-param-none { color: #64748b; }
+.api-endpoint-path { font-size: 0.85rem; }
+.api-info-note-text { color: #475569; }
+.api-graphql-query { font-size: 0.8rem; tab-size: 2; }
+
+/* ------------------------------------------------------------------ */
+/* External API docs — form control sizing                           */
+/* ------------------------------------------------------------------ */
+
+.api-domain-select { max-width: 280px; font-size: 0.85rem; }
+.api-version-select { max-width: 140px; font-size: 0.85rem; }

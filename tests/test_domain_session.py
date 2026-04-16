@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from back.objects.session.domain_session import DomainSession, get_empty_domain
+from back.objects.session.DomainSession import DomainSession, get_empty_domain
 
 
 class TestGetEmptyDomain:

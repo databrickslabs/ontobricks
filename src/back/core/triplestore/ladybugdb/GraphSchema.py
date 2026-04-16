@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.helpers import extract_local_name, safe_identifier as _helpers_safe_id
+from back.core.w3c.rdf_utils import uri_local_name
 from back.core.triplestore.constants import RDF_TYPE, RDFS_LABEL
 from back.core.triplestore.ladybugdb.models import NodeTableDef, RelTableDef
 
@@ -148,7 +149,7 @@ class GraphSchema:
             schema.rel_tables[safe_name] = rel_def
             schema.property_uri_to_table[prop_uri] = safe_name
             if norm_base and prop_uri and not prop_uri.startswith(norm_base):
-                local = prop_uri.rsplit("#", 1)[-1] if "#" in prop_uri else prop_uri.rsplit("/", 1)[-1]
+                local = uri_local_name(prop_uri)
                 schema.property_uri_to_table[norm_base + local] = safe_name
 
         logger.info(

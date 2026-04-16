@@ -4,7 +4,7 @@
         <div>
             <h4 class="mb-1"><i class="bi bi-lightning me-2"></i>Inference</h4>
             <p class="text-muted mb-0 small">OWL 2 RL inference, SWRL rules, graph reasoning, and business rules<br>
-                <i class="bi bi-folder2-open"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50" style="font-size:.65rem">v{{ current_version }}</span>
+                <i class="bi bi-folder2-open"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50 query-reasoning-fs-tiny">v{{ current_version }}</span>
                 <button class="btn btn-sm btn-outline-secondary py-0 px-1 ms-2" onclick="_openGraphSwitcherModal()" title="Switch to another domain graph">
                     <i class="bi bi-arrow-left-right me-1"></i>Switch domain
                 </button>
@@ -38,18 +38,18 @@
                             data-bs-target="#pane-inferred" type="button" role="tab"
                             aria-controls="pane-inferred" aria-selected="false">
                         <i class="bi bi-plus-circle me-1"></i>Inferred
-                        <span class="badge bg-success bg-opacity-75 ms-1" id="tabBadgeInferred" style="font-size:.65rem"></span>
+                        <span class="badge bg-success bg-opacity-75 ms-1 query-reasoning-fs-tiny" id="tabBadgeInferred"></span>
                     </button>
                 </li>
             </ul>
 
             <!-- Progress area (visible across all tabs) -->
-            <div id="reasoningProgressArea" class="flex-shrink-0" style="display: none;">
+            <div id="reasoningProgressArea" class="flex-shrink-0 d-none">
                 <div class="card bg-light border border-top-0 rounded-0 mx-3 mb-0">
                     <div class="card-body py-3">
                         <div class="d-flex align-items-center justify-content-center mb-3">
                             <div class="ob-loading-spinner">
-                                <svg class="ob-spinner-svg" style="width:56px;height:56px;" viewBox="0 0 80 80" fill="none">
+                                <svg class="ob-spinner-svg query-reasoning-spinner-svg" viewBox="0 0 80 80" fill="none">
                                     <g class="ob-ring">
                                         <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
                                             <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
@@ -75,16 +75,16 @@
                         <div class="text-center mb-2">
                             <strong id="reasoningProgressStep" class="text-muted">Starting inference...</strong>
                         </div>
-                        <div class="progress" style="height: 20px;">
+                        <div class="progress query-reasoning-progress-track">
                             <div id="reasoningProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
-                                 role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                                 role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Tab panes (scrollable area) -->
-            <div class="tab-content flex-grow-1 overflow-auto" id="reasoningPanes" style="min-height:0;">
+            <div class="tab-content flex-grow-1 overflow-auto query-reasoning-panes-scroll" id="reasoningPanes">
 
                 <!-- Options pane -->
                 <div class="tab-pane fade show active p-3" id="pane-options" role="tabpanel" aria-labelledby="tab-options">
@@ -97,56 +97,6 @@
                             <i class="bi bi-x-circle me-1"></i>Unselect all
                         </a>
                     </div>
-
-                    <style>
-                        .reasoning-tile {
-                            border: 1px solid var(--bs-border-color);
-                            border-radius: .5rem;
-                            padding: .75rem;
-                            cursor: pointer;
-                            transition: border-color .15s, box-shadow .15s, background-color .15s;
-                            display: flex;
-                            flex-direction: column;
-                            align-items: center;
-                            text-align: center;
-                            gap: .35rem;
-                            min-height: 120px;
-                            justify-content: center;
-                            user-select: none;
-                            position: relative;
-                        }
-                        .reasoning-tile:hover {
-                            border-color: var(--bs-primary);
-                            box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), .12);
-                        }
-                        .reasoning-tile.active {
-                            border-color: var(--bs-primary);
-                            background-color: rgba(var(--bs-primary-rgb), .06);
-                            box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), .18);
-                        }
-                        .reasoning-tile .rt-icon {
-                            font-size: 1.5rem;
-                            line-height: 1;
-                        }
-                        .reasoning-tile .rt-check {
-                            position: absolute;
-                            top: .5rem;
-                            right: .5rem;
-                        }
-                        .reasoning-tile .rt-title {
-                            font-size: .78rem;
-                            font-weight: 600;
-                            line-height: 1.2;
-                        }
-                        .reasoning-tile .rt-badge {
-                            font-size: .6rem;
-                        }
-                        .reasoning-tile .rt-desc {
-                            font-size: .65rem;
-                            color: var(--bs-secondary-color);
-                            line-height: 1.3;
-                        }
-                    </style>
 
                     <div class="row g-2">
                         <!-- T-Box -->
@@ -250,14 +200,14 @@
                         <i class="bi bi-lightning fs-3 d-block mb-2"></i>
                         <small>Run inference to see the execution report here.</small>
                     </div>
-                    <div id="reasoningReportContent" style="display:none;">
+                    <div id="reasoningReportContent" class="d-none">
                         <div id="reasoningStats" class="small text-muted mb-2"></div>
                         <table class="table table-sm table-borderless mb-0 small">
                             <thead>
                                 <tr class="text-muted">
-                                    <th style="width:30%">Phase</th>
-                                    <th style="width:15%">Status</th>
-                                    <th style="width:15%">Duration</th>
+                                    <th class="reasoning-report-th-phase">Phase</th>
+                                    <th class="reasoning-report-th-status">Status</th>
+                                    <th class="reasoning-report-th-duration">Duration</th>
                                     <th>Details</th>
                                 </tr>
                             </thead>
@@ -271,10 +221,10 @@
                                 </tr>
                             </tfoot>
                         </table>
-                        <div id="reportTimestamp" class="text-end text-muted mt-1" style="font-size: 0.75rem;"></div>
+                        <div id="reportTimestamp" class="text-end text-muted mt-1 query-reasoning-fs-caption"></div>
 
                         <!-- Materialise panel (shown after inference completes with results) -->
-                        <div id="materializePanel" class="card border-dashed mt-3" style="display:none;">
+                        <div id="materializePanel" class="card border-dashed mt-3 d-none">
                             <div class="card-body py-2 px-3">
                                 <div class="d-flex align-items-center mb-2">
                                     <i class="bi bi-database-add me-2 text-warning"></i>
@@ -287,25 +237,25 @@
                                         <i class="bi bi-table me-1 text-primary"></i>Write to Delta table
                                     </label>
                                 </div>
-                                <div id="materializeDeltaGroup" class="ms-4 mb-2" style="display:none;">
+                                <div id="materializeDeltaGroup" class="ms-4 mb-2 d-none">
                                     <input type="text" class="form-control form-control-sm" id="materializeTableName"
                                            value="{{ reasoning_ctx.materialize_table }}"
                                            placeholder="catalog.schema.table">
-                                    <div class="form-text" style="font-size:.7rem;">
+                                    <div class="form-text query-reasoning-fs-micro">
                                         Fully-qualified name (catalog.schema.table). Created automatically if it does not exist.
                                     </div>
                                 </div>
                                 <div class="form-check mb-3">
                                     <input class="form-check-input" type="checkbox" id="materializeGraph" checked>
                                     <label class="form-check-label small" for="materializeGraph">
-                                        <i class="bi bi-diagram-3 me-1 text-info"></i>Append to graph database (LadybugDB)
+                                        <i class="bi bi-diagram-3 me-1 text-info"></i>Append to graph database (Graph DB)
                                     </label>
                                 </div>
                                 <button class="btn btn-sm btn-warning" id="runMaterializeBtn"
                                         onclick="ReasoningModule.runMaterialize()">
                                     <i class="bi bi-database-add me-1"></i>Materialise
                                 </button>
-                                <div id="materializeResultArea" class="mt-2" style="display:none;"></div>
+                                <div id="materializeResultArea" class="mt-2 d-none"></div>
                             </div>
                         </div>
                     </div>
@@ -317,7 +267,7 @@
                         <i class="bi bi-check-circle fs-4 d-block mb-1"></i>
                         <small>No inferred triples.</small>
                     </div>
-                    <div id="inferredTriplesTable" style="display:none;">
+                    <div id="inferredTriplesTable" class="d-none">
                         <table class="table table-sm table-striped table-hover mb-0">
                             <thead class="table-light">
                                 <tr>
@@ -329,7 +279,7 @@
                             </thead>
                             <tbody id="inferredTriplesBody"></tbody>
                         </table>
-                        <nav id="inferredPaginationNav" class="d-flex align-items-center justify-content-between mt-2" style="display:none!important;">
+                        <nav id="inferredPaginationNav" class="d-flex align-items-center justify-content-between mt-2 d-none">
                             <small class="text-muted" id="inferredPageInfo"></small>
                             <ul class="pagination pagination-sm mb-0">
                                 <li class="page-item" id="inferredPrevLi">

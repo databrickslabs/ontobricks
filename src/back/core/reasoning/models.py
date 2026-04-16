@@ -1,6 +1,6 @@
 """Data models for the reasoning engine."""
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Any, Dict, List
 
 
 @dataclass
@@ -87,3 +87,14 @@ class ReasoningResult:
             ],
             "stats": dict(self.stats),
         }
+
+
+@dataclass
+class SWRLAtomPartition:
+    """Partitioned antecedent/consequent atoms for SWRL rule translation."""
+
+    class_atoms: List[Dict[str, Any]]
+    prop_atoms: List[Dict[str, Any]]
+    builtin_atoms: List[Dict[str, Any]]
+    negated_atoms: List[Dict[str, Any]]
+    consequent_atoms: List[Dict[str, Any]]

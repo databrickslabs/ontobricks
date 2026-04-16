@@ -7,6 +7,7 @@ by both the SQL and Cypher translation paths.
 from typing import Dict, List, Optional
 
 from back.core.reasoning.constants import SWRL_ATOM_RE, NEGATED_ATOM_RE
+from back.core.reasoning.models import SWRLAtomPartition
 
 
 class SWRLParser:
@@ -14,6 +15,43 @@ class SWRLParser:
 
     All methods are static — no instance state is needed.
     """
+
+    @staticmethod
+    def partition_rule_atoms(rule: Dict) -> Optional[SWRLAtomPartition]:
+        """Parse and partition a SWRL rule's atoms for translation.
+
+        Returns ``None`` if the antecedent or consequent is empty, or if
+        the antecedent has no class atoms.
+        """
+        antecedent = rule.get("antecedent", "")
+        consequent = rule.get("consequent", "")
+        ante_atoms = SWRLParser.parse_atoms(antecedent)
+        cons_atoms = SWRLParser.parse_atoms(consequent)
+        if not ante_atoms or not cons_atoms:
+            return None
+
+        class_atoms = [
+            a for a in ante_atoms
+            if a["arity"] == 1 and not a.get("builtin") and not a.get("negated")
+        ]
+        prop_atoms = [
+            a for a in ante_atoms
+            if a["arity"] == 2 and not a.get("builtin") and not a.get("negated")
+        ]
+        builtin_atoms = [
+            a for a in ante_atoms if a.get("builtin") and not a.get("negated")
+        ]
+        negated_atoms = [a for a in ante_atoms if a.get("negated")]
+        if not class_atoms:
+            return None
+
+        return SWRLAtomPartition(
+            class_atoms=class_atoms,
+            prop_atoms=prop_atoms,
+            builtin_atoms=builtin_atoms,
+            negated_atoms=negated_atoms,
+            consequent_atoms=cons_atoms,
+        )
 
     @staticmethod
     def parse_atoms(expression: str) -> List[Dict]:

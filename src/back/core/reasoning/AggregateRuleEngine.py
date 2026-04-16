@@ -13,6 +13,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
+from back.core.w3c.rdf_utils import uri_local_name
 from back.core.reasoning.constants import AGG_FUNCTIONS, AGG_OPERATORS, RDF_TYPE
 from back.core.reasoning.models import InferredTriple, ReasoningResult, RuleViolation
 
@@ -42,7 +43,7 @@ class AggregateRuleEngine:
                 dp_name = dp.get("name", "") or dp.get("localName", "")
                 dp_uri = dp.get("uri", "")
                 if data_ns and dp_uri and not dp_uri.startswith(data_ns):
-                    local = dp_uri.rsplit("#", 1)[-1] if "#" in dp_uri else dp_uri.rsplit("/", 1)[-1]
+                    local = uri_local_name(dp_uri)
                     dp_uri = data_ns + local
                 elif not dp_uri and dp_name:
                     dp_uri = data_ns + dp_name if data_ns else base_uri + sep + dp_name
@@ -52,7 +53,7 @@ class AggregateRuleEngine:
             name = prop.get("name", "") or prop.get("localName", "")
             uri = prop.get("uri", "")
             if data_ns and uri and not uri.startswith(data_ns):
-                local = uri.rsplit("#", 1)[-1] if "#" in uri else uri.rsplit("/", 1)[-1]
+                local = uri_local_name(uri)
                 uri = data_ns + local
             elif not uri and name:
                 uri = data_ns + name if data_ns else base_uri + sep + name

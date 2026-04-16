@@ -5,8 +5,8 @@
     <div>
         <h4 class="mb-1"><i class="bi bi-shield-check me-2"></i>Data Quality</h4>
         <p class="text-muted mb-0 small">Validate SHACL shapes against the triple store<br>
-            <i class="bi bi-folder2-open"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50" style="font-size:.65rem">v{{ current_version }}</span>
-            <button class="btn btn-sm btn-outline-secondary py-0 px-1 ms-2" onclick="_openGraphSwitcherModal()" title="Switch to another domain graph">
+            <i class="bi bi-folder2-open"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50 dq-version-badge">v{{ current_version }}</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-2" data-dq-action="open-graph-switcher" title="Switch to another domain graph">
                 <i class="bi bi-arrow-left-right me-1"></i>Switch domain
             </button>
         </p>
@@ -14,7 +14,7 @@
     <div class="d-flex align-items-center gap-2">
         <div class="d-inline-flex align-items-center gap-1">
             <label class="form-label small mb-0 text-muted" for="dqViolationLimit" title="Max violations per rule"><i class="bi bi-exclamation-triangle"></i></label>
-            <select class="form-select form-select-sm py-0" id="dqViolationLimit" title="Max violations shown per rule (speeds up execution)" style="width:auto;font-size:.78rem;">
+            <select class="form-select form-select-sm py-0 dq-compact-select" id="dqViolationLimit" title="Max violations shown per rule (speeds up execution)">
                 <option value="5">5</option>
                 <option value="10" selected>10</option>
                 <option value="25">25</option>
@@ -23,7 +23,7 @@
                 <option value="0">All</option>
             </select>
         </div>
-        <button class="btn btn-sm btn-outline-primary" onclick="DQExecModule.runAllChecks()" id="runDQChecksBtn">
+        <button type="button" class="btn btn-sm btn-outline-primary" data-dq-action="run-all-checks" id="runDQChecksBtn">
             <i class="bi bi-play-fill me-1"></i> Run All
         </button>
     </div>
@@ -50,16 +50,16 @@
         </ul>
 
         <!-- Progress area (visible across all tabs) -->
-        <div id="dqExecProgressArea" class="flex-shrink-0" style="display:none">
+        <div id="dqExecProgressArea" class="flex-shrink-0 d-none">
             <div class="card bg-light border border-top-0 rounded-0 mx-3 mb-0">
                 <div class="card-body py-3">
                     <div class="text-center mb-2">
                         <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
                         <strong id="dqExecProgressStep" class="text-muted">Starting...</strong>
                     </div>
-                    <div class="progress" style="height:20px">
-                        <div id="dqExecProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
-                             style="width:0%" role="progressbar">0%</div>
+                    <div class="progress dq-progress-md">
+                        <div id="dqExecProgressBar" class="progress-bar progress-bar-striped progress-bar-animated dq-progress-bar-start"
+                             role="progressbar">0%</div>
                     </div>
                     <small id="dqExecProgressDetail" class="text-muted mt-1 d-block text-center"></small>
                 </div>
@@ -67,7 +67,7 @@
         </div>
 
         <!-- Tab panes -->
-        <div class="tab-content flex-grow-1 overflow-auto" id="dqPanes" style="min-height:0;">
+        <div class="tab-content flex-grow-1 overflow-auto dq-tab-panes-min" id="dqPanes">
 
             <!-- Options pane -->
             <div class="tab-pane fade show active p-3" id="dq-pane-options" role="tabpanel" aria-labelledby="dq-tab-options">
@@ -75,8 +75,8 @@
                 <div class="mb-3 d-flex align-items-center gap-3">
                     <div class="btn-group btn-group-sm" role="group" id="dqBackendToggle">
                         <button type="button" class="btn btn-outline-secondary" data-backend="view"
-                                title="Run SHACL checks as SQL against the zero-copy VIEW via SQL Warehouse">
-                            <i class="bi bi-table me-1"></i>Zero-Copy
+                                title="Run SHACL checks as SQL against the Triple-Store VIEW via SQL Warehouse">
+                            <i class="bi bi-table me-1"></i>Triple-Store
                         </button>
                         <button type="button" class="btn btn-outline-secondary active" data-backend="graph"
                                 title="Run SHACL checks against the graph database">
@@ -91,11 +91,11 @@
 
                 <!-- Dimension Selection Tiles -->
                 <div class="d-flex justify-content-end gap-2 mb-2">
-                    <a href="#" class="small text-decoration-none" onclick="DQExecModule.toggleAllDimensions(true);return false;">
+                    <a href="#" class="small text-decoration-none" data-dq-action="toggle-all-dims" data-dq-checked="1">
                         <i class="bi bi-check-all me-1"></i>Select all
                     </a>
                     <span class="text-muted small">|</span>
-                    <a href="#" class="small text-decoration-none" onclick="DQExecModule.toggleAllDimensions(false);return false;">
+                    <a href="#" class="small text-decoration-none" data-dq-action="toggle-all-dims" data-dq-checked="0">
                         <i class="bi bi-x-circle me-1"></i>Unselect all
                     </a>
                 </div>
@@ -103,7 +103,7 @@
                     <div class="col-4">
                         <label class="reasoning-tile active w-100" for="dqDimCompleteness">
                             <input class="form-check-input rt-check" type="checkbox" id="dqDimCompleteness" checked
-                                   data-dimension="completeness" onchange="DQExecModule._syncTile(this)">
+                                   data-dimension="completeness">
                             <i class="bi bi-check2-all rt-icon text-info"></i>
                             <span class="rt-title">Completeness</span>
                             <span class="rt-desc">Required properties present</span>
@@ -112,7 +112,7 @@
                     <div class="col-4">
                         <label class="reasoning-tile active w-100" for="dqDimCardinality">
                             <input class="form-check-input rt-check" type="checkbox" id="dqDimCardinality" checked
-                                   data-dimension="cardinality" onchange="DQExecModule._syncTile(this)">
+                                   data-dimension="cardinality">
                             <i class="bi bi-123 rt-icon text-primary"></i>
                             <span class="rt-title">Cardinality</span>
                             <span class="rt-desc">Min / max value counts</span>
@@ -121,7 +121,7 @@
                     <div class="col-4">
                         <label class="reasoning-tile active w-100" for="dqDimUniqueness">
                             <input class="form-check-input rt-check" type="checkbox" id="dqDimUniqueness" checked
-                                   data-dimension="uniqueness" onchange="DQExecModule._syncTile(this)">
+                                   data-dimension="uniqueness">
                             <i class="bi bi-fingerprint rt-icon text-warning"></i>
                             <span class="rt-title">Uniqueness</span>
                             <span class="rt-desc">No duplicate values</span>
@@ -130,7 +130,7 @@
                     <div class="col-4">
                         <label class="reasoning-tile active w-100" for="dqDimConsistency">
                             <input class="form-check-input rt-check" type="checkbox" id="dqDimConsistency" checked
-                                   data-dimension="consistency" onchange="DQExecModule._syncTile(this)">
+                                   data-dimension="consistency">
                             <i class="bi bi-link-45deg rt-icon text-success"></i>
                             <span class="rt-title">Consistency</span>
                             <span class="rt-desc">Cross-property constraints</span>
@@ -139,7 +139,7 @@
                     <div class="col-4">
                         <label class="reasoning-tile active w-100" for="dqDimConformance">
                             <input class="form-check-input rt-check" type="checkbox" id="dqDimConformance" checked
-                                   data-dimension="conformance" onchange="DQExecModule._syncTile(this)">
+                                   data-dimension="conformance">
                             <i class="bi bi-regex rt-icon text-danger"></i>
                             <span class="rt-title">Conformance</span>
                             <span class="rt-desc">Pattern &amp; type validation</span>
@@ -148,7 +148,7 @@
                     <div class="col-4">
                         <label class="reasoning-tile active w-100" for="dqDimStructural">
                             <input class="form-check-input rt-check" type="checkbox" id="dqDimStructural" checked
-                                   data-dimension="structural" onchange="DQExecModule._syncTile(this)">
+                                   data-dimension="structural">
                             <i class="bi bi-diagram-3 rt-icon text-dark"></i>
                             <span class="rt-title">Structural</span>
                             <span class="rt-desc">Transitive &amp; reflexive integrity</span>
@@ -167,7 +167,7 @@
                 </div>
 
                 <!-- Dimension Gauges -->
-                <div id="dqGaugesArea" class="mb-3" style="display:none">
+                <div id="dqGaugesArea" class="mb-3 d-none">
                     <div class="row g-2">
                         <div class="col-4"><div class="dq-gauge-box text-center"><canvas id="gaugeCompleteness" width="150" height="80"></canvas><small class="text-muted">Completeness</small></div></div>
                         <div class="col-4"><div class="dq-gauge-box text-center"><canvas id="gaugeCardinality" width="150" height="80"></canvas><small class="text-muted">Cardinality</small></div></div>
@@ -181,7 +181,7 @@
                 </div>
 
                 <!-- Results by dimension (accordion) -->
-                <div id="dqExecResults" style="display:none">
+                <div id="dqExecResults" class="d-none">
                     <div class="accordion accordion-flush" id="dqExecAccordion">
                         <div class="accordion-item" id="dqExecResultsCompleteness">
                             <h2 class="accordion-header">
@@ -283,14 +283,14 @@
                 </div>
 
                 <!-- SQL Query Viewer -->
-                <div id="dqExecQueryViewer" class="mt-4" style="display:none">
+                <div id="dqExecQueryViewer" class="mt-4 d-none">
                     <h6 class="text-secondary mb-2">
                         <i class="bi bi-code-slash me-1"></i> SQL Query
-                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="DQExecModule.hideQueryViewer()">
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" data-dq-action="hide-query-viewer">
                             <i class="bi bi-x"></i>
                         </button>
                     </h6>
-                    <pre class="bg-dark text-light p-3 rounded small" id="dqExecQueryCode" style="max-height:200px;overflow:auto"></pre>
+                    <pre class="bg-dark text-light p-3 rounded small dq-exec-query-code" id="dqExecQueryCode"></pre>
                 </div>
             </div>
         </div>
@@ -311,7 +311,7 @@
                 <div class="bg-light p-2 border-bottom text-muted small">
                     <i class="bi bi-list-ul me-1"></i> <span id="dqExecViolationsCount">0 violations</span>
                 </div>
-                <div style="max-height:400px;overflow:auto">
+                <div class="dq-violations-scroll">
                     <table class="table table-sm table-striped table-hover mb-0">
                         <thead class="table-light sticky-top">
                             <tr id="dqExecViolationsHeader"></tr>

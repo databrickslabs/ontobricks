@@ -20,3 +20,64 @@
     color: inherit;
     padding: 0;
 }
+
+.dm-progress-tall {
+    height: 25px;
+}
+
+.dm-progress-bar-full {
+    width: 100%;
+}
+
+.dm-table-scroll {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.dm-details-scroll {
+    max-height: 350px;
+}
+
+.dm-th-select {
+    width: 5%;
+}
+
+.dm-th-table {
+    width: 20%;
+}
+
+.dm-th-datasource {
+    width: 18%;
+}
+
+.dm-th-cols {
+    width: 6%;
+}
+
+.dm-th-desc {
+    width: 51%;
+}
+
+.dm-th-import-name {
+    width: 75%;
+}
+
+.dm-th-import-status {
+    width: 20%;
+}
+
+.dm-th-col-name {
+    width: 25%;
+}
+
+.dm-th-col-type {
+    width: 15%;
+}
+
+.dm-th-col-comment {
+    width: 60%;
+}
+
+.meta-cursor-pointer {
+    cursor: pointer;
+}

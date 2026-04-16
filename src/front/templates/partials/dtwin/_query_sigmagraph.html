@@ -6,33 +6,33 @@
     <div>
         <h4 class="mb-1"><i class="bi bi-layers-half me-2"></i>Knowledge Graph</h4>
         <p class="text-muted mb-0 small">Interactive graph visualization<br>
-            <i class="bi bi-folder2-open"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50" style="font-size:.65rem">v{{ current_version }}</span><br>
-            <i class="bi bi-diagram-3"></i> LadybugDB: <code id="sgGraphDbName" class="text-primary">{{ graph_name or 'Not configured' }}</code>
-            <button class="btn btn-sm btn-outline-secondary py-0 px-1 ms-2" onclick="SigmaGraph.openGraphSwitcher()" title="Switch to another domain graph">
+            <i class="bi bi-folder2-open"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50 ob-version-badge">v{{ current_version }}</span><br>
+            <i class="bi bi-diagram-3"></i> Graph DB: <code id="sgGraphDbName" class="text-primary">{{ graph_name or 'Not configured' }}</code>
+            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-2" data-sg-action="openGraphSwitcher" title="Switch to another domain graph">
                 <i class="bi bi-arrow-left-right me-1"></i>Switch domain
             </button>
         </p>
     </div>
     <div class="d-flex align-items-center gap-2 flex-wrap">
         <div class="form-check form-check-inline mb-0">
-            <input class="form-check-input" type="checkbox" id="sgShowLabels" checked onchange="SigmaGraph.toggleLabels()">
+            <input class="form-check-input" type="checkbox" id="sgShowLabels" checked data-sg-change="toggleLabels">
             <label class="form-check-label small" for="sgShowLabels">Labels</label>
         </div>
         <div class="form-check form-check-inline mb-0">
-            <input class="form-check-input" type="checkbox" id="sgShowEdgeLabels" checked onchange="SigmaGraph.toggleEdgeLabels()">
+            <input class="form-check-input" type="checkbox" id="sgShowEdgeLabels" checked data-sg-change="toggleEdgeLabels">
             <label class="form-check-label small" for="sgShowEdgeLabels">Edges</label>
         </div>
         <div class="form-check form-check-inline mb-0">
-            <input class="form-check-input" type="checkbox" id="sgHideOrphans" onchange="SigmaGraph.refresh()">
+            <input class="form-check-input" type="checkbox" id="sgHideOrphans" data-sg-change="refresh">
             <label class="form-check-label small" for="sgHideOrphans">Hide orphans</label>
         </div>
         <div class="form-check form-check-inline mb-0">
-            <input class="form-check-input" type="checkbox" id="sgShowInferred" checked onchange="SigmaGraph.toggleInferred()">
+            <input class="form-check-input" type="checkbox" id="sgShowInferred" checked data-sg-change="toggleInferred">
             <label class="form-check-label small" for="sgShowInferred">Inferred</label>
         </div>
         <div class="d-inline-flex align-items-center gap-1 mb-0">
             <label class="form-label small mb-0 text-muted" for="sgMaxEntities"><i class="bi bi-speedometer2"></i></label>
-            <select class="form-select form-select-sm py-0" id="sgMaxEntities" title="Max entities returned by graph search" style="width:auto;font-size:.78rem;">
+            <select class="form-select form-select-sm py-0 sg-compact-select" id="sgMaxEntities" title="Max entities returned by graph search">
                 <option value="500">500</option>
                 <option value="1000">1 000</option>
                 <option value="2000">2 000</option>
@@ -41,20 +41,20 @@
                 <option value="20000">20 000</option>
             </select>
         </div>
-        <button class="btn btn-sm btn-outline-primary" onclick="OntologyViewer.open()" title="View ontology model">
+        <button type="button" class="btn btn-sm btn-outline-primary" data-sg-action="openOntologyViewer" title="View ontology model">
             <i class="bi bi-diagram-3"></i> Ontology
         </button>
         <div class="btn-group btn-group-sm">
-            <button class="btn btn-outline-primary" onclick="SigmaGraph.reload()" title="Reload from Results">
+            <button type="button" class="btn btn-outline-primary" data-sg-action="reload" title="Reload from Results">
                 <i class="bi bi-arrow-counterclockwise"></i>
             </button>
-            <button class="btn btn-outline-secondary" onclick="SigmaGraph.zoomIn()" title="Zoom In">
+            <button type="button" class="btn btn-outline-secondary" data-sg-action="zoomIn" title="Zoom In">
                 <i class="bi bi-zoom-in"></i>
             </button>
-            <button class="btn btn-outline-secondary" onclick="SigmaGraph.zoomOut()" title="Zoom Out">
+            <button type="button" class="btn btn-outline-secondary" data-sg-action="zoomOut" title="Zoom Out">
                 <i class="bi bi-zoom-out"></i>
             </button>
-            <button class="btn btn-outline-secondary" onclick="SigmaGraph.fitToView()" title="Fit to View">
+            <button type="button" class="btn btn-outline-secondary" data-sg-action="fitToView" title="Fit to View">
                 <i class="bi bi-arrows-fullscreen"></i>
             </button>
         </div>
@@ -68,7 +68,7 @@
             <div class="card">
                 <div class="card-body p-0">
                     <!-- Sigma Container -->
-                    <div id="sgContainer" style="position:relative;">
+                    <div id="sgContainer">
                         <div id="sgLoading" class="position-absolute top-50 start-50 translate-middle text-center">
                             <div class="ob-loading-spinner">
                                 <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
@@ -97,7 +97,7 @@
                         </div>
                     </div>
                     <!-- Graph Stats -->
-                    <div id="sgStats" class="px-2 py-1 d-flex justify-content-between align-items-center" style="display:none;">
+                    <div id="sgStats" class="px-2 py-1 justify-content-between align-items-center d-none">
                         <span class="text-muted small">
                             <span id="sgNodeCount">0 entities</span> &bull; <span id="sgEdgeCount">0 relationships</span>
                         </span>
@@ -162,10 +162,10 @@
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="small fw-semibold text-warning"><i class="bi bi-collection"></i> Groups</span>
                                 <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="SigmaGraph.collapseAllGroups()" title="Collapse all">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" data-sg-action="collapseAllGroups" title="Collapse all">
                                         <i class="bi bi-arrows-collapse"></i>
                                     </button>
-                                    <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="SigmaGraph.expandAllGroups()" title="Expand all">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" data-sg-action="expandAllGroups" title="Expand all">
                                         <i class="bi bi-arrows-expand"></i>
                                     </button>
                                 </div>
@@ -178,10 +178,10 @@
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="small fw-semibold text-success"><i class="bi bi-bezier2"></i> Data Clusters</span>
                                 <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="SigmaGraph.collapseAllClusters()" title="Collapse all clusters">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" data-sg-action="collapseAllClusters" title="Collapse all clusters">
                                         <i class="bi bi-arrows-collapse"></i>
                                     </button>
-                                    <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="SigmaGraph.expandAllClusters()" title="Expand all clusters">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" data-sg-action="expandAllClusters" title="Expand all clusters">
                                         <i class="bi bi-arrows-expand"></i>
                                     </button>
                                 </div>
@@ -196,20 +196,20 @@
                                 <label class="form-label small mb-1" for="sgClusterResolution">Resolution: <span id="sgClusterResolutionValue">1.00</span></label>
                                 <input type="range" class="form-range form-range-sm sg-cluster-slider" id="sgClusterResolution"
                                        min="0.1" max="3.0" step="0.05" value="1.0"
-                                       oninput="SigmaGraph.updateClusterResolutionLabel()">
+                                       data-sg-input="updateClusterResolutionLabel">
                                 <div class="d-flex gap-1 mt-1">
-                                    <button class="btn btn-sm btn-outline-success flex-grow-1" onclick="SigmaGraph.detectClusters()">
+                                    <button type="button" class="btn btn-sm btn-outline-success flex-grow-1" data-sg-action="detectClusters">
                                         <i class="bi bi-bezier2"></i> Detect (local)
                                     </button>
-                                    <button class="btn btn-sm btn-outline-primary flex-grow-1" onclick="SigmaGraph.detectClustersBackend()" title="Run detection on full graph via backend">
+                                    <button type="button" class="btn btn-sm btn-outline-primary flex-grow-1" data-sg-action="detectClustersBackend" title="Run detection on full graph via backend">
                                         <i class="bi bi-cloud-arrow-down"></i> Full graph
                                     </button>
-                                    <button class="btn btn-sm btn-outline-warning" onclick="SigmaGraph.clearClusters()" title="Clear clusters">
+                                    <button type="button" class="btn btn-sm btn-outline-warning" data-sg-action="clearClusters" title="Clear clusters">
                                         <i class="bi bi-x-lg"></i>
                                     </button>
                                 </div>
                                 <div class="form-check mt-2 mb-1">
-                                    <input class="form-check-input" type="checkbox" id="sgClusterColorBy" onchange="SigmaGraph.toggleClusterColorBy()">
+                                    <input class="form-check-input" type="checkbox" id="sgClusterColorBy" data-sg-change="toggleClusterColorBy">
                                     <label class="form-check-label small" for="sgClusterColorBy">Color by cluster</label>
                                 </div>
                             </div>
@@ -222,10 +222,10 @@
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="small fw-semibold text-info"><i class="bi bi-eye"></i> Entity Types</span>
                                 <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="SigmaGraph.selectAllTypes()" title="Show all">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" data-sg-action="selectAllTypes" title="Show all">
                                         <i class="bi bi-check-all"></i> All
                                     </button>
-                                    <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="SigmaGraph.clearAllTypes()" title="Hide all">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" data-sg-action="clearAllTypes" title="Hide all">
                                         <i class="bi bi-x-lg"></i> None
                                     </button>
                                 </div>
@@ -246,12 +246,12 @@
                         <div class="sg-tab-inner p-3">
                             <span class="small fw-semibold"><i class="bi bi-highlighter"></i> Highlight</span>
                             <p class="text-muted small mt-1 mb-2">Type a name to highlight matching entities in the graph.</p>
-                            <input type="text" class="form-control form-control-sm mb-2" id="sgSearchValue" placeholder="Search entities..." onkeypress="if(event.key==='Enter') SigmaGraph.applySearch()">
+                            <input type="text" class="form-control form-control-sm mb-2" id="sgSearchValue" placeholder="Search entities..." data-sg-keyenter="applySearch">
                             <div class="d-flex gap-1">
-                                <button class="btn btn-sm btn-primary flex-grow-1" onclick="SigmaGraph.applySearch()">
+                                <button type="button" class="btn btn-sm btn-primary flex-grow-1" data-sg-action="applySearch">
                                     <i class="bi bi-highlighter"></i> Highlight
                                 </button>
-                                <button class="btn btn-sm btn-outline-warning" onclick="SigmaGraph.clearSearch()" title="Clear" id="sgClearSearchBtn" style="display:none;">
+                                <button type="button" class="btn btn-sm btn-outline-warning d-none" data-sg-action="clearSearch" title="Clear" id="sgClearSearchBtn">
                                     <i class="bi bi-x-circle"></i>
                                 </button>
                             </div>
@@ -266,7 +266,7 @@
                             <span class="small fw-semibold"><i class="bi bi-funnel"></i> Filter Graph</span>
                             <p class="text-muted small mt-1 mb-2">Search and filter entities from the knowledge graph.</p>
                             <label class="form-label small mb-1" for="sgFilterEntityType">Entity Type</label>
-                            <select class="form-select form-select-sm mb-2" id="sgFilterEntityType" onchange="SigmaGraph.populateFilterEntityTypes()">
+                            <select class="form-select form-select-sm mb-2" id="sgFilterEntityType" data-sg-change="populateFilterEntityTypes">
                                 <option value="">All types</option>
                             </select>
                             <label class="form-label small mb-1" for="sgFilterMatchType">Match</label>
@@ -277,14 +277,14 @@
                                 <option value="ends">Ends with</option>
                             </select>
                             <label class="form-label small mb-1" for="sgFilterValue">Search Value</label>
-                            <input type="text" class="form-control form-control-sm mb-2" id="sgFilterValue" placeholder="Enter search term..." onkeypress="if(event.key==='Enter') SigmaGraph.executeGraphFilter()">
+                            <input type="text" class="form-control form-control-sm mb-2" id="sgFilterValue" placeholder="Enter search term..." data-sg-keyenter="executeGraphFilter">
                             <label class="form-label small mb-1" for="sgFilterDepth">Depth: <span id="sgFilterDepthValue">3</span></label>
-                            <input type="range" class="form-range form-range-sm mb-2" id="sgFilterDepth" min="1" max="10" value="3" title="Number of relationship levels to traverse" oninput="document.getElementById('sgFilterDepthValue').textContent=this.value">
+                            <input type="range" class="form-range form-range-sm mb-2" id="sgFilterDepth" min="1" max="10" value="3" title="Number of relationship levels to traverse" data-sg-input="updateFilterDepthLabel">
                             <div class="d-flex gap-1">
-                                <button class="btn btn-sm btn-primary flex-grow-1" onclick="SigmaGraph.executeGraphSearch()">
+                                <button type="button" class="btn btn-sm btn-primary flex-grow-1" data-sg-action="executeGraphSearch">
                                     <i class="bi bi-search"></i> Search
                                 </button>
-                                <button class="btn btn-sm btn-outline-warning" onclick="SigmaGraph.clearGraphFilter()" title="Clear" id="sgClearGraphFilterBtn" style="display:none;">
+                                <button type="button" class="btn btn-sm btn-outline-warning d-none" data-sg-action="clearGraphFilter" title="Clear" id="sgClearGraphFilterBtn">
                                     <i class="bi bi-x-circle"></i>
                                 </button>
                             </div>
@@ -316,16 +316,16 @@
                 </div>
                 <div class="px-3 py-2 border-bottom bg-light d-flex justify-content-between align-items-center">
                     <div class="form-check mb-0">
-                        <input class="form-check-input" type="checkbox" id="sgSeedSelectAll" onchange="SigmaGraph.toggleSeedSelectAll()">
+                        <input class="form-check-input" type="checkbox" id="sgSeedSelectAll" data-sg-change="toggleSeedSelectAll">
                         <label class="form-check-label small fw-semibold" for="sgSeedSelectAll">Select all</label>
                     </div>
-                    <input type="text" class="form-control form-control-sm" id="sgSeedQuickFilter" placeholder="Quick filter..." style="width:200px;" oninput="SigmaGraph.filterSeedTable()">
+                    <input type="text" class="form-control form-control-sm sg-seed-quick-filter" id="sgSeedQuickFilter" placeholder="Quick filter..." data-sg-input="filterSeedTable">
                 </div>
                 <div class="sg-seed-table-wrap">
                     <table class="table table-sm table-hover mb-0 sg-seed-table">
                         <thead>
                             <tr>
-                                <th style="width:36px;"></th>
+                                <th class="sg-seed-table-check-col"></th>
                                 <th class="small">Type</th>
                                 <th class="small">Name / Label</th>
                                 <th class="small">URI</th>
@@ -339,7 +339,7 @@
             <div class="modal-footer py-2">
                 <span class="me-auto small text-muted"><span id="sgSeedSelectedCount">0</span> selected</span>
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-sm btn-primary" id="sgSeedExploreBtn" onclick="SigmaGraph.expandSelectedSeeds()">
+                <button type="button" class="btn btn-sm btn-primary" id="sgSeedExploreBtn" data-sg-action="expandSelectedSeeds">
                     <i class="bi bi-diagram-3 me-1"></i>Explore selected
                 </button>
             </div>

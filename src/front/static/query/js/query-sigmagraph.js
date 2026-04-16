@@ -44,6 +44,7 @@ var SigmaGraph = (function () {
     var _initialized = false;
     var _cachedStats = null;
     var _libsRequested = false;
+    var _pendingFocusLoad = false;
 
     // --- Group expand/collapse state ---
     var _groupsDefs = [];          // group definitions from /dtwin/groups
@@ -1508,7 +1509,10 @@ var SigmaGraph = (function () {
         var statsEl = document.getElementById('sgStats');
         if (nodeEl) nodeEl.textContent = _graph.order + ' entities';
         if (edgeEl) edgeEl.textContent = _graph.size + ' relationships';
-        if (statsEl) statsEl.style.display = 'flex';
+        if (statsEl) {
+            statsEl.classList.remove('d-none');
+            statsEl.classList.add('d-flex');
+        }
     }
 
     function _populateTypes() {
@@ -1859,7 +1863,10 @@ var SigmaGraph = (function () {
             text.textContent = msg;
         }
         var clearBtn = document.getElementById('sgClearGraphFilterBtn');
-        if (clearBtn) clearBtn.style.display = 'inline-block';
+        if (clearBtn) {
+            clearBtn.classList.remove('d-none');
+            clearBtn.classList.add('d-inline-block');
+        }
 
         return data;
     }
@@ -1906,14 +1913,20 @@ var SigmaGraph = (function () {
         var info = document.getElementById('sgGraphFilterInfo');
         if (info) info.classList.add('d-none');
         var clearBtn = document.getElementById('sgClearGraphFilterBtn');
-        if (clearBtn) clearBtn.style.display = 'none';
+        if (clearBtn) {
+            clearBtn.classList.add('d-none');
+            clearBtn.classList.remove('d-inline-block');
+        }
         var val = document.getElementById('sgFilterValue');
         if (val) val.value = '';
         var sel = document.getElementById('sgFilterEntityType');
         if (sel) sel.value = '';
 
         var statsEl = document.getElementById('sgStats');
-        if (statsEl) statsEl.style.display = 'none';
+        if (statsEl) {
+            statsEl.classList.add('d-none');
+            statsEl.classList.remove('d-flex');
+        }
 
         _showPlaceholder();
         _showEmptyState();
@@ -1922,12 +1935,11 @@ var SigmaGraph = (function () {
     // -----------------------------------------------------------
     // Public API
     // -----------------------------------------------------------
-    function init() {
-        console.log('[SigmaGraph] init called');
+    function init(focusUri) {
+        console.log('[SigmaGraph] init called, focusUri:', focusUri || 'none');
+        _pendingFocusLoad = !!focusUri;
         _loadGraphLibs();
 
-        // Always start fresh: discard any stale d3 data so the graph
-        // queries the triple store directly via the search filter.
         if (!_graphFilterActive) {
             d3NodesData = [];
             d3LinksData = [];
@@ -1936,11 +1948,25 @@ var SigmaGraph = (function () {
                 _renderer = null;
             }
             _graph = null;
-            _showEmptyState();
+            if (focusUri) {
+                _hideEmptyState();
+                var loading = document.getElementById('sgLoading');
+                if (loading) loading.style.display = 'flex';
+            } else {
+                _showEmptyState();
+            }
         } else {
             _render();
         }
         _initialized = true;
+
+        if (focusUri) {
+            _waitForGraphLibs(10000).then(function () {
+                SigmaGraph.focusEntityByUri(focusUri).finally(function () {
+                    _pendingFocusLoad = false;
+                });
+            });
+        }
     }
 
     function _hasData() {
@@ -1948,6 +1974,7 @@ var SigmaGraph = (function () {
     }
 
     function _showEmptyState() {
+        if (_pendingFocusLoad) return;
         _hideLoading();
         var container = document.getElementById('sgContainer');
         if (container) {
@@ -1958,9 +1985,9 @@ var SigmaGraph = (function () {
                 placeholder.className = 'position-absolute top-50 start-50 translate-middle text-center';
                 placeholder.innerHTML =
                     '<div class="text-muted">' +
-                    '<i class="bi bi-funnel" style="font-size:2.5rem;"></i>' +
-                    '<p class="mt-2 mb-1 fw-semibold">No data loaded</p>' +
-                    '<p class="small">Use search to load entities from the triple store.</p>' +
+                    '<i class="bi bi-diagram-3 " style="font-size:2.5rem;"></i>' +
+                    '<p class="mt-2 mb-1 fw-semibold">Knowledge Graph</p>' +
+                    '<p class="small">Use the filter panel to search and explore entities.</p>' +
                     '</div>';
                 container.appendChild(placeholder);
             }
@@ -2174,7 +2201,10 @@ var SigmaGraph = (function () {
                 infoText.textContent = 'Found ' + _searchMatched.size + ' entit' + (_searchMatched.size === 1 ? 'y' : 'ies');
             }
             var clearBtn = document.getElementById('sgClearSearchBtn');
-            if (clearBtn) clearBtn.style.display = 'inline-block';
+            if (clearBtn) {
+                clearBtn.classList.remove('d-none');
+                clearBtn.classList.add('d-inline-block');
+            }
 
             // Clear click/hover selection so search focus takes over
             _selectedNode = null;
@@ -2196,7 +2226,10 @@ var SigmaGraph = (function () {
             var info = document.getElementById('sgSearchInfo');
             if (info) info.classList.add('d-none');
             var clearBtn = document.getElementById('sgClearSearchBtn');
-            if (clearBtn) clearBtn.style.display = 'none';
+            if (clearBtn) {
+                clearBtn.classList.add('d-none');
+                clearBtn.classList.remove('d-inline-block');
+            }
             var val = document.getElementById('sgSearchValue');
             if (val) val.value = '';
             if (_renderer) {
@@ -2213,6 +2246,11 @@ var SigmaGraph = (function () {
         populateFilterEntityTypes: function () { _populateFilterEntityTypes(); },
         executeGraphFilter: function () { _executeGraphSearch(); },
         executeGraphSearch: function () { _executeGraphSearch(); },
+        updateFilterDepthLabel: function () {
+            var depthEl = document.getElementById('sgFilterDepth');
+            var labelEl = document.getElementById('sgFilterDepthValue');
+            if (labelEl && depthEl) labelEl.textContent = depthEl.value;
+        },
         expandSelectedSeeds: function () { _expandSelectedSeeds(); },
         toggleSeedSelectAll: function () { _toggleSeedSelectAll(); },
         filterSeedTable: function () { _filterSeedTable(); },
@@ -2594,3 +2632,59 @@ async function _graphSwitcherSelect(domainName, version) {
         if (list) list.innerHTML = '<div class="text-danger p-3"><i class="bi bi-exclamation-triangle me-1"></i>Failed to load domain</div>';
     }
 }
+
+/**
+ * Replaces inline onclick/onchange/oninput handlers from _query_sigmagraph.html
+ * (section + seed preview modal, which is rendered outside #sigmagraph-section).
+ */
+document.addEventListener('DOMContentLoaded', function () {
+    function _sgUiContains(node) {
+        if (!node) return false;
+        var sec = document.getElementById('sigmagraph-section');
+        var seedModal = document.getElementById('sgSeedPreviewModal');
+        return (sec && sec.contains(node)) || (seedModal && seedModal.contains(node));
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-sg-action]');
+        if (!btn || !_sgUiContains(btn)) return;
+        var act = btn.getAttribute('data-sg-action');
+        if (act === 'openOntologyViewer') {
+            if (typeof OntologyViewer !== 'undefined' && typeof OntologyViewer.open === 'function') {
+                OntologyViewer.open();
+            }
+            return;
+        }
+        if (typeof SigmaGraph !== 'undefined' && typeof SigmaGraph[act] === 'function') {
+            SigmaGraph[act]();
+        }
+    });
+
+    document.addEventListener('change', function (e) {
+        var el = e.target;
+        if (!_sgUiContains(el)) return;
+        var m = el.getAttribute('data-sg-change');
+        if (m && typeof SigmaGraph !== 'undefined' && typeof SigmaGraph[m] === 'function') {
+            SigmaGraph[m]();
+        }
+    });
+
+    document.addEventListener('input', function (e) {
+        var el = e.target;
+        if (!_sgUiContains(el)) return;
+        var m = el.getAttribute('data-sg-input');
+        if (m && typeof SigmaGraph !== 'undefined' && typeof SigmaGraph[m] === 'function') {
+            SigmaGraph[m]();
+        }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        var el = e.target;
+        if (!_sgUiContains(el) || !el || el.tagName !== 'INPUT') return;
+        var m = el.getAttribute('data-sg-keyenter');
+        if (m && typeof SigmaGraph !== 'undefined' && typeof SigmaGraph[m] === 'function') {
+            SigmaGraph[m]();
+        }
+    });
+});

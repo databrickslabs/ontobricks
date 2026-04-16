@@ -25,7 +25,43 @@ document.addEventListener('DOMContentLoaded', () => {
     if (select) {
         select.addEventListener('change', () => loadApiVersions(select.value));
     }
+
+    bindQueryApiInteractions();
 });
+
+/**
+ * Wire API reference UI from ``data-action`` / ``data-try-endpoint`` (no inline handlers).
+ */
+function bindQueryApiInteractions() {
+    document.querySelectorAll('[data-action]').forEach((el) => {
+        const action = el.dataset.action;
+        if (action === 'toggle-api-card') {
+            el.addEventListener('click', () => toggleApiCard(el));
+        } else if (action === 'copy-base-url') {
+            el.addEventListener('click', () => copyApiBaseUrl());
+        } else if (action === 'find-run') {
+            el.addEventListener('click', () => tryFindEndpoint(el));
+        } else if (action === 'find-clear') {
+            el.addEventListener('click', () => clearFindForm());
+        } else if (action === 'triples-run') {
+            el.addEventListener('click', () => tryTriplesEndpoint(el));
+        } else if (action === 'triples-clear') {
+            el.addEventListener('click', () => clearTriplesForm());
+        } else if (action === 'graphiql-open') {
+            el.addEventListener('click', () => openGraphiQL());
+        } else if (action === 'graphql-run') {
+            el.addEventListener('click', () => tryGraphqlQuery(el));
+        } else if (action === 'graphql-schema') {
+            el.addEventListener('click', () => tryGraphqlSchema(el));
+        }
+    });
+
+    document.querySelectorAll('[data-try-endpoint]').forEach((btn) => {
+        const path = btn.getAttribute('data-try-endpoint');
+        if (!path) return;
+        btn.addEventListener('click', () => tryApiEndpoint(path, btn));
+    });
+}
 
 async function loadApiDomains() {
     const select = document.getElementById('apiDomainName');
@@ -116,7 +152,7 @@ function toggleApiCard(headerEl) {
     const card = headerEl.closest('.ob-api-card');
     const body = card.querySelector('.card-body');
     const isOpen = card.classList.toggle('open');
-    body.style.display = isOpen ? '' : 'none';
+    body.classList.toggle('d-none', !isOpen);
 }
 
 /* ------------------------------------------------------------------ */
@@ -126,12 +162,14 @@ function toggleApiCard(headerEl) {
 function copyApiBaseUrl() {
     const url = document.getElementById('apiBaseUrl')?.textContent;
     if (!url) return;
+    const btn = document.getElementById('api-copy-base-url-btn');
     navigator.clipboard.writeText(url).then(() => {
-        const btn = document.querySelector('[onclick="copyApiBaseUrl()"]');
         if (btn) {
             const icon = btn.querySelector('i');
-            icon.className = 'bi bi-check2';
-            setTimeout(() => { icon.className = 'bi bi-clipboard'; }, 1500);
+            if (icon) {
+                icon.className = 'bi bi-check2';
+                setTimeout(() => { icon.className = 'bi bi-clipboard'; }, 1500);
+            }
         }
     });
 }
@@ -147,7 +185,7 @@ async function tryApiEndpoint(path, btnEl) {
 
     btnEl.disabled = true;
     btnEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Loading…';
-    responseDiv.style.display = 'block';
+    responseDiv.classList.remove('d-none');
     responseDiv.innerHTML = '';
 
     const fullPath = appendDomainParam(path);
@@ -204,7 +242,7 @@ async function tryFindEndpoint(btnEl) {
         const card = btnEl.closest('.card-body');
         const responseDiv = card.querySelector('.ob-api-response');
         if (responseDiv) {
-            responseDiv.style.display = 'block';
+            responseDiv.classList.remove('d-none');
             responseDiv.innerHTML = '<div class="text-warning small">Provide at least Entity type or Search value</div>';
         }
         return;
@@ -304,7 +342,7 @@ async function tryGraphqlQuery(btnEl) {
 
     btnEl.disabled = true;
     btnEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Running…';
-    responseDiv.style.display = 'block';
+    responseDiv.classList.remove('d-none');
     responseDiv.innerHTML = '';
 
     const url = GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(domainSlug);
@@ -357,7 +395,7 @@ async function tryGraphqlSchema(btnEl) {
 
     btnEl.disabled = true;
     btnEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Loading…';
-    responseDiv.style.display = 'block';
+    responseDiv.classList.remove('d-none');
     responseDiv.innerHTML = '';
 
     try {

@@ -7,6 +7,15 @@ logger = get_logger(__name__)
 
 _DEFAULT_FORMATS = ("turtle", "xml", "n3", "nt", "json-ld")
 
+__all__ = ["parse_rdf_flexible", "uri_local_name"]
+
+
+def uri_local_name(uri: str) -> str:
+    """Extract the local name (fragment or last path segment) from a URI."""
+    if "#" in uri:
+        return uri.rsplit("#", 1)[-1]
+    return uri.rsplit("/", 1)[-1]
+
 
 def parse_rdf_flexible(
     data: str,

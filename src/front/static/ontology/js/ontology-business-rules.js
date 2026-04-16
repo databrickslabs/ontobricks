@@ -5,6 +5,8 @@
  */
 window.BusinessRulesModule = {
     _initialized: false,
+    _brStaticUiBound: false,
+    _dtEditorDelegBound: false,
     _ontologyClasses: [],
     _ontologyProperties: [],
 
@@ -26,6 +28,9 @@ window.BusinessRulesModule = {
         }
         this._initialized = true;
 
+        this._bindBrStaticUiOnce();
+        this._ensureDtEditorDelegation();
+
         await this._loadOntologyItems();
 
         const loaders = [
@@ -39,6 +44,69 @@ window.BusinessRulesModule = {
         }
         await Promise.all(loaders);
         this._refreshAllBadges();
+    },
+
+    _bindBrStaticUiOnce() {
+        if (this._brStaticUiBound) return;
+        const root = document.getElementById('swrl-section');
+        if (!root) return;
+        this._brStaticUiBound = true;
+
+        root.addEventListener('click', (e) => {
+            const t = e.target.closest('[data-br-action]');
+            if (!t || !root.contains(t)) return;
+            const act = t.getAttribute('data-br-action');
+            if (act === 'add-rule') this.addRuleForActiveTab();
+            else if (act === 'dt-add-column') this.dtAddColumn();
+            else if (act === 'dt-add-row') this.dtAddRow();
+            else if (act === 'dt-save') this.dtSave();
+            else if (act === 'sparql-validate') this.sparqlValidate();
+            else if (act === 'sparql-save') this.sparqlSave();
+            else if (act === 'agg-save') this.aggSave();
+        });
+
+        root.addEventListener('change', (e) => {
+            const el = e.target;
+            if (!root.contains(el)) return;
+            if (el.id === 'dtTargetClass') this._dtTargetClassChanged();
+            else if (el.id === 'dtOutputAction') this._dtSyncOutputValue();
+            else if (el.id === 'aggTargetClass') this._aggTargetClassChanged();
+            else if (el.name === 'dtRowLogic') this._dtRowLogicChanged();
+        });
+    },
+
+    _ensureDtEditorDelegation() {
+        if (this._dtEditorDelegBound) return;
+        const modal = document.getElementById('dtEditorModal');
+        if (!modal) return;
+        this._dtEditorDelegBound = true;
+
+        modal.addEventListener('change', (e) => {
+            const t = e.target;
+            if (!modal.contains(t)) return;
+            if (t.matches && t.matches('select[data-dt-hdr-col]')) {
+                this._dtColChanged(parseInt(t.getAttribute('data-dt-hdr-col'), 10), t.value);
+                return;
+            }
+            if (t.matches && t.matches('select.dt-op-select')) {
+                const ri = parseInt(t.getAttribute('data-dt-r'), 10);
+                const ci = parseInt(t.getAttribute('data-dt-c'), 10);
+                this._dtCellChanged(ri, ci, 'op', t.value);
+                return;
+            }
+            if (t.matches && t.matches('input[data-dt-cell-val]')) {
+                const ri = parseInt(t.getAttribute('data-dt-r'), 10);
+                const ci = parseInt(t.getAttribute('data-dt-c'), 10);
+                this._dtCellChanged(ri, ci, 'value', t.value);
+            }
+        });
+
+        modal.addEventListener('click', (e) => {
+            const rm = e.target.closest('[data-dt-remove-row]');
+            if (rm && modal.contains(rm)) {
+                this._dtRemoveRow(parseInt(rm.getAttribute('data-dt-remove-row'), 10));
+            }
+        });
     },
 
     // ── Ontology items (classes / properties for dropdowns) ──
@@ -277,7 +345,7 @@ window.BusinessRulesModule = {
         if (enabled === false) card.style.opacity = '0.55';
 
         const enabledBadge = enabled === false
-            ? '<span class="badge bg-secondary me-1" style="font-size:.6rem">disabled</span>'
+            ? '<span class="badge bg-secondary me-1 br-disabled-badge">disabled</span>'
             : '';
 
         card.innerHTML =
@@ -308,8 +376,8 @@ window.BusinessRulesModule = {
         const empty = document.getElementById('dtEmpty');
         if (!container) return;
         container.querySelectorAll('.br-rule-card').forEach(c => c.remove());
-        if (this.dtRules.length === 0) { if (empty) empty.style.display = ''; return; }
-        if (empty) empty.style.display = 'none';
+        if (this.dtRules.length === 0) { if (empty) empty.classList.remove('d-none'); return; }
+        if (empty) empty.classList.add('d-none');
 
         this.dtRules.forEach((dt, i) => {
             this._renderRuleCard(container, {
@@ -378,10 +446,10 @@ window.BusinessRulesModule = {
         const targetCls = (document.getElementById('dtTargetClass') || {}).value || '';
         const filteredProps = this._getPropertiesForClass(targetCls);
 
-        let hdr = '<tr><th class="text-center small text-muted" style="width:40px">#</th>';
+        let hdr = '<tr><th class="text-center small text-muted dt-grid-num-col">#</th>';
         this._dtColumns.forEach((col, ci) => {
             hdr += `<th class="dt-col-header">` +
-                `<select class="form-select form-select-sm" onchange="BusinessRulesModule._dtColChanged(${ci}, this.value)">` +
+                `<select class="form-select form-select-sm" data-dt-hdr-col="${ci}">` +
                 `<option value="">Property…</option>`;
             for (const p of filteredProps) {
                 const pName = p.name || p.label || '';
@@ -389,7 +457,7 @@ window.BusinessRulesModule = {
             }
             hdr += `</select></th>`;
         });
-        hdr += '<th style="width:36px"></th></tr>';
+        hdr += '<th class="dt-grid-action-col"></th></tr>';
         thead.innerHTML = hdr;
 
         const colCount = this._dtColumns.length + 2;
@@ -401,8 +469,8 @@ window.BusinessRulesModule = {
         this._dtRows.forEach((row, ri) => {
             if (ri > 0) {
                 tbody.innerHTML +=
-                    `<tr class="dt-logic-row"><td colspan="${colCount}" class="text-center py-0" style="border:none;background:transparent;">` +
-                    `<span class="badge ${logicClass} bg-opacity-75" style="font-size:.65rem;letter-spacing:.05em">${logicLabel}</span>` +
+                    `<tr class="dt-logic-row"><td colspan="${colCount}" class="text-center py-0 dt-logic-row-cell">` +
+                    `<span class="badge ${logicClass} bg-opacity-75 dt-logic-badge">${logicLabel}</span>` +
                     `</td></tr>`;
             }
             let tr = `<tr><td class="text-center small text-muted">${ri + 1}</td>`;
@@ -410,14 +478,13 @@ window.BusinessRulesModule = {
                 const cond = (row.conditions || [])[ci] || { op: 'eq', value: '' };
                 tr += `<td>` +
                     `<div class="d-flex gap-1">` +
-                    `<select class="form-select form-select-sm dt-op-select" onchange="BusinessRulesModule._dtCellChanged(${ri},${ci},'op',this.value)">` +
+                    `<select class="form-select form-select-sm dt-op-select" data-dt-r="${ri}" data-dt-c="${ci}">` +
                     this._dtOpOptions(cond.op) +
                     `</select>` +
-                    `<input type="text" class="form-control form-control-sm dt-val-input" value="${this._esc(cond.value)}" ` +
-                    `onchange="BusinessRulesModule._dtCellChanged(${ri},${ci},'value',this.value)">` +
+                    `<input type="text" class="form-control form-control-sm dt-val-input" value="${this._esc(cond.value)}" data-dt-cell-val data-dt-r="${ri}" data-dt-c="${ci}">` +
                     `</div></td>`;
             });
-            tr += `<td class="text-center"><i class="bi bi-x-circle dt-remove-btn" onclick="BusinessRulesModule._dtRemoveRow(${ri})" title="Remove row"></i></td>`;
+            tr += `<td class="text-center"><i class="bi bi-x-circle dt-remove-btn" data-dt-remove-row="${ri}" title="Remove row" role="button" tabindex="0"></i></td>`;
             tr += '</tr>';
             tbody.innerHTML += tr;
         });
@@ -448,7 +515,10 @@ window.BusinessRulesModule = {
     _dtSyncOutputValue() {
         const action = document.getElementById('dtOutputAction')?.value;
         const grp = document.getElementById('dtOutputValueGroup');
-        if (grp) grp.style.display = action === 'set_value' ? '' : 'none';
+        if (grp) {
+            if (action === 'set_value') grp.classList.remove('d-none');
+            else grp.classList.add('d-none');
+        }
     },
 
     dtAddColumn() {
@@ -503,8 +573,8 @@ window.BusinessRulesModule = {
         const empty = document.getElementById('sparqlEmpty');
         if (!container) return;
         container.querySelectorAll('.br-rule-card').forEach(c => c.remove());
-        if (this.sparqlRules.length === 0) { if (empty) empty.style.display = ''; return; }
-        if (empty) empty.style.display = 'none';
+        if (this.sparqlRules.length === 0) { if (empty) empty.classList.remove('d-none'); return; }
+        if (empty) empty.classList.add('d-none');
 
         this.sparqlRules.forEach((r, i) => {
             const querySnip = (r.query || '').substring(0, 80).replace(/\n/g, ' ');
@@ -527,7 +597,8 @@ window.BusinessRulesModule = {
         document.getElementById('sparqlDescription').value = r.description || '';
         document.getElementById('sparqlQuery').value = r.query || '';
         document.getElementById('sparqlEditorTitle').innerHTML = `<i class="bi bi-braces me-2"></i>${isNew ? 'Add' : 'Edit'} SPARQL Rule`;
-        document.getElementById('sparqlValidationMsg').style.display = 'none';
+        const svm = document.getElementById('sparqlValidationMsg');
+        if (svm) svm.classList.add('d-none');
         new bootstrap.Modal(document.getElementById('sparqlEditorModal')).show();
     },
 
@@ -542,7 +613,7 @@ window.BusinessRulesModule = {
                 body: JSON.stringify({ rule: { name, query } }),
             });
             const data = await resp.json();
-            msgEl.style.display = '';
+            msgEl.classList.remove('d-none');
             if (data.valid) {
                 msgEl.className = 'alert alert-success small py-2';
                 msgEl.textContent = 'Query syntax is valid.';
@@ -551,7 +622,7 @@ window.BusinessRulesModule = {
                 msgEl.textContent = (data.errors || []).join('; ') || 'Validation failed';
             }
         } catch (e) {
-            msgEl.style.display = '';
+            msgEl.classList.remove('d-none');
             msgEl.className = 'alert alert-danger small py-2';
             msgEl.textContent = 'Validation request failed';
         }
@@ -580,8 +651,8 @@ window.BusinessRulesModule = {
         const empty = document.getElementById('aggEmpty');
         if (!container) return;
         container.querySelectorAll('.br-rule-card').forEach(c => c.remove());
-        if (this.aggRules.length === 0) { if (empty) empty.style.display = ''; return; }
-        if (empty) empty.style.display = 'none';
+        if (this.aggRules.length === 0) { if (empty) empty.classList.remove('d-none'); return; }
+        if (empty) empty.classList.add('d-none');
 
         const opLabels = { lt: '<', gt: '>', eq: '=', lte: '≤', gte: '≥', neq: '≠' };
         this.aggRules.forEach((r, i) => {

@@ -84,15 +84,15 @@ async function loadMetadataStatus() {
             // Show preview and Update Mappings button
             displayMetadataPreview(data.metadata);
             const updateMappingsBtn = document.getElementById('updateMappingsBtn');
-            if (updateMappingsBtn) updateMappingsBtn.style.display = 'inline-block';
+            if (updateMappingsBtn) updateMappingsBtn.classList.remove('d-none');
         } else {
             metadataCache = null;
             tableSelections = {};
             statusDiv.className = 'alert alert-secondary mb-4';
             statusText.innerHTML = '<i class="bi bi-info-circle"></i> No data sources loaded';
-            previewDiv.style.display = 'none';
+            previewDiv.classList.add('d-none');
             const updateMappingsBtn = document.getElementById('updateMappingsBtn');
-            if (updateMappingsBtn) updateMappingsBtn.style.display = 'none';
+            if (updateMappingsBtn) updateMappingsBtn.classList.add('d-none');
         }
     } catch (error) {
         console.error('Error loading metadata status:', error);
@@ -126,7 +126,7 @@ async function loadMetadataFromUC() {
     const statusSpan = document.getElementById('metadataInitStatus');
     
     loadBtn.disabled = true;
-    progressDiv.style.display = 'block';
+    progressDiv.classList.remove('d-none');
     statusSpan.textContent = 'Fetching table list from Unity Catalog...';
     
     try {
@@ -140,7 +140,7 @@ async function loadMetadataFromUC() {
         
         const data = await response.json();
         
-        progressDiv.style.display = 'none';
+        progressDiv.classList.add('d-none');
         loadBtn.disabled = false;
         statusSpan.textContent = '';
         
@@ -167,7 +167,7 @@ async function loadMetadataFromUC() {
         }
         
     } catch (error) {
-        progressDiv.style.display = 'none';
+        progressDiv.classList.add('d-none');
         loadBtn.disabled = false;
         statusSpan.textContent = '';
         showNotification('Error: ' + error.message, 'error');
@@ -199,8 +199,7 @@ function showTableSelectionModal(catalog, schema) {
                 <td>
                     <input type="checkbox" class="form-check-input import-table-checkbox" 
                            data-table="${table.name}" 
-                           ${isSelected ? 'checked' : ''} 
-                           onchange="toggleImportTableSelection('${table.name}', this.checked)">
+                           ${isSelected ? 'checked' : ''}>
                 </td>
                 <td>
                     <i class="bi bi-table text-primary me-1"></i>
@@ -229,7 +228,7 @@ function toggleImportTableSelection(tableName, isSelected) {
 
 function selectAllImportTables(isSelected) {
     // Only affect visible (non-filtered) rows
-    const visibleRows = document.querySelectorAll('.import-table-row:not([style*="display: none"])');
+    const visibleRows = document.querySelectorAll('.import-table-row:not(.d-none)');
     visibleRows.forEach(row => {
         const tableName = row.dataset.table;
         importTableSelections[tableName] = isSelected;
@@ -264,9 +263,9 @@ function filterImportTables(filter) {
     rows.forEach(row => {
         const tableName = row.dataset.table.toLowerCase();
         if (tableName.includes(lowerFilter)) {
-            row.style.display = '';
+            row.classList.remove('d-none');
         } else {
-            row.style.display = 'none';
+            row.classList.add('d-none');
         }
     });
 }
@@ -289,7 +288,7 @@ function updateImportSelectionCount() {
 }
 
 function updateSelectAllImportCheckbox() {
-    const visibleRows = document.querySelectorAll('.import-table-row:not([style*="display: none"])');
+    const visibleRows = document.querySelectorAll('.import-table-row:not(.d-none)');
     const visibleTableNames = Array.from(visibleRows).map(r => r.dataset.table);
     
     const allSelected = visibleTableNames.every(name => importTableSelections[name] === true);
@@ -325,7 +324,7 @@ async function importSelectedTables() {
     const statusSpan = document.getElementById('metadataInitStatus');
     
     loadBtn.disabled = true;
-    progressDiv.style.display = 'block';
+    progressDiv.classList.remove('d-none');
     statusSpan.textContent = `Loading data sources for ${selectedTables.length} table(s)...`;
     
     try {
@@ -344,7 +343,7 @@ async function importSelectedTables() {
         const startResult = await response.json();
         
         if (!startResult.success) {
-            progressDiv.style.display = 'none';
+            progressDiv.classList.add('d-none');
             loadBtn.disabled = false;
             showNotification('Error: ' + startResult.message, 'error');
             return;
@@ -362,7 +361,7 @@ async function importSelectedTables() {
         await monitorMetadataTask(taskId, 'load', loadBtn, progressDiv, statusSpan);
         
     } catch (error) {
-        progressDiv.style.display = 'none';
+        progressDiv.classList.add('d-none');
         loadBtn.disabled = false;
         showNotification('Error: ' + error.message, 'error');
     }
@@ -395,7 +394,7 @@ async function monitorMetadataTask(taskId, taskType, btn, progressDiv, statusSpa
             if (task.status === 'completed') {
                 sessionStorage.removeItem(taskType === 'load' ? METADATA_LOAD_TASK_KEY : METADATA_UPDATE_TASK_KEY);
                 
-                if (progressDiv) progressDiv.style.display = 'none';
+                if (progressDiv) progressDiv.classList.add('d-none');
                 if (btn) btn.disabled = false;
                 
                 // Auto-save the updated metadata to the session
@@ -429,7 +428,7 @@ async function monitorMetadataTask(taskId, taskType, btn, progressDiv, statusSpa
             } else if (task.status === 'failed') {
                 sessionStorage.removeItem(taskType === 'load' ? METADATA_LOAD_TASK_KEY : METADATA_UPDATE_TASK_KEY);
                 
-                if (progressDiv) progressDiv.style.display = 'none';
+                if (progressDiv) progressDiv.classList.add('d-none');
                 if (btn) btn.disabled = false;
                 
                 showNotification('Failed: ' + (task.error || 'Unknown error'), 'error');
@@ -439,7 +438,7 @@ async function monitorMetadataTask(taskId, taskType, btn, progressDiv, statusSpa
             } else if (task.status === 'cancelled') {
                 sessionStorage.removeItem(taskType === 'load' ? METADATA_LOAD_TASK_KEY : METADATA_UPDATE_TASK_KEY);
                 
-                if (progressDiv) progressDiv.style.display = 'none';
+                if (progressDiv) progressDiv.classList.add('d-none');
                 if (btn) btn.disabled = false;
                 
                 showNotification('Operation was cancelled', 'warning');
@@ -450,7 +449,7 @@ async function monitorMetadataTask(taskId, taskType, btn, progressDiv, statusSpa
             console.error('[Metadata] Monitoring error:', error);
             sessionStorage.removeItem(taskType === 'load' ? METADATA_LOAD_TASK_KEY : METADATA_UPDATE_TASK_KEY);
             
-            if (progressDiv) progressDiv.style.display = 'none';
+            if (progressDiv) progressDiv.classList.add('d-none');
             if (btn) btn.disabled = false;
             
             showNotification('Error monitoring task', 'error');
@@ -464,7 +463,7 @@ function displayMetadataPreview(metadata) {
     const tbody = document.getElementById('metadataTablesBody');
     
     if (!metadata || !metadata.tables || metadata.tables.length === 0) {
-        previewDiv.style.display = 'none';
+        previewDiv.classList.add('d-none');
         return;
     }
     
@@ -486,25 +485,24 @@ function displayMetadataPreview(metadata) {
         
         html += `
             <tr class="${isMarked ? 'table-danger' : ''}" data-table-index="${index}">
-                <td onclick="event.stopPropagation();">
+                <td>
                     <input type="checkbox" class="form-check-input table-checkbox" 
                            data-table="${table.name}" 
-                           ${isMarked ? 'checked' : ''} 
-                           onchange="toggleTableSelection('${table.name}', this.checked)">
+                           ${isMarked ? 'checked' : ''}>
                 </td>
-                <td style="cursor: pointer;" onclick="showTableDetails(${index})" title="${fullName}">
+                <td class="meta-cursor-pointer" data-meta-action="table-details" data-table-index="${index}" title="${fullName}">
                     <i class="bi bi-table text-primary me-1"></i>
                     <strong>${displayName}</strong>
                 </td>
-                <td style="cursor: pointer;" onclick="openChangeDataSourceModal(${index})" title="Click to change data source">
+                <td class="meta-cursor-pointer" data-meta-action="open-ds-modal" data-table-index="${index}" title="Click to change data source">
                     ${dataSource
                         ? `<code>${dataSource}</code>`
                         : '<span class="text-muted fst-italic">Click to set...</span>'}
                 </td>
-                <td style="cursor: pointer;" onclick="showTableDetails(${index})">
+                <td class="meta-cursor-pointer" data-meta-action="table-details" data-table-index="${index}">
                     <span class="badge bg-secondary">${columnCount}</span>
                 </td>
-                <td class="table-comment-cell" onclick="editTableCommentInline(${index}, event)">
+                <td class="table-comment-cell meta-cursor-pointer" data-meta-action="edit-comment" data-table-index="${index}">
                     <span class="table-comment-text" id="tableComment_${index}">${tableComment || '<span class="text-muted fst-italic">Click to add description...</span>'}</span>
                 </td>
             </tr>
@@ -512,7 +510,7 @@ function displayMetadataPreview(metadata) {
     });
     
     tbody.innerHTML = html || '<tr><td colspan="5" class="text-center text-muted">No tables found</td></tr>';
-    previewDiv.style.display = 'block';
+    previewDiv.classList.remove('d-none');
     
     updateSelectionCount();
     updateSelectAllCheckbox();
@@ -530,15 +528,21 @@ function editTableCommentInline(tableIndex, event) {
     const currentComment = table.comment || table.description || '';
     
     // Replace cell content with input
+    const safeVal = currentComment.replace(/"/g, '&quot;');
     cell.innerHTML = `
         <input type="text" class="form-control form-control-sm" 
-               value="${currentComment.replace(/"/g, '&quot;')}" 
-               onblur="saveTableCommentInline(${tableIndex}, this.value)"
-               onkeydown="if(event.key==='Enter'){this.blur();} if(event.key==='Escape'){cancelTableCommentEdit(${tableIndex});}"
+               value="${safeVal}" 
                autofocus>
     `;
     
     const input = cell.querySelector('input');
+    input.addEventListener('blur', function () {
+        saveTableCommentInline(tableIndex, input.value);
+    });
+    input.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') input.blur();
+        if (ev.key === 'Escape') cancelTableCommentEdit(tableIndex);
+    });
     input.focus();
     input.select();
 }
@@ -619,10 +623,10 @@ function updateSelectionCount() {
     // Show/hide remove button based on how many tables are checked for removal
     if (removeBtn) {
         if (markedCount > 0) {
-            removeBtn.style.display = 'inline-block';
+            removeBtn.classList.remove('d-none');
             removeBtn.innerHTML = `<i class="bi bi-trash"></i> Remove ${markedCount} Selected Table${markedCount !== 1 ? 's' : ''}`;
         } else {
-            removeBtn.style.display = 'none';
+            removeBtn.classList.add('d-none');
         }
     }
 }
@@ -1057,3 +1061,53 @@ async function updateMetadataFromUC() {
         showNotification('Error: ' + error.message, 'error');
     }
 }
+
+/**
+ * Replaces inline onclick/onchange/oninput from _domain_metadata.html
+ * (entire partial is rendered inside #metadata-section, including modals).
+ */
+(function setupDomainMetadataTemplateBindings() {
+    let bound = false;
+    function bind() {
+        if (bound) return;
+        const root = document.getElementById('metadata-section');
+        if (!root) return;
+        bound = true;
+
+        root.addEventListener('click', function (e) {
+            const t = e.target.closest('[data-meta-action]');
+            if (!t || !root.contains(t)) return;
+            const act = t.getAttribute('data-meta-action');
+            if (act === 'clear-metadata') clearMetadata();
+            else if (act === 'show-load-modal') showLoadMetadataModal();
+            else if (act === 'remove-selected-tables') removeSelectedTables();
+            else if (act === 'update-mappings') updateMappingsFromMetadata();
+            else if (act === 'update-from-uc') updateMetadataFromUC();
+            else if (act === 'import-select-all') selectAllImportTables(t.getAttribute('data-meta-checked') === '1');
+            else if (act === 'import-new-only') selectNewTablesOnly();
+            else if (act === 'import-selected') importSelectedTables();
+            else if (act === 'save-table-details') saveTableDetails();
+            else if (act === 'load-from-uc') loadMetadataFromUC();
+            else if (act === 'confirm-ds-change') confirmDataSourceChange();
+            else if (act === 'table-details') showTableDetails(parseInt(t.getAttribute('data-table-index'), 10));
+            else if (act === 'open-ds-modal') openChangeDataSourceModal(parseInt(t.getAttribute('data-table-index'), 10));
+            else if (act === 'edit-comment') editTableCommentInline(parseInt(t.getAttribute('data-table-index'), 10), e);
+        });
+
+        root.addEventListener('change', function (e) {
+            const el = e.target;
+            if (!root.contains(el)) return;
+            if (el.id === 'selectAllTablesCheckbox') toggleAllTables(el.checked);
+            else if (el.id === 'selectAllImportCheckbox') selectAllImportTables(el.checked);
+            else if (el.classList.contains('table-checkbox') && el.dataset.table) {
+                toggleTableSelection(el.dataset.table, el.checked);
+            } else if (el.classList.contains('import-table-checkbox') && el.dataset.table) {
+                toggleImportTableSelection(el.dataset.table, el.checked);
+            }
+        });
+
+        const tsf = document.getElementById('tableSearchFilter');
+        if (tsf) tsf.addEventListener('input', function () { filterImportTables(tsf.value); });
+    }
+    document.addEventListener('DOMContentLoaded', bind);
+})();

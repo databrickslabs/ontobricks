@@ -20,6 +20,7 @@ Usage in a route handler::
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -36,6 +37,7 @@ from back.objects.registry.registry_cache import (
 
 logger = get_logger(__name__)
 
+_SCHEME_RE = re.compile(r"^https?:/[^/]")
 _DEFAULT_VOLUME = "OntoBricksRegistry"
 _REGISTRY_MARKER = ".registry"
 _DOMAINS_FOLDER = "domains"
@@ -87,7 +89,7 @@ class RegistryCfg:
     @classmethod
     def from_session(cls, session_mgr, settings) -> RegistryCfg:
         """Build from *SessionManager* and *Settings*."""
-        from back.objects.session.domain_session import get_domain
+        from back.objects.session.DomainSession import get_domain
         return cls.from_domain(get_domain(session_mgr), settings)
 
     @classmethod
@@ -333,6 +335,77 @@ class RegistryService:
         if ok:
             set_cached_registry_details(self.cache_key, details)
         return ok, details, msg
+
+    @staticmethod
+    def normalize_entity_uri(raw: str) -> str:
+        """Restore double-slash after scheme when proxies collapse it."""
+        if _SCHEME_RE.match(raw):
+            return raw.replace(":/", "://", 1)
+        return raw
+
+    async def resolve_uri_to_domain(
+        self,
+        entity_uri: str,
+        current_domain_name: str,
+        current_folder: str,
+        current_base_uri: str,
+    ) -> Optional[str]:
+        """Find the registry domain whose base URI longest-prefix matches *entity_uri*.
+
+        Returns the domain folder name to bridge to, or ``None`` when the URI
+        already belongs to the current domain (no switch needed) or when no
+        match is found. *current_base_uri* should be normalized with
+        ``rstrip('/')`` by the caller.
+        """
+        from back.core.helpers import run_blocking
+
+        current_name = current_domain_name.strip().lower()
+        current_folder_l = current_folder.strip().lower()
+        current_base = current_base_uri.rstrip("/")
+
+        try:
+            ok, details, msg = await run_blocking(self.list_domain_details)
+            if not ok:
+                logger.warning(
+                    "Could not list registry domains for URI resolution: %s", msg,
+                )
+                return None
+
+            best_match: Optional[str] = None
+            best_len = 0
+
+            for p in details:
+                base = (p.get("base_uri") or "").rstrip("/")
+                if not base:
+                    continue
+                if entity_uri.startswith(base) and len(base) > best_len:
+                    best_match = p["name"]
+                    best_len = len(base)
+
+            if not best_match:
+                logger.debug("No registry domain matches URI %s", entity_uri)
+                return None
+
+            if best_match.strip().lower() in (current_name, current_folder_l):
+                logger.debug(
+                    "URI %s belongs to the current domain; no switch needed",
+                    entity_uri,
+                )
+                return None
+
+            if current_base and entity_uri.startswith(current_base):
+                logger.debug(
+                    "URI %s matches current domain base URI; no switch needed",
+                    entity_uri,
+                )
+                return None
+
+            logger.info("URI %s resolved to domain '%s'", entity_uri, best_match)
+            return best_match
+
+        except Exception as exc:
+            logger.warning("Error resolving domain for URI %s: %s", entity_uri, exc)
+            return None
 
     @staticmethod
     def _extract_latest_ontology(doc: Dict[str, Any]) -> Dict[str, Any]:

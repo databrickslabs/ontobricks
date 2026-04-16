@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 from back.core.logging import get_logger
-from shared.config.constants import DEFAULT_BASE_URI
+from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME, DEFAULT_LADYBUG_PATH
 
 logger = get_logger(__name__)
 
@@ -64,10 +64,6 @@ def get_empty_domain() -> Dict[str, Any]:
                     "schema": "",
                     "table_name": ""
                 },
-                "ladybug": {
-                    "db_path": "/tmp/ontobricks"
-                },
-                "snapshot_table": "",
                 "source_versions": {}
             },
             "current_version": "1",
@@ -270,12 +266,9 @@ class DomainSession:
         for old_key in [k for k in info if k.startswith('lakebase_')]:
             info.pop(old_key)
 
-        # Migrate ladybug config: fix old db_path and drop unused keys
-        lb_cfg = ts.get('ladybug', {})
-        if lb_cfg.get('db_path') == '/tmp':
-            lb_cfg['db_path'] = '/tmp/ontobricks'
-        lb_cfg.pop('table_name', None)
-        lb_cfg.pop('db_name', None)
+        # Drop legacy ladybug config and snapshot_table (both are now computed)
+        ts.pop('ladybug', None)
+        ts.pop('snapshot_table', None)
 
         # Remove legacy backend selector (dual digital twin: both view + graph)
         ts.pop('backend', None)
@@ -786,12 +779,16 @@ class DomainSession:
 
     @property
     def snapshot_table(self) -> str:
-        """Fully-qualified name of the incremental-sync snapshot Delta table."""
-        return self._data['domain'].get('triplestore', {}).get('snapshot_table', '')
-
-    @snapshot_table.setter
-    def snapshot_table(self, value: str):
-        self._data['domain'].setdefault('triplestore', {})['snapshot_table'] = value
+        """Fully-qualified name of the incremental-sync snapshot Delta table (computed)."""
+        from back.core.triplestore.IncrementalBuildService import IncrementalBuildService
+        delta = self.delta
+        if not delta.get('catalog') or not delta.get('schema'):
+            return ''
+        return IncrementalBuildService.snapshot_table_name(
+            self.info.get('name', DEFAULT_GRAPH_NAME),
+            delta,
+            version=self.current_version,
+        )
 
     @property
     def source_versions(self) -> Dict[str, Any]:
@@ -973,8 +970,8 @@ class DomainSession:
 
     @property
     def ladybug(self) -> Dict[str, str]:
-        """Get LadybugDB settings (db_path)."""
-        return self.triplestore.get('ladybug', {})
+        """LadybugDB settings (computed constant, no longer stored in session)."""
+        return {"db_path": DEFAULT_LADYBUG_PATH}
 
     @property
     def databricks(self) -> Dict[str, str]:

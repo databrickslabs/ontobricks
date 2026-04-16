@@ -6,6 +6,7 @@ Moved from app/frontend/settings/routes.py during the front/back split.
 from fastapi import APIRouter, Request, Depends
 
 from shared.config.settings import get_settings, Settings
+from back.core.errors import ValidationError
 from back.objects.session import SessionManager, get_session_manager
 from back.core.helpers import resolve_default_base_uri, resolve_default_emoji
 from back.objects.session import get_domain
@@ -131,7 +132,9 @@ async def save_registry(request: Request,
                         settings: Settings = Depends(get_settings)):
     """Persist registry catalog / schema / volume in settings.registry."""
     if config_service.is_registry_locked(settings):
-        return {'success': False, 'message': 'Registry is configured via Databricks App resources and cannot be changed here.'}
+        raise ValidationError(
+            'Registry is configured via Databricks App resources and cannot be changed here.',
+        )
 
     data = await request.json()
     return config_service.apply_registry_save(data, session_mgr)

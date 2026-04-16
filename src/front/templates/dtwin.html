@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-visualization.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-sigmagraph.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-dataquality.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-reasoning.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-api.css') }}?v={{ asset_version }}">
 <!-- Query page specific styles -->
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/query.css') }}">
 <!-- Ontology map styles for read-only viewer modal -->
@@ -70,6 +72,8 @@
 <script defer src="{{ url_for('static', filename='query/js/query-reasoning.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-sigmagraph.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-graphql.js') }}?v={{ asset_version }}"></script>
+<!-- External REST / GraphQL API reference (also used from Settings → Registry) -->
+<script defer src="{{ url_for('static', filename='query/js/query-api.js') }}?v={{ asset_version }}"></script>
 <!-- Read-only ontology model viewer modal (D3.js) -->
 <script defer src="{{ url_for('static', filename='query/js/query-ontology-viewer.js') }}?v={{ asset_version }}"></script>
 {% endblock %}

@@ -1,6 +1,5 @@
 import re
 
-
 class URIHelpers:
     @staticmethod
     def is_uri(value: str) -> bool:
@@ -9,16 +8,12 @@ class URIHelpers:
 
     @staticmethod
     def extract_local_name(uri: str) -> str:
-        """Extract the local name from a URI (the part after ``#`` or the last ``/``).
-
-        This is the canonical implementation used across the codebase.
-        """
+        """Extract the local name from a URI (the part after ``#`` or the last ``/``)."""
         if not uri:
             return ""
-        s = str(uri)
-        if "#" in s:
-            return s.rsplit("#", 1)[-1]
-        return s.rsplit("/", 1)[-1]
+        from back.core.w3c.rdf_utils import uri_local_name as _uri_local_name
+
+        return _uri_local_name(str(uri))
 
     @staticmethod
     def safe_identifier(name: str, prefix: str = "") -> str:

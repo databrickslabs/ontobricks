@@ -131,24 +131,17 @@ class SWRLSQLTranslator:
         Supports built-in filter atoms (comparison, math, string, date)
         and negated antecedent atoms (closed-world assumption).
         """
-        antecedent = params.get("antecedent", "")
-        consequent = params.get("consequent", "")
         base_uri = params.get("base_uri", "")
         uri_map = params.get("uri_map") or {}
 
-        ante_atoms = SWRLParser.parse_atoms(antecedent)
-        cons_atoms = SWRLParser.parse_atoms(consequent)
-        if not ante_atoms or not cons_atoms:
+        part = SWRLParser.partition_rule_atoms(params)
+        if part is None:
             return None
-
-        class_atoms = [a for a in ante_atoms
-                       if a["arity"] == 1 and not a.get("builtin") and not a.get("negated")]
-        prop_atoms = [a for a in ante_atoms
-                      if a["arity"] == 2 and not a.get("builtin") and not a.get("negated")]
-        builtin_atoms = [a for a in ante_atoms if a.get("builtin") and not a.get("negated")]
-        negated_atoms = [a for a in ante_atoms if a.get("negated")]
-        if not class_atoms:
-            return None
+        class_atoms = part.class_atoms
+        prop_atoms = part.prop_atoms
+        builtin_atoms = part.builtin_atoms
+        negated_atoms = part.negated_atoms
+        cons_atoms = part.consequent_atoms
 
         var_class: Dict[str, str] = {}
         for a in class_atoms:
@@ -313,7 +306,12 @@ class SWRLSQLTranslator:
         lines.append(f"  AND ({violation_cond})")
 
         sql = "\n".join(lines)
-        logger.debug("SWRL SQL [%s -> %s]:\n%s", antecedent, consequent, sql)
+        logger.debug(
+            "SWRL SQL [%s -> %s]:\n%s",
+            params.get("antecedent", ""),
+            params.get("consequent", ""),
+            sql,
+        )
         return sql
 
     def build_antecedent_count_sql(self, table: str, params: Dict) -> Optional[str]:

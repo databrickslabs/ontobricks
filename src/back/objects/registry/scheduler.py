@@ -406,7 +406,7 @@ def _load_domain_for_build(
 
     Returns ``(domain, loaded_version, domain_path, latest_filename)``.
     """
-    from back.objects.session.domain_session import DomainSession
+    from back.objects.session.DomainSession import DomainSession
     from back.core.helpers import resolve_warehouse_id
 
     if version and version != "latest":
@@ -573,7 +573,7 @@ def _run_scheduled_build(
             task_type="scheduled_build",
             steps=[
                 {"name": "prepare", "description": "Loading domain and generating SQL"},
-                {"name": "view", "description": "Creating zero-copy VIEW in Unity Catalog"},
+                {"name": "view", "description": "Creating Triple-Store VIEW in Unity Catalog"},
                 {"name": "graph", "description": "Populating LadybugDB graph"},
             ],
         )

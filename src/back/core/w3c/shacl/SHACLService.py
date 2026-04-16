@@ -10,6 +10,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
+from back.core.w3c.rdf_utils import uri_local_name
 from back.core.triplestore.constants import RDF_TYPE
 from back.core.w3c.shacl.constants import QUALITY_CATEGORIES, RDFS_LABEL, XSD_TO_SPARK_TYPE
 from back.core.w3c.shacl.SHACLGenerator import SHACLGenerator
@@ -670,19 +671,12 @@ class SHACLService:
                     logger.info("URI fallback (/→#): '%s' → '%s'", prop_uri, alt)
                     return alt
 
-        def _local(u: str) -> str:
-            if "#" in u:
-                return u.rsplit("#", 1)[-1]
-            if "/" in u:
-                return u.rsplit("/", 1)[-1]
-            return u
-
-        target_local = _local(prop_uri).lower()
+        target_local = uri_local_name(prop_uri).lower()
         if target_local:
             for pred in available_predicates:
                 if "w3.org" in pred:
                     continue
-                if _local(pred).lower() == target_local:
+                if uri_local_name(pred).lower() == target_local:
                     logger.info(
                         "URI fallback (local-name): '%s' → '%s'", prop_uri, pred,
                     )

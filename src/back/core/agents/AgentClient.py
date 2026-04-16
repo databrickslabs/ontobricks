@@ -35,6 +35,26 @@ class AgentClient:
         ontology: Optional[Dict] = None,
         on_step: Optional[Callable] = None,
     ) -> "AgentResult":
+        """Generate or extend OWL from warehouse metadata via the owl-generator agent.
+
+        Args:
+            host: Databricks workspace host (with or without ``https://``).
+            token: Bearer token for the workspace APIs.
+            endpoint_name: Model serving endpoint name for the agent.
+            base_uri: Ontology base URI used in generated IRIs.
+            selected_tables: Fully qualified or logical table names the agent may use.
+            metadata: Optional pre-fetched schema/catalog context for the agent.
+            ontology: Optional existing ontology dict to merge or constrain output.
+            on_step: Optional ``(message, progress)`` callback for UI progress.
+
+        Returns:
+            Agent result object from ``agents.agent_owl_generator`` (fields depend
+            on agent version; typically includes generated OWL and diagnostics).
+
+        Raises:
+            Exception: Propagates any failure raised by ``run_agent`` (network,
+                auth, or model errors).
+        """
         from agents.agent_owl_generator import run_agent
         return run_agent(
             host=host,
@@ -62,6 +82,31 @@ class AgentClient:
         on_step: Optional[Callable] = None,
         max_iterations: int = 10,
     ) -> "AutoAssignAgentResult":
+        """Propose entity and relationship SQL mappings using the auto-assignment agent.
+
+        Args:
+            host: Databricks workspace host (with or without ``https://``).
+            token: Bearer token for the workspace APIs.
+            endpoint_name: Model serving endpoint name for the agent.
+            client: SQL client (typically :class:`~back.core.databricks.DatabricksClient`)
+                used to validate or sample queries against the configured warehouse.
+            metadata: Schema context (for example UC table metadata) for the agent.
+            ontology: Ontology dict describing classes and properties to map.
+            entity_mappings: Existing or partial entity mapping list for the agent
+                to refine or extend.
+            relationship_mappings: Existing or partial relationship mapping list.
+            documents: Optional list of document dicts (``name``, ``content``) for
+                grounding.
+            on_step: Optional progress callback invoked by the agent loop.
+            max_iterations: Upper bound on agent refinement iterations.
+
+        Returns:
+            Structured result from ``agents.agent_auto_assignment`` describing
+            proposed mappings and per-item status.
+
+        Raises:
+            Exception: Propagates any failure raised by ``run_agent``.
+        """
         from agents.agent_auto_assignment import run_agent
         return run_agent(
             host=host,
@@ -88,6 +133,24 @@ class AgentClient:
         ontology: Optional[Dict] = None,
         on_step: Optional[Callable] = None,
     ) -> "IconAssignAgentResult":
+        """Assign icons to ontology entity names using the icon-assignment agent.
+
+        Args:
+            host: Databricks workspace host (with or without ``https://``).
+            token: Bearer token for the workspace APIs.
+            endpoint_name: Model serving endpoint name for the agent.
+            entity_names: Human-readable entity names to receive icon suggestions.
+            metadata: Optional schema or glossary context for disambiguation.
+            ontology: Optional ontology dict for class/label context.
+            on_step: Optional progress callback for long runs.
+
+        Returns:
+            Agent result from ``agents.agent_auto_icon_assign`` with suggested
+            icons or explanations per entity.
+
+        Raises:
+            Exception: Propagates any failure raised by ``run_agent``.
+        """
         from agents.agent_auto_icon_assign import run_agent
         return run_agent(
             host=host,
@@ -109,6 +172,24 @@ class AgentClient:
         ontology_context: Dict[str, Any],
         on_step: Optional[Callable] = None,
     ) -> Any:
+        """Run a conversational ontology assistant turn with model grounding.
+
+        Args:
+            host: Databricks workspace host (with or without ``https://``).
+            token: Bearer token for the workspace APIs.
+            endpoint_name: Model serving endpoint name for the assistant.
+            messages: Chat history as a list of role/content dicts (OpenAI-style).
+            ontology_context: Serialized ontology and session facts passed to the
+                assistant as system or tool context.
+            on_step: Optional progress callback for streaming-style updates.
+
+        Returns:
+            Assistant output (structure defined by ``agents.agent_ontology_assistant``;
+            often a message dict or completion payload).
+
+        Raises:
+            Exception: Propagates any failure raised by ``run_agent``.
+        """
         from agents.agent_ontology_assistant import run_agent
         return run_agent(
             host=host,

@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.core.helpers import sql_escape as escape_sql_value, extract_local_name
+from back.core.w3c.rdf_utils import uri_local_name
 from back.core.logging import get_logger
 from back.objects.digitaltwin.constants import RDF_TYPE, RDFS_LABEL
 from back.objects.digitaltwin.models import DomainSnapshot
@@ -143,7 +144,7 @@ class DigitalTwin:
         suggested = suggestions_match.group(1).strip() if suggestions_match else ""
 
         for class_uri, mapping in (entity_mappings or {}).items():
-            local_name = class_uri.rsplit("#", 1)[-1] if "#" in class_uri else class_uri.rsplit("/", 1)[-1]
+            local_name = uri_local_name(class_uri)
             source = (mapping.get("sql_query") or mapping.get("table") or "unknown").strip()
 
             if mapping.get("id_column") == bad_column:
@@ -166,7 +167,7 @@ class DigitalTwin:
                 )
             for pred_uri, pred_info in mapping.get("predicates", {}).items():
                 if pred_info.get("column") == bad_column:
-                    attr_name = pred_uri.rsplit("#", 1)[-1] if "#" in pred_uri else pred_uri.rsplit("/", 1)[-1]
+                    attr_name = uri_local_name(pred_uri)
                     return (
                         f"Column '{bad_column}' not found in source for entity '{local_name}'.\n"
                         f"  Entity: {local_name} ({class_uri})\n"
@@ -294,7 +295,7 @@ class DigitalTwin:
             if not avail:
                 continue
 
-            local_name = class_uri.rsplit('#', 1)[-1] if '#' in class_uri else class_uri.rsplit('/', 1)[-1]
+            local_name = uri_local_name(class_uri)
             bad_preds = [
                 pred_uri
                 for pred_uri, info in mapping.get('predicates', {}).items()
@@ -304,7 +305,7 @@ class DigitalTwin:
             ]
             for pred_uri in bad_preds:
                 col = mapping['predicates'][pred_uri]['column']
-                attr = pred_uri.rsplit('#', 1)[-1] if '#' in pred_uri else pred_uri.rsplit('/', 1)[-1]
+                attr = uri_local_name(pred_uri)
                 logger.warning(
                     "Entity '%s': removing predicate '%s' — column '%s' "
                     "is not available in source output columns %s.",

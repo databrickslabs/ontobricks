@@ -156,10 +156,13 @@ class TestOntologyRoutes:
 
     def test_swrl_save(self, client):
         data = {
-            'name': 'TestRule',
-            'antecedent': 'A(?x)',
-            'consequent': 'B(?x)',
-            'description': 'Test'
+            'rule': {
+                'name': 'TestRule',
+                'antecedent': 'A(?x)',
+                'consequent': 'B(?x)',
+                'description': 'Test',
+            },
+            'index': -1,
         }
         response = client.post('/ontology/swrl/save', json=data)
         assert response.status_code == 200

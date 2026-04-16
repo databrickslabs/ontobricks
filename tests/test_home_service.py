@@ -44,7 +44,7 @@ def _make_domain(classes=None, properties=None, entity_mappings=None,
     domain._data = {'domain': {'metadata': {}}}
     domain.last_update = None
 
-    from back.objects.session.domain_session import DomainSession
+    from back.objects.session.DomainSession import DomainSession
     domain.get_session_status = lambda: DomainSession.get_session_status(domain)
     return domain
 

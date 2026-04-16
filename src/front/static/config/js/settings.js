@@ -297,7 +297,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 btn.addEventListener('click', () => deleteLadybugFile(btn.dataset.name));
             });
         } catch (e) {
-            console.error('Error loading LadybugDB files:', e);
+            console.error('Error loading Graph DB files:', e);
             container.innerHTML = '<div class="text-danger small py-3">' +
                 '<i class="bi bi-x-circle me-1"></i> Error loading files: ' +
                 escapeHtmlSettings(e.message) + '</div>';

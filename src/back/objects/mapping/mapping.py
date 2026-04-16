@@ -12,6 +12,7 @@ from shared.config.settings import get_settings
 from shared.config.constants import DEFAULT_BASE_URI
 from back.core.databricks import VolumeFileService
 from back.core.logging import get_logger
+from back.core.w3c.rdf_utils import uri_local_name
 from back.core.errors import InfrastructureError
 
 logger = get_logger(__name__)
@@ -23,9 +24,28 @@ if TYPE_CHECKING:
 
 
 class Mapping:
-    """Centralizes mapping operations for a domain session."""
+    """Entity and relationship mapping helpers for a single domain session.
+
+    Provides CRUD for assignment mappings, R2RML generation and parsing, SQL
+    validation, diagnostics, and utilities used by mapping wizards and agents.
+    All persistence goes through the bound domain's ``assignment`` payload and
+    ``save()`` method.
+    """
 
     def __init__(self, domain: Any) -> None:
+        """Attach mapping logic to a domain session object.
+
+        Args:
+            domain: Session-backed domain instance (typically
+                :class:`~back.objects.session.DomainSession.DomainSession` or a
+                compatible facade) exposing ``assignment``, ``ontology``,
+                ``catalog_metadata``, ``get_entity_mappings``,
+                ``get_relationship_mappings``, ``clear_generated_content``, and
+                ``save``.
+
+        Attributes:
+            _domain: The domain object used for all read/write mapping state.
+        """
         self._domain = domain
 
     def auto_assign_with_agent(
@@ -738,7 +758,7 @@ class Mapping:
                     entity_lookup[key] = m
             class_uri = m.get('ontology_class', '')
             if class_uri:
-                local = class_uri.rsplit('#', 1)[-1] if '#' in class_uri else class_uri.rsplit('/', 1)[-1]
+                local = uri_local_name(class_uri)
                 if local:
                     entity_lookup[local] = m
                     entity_lookup[local.lower()] = m
@@ -790,7 +810,7 @@ class Mapping:
                                    'detail': f"Column '{col_name}' found"})
 
             if class_uri and class_uri not in ont_classes:
-                local = class_uri.rsplit('#', 1)[-1] if '#' in class_uri else class_uri.rsplit('/', 1)[-1]
+                local = uri_local_name(class_uri)
                 if local not in ont_class_names:
                     checks.append({'check': 'ontology_class', 'status': 'warning',
                                    'detail': f"Class '{class_uri}' not found in ontology"})
@@ -798,7 +818,7 @@ class Mapping:
                     checks.append({'check': 'ontology_class', 'status': 'ok', 'detail': f"Class '{local}' found"})
             elif class_uri:
                 checks.append({'check': 'ontology_class', 'status': 'ok',
-                               'detail': f"Class '{class_uri.rsplit('#', 1)[-1] if '#' in class_uri else class_uri.rsplit('/', 1)[-1]}' found"})
+                               'detail': f"Class '{uri_local_name(class_uri)}' found"})
 
             worst = 'ok'
             for c in checks:
@@ -881,7 +901,7 @@ class Mapping:
                     src_name = (resolved_src.get('ontology_class_label') or '').lower()
                     src_uri = resolved_src.get('ontology_class', '')
                     if ont_domain.lower() != src_name and ont_domain != src_uri:
-                        local_src = src_uri.rsplit('#', 1)[-1] if '#' in src_uri else src_uri.rsplit('/', 1)[-1]
+                        local_src = uri_local_name(src_uri)
                         if ont_domain.lower() != local_src.lower():
                             checks.append({'check': 'domain_match', 'status': 'warning',
                                            'detail': f"Ontology domain is '{ont_domain}' but source entity is '{src_name or local_src}'"})
@@ -889,7 +909,7 @@ class Mapping:
                     tgt_name = (resolved_tgt.get('ontology_class_label') or '').lower()
                     tgt_uri = resolved_tgt.get('ontology_class', '')
                     if ont_range.lower() != tgt_name and ont_range != tgt_uri:
-                        local_tgt = tgt_uri.rsplit('#', 1)[-1] if '#' in tgt_uri else tgt_uri.rsplit('/', 1)[-1]
+                        local_tgt = uri_local_name(tgt_uri)
                         if ont_range.lower() != local_tgt.lower():
                             checks.append({'check': 'range_match', 'status': 'warning',
                                            'detail': f"Ontology range is '{ont_range}' but target entity is '{tgt_name or local_tgt}'"})
@@ -941,7 +961,7 @@ class Mapping:
             if key and key in entity_lookup:
                 return entity_lookup[key]
         if class_ref:
-            local = class_ref.rsplit('#', 1)[-1] if '#' in class_ref else class_ref.rsplit('/', 1)[-1]
+            local = uri_local_name(class_ref)
             for key in (local, local.lower()):
                 if key in entity_lookup:
                     return entity_lookup[key]

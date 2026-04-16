@@ -51,8 +51,8 @@ window.SwrlModule = {
     async loadRules() {
         const spinner = document.getElementById('swrlRulesSpinner');
         const list = document.getElementById('swrlRulesList');
-        if (spinner) spinner.style.display = '';
-        if (list) list.style.display = 'none';
+        if (spinner) spinner.classList.remove('d-none');
+        if (list) list.classList.add('d-none');
         try {
             const r = await fetch('/ontology/swrl/list');
             const d = await r.json();
@@ -63,8 +63,8 @@ window.SwrlModule = {
         } catch (e) {
             console.error('Error loading SWRL rules:', e);
         } finally {
-            if (spinner) spinner.style.display = 'none';
-            if (list) list.style.display = '';
+            if (spinner) spinner.classList.add('d-none');
+            if (list) list.classList.remove('d-none');
         }
     },
 
@@ -97,10 +97,10 @@ window.SwrlModule = {
         const noMsg = document.getElementById('noSwrlRulesMessage');
 
         if (this.rules.length === 0) {
-            noMsg.style.display = 'block';
+            noMsg.classList.remove('d-none');
             return;
         }
-        noMsg.style.display = 'none';
+        noMsg.classList.add('d-none');
         const canEdit = window.isActiveVersion !== false;
 
         let html = '';
@@ -192,7 +192,7 @@ window.SwrlModule = {
         const rawToggle = document.getElementById('swrlRawToggle');
         if (rawToggle) rawToggle.checked = false;
         const rawEditor = document.getElementById('swrlRawEditor');
-        if (rawEditor) rawEditor.style.display = 'none';
+        if (rawEditor) rawEditor.classList.add('d-none');
 
         this._hideContextMenu();
     },
@@ -277,7 +277,7 @@ window.SwrlModule = {
         this._openEditor('View SWRL Rule').then(() => {
             this._prefillFromRule(rule);
             document.querySelectorAll('#swrlRulePane input, #swrlRulePane textarea').forEach(el => { el.disabled = true; });
-            document.getElementById('swrlSaveBtn').style.display = 'none';
+            document.getElementById('swrlSaveBtn').classList.add('d-none');
         });
     },
 
@@ -594,11 +594,14 @@ window.SwrlModule = {
         const isSelected = this.ifNodes.has(elementId) || this.thenNodes.has(elementId) ||
                           this.ifLinks.has(elementId) || this.thenLinks.has(elementId);
 
-        menu.querySelector('.swrl-ctx-if').style.display = isSelected ? 'none' : '';
-        menu.querySelector('.swrl-ctx-then').style.display = isSelected ? 'none' : '';
-        menu.querySelector('.swrl-ctx-remove').style.display = isSelected ? '' : 'none';
+        const ifItem = menu.querySelector('.swrl-ctx-if');
+        const thenItem = menu.querySelector('.swrl-ctx-then');
+        const removeItem = menu.querySelector('.swrl-ctx-remove');
+        if (ifItem) ifItem.classList.toggle('d-none', isSelected);
+        if (thenItem) thenItem.classList.toggle('d-none', isSelected);
+        if (removeItem) removeItem.classList.toggle('d-none', !isSelected);
 
-        menu.style.display = '';
+        menu.classList.remove('d-none');
         menu.style.left = event.clientX + 'px';
         menu.style.top = event.clientY + 'px';
 
@@ -609,7 +612,7 @@ window.SwrlModule = {
 
     _hideContextMenu() {
         const menu = document.getElementById('swrlContextMenu');
-        if (menu) menu.style.display = 'none';
+        if (menu) menu.classList.add('d-none');
     },
 
     ctxAddToIf() {
@@ -985,7 +988,10 @@ window.SwrlModule = {
         const checked = document.getElementById('swrlRawToggle')?.checked;
         this.rawMode = !!checked;
         const editor = document.getElementById('swrlRawEditor');
-        if (editor) editor.style.display = this.rawMode ? '' : 'none';
+        if (editor) {
+            if (this.rawMode) editor.classList.remove('d-none');
+            else editor.classList.add('d-none');
+        }
     },
 
     // ── Save & Delete ────────────────────────────────────
@@ -1096,7 +1102,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (modal) {
         modal.addEventListener('hidden.bs.modal', function () {
             modal.querySelectorAll('input, textarea').forEach(el => { el.disabled = false; });
-            document.getElementById('swrlSaveBtn').style.display = '';
+            document.getElementById('swrlSaveBtn').classList.remove('d-none');
             SwrlModule._resetEditor();
             if (SwrlModule._simulation) { SwrlModule._simulation.stop(); SwrlModule._simulation = null; }
             SwrlModule._svg = null;
@@ -1106,8 +1112,34 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener('click', function (e) {
         const menu = document.getElementById('swrlContextMenu');
-        if (menu && menu.style.display !== 'none' && !menu.contains(e.target)) {
+        if (menu && !menu.classList.contains('d-none') && !menu.contains(e.target)) {
             SwrlModule._hideContextMenu();
         }
+    });
+
+    const swrlSec = document.getElementById('swrl-section');
+    if (swrlSec) {
+        swrlSec.addEventListener('click', function (e) {
+            const b = e.target.closest('[data-swrl-action]');
+            if (!b || !swrlSec.contains(b)) return;
+            const act = b.getAttribute('data-swrl-action');
+            if (act && typeof SwrlModule[act] === 'function') SwrlModule[act]();
+        });
+    }
+
+    const swrlCtx = document.getElementById('swrlContextMenu');
+    if (swrlCtx) {
+        swrlCtx.addEventListener('click', function (e) {
+            const item = e.target.closest('[data-swrl-ctx]');
+            if (!item || !swrlCtx.contains(item)) return;
+            const k = item.getAttribute('data-swrl-ctx');
+            if (k === 'if') SwrlModule.ctxAddToIf();
+            else if (k === 'then') SwrlModule.ctxAddToThen();
+            else if (k === 'remove') SwrlModule.ctxRemove();
+        });
+    }
+
+    document.getElementById('swrlRawToggle')?.addEventListener('change', function () {
+        SwrlModule.toggleRawMode();
     });
 });

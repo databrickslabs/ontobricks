@@ -7,10 +7,13 @@ When no explicit ``domain`` query-parameter is supplied the route
 inspects the URI against all registry domains' base URIs and
 automatically selects the owning domain so the Knowledge Graph page
 can load the correct graph.
+
+Cross-domain bridges are handled server-side: the target domain is
+loaded into the session *before* the redirect, so the browser only
+needs a single page load to display the graph.
 """
 from __future__ import annotations
 
-import re
 from typing import Optional
 from urllib.parse import quote
 
@@ -20,76 +23,59 @@ from fastapi.responses import RedirectResponse
 from back.core.errors import ValidationError
 from back.core.helpers import run_blocking
 from back.core.logging import get_logger
+from back.objects.domain.domain import Domain
+from back.objects.registry import RegistryService
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import Settings, get_settings
 
 router = APIRouter(tags=["Resolve"])
 logger = get_logger(__name__)
 
-_SCHEME_RE = re.compile(r"^https?:/[^/]")
 
-
-def _normalize_uri(raw: str) -> str:
-    """Restore double-slash after scheme when proxies collapse it."""
-    if _SCHEME_RE.match(raw):
-        return raw.replace(":/", "://", 1)
-    return raw
-
-
-async def _resolve_domain_for_uri(
+async def _bridge_domain_for_uri(
     entity_uri: str,
     session_mgr: SessionManager,
     settings: Settings,
 ) -> Optional[str]:
-    """Find the registry domain whose base URI matches *entity_uri*.
+    """Wire session context into :meth:`RegistryService.resolve_uri_to_domain`."""
+    domain = get_domain(session_mgr)
+    svc = RegistryService.from_context(domain, settings)
+    return await svc.resolve_uri_to_domain(
+        entity_uri,
+        (domain.info.get("name") or "").strip().lower(),
+        (domain.domain_folder or "").strip().lower(),
+        (domain.ontology or {}).get("base_uri", "").rstrip("/"),
+    )
 
-    Returns the domain folder name, or ``None`` when the URI already
-    belongs to the currently loaded domain (no switch needed) or when
-    no match is found.
+
+async def _switch_domain_if_needed(
+    target_domain: str,
+    session_mgr: SessionManager,
+    settings: Settings,
+) -> bool:
+    """Load *target_domain* into the session if it differs from the current one.
+
+    Returns True if the domain was switched (or was already current).
     """
+    ds = get_domain(session_mgr)
+    current_folder = (ds.domain_folder or "").strip().lower()
+    if current_folder == target_domain.strip().lower():
+        return True
+
     try:
-        from back.objects.registry import RegistryService
-
-        domain = get_domain(session_mgr)
-        svc = RegistryService.from_context(domain, settings)
-        ok, details, msg = await run_blocking(svc.list_domain_details)
-        if not ok:
-            logger.warning("Could not list registry domains for URI resolution: %s", msg)
-            return None
-
-        current_name = (domain.info.get("name") or "").strip().lower()
-        current_folder = (domain.domain_folder or "").strip().lower()
-        current_base = (domain.ontology or {}).get("base_uri", "").rstrip("/")
-
-        best_match: Optional[str] = None
-        best_len = 0
-
-        for p in details:
-            base = (p.get("base_uri") or "").rstrip("/")
-            if not base:
-                continue
-            if entity_uri.startswith(base) and len(base) > best_len:
-                best_match = p["name"]
-                best_len = len(base)
-
-        if not best_match:
-            logger.debug("No registry domain matches URI %s", entity_uri)
-            return None
-
-        if best_match.strip().lower() in (current_name, current_folder):
-            logger.debug("URI %s belongs to the current domain; no switch needed", entity_uri)
-            return None
-
-        if current_base and entity_uri.startswith(current_base):
-            logger.debug("URI %s matches current domain base URI; no switch needed", entity_uri)
-            return None
-
-        logger.info("URI %s resolved to domain '%s'", entity_uri, best_match)
-        return best_match
-
-    except Exception as exc:
-        logger.warning("Error resolving domain for URI %s: %s", entity_uri, exc)
-        return None
+        p = Domain(ds, settings)
+        svc = p.build_registry_service()
+        result = await run_blocking(p.load_domain_from_uc, svc, target_domain)
+        if result.get("success"):
+            logger.info("[Bridge] Server-side domain switch to '%s' v%s",
+                        target_domain, result.get("version", "?"))
+            return True
+        logger.warning("[Bridge] Domain switch to '%s' failed: %s",
+                       target_domain, result.get("message"))
+    except Exception as e:
+        logger.exception("[Bridge] Error switching to domain '%s': %s",
+                         target_domain, e)
+    return False
 
 
 def _build_redirect(entity_uri: str, bridge_domain: Optional[str] = None) -> RedirectResponse:
@@ -99,6 +85,25 @@ def _build_redirect(entity_uri: str, bridge_domain: Optional[str] = None) -> Red
         target += f"&domain={quote(bridge_domain, safe='')}"
     logger.info("Resolving entity URI %s -> %s", entity_uri, target)
     return RedirectResponse(url=target, status_code=302)
+
+
+async def _resolve_and_switch(
+    entity_uri: str,
+    domain_hint: Optional[str],
+    session_mgr: SessionManager,
+    settings: Settings,
+) -> RedirectResponse:
+    """Resolve the target domain, switch server-side, redirect without ``&domain=``."""
+    target_domain = domain_hint
+    if not target_domain:
+        target_domain = await _bridge_domain_for_uri(entity_uri, session_mgr, settings)
+
+    if target_domain:
+        switched = await _switch_domain_if_needed(target_domain, session_mgr, settings)
+        if switched:
+            return _build_redirect(entity_uri)
+
+    return _build_redirect(entity_uri, bridge_domain=target_domain)
 
 
 @router.get("/resolve", include_in_schema=False)
@@ -114,9 +119,7 @@ async def resolve_entity_query(
         raise ValidationError("Missing required 'uri' query parameter")
     if not domain:
         domain = request.query_params.get("project")
-    if not domain:
-        domain = await _resolve_domain_for_uri(uri, session_mgr, settings)
-    return _build_redirect(uri, bridge_domain=domain)
+    return await _resolve_and_switch(uri, domain, session_mgr, settings)
 
 
 @router.get("/resolve/{uri:path}", include_in_schema=False)
@@ -130,9 +133,7 @@ async def resolve_entity_path(
     """Resolve an entity URI embedded in the URL path."""
     if not uri:
         raise ValidationError("Missing entity URI in path")
-    normalized = _normalize_uri(uri)
+    normalized = RegistryService.normalize_entity_uri(uri)
     if not domain:
         domain = request.query_params.get("project")
-    if not domain:
-        domain = await _resolve_domain_for_uri(normalized, session_mgr, settings)
-    return _build_redirect(normalized, bridge_domain=domain)
+    return await _resolve_and_switch(normalized, domain, session_mgr, settings)

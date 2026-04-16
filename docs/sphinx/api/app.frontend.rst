@@ -24,7 +24,17 @@ HTML routes (Jinja2)
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: front.routes.project
+.. automodule:: front.routes.domain
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: front.routes.registry
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: front.routes.resolve
    :members:
    :undoc-members:
    :show-inheritance:
@@ -57,7 +67,7 @@ Internal JSON API routers
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: api.routers.internal.project
+.. automodule:: api.routers.internal.domain
    :members:
    :undoc-members:
    :show-inheritance:
@@ -71,6 +81,11 @@ Services
 --------
 
 .. automodule:: back.services.home
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: back.services.settings
    :members:
    :undoc-members:
    :show-inheritance:

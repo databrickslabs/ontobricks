@@ -1,7 +1,7 @@
 """Workflow tests: create domain -> set ontology -> set mapping -> export -> import -> verify."""
 import json
 import pytest
-from back.objects.session.domain_session import DomainSession
+from back.objects.session.DomainSession import DomainSession
 
 
 class TestDomainWorkflow:

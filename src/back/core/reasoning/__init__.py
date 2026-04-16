@@ -6,6 +6,7 @@ from back.core.reasoning.models import (  # noqa: F401
     InferredTriple,
     ReasoningResult,
     RuleViolation,
+    SWRLAtomPartition,
 )
 from back.core.reasoning.ReasoningService import ReasoningService  # noqa: F401
 from back.core.reasoning.OWLRLReasoner import OWLRLReasoner  # noqa: F401
@@ -40,6 +41,7 @@ __all__ = [
     "ReasoningService",
     "RuleViolation",
     "SPARQLRuleEngine",
+    "SWRLAtomPartition",
     "SWRLBuiltin",
     "SWRLBuiltinRegistry",
     "SWRLCypherTranslator",

@@ -56,3 +56,38 @@
 .dq-gauge-box canvas {
     display: block;
 }
+
+.dq-version-badge {
+    font-size: 0.65rem;
+}
+
+.dq-compact-select {
+    width: auto;
+    font-size: 0.78rem;
+}
+
+#dataquality-section #dqPanes.dq-tab-panes-min {
+    min-height: 0;
+}
+
+.dq-progress-md {
+    height: 20px;
+}
+
+.dq-progress-bar-start {
+    width: 0%;
+}
+
+.dq-exec-query-code {
+    max-height: 200px;
+    overflow: auto;
+}
+
+.dq-violations-scroll {
+    max-height: 400px;
+    overflow: auto;
+}
+
+.dq-violations-actions-col {
+    width: 40px;
+}

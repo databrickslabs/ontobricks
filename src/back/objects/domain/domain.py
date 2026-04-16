@@ -39,7 +39,7 @@ from back.objects.domain.version_status import (
 )
 
 if TYPE_CHECKING:
-    from back.objects.session.domain_session import DomainSession
+    from back.objects.session.DomainSession import DomainSession
 
 logger = get_logger(__name__)
 
@@ -76,9 +76,29 @@ def merge_table_metadata(
 
 
 class Domain:
-    """Domain management operations for the current session-backed domain."""
+    """Non-HTTP façade for domain lifecycle, registry sync, metadata, and design state.
+
+    Wraps a :class:`~back.objects.session.DomainSession.DomainSession` so API
+    routes and services can perform saves, Unity Catalog registry operations,
+    LadybugDB sync, metadata loading, and template-oriented reads without
+    duplicating session mutation logic.
+    """
 
     def __init__(self, session: "DomainSession", settings: Optional[Settings] = None) -> None:
+        """Bind domain operations to a loaded session (and optional app settings).
+
+        Args:
+            session: Active domain session containing ``info``, ``ontology``,
+                ``assignment``, ``registry``, ``catalog_metadata``, and related
+                persistence helpers.
+            settings: Application settings used for Databricks and paths when
+                operations require credentials. May be omitted for read-only
+                paths that do not call :meth:`_require_settings`.
+
+        Attributes:
+            _s: The underlying :class:`~back.objects.session.DomainSession.DomainSession`.
+            _settings: Cached :class:`~shared.config.settings.Settings` or ``None``.
+        """
         self._s = session
         self._settings = settings
 
@@ -746,7 +766,8 @@ class Domain:
                 available_versions = [version]
 
             is_latest = not available_versions or version == available_versions[0]
-            is_active = self._s.is_active_version
+            self._s.is_active_version = is_latest
+            is_active = is_latest
             result = {
                 'success': True,
                 'version': version,

@@ -13,6 +13,13 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import Request
 
+from back.core.errors import (
+    AuthorizationError,
+    InfrastructureError,
+    NotFoundError,
+    OntoBricksError,
+    ValidationError,
+)
 from shared.config.settings import Settings
 from back.core.databricks import is_databricks_app
 from back.core.helpers import (
@@ -67,10 +74,10 @@ def require_admin_error(
     request: Request,
     session_mgr: SessionManager,
     settings: Settings,
-) -> Optional[Dict[str, Any]]:
-    """Return an error response dict if the caller is not an admin, else None."""
+) -> None:
+    """Raise :class:`AuthorizationError` if the caller is not an admin in Databricks App mode."""
     if not is_databricks_app():
-        return None
+        return
 
     email = getattr(request.state, 'user_email', '') or request.headers.get('x-forwarded-email', '')
     _, host, token, _ = _resolve_context(session_mgr, settings)
@@ -78,8 +85,7 @@ def require_admin_error(
     if not permission_service.is_admin(
         email, host, token, settings.ontobricks_app_name, user_token=user_token,
     ):
-        return {'success': False, 'message': 'Only admins (CAN MANAGE) can change the SQL Warehouse'}
-    return None
+        raise AuthorizationError('Only admins (CAN MANAGE) can change the SQL Warehouse')
 
 
 # --- Main configuration ---
@@ -136,18 +142,19 @@ def apply_config_save(
 
     if data.get('warehouse_id'):
         if is_warehouse_locked(settings):
-            return {'success': False, 'message': 'SQL Warehouse is configured via Databricks App resources and cannot be changed here.'}
+            raise ValidationError(
+                'SQL Warehouse is configured via Databricks App resources and cannot be changed here.',
+            )
 
+        require_admin_error(request, session_mgr, settings)
         domain.databricks['warehouse_id'] = data['warehouse_id']
 
-        admin_err = require_admin_error(request, session_mgr, settings)
-        if admin_err is None:
-            _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
-            ok, msg = global_config_service.set_warehouse_id(
-                host, token, registry_cfg, data['warehouse_id'],
-            )
-            if not ok:
-                logger.info("Warehouse saved in session only (global: %s)", msg)
+        _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
+        ok, msg = global_config_service.set_warehouse_id(
+            host, token, registry_cfg, data['warehouse_id'],
+        )
+        if not ok:
+            logger.info("Warehouse saved in session only (global: %s)", msg)
 
     domain.save()
     return {'success': True, 'message': 'Configuration saved'}
@@ -159,38 +166,48 @@ async def test_connection(session_mgr: SessionManager, settings: Settings) -> Di
         client = get_databricks_client(get_domain(session_mgr), settings)
 
         if not client:
-            return {'success': False, 'message': 'Databricks not configured. Please set DATABRICKS_HOST and DATABRICKS_TOKEN.'}
+            raise ValidationError(
+                'Databricks not configured. Please set DATABRICKS_HOST and DATABRICKS_TOKEN.',
+            )
 
         warehouses = await run_blocking(client.get_warehouses)
         return {'success': True, 'message': f'Connection successful. Found {len(warehouses)} warehouses.'}
+    except OntoBricksError:
+        raise
     except AttributeError as e:
         logger.exception("Test connection AttributeError: %s", e)
         error_msg = str(e)
         if 'NoneType' in error_msg and 'request' in error_msg:
-            return {'success': False, 'message': 'Databricks SDK not properly initialized. Check your authentication configuration.'}
-        return {'success': False, 'message': error_msg}
+            raise ValidationError(
+                'Databricks SDK not properly initialized. Check your authentication configuration.',
+            ) from e
+        raise InfrastructureError('Test connection failed', detail=error_msg) from e
     except Exception as e:
         logger.exception("Test connection failed: %s", e)
-        return {'success': False, 'message': str(e)}
+        raise InfrastructureError('Test connection failed', detail=str(e)) from e
 
 
 async def fetch_warehouses(session_mgr: SessionManager, settings: Settings) -> Dict[str, Any]:
-    """List warehouses or return {'error': ...}."""
+    """List warehouses from Databricks (``warehouses`` key on success)."""
     try:
         client = get_databricks_client(get_domain(session_mgr), settings)
         if not client:
-            return {'error': 'Databricks not configured'}
+            raise ValidationError('Databricks not configured')
         return {'warehouses': await run_blocking(client.get_warehouses)}
+    except OntoBricksError:
+        raise
     except AttributeError as e:
         error_msg = str(e)
         if 'NoneType' in error_msg and 'request' in error_msg:
             logger.warning("Warehouses HTTP client error: %s", e)
-            return {'error': 'Databricks SDK not properly initialized. Check your authentication configuration.'}
+            raise ValidationError(
+                'Databricks SDK not properly initialized. Check your authentication configuration.',
+            ) from e
         logger.exception("Get warehouses AttributeError: %s", e)
-        return {'error': error_msg}
+        raise InfrastructureError('Failed to list SQL warehouses', detail=error_msg) from e
     except Exception as e:
         logger.exception("Get warehouses failed: %s", e)
-        return {'error': str(e)}
+        raise InfrastructureError('Failed to list SQL warehouses', detail=str(e)) from e
 
 
 def select_warehouse(
@@ -201,14 +218,14 @@ def select_warehouse(
 ) -> Dict[str, Any]:
     """Persist warehouse selection in session and attempt global registry update."""
     if is_warehouse_locked(settings):
-        return {'success': False, 'message': 'SQL Warehouse is configured via Databricks App resources and cannot be changed here.'}
+        raise ValidationError(
+            'SQL Warehouse is configured via Databricks App resources and cannot be changed here.',
+        )
 
     if not warehouse_id:
-        return {'success': False, 'message': 'No warehouse ID provided'}
+        raise ValidationError('No warehouse ID provided')
 
-    admin_err = require_admin_error(request, session_mgr, settings)
-    if admin_err:
-        return admin_err
+    require_admin_error(request, session_mgr, settings)
 
     domain, host, token, registry_cfg = _resolve_context(session_mgr, settings)
     domain.databricks['warehouse_id'] = warehouse_id
@@ -232,11 +249,13 @@ async def fetch_catalogs(session_mgr: SessionManager, settings: Settings) -> Dic
     try:
         client = get_databricks_client(get_domain(session_mgr), settings)
         if not client:
-            return {'error': 'Databricks not configured'}
+            raise ValidationError('Databricks not configured')
         return {'catalogs': await run_blocking(client.get_catalogs)}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("Get catalogs failed: %s", e)
-        return {'error': str(e)}
+        raise InfrastructureError('Failed to list Unity Catalog catalogs', detail=str(e)) from e
 
 
 async def fetch_schemas(
@@ -249,11 +268,13 @@ async def fetch_schemas(
     try:
         client = get_databricks_client(get_domain(session_mgr), settings)
         if not client:
-            return {'error': 'Databricks not configured'}
+            raise ValidationError('Databricks not configured')
         return {'schemas': await run_blocking(client.get_schemas, catalog)}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("%s failed: %s", log_label, e)
-        return {'error': str(e)}
+        raise InfrastructureError(f'{log_label} failed', detail=str(e)) from e
 
 
 async def fetch_volumes(
@@ -266,11 +287,13 @@ async def fetch_volumes(
     try:
         client = get_databricks_client(get_domain(session_mgr), settings)
         if not client:
-            return {'error': 'Databricks not configured'}
+            raise ValidationError('Databricks not configured')
         return {'volumes': await run_blocking(client.get_volumes, catalog, schema)}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("%s failed: %s", log_label, e)
-        return {'error': str(e)}
+        raise InfrastructureError(f'{log_label} failed', detail=str(e)) from e
 
 
 # --- Registry ---
@@ -315,17 +338,21 @@ def initialize_registry_result(session_mgr: SessionManager, settings: Settings) 
         domain = get_domain(session_mgr)
         svc = RegistryService.from_context(domain, settings)
         if not svc.cfg.is_configured:
-            return {'success': False, 'message': 'Registry catalog, schema, and volume must be configured first'}
+            raise ValidationError('Registry catalog, schema, and volume must be configured first')
 
         client = get_databricks_client(domain, settings)
         if not client:
-            return {'success': False, 'message': 'Databricks not configured'}
+            raise ValidationError('Databricks not configured')
 
         ok, msg = svc.initialize(client)
+        if not ok:
+            raise InfrastructureError('Registry initialization failed', detail=msg)
         return {'success': ok, 'message': msg}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("Initialize registry failed: %s", e)
-        return {'success': False, 'message': str(e)}
+        raise InfrastructureError('Initialize registry failed', detail=str(e)) from e
 
 
 def list_registry_domains_result(session_mgr: SessionManager, settings: Settings) -> Dict[str, Any]:
@@ -333,15 +360,17 @@ def list_registry_domains_result(session_mgr: SessionManager, settings: Settings
         domain = get_domain(session_mgr)
         svc = RegistryService.from_context(domain, settings)
         if not svc.cfg.is_configured:
-            return {'success': False, 'message': 'Registry not configured', 'domains': []}
+            raise ValidationError('Registry not configured')
 
         ok, result, msg = svc.list_domain_details_cached()
         if not ok:
-            return {'success': False, 'message': msg, 'domains': []}
+            raise InfrastructureError('Failed to list registry domains', detail=msg)
         return {'success': True, 'domains': result}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("List registry domains failed: %s", e)
-        return {'success': False, 'message': str(e), 'domains': []}
+        raise InfrastructureError('Failed to list registry domains', detail=str(e)) from e
 
 
 def list_registry_bridges_result(session_mgr: SessionManager, settings: Settings) -> Dict[str, Any]:
@@ -350,15 +379,17 @@ def list_registry_bridges_result(session_mgr: SessionManager, settings: Settings
         domain = get_domain(session_mgr)
         svc = RegistryService.from_context(domain, settings)
         if not svc.cfg.is_configured:
-            return {'success': False, 'message': 'Registry not configured', 'domains': []}
+            raise ValidationError('Registry not configured')
 
         ok, result, msg = svc.list_all_bridges()
         if not ok:
-            return {'success': False, 'message': msg, 'domains': []}
+            raise InfrastructureError('Failed to list registry bridges', detail=msg)
         return {'success': True, 'domains': result}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("List registry bridges failed: %s", e)
-        return {'success': False, 'message': str(e), 'domains': []}
+        raise InfrastructureError('Failed to list registry bridges', detail=str(e)) from e
 
 
 def delete_registry_domain_result(
@@ -370,17 +401,23 @@ def delete_registry_domain_result(
         domain = get_domain(session_mgr)
         svc = RegistryService.from_context(domain, settings)
         if not svc.cfg.is_configured:
-            return {'success': False, 'message': 'Registry not configured'}
+            raise ValidationError('Registry not configured')
 
         errors = svc.delete_domain(domain_name)
 
         if errors:
-            return {'success': False, 'message': f'Partially deleted. Errors: {"; ".join(errors)}'}
+            joined = '; '.join(errors)
+            raise InfrastructureError(
+                'Registry domain was only partially deleted',
+                detail=joined,
+            )
 
         return {'success': True, 'message': f'Domain "{domain_name}" deleted from registry'}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("Delete registry domain failed: %s", e)
-        return {'success': False, 'message': str(e)}
+        raise InfrastructureError('Delete registry domain failed', detail=str(e)) from e
 
 
 def delete_registry_version_result(
@@ -393,16 +430,18 @@ def delete_registry_version_result(
         domain = get_domain(session_mgr)
         svc = RegistryService.from_context(domain, settings)
         if not svc.cfg.is_configured:
-            return {'success': False, 'message': 'Registry not configured'}
+            raise ValidationError('Registry not configured')
 
         d_ok, d_msg = svc.delete_version(domain_name, version)
         if not d_ok:
-            return {'success': False, 'message': f'Failed to delete version: {d_msg}'}
+            raise InfrastructureError('Failed to delete registry version', detail=d_msg)
 
         return {'success': True, 'message': f'Version {version} deleted from "{domain_name}"'}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("Delete registry version failed: %s", e)
-        return {'success': False, 'message': str(e)}
+        raise InfrastructureError('Delete registry version failed', detail=str(e)) from e
 
 
 def set_registry_version_active_result(
@@ -422,11 +461,11 @@ def set_registry_version_active_result(
         domain = get_domain(session_mgr)
         svc = RegistryService.from_context(domain, settings)
         if not svc.cfg.is_configured:
-            return {'success': False, 'message': 'Registry not configured'}
+            raise ValidationError('Registry not configured')
 
         sorted_versions = svc.list_versions_sorted(domain_name)
         if version not in sorted_versions:
-            return {'success': False, 'message': f'Version {version} not found in "{domain_name}"'}
+            raise NotFoundError(f'Version {version} not found in "{domain_name}"')
 
         if enabled:
             for ver in sorted_versions:
@@ -441,7 +480,7 @@ def set_registry_version_active_result(
 
         ok, data, msg = svc.read_version(domain_name, version)
         if not ok:
-            return {'success': False, 'message': msg}
+            raise InfrastructureError('Failed to read registry version', detail=msg)
 
         data.setdefault('info', {})['mcp_enabled'] = enabled
         svc.write_version(domain_name, version, json.dumps(data))
@@ -452,9 +491,11 @@ def set_registry_version_active_result(
             domain.info['mcp_enabled'] = enabled
 
         return {'success': True, 'version': version, 'active': enabled}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("Set registry version active failed: %s", e)
-        return {'success': False, 'message': str(e)}
+        raise InfrastructureError('Set registry version active failed', detail=str(e)) from e
 
 
 # --- Emoji / base URI ---
@@ -466,14 +507,12 @@ def set_default_emoji_result(
     session_mgr: SessionManager,
     settings: Settings,
 ) -> Dict[str, Any]:
-    admin_err = require_admin_error(request, session_mgr, settings)
-    if admin_err:
-        return admin_err
+    require_admin_error(request, session_mgr, settings)
 
     _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
     ok, msg = global_config_service.set_default_emoji(host, token, registry_cfg, emoji)
     if not ok:
-        return {'success': False, 'message': msg}
+        raise InfrastructureError('Failed to save default emoji', detail=msg)
     return {'success': True, 'emoji': emoji}
 
 
@@ -483,14 +522,12 @@ def save_base_uri_result(
     session_mgr: SessionManager,
     settings: Settings,
 ) -> Dict[str, Any]:
-    admin_err = require_admin_error(request, session_mgr, settings)
-    if admin_err:
-        return admin_err
+    require_admin_error(request, session_mgr, settings)
 
     _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
     ok, msg = global_config_service.set_default_base_uri(host, token, registry_cfg, base_uri)
     if not ok:
-        return {'success': False, 'message': msg}
+        raise InfrastructureError('Failed to save default base URI', detail=msg)
     return {'success': True, 'base_uri': base_uri}
 
 
@@ -509,14 +546,12 @@ def save_registry_cache_ttl_result(
     session_mgr: SessionManager,
     settings: Settings,
 ) -> Dict[str, Any]:
-    admin_err = require_admin_error(request, session_mgr, settings)
-    if admin_err:
-        return admin_err
+    require_admin_error(request, session_mgr, settings)
 
     _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
     ok, msg = global_config_service.set_registry_cache_ttl(host, token, registry_cfg, ttl)
     if not ok:
-        return {'success': False, 'message': msg}
+        raise InfrastructureError('Failed to save registry cache TTL', detail=msg)
     return {'success': True, 'registry_cache_ttl': max(10, int(ttl))}
 
 
@@ -647,17 +682,21 @@ def add_permission_result(
     role = data.get('role', 'viewer')
 
     if not principal:
-        return {'success': False, 'message': 'Principal (email or group name) is required'}
+        raise ValidationError('Principal (email or group name) is required')
     if role not in ('viewer', 'editor'):
-        return {'success': False, 'message': 'Role must be "viewer" or "editor"'}
+        raise ValidationError('Role must be "viewer" or "editor"')
 
     _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
     if not registry_cfg.get('catalog') or not registry_cfg.get('schema'):
-        return {'success': False, 'message': 'Registry not configured. Initialize the registry in Settings first.'}
+        raise ValidationError(
+            'Registry not configured. Initialize the registry in Settings first.',
+        )
 
     ok, msg = permission_service.add_or_update_entry(
         host, token, registry_cfg, principal, principal_type, display_name, role,
     )
+    if not ok:
+        raise InfrastructureError('Failed to add or update permission', detail=msg)
     return {'success': ok, 'message': msg}
 
 
@@ -668,9 +707,13 @@ def delete_permission_result(
 ) -> Dict[str, Any]:
     _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
     if not registry_cfg.get('catalog') or not registry_cfg.get('schema'):
-        return {'success': False, 'message': 'Registry not configured. Initialize the registry in Settings first.'}
+        raise ValidationError(
+            'Registry not configured. Initialize the registry in Settings first.',
+        )
 
     ok, msg = permission_service.remove_entry(host, token, registry_cfg, principal)
+    if not ok:
+        raise InfrastructureError('Failed to remove permission', detail=msg)
     return {'success': ok, 'message': msg}
 
 
@@ -748,7 +791,7 @@ def list_ladybugdb_files() -> Dict[str, Any]:
             })
     except OSError as exc:
         logger.warning("Failed to list LadybugDB directory: %s", exc)
-        return {"success": False, "message": str(exc), "files": []}
+        raise InfrastructureError('Failed to list LadybugDB files', detail=str(exc)) from exc
 
     return {"success": True, "files": items, "base_dir": LADYBUG_BASE_DIR}
 
@@ -757,11 +800,11 @@ def delete_ladybugdb_file(filename: str) -> Dict[str, Any]:
     """Delete a file or directory under LadybugDB base dir (basename only)."""
     safe_name = os.path.basename(filename)
     if not safe_name or safe_name in (".", ".."):
-        return {"success": False, "message": "Invalid filename"}
+        raise ValidationError('Invalid filename')
 
     target = os.path.join(LADYBUG_BASE_DIR, safe_name)
     if not os.path.exists(target):
-        return {"success": False, "message": f"Not found: {safe_name}"}
+        raise NotFoundError(f'Not found: {safe_name}')
 
     try:
         if os.path.isdir(target):
@@ -772,7 +815,7 @@ def delete_ladybugdb_file(filename: str) -> Dict[str, Any]:
         return {"success": True, "message": f"Deleted {safe_name}"}
     except OSError as exc:
         logger.warning("Failed to delete LadybugDB file %s: %s", target, exc)
-        return {"success": False, "message": str(exc)}
+        raise InfrastructureError('Failed to delete LadybugDB file', detail=str(exc)) from exc
 
 
 # --- Schedules ---
@@ -784,9 +827,11 @@ def list_schedules_result(session_mgr: SessionManager, settings: Settings) -> Di
     try:
         entries = scheduler.get_all_schedules(host, token, registry_cfg)
         return {"success": True, "schedules": entries}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("list_schedules failed: %s", e)
-        return {"success": False, "message": str(e), "schedules": []}
+        raise InfrastructureError('Failed to list schedules', detail=str(e)) from e
 
 
 def save_schedule_result(
@@ -804,7 +849,7 @@ def save_schedule_result(
         version = (data.get("version") or "latest").strip()
 
         if not domain_name:
-            return {"success": False, "message": "Domain name is required"}
+            raise ValidationError('Domain name is required')
 
         _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
 
@@ -813,10 +858,14 @@ def save_schedule_result(
             host, token, registry_cfg, settings, domain_name, interval_minutes,
             drop_existing, enabled, version=version,
         )
+        if not ok:
+            raise InfrastructureError('Failed to save schedule', detail=msg)
         return {"success": ok, "message": msg}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("save_schedule failed: %s", e)
-        return {"success": False, "message": str(e)}
+        raise InfrastructureError('Failed to save schedule', detail=str(e)) from e
 
 
 def get_schedule_history_result(
@@ -829,9 +878,11 @@ def get_schedule_history_result(
     try:
         entries = scheduler.get_schedule_history(host, token, registry_cfg, domain_name)
         return {"success": True, "domain_name": domain_name, "history": entries}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("get_schedule_history failed for '%s': %s", domain_name, e)
-        return {"success": False, "message": str(e), "history": []}
+        raise InfrastructureError('Failed to load schedule history', detail=str(e)) from e
 
 
 def scheduler_status_payload() -> Dict[str, Any]:
@@ -849,7 +900,11 @@ def delete_schedule_result(
 
         scheduler = _get_scheduler()
         ok, msg = scheduler.remove_schedule(host, token, registry_cfg, domain_name)
+        if not ok:
+            raise InfrastructureError('Failed to remove schedule', detail=msg)
         return {"success": ok, "message": msg}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("delete_schedule failed: %s", e)
-        return {"success": False, "message": str(e)}
+        raise InfrastructureError('Failed to remove schedule', detail=str(e)) from e

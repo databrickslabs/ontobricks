@@ -11,6 +11,7 @@ from rdflib import BNode, Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF, RDFS, XSD
 
 from back.core.logging import get_logger
+from back.core.w3c.rdf_utils import uri_local_name
 from back.core.w3c.shacl.constants import DATATYPE_MAP, SEVERITY_MAP, SH
 
 logger = get_logger(__name__)
@@ -73,7 +74,7 @@ class SHACLGenerator:
         return g.serialize(format="turtle")
 
     def _node_shape_uri(self, cls_uri: str) -> URIRef:
-        local = cls_uri.rsplit("#", 1)[-1] if "#" in cls_uri else cls_uri.rsplit("/", 1)[-1]
+        local = uri_local_name(cls_uri)
         return URIRef(str(self._ns) + local + "Shape")
 
     def _resolve_property_uri(self, shape: Dict) -> Optional[URIRef]:

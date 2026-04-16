@@ -298,7 +298,7 @@ async def get_detailed_validation(domain, settings, warehouse_id: str = "") -> D
 
     domain_info = domain.info or {}
     dname = domain_info.get('name', 'NewDomain')
-    dversion = domain_info.get('version', '1')
+    dversion = domain.current_version or '1'
 
     return {
         'success': True,

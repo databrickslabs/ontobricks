@@ -190,7 +190,7 @@ MCP has **no Jinja routes**; “navigation” is **tool choice** (e.g. `list_dom
 | App factory | `src/shared/fastapi/main.py` |
 | Health | `src/shared/fastapi/health.py` |
 | Settings, constants & templates | `src/shared/config/settings.py`, `src/shared/config/constants.py`, `src/front/fastapi/dependencies.py` (includes `triplestore_page_context` shared helper) |
-| Sessions | `src/back/objects/session/` (`middleware.py`, `manager.py`, `domain_session.py`) |
+| Sessions | `src/back/objects/session/` (`middleware.py`, `SessionManager.py`, `DomainSession.py`) |
 | Databricks / volumes | `src/back/core/databricks/`, `src/back/core/helpers/` |
 | Registry / permissions | `src/back/objects/registry/` |
 | Saved domain / UC layout (`Domain` class) | `src/back/objects/domain/` (`Domain` class); feature services in `src/back/services/` (e.g. `home.py`, `settings.py`) |

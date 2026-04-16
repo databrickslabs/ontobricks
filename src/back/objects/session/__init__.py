@@ -6,8 +6,8 @@ from .middleware import (
     save_to_session,
     get_from_session,
 )
-from .manager import SessionManager, get_session_manager
-from .domain_session import (
+from .SessionManager import SessionManager, get_session_manager
+from .DomainSession import (
     DomainSession,
     get_domain,
     get_empty_domain,

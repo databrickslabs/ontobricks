@@ -62,6 +62,23 @@
     position: relative;
 }
 
+.ob-version-badge {
+    font-size: 0.65rem;
+}
+
+.sg-compact-select {
+    width: auto;
+    font-size: 0.78rem;
+}
+
+.sg-seed-quick-filter {
+    width: 200px;
+}
+
+.sg-seed-table-check-col {
+    width: 36px;
+}
+
 /* Details panel */
 #sigmagraph-section .details-panel {
     width: 320px;

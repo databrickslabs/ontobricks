@@ -58,6 +58,8 @@ These packages are used by the MCP server (`src/mcp-server/`) which runs as a se
 | **playwright** | ≥1.40.0 | Browser automation for end-to-end tests | Apache-2.0 | [playwright.dev/python](https://playwright.dev/python/) |
 | **black** | ≥23.0.0 | Python code formatter | MIT | [black.readthedocs.io](https://black.readthedocs.io/) |
 | **flake8** | ≥6.0.0 | Python style guide enforcer | MIT | [flake8.pycqa.org](https://flake8.pycqa.org/) |
+| **Sphinx** | ≥7.0.0 | Documentation generator from docstrings (API reference) | BSD-2-Clause | [sphinx-doc.org](https://www.sphinx-doc.org/) |
+| **myst-parser** | ≥3.0.0 | Markdown support for Sphinx (MyST flavour) | MIT | [myst-parser.readthedocs.io](https://myst-parser.readthedocs.io/) |
 
 ---
 
@@ -262,7 +264,7 @@ new gridjs.Grid({
 | **MIT** | FastAPI, pydantic, pydantic-settings, Bootstrap, Bootstrap Icons, Sigma.js, Graphology, Grid.js, OntoViz, strawberry-graphql, real_ladybug, pytest, pytest-asyncio, pytest-cov, black, flake8 |
 | **BSD-3-Clause** | Uvicorn, Starlette, Jinja2, itsdangerous, RDFLib, python-dotenv, httpx, NetworkX |
 | **Apache-2.0** | databricks-sql-connector, databricks-sdk, pyarrow, python-multipart, aiofiles, requests, fastmcp, MLflow, pyshacl, responses, playwright |
-| **LGPL-3.0** | psycopg |
+| **BSD-2-Clause** | Sphinx |
 | **ISC** | D3.js |
 
 All dependencies use permissive open-source licenses compatible with commercial use.
@@ -283,10 +285,10 @@ All dependencies use permissive open-source licenses compatible with commercial 
 
 ```bash
 ## Update all dependencies
-uv pip install --upgrade -r pyproject.toml
+uv sync --upgrade
 
-## Update specific package
-uv pip install --upgrade fastapi
+## Update a specific package
+uv lock --upgrade-package fastapi && uv sync
 ```
 
 #### Frontend Dependencies
@@ -450,7 +452,7 @@ These use `unittest.mock` to isolate modules that depend on external systems (Da
 | Test File | Tests | Module Under Test | What Is Verified |
 |-----------|-------|-------------------|------------------|
 | `test_databricks_client.py` | 20 | `back.core.databricks.DatabricksClient` | `is_databricks_app`, `normalize_host`, `get_workspace_host`, `DatabricksClient` init, `has_valid_auth`, `test_connection`, `get_catalogs`, `get_schemas`, `get_tables`, `get_table_columns` |
-| `test_domain_session.py` | 21 | `back.objects.session.domain_session` | `get_empty_domain`, `DomainSession` properties (info, version, ontology, assignment, generated, R2RML), save/reset, export/import, legacy migration |
+| `test_domain_session.py` | 21 | `back.objects.session.DomainSession` | `get_empty_domain`, `DomainSession` properties (info, version, ontology, assignment, generated, R2RML), save/reset, export/import, legacy migration |
 | `test_mapping_service.py` | 14 | `back.objects.mapping.Mapping` | `build_entity_mapping`, `build_relationship_mapping`, add/update/delete entities and relationships, `get_mapping_stats`, `save_mapping_config`, `reset_mapping` |
 | `test_domain_service.py` | 8 | `back.objects.domain.Domain` | `get_domain_info`, `get_domain_stats`, `save_domain_info`, `get_domain_template_data` |
 | `test_llm_utils.py` | 5 | `agents.llm_utils` | `call_llm_with_retry` -- success, retry on 429/503 HTTP errors, retry on timeout, retry exhaustion |
@@ -529,7 +531,7 @@ open htmlcov/index.html
 | `back/services/home.py` | 76% | Good coverage |
 | `api/routers/v1.py` | 70% | Auth-required paths lower coverage |
 | `back/objects/digitaltwin/DigitalTwin.py` | 67% | Good coverage |
-| `back/objects/session/domain_session.py` | 66% | Legacy migration paths less covered |
+| `back/objects/session/DomainSession.py` | 66% | Legacy migration paths less covered |
 | `back/core/w3c/owl/OntologyParser.py` | 63% | Complex helper methods partially covered |
 | `back/core/w3c/owl/OntologyGenerator.py` | 50% | Advanced OWL features (annotations, complex axioms) less covered |
 | `back/core/w3c/sparql/SparqlTranslator.py` | 41% | Large module; advanced translation paths need Databricks |

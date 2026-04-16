@@ -219,18 +219,11 @@ class DatabricksHelpers:
 
 
 def resolve_ladybug_local_path(domain, db_name: str) -> str:
-    """Return the local file-system path for a LadybugDB archive.
-
-    Extracts the ``db_path`` from the domain's ladybug / triplestore
-    configuration, falling back to ``/tmp/ontobricks``.
-    """
+    """Return the local file-system path for a LadybugDB archive."""
     from back.core.triplestore.ladybugdb import local_db_path
+    from shared.config.constants import DEFAULT_LADYBUG_PATH
 
-    lb_cfg = getattr(domain, "ladybug", None) or {}
-    if not lb_cfg and hasattr(domain, "triplestore"):
-        lb_cfg = (domain.triplestore or {}).get("ladybug", {})
-    local_base = lb_cfg.get("db_path", "/tmp/ontobricks")
-    return local_db_path(db_name, local_base)
+    return local_db_path(db_name, DEFAULT_LADYBUG_PATH)
 
 
 def effective_uc_version_path(domain) -> str:

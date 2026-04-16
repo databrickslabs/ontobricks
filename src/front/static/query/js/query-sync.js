@@ -106,7 +106,10 @@ function _applyReadiness(data) {
     syncIsReady = ontologyReady && assignmentReady;
 
     var alertEl = document.getElementById('syncNotReadyAlert');
-    if (alertEl) alertEl.style.display = syncIsReady ? 'none' : 'block';
+    if (alertEl) {
+        if (syncIsReady) alertEl.classList.add('d-none');
+        else alertEl.classList.remove('d-none');
+    }
 
     var syncBtn = document.getElementById('syncStartBtn');
     var loadBtn = document.getElementById('syncLoadBtn');
@@ -115,8 +118,8 @@ function _applyReadiness(data) {
 
     var loadingEl = document.getElementById('syncReadinessLoading');
     var contentEl = document.getElementById('syncReadinessContent');
-    if (loadingEl) loadingEl.style.display = 'none';
-    if (contentEl) contentEl.style.display = 'block';
+    if (loadingEl) loadingEl.classList.add('d-none');
+    if (contentEl) contentEl.classList.remove('d-none');
 }
 
 /**
@@ -132,7 +135,7 @@ function _applyDtExistence(data) {
         return '<span class="badge bg-secondary bg-opacity-10 text-secondary border"><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
     }
 
-    // Zero-Copy card: status badge + card border
+    // Triple-Store card: status badge + card border
     var viewEl = document.getElementById('dtExistView');
     if (viewEl) viewEl.innerHTML = _badge(data.view_exists, 'Exists', 'Not found', 'Not configured');
 
@@ -157,7 +160,10 @@ function _applyDtExistence(data) {
     if (regEl) regEl.innerHTML = _badge(data.registry_lbug_exists, 'Archived', 'Not archived', 'Not configured');
 
     var reloadBtn = document.getElementById('dtReloadFromRegistry');
-    if (reloadBtn) reloadBtn.style.display = data.registry_lbug_exists === true ? '' : 'none';
+    if (reloadBtn) {
+        if (data.registry_lbug_exists === true) reloadBtn.classList.remove('d-none');
+        else reloadBtn.classList.add('d-none');
+    }
 
     var graphCard = document.getElementById('dtGraphCard');
     if (graphCard) {
@@ -169,18 +175,21 @@ function _applyDtExistence(data) {
             graphCard.className = 'border rounded p-3 h-100';
     }
 
-    // Snapshot info (inside Zero-Copy card)
+    // Snapshot info (inside Triple-Store card)
     var snapshotArea = document.getElementById('dtSnapshotArea');
     var snapshotNameEl = document.getElementById('dtSnapshotName');
     var snapshotBadgeEl = document.getElementById('dtExistSnapshot');
     var dropBtn = document.getElementById('dtDropSnapshot');
     if (snapshotArea && data.snapshot_table) {
-        snapshotArea.style.display = '';
+        snapshotArea.classList.remove('d-none');
         if (snapshotNameEl) snapshotNameEl.textContent = data.snapshot_table;
         if (snapshotBadgeEl) snapshotBadgeEl.innerHTML = _badge(data.snapshot_exists, 'Exists', 'Not created', 'N/A');
-        if (dropBtn) dropBtn.style.display = data.snapshot_exists === true ? '' : 'none';
+        if (dropBtn) {
+            if (data.snapshot_exists === true) dropBtn.classList.remove('d-none');
+            else dropBtn.classList.add('d-none');
+        }
     } else if (snapshotArea) {
-        snapshotArea.style.display = 'none';
+        snapshotArea.classList.add('d-none');
     }
 
     // Global info: last update & last built
@@ -232,7 +241,7 @@ async function initSyncSection() {
     _syncSectionLoaded = true;
 
     var overlay = document.getElementById('syncLoadingOverlay');
-    if (overlay) overlay.style.display = 'flex';
+    if (overlay) overlay.classList.remove('d-none');
 
     try {
         var payload = await loadSyncInfo();
@@ -260,10 +269,10 @@ async function initSyncSection() {
         }
 
         var globalInfo = document.getElementById('dtGlobalInfo');
-        if (globalInfo) globalInfo.style.display = '';
+        if (globalInfo) globalInfo.classList.remove('d-none');
 
         var columnsArea = document.getElementById('dtColumnsArea');
-        if (columnsArea) columnsArea.style.display = '';
+        if (columnsArea) columnsArea.classList.remove('d-none');
 
         if (payload && payload.dt_existence) {
             _applyDtExistence(payload.dt_existence);
@@ -276,14 +285,14 @@ async function initSyncSection() {
 
         var ladybugSyncInfo = document.getElementById('ladybugSyncInfo');
         if (ladybugSyncInfo) {
-            ladybugSyncInfo.style.display = '';
+            ladybugSyncInfo.classList.remove('d-none');
         }
 
         if (typeof refreshNavbarIndicators === 'function') refreshNavbarIndicators();
 
         await checkAndResumeSyncTask();
     } finally {
-        if (overlay) overlay.style.display = 'none';
+        if (overlay) overlay.classList.add('d-none');
     }
 }
 
@@ -323,7 +332,7 @@ async function checkTripleStoreStatus(refresh) {
 
     var overlay = document.getElementById('syncLoadingOverlay');
     var showedOverlay = false;
-    if (refresh && overlay) { overlay.style.display = 'flex'; showedOverlay = true; }
+    if (refresh && overlay) { overlay.classList.remove('d-none'); showedOverlay = true; }
 
     try {
         const response = await fetch(url, { credentials: 'same-origin' });
@@ -336,7 +345,7 @@ async function checkTripleStoreStatus(refresh) {
         tripleStoreHasData = false;
         renderTripleStoreStatus(null);
     } finally {
-        if (showedOverlay && overlay) overlay.style.display = 'none';
+        if (showedOverlay && overlay) overlay.classList.add('d-none');
     }
     updateDataMenus();
     updateInsightsTab();
@@ -359,7 +368,7 @@ function renderTripleStoreStatus(data) {
     const area = document.getElementById('tripleStoreStatusArea');
     if (!area) return;
 
-    area.style.display = 'block';
+    area.classList.remove('d-none');
 
     if (!data || !data.success) {
         // Error checking status (e.g. Databricks not configured)
@@ -567,7 +576,7 @@ async function startTripleStoreSync() {
     const btn = document.getElementById('syncStartBtn');
     if (btn) btn.disabled = true;
     var resultCard = document.getElementById('syncResultCard');
-    if (resultCard) resultCard.style.display = 'none';
+    if (resultCard) resultCard.classList.add('d-none');
 
     // Mark sync as running — disable data menus
     syncIsRunning = true;
@@ -700,7 +709,7 @@ async function monitorSyncTask(taskId) {
  */
 function showSyncProgress() {
     const area = document.getElementById('syncProgressArea');
-    if (area) area.style.display = 'block';
+    if (area) area.classList.remove('d-none');
 }
 
 /**
@@ -708,7 +717,7 @@ function showSyncProgress() {
  */
 function hideSyncProgress() {
     const area = document.getElementById('syncProgressArea');
-    if (area) area.style.display = 'none';
+    if (area) area.classList.add('d-none');
 }
 
 /**
@@ -791,7 +800,7 @@ function showSyncResult(result) {
         '  <small class="text-muted">View: <code>' + viewTable + '</code> | Graph: <code>' + graphName + '</code></small>' +
         '</div>';
 
-    card.style.display = 'block';
+    card.classList.remove('d-none');
 }
 
 /**
@@ -918,9 +927,9 @@ async function loadInsights() {
     const loading = document.getElementById('insightsLoading');
     const content = document.getElementById('insightsContent');
     const errorEl = document.getElementById('insightsError');
-    if (loading) loading.style.display = 'block';
-    if (content) content.style.display = 'none';
-    if (errorEl) errorEl.style.display = 'none';
+    if (loading) loading.classList.remove('d-none');
+    if (content) content.classList.add('d-none');
+    if (errorEl) errorEl.classList.add('d-none');
 
     try {
         const resp = await fetch('/dtwin/sync/stats', { credentials: 'same-origin' });
@@ -930,22 +939,22 @@ async function loadInsights() {
                 errorEl.innerHTML = '<div class="alert alert-warning small mb-0 py-1 px-2">' +
                     '<i class="bi bi-exclamation-triangle me-1"></i>' + (data.message || 'Failed to load insights') +
                     '</div>';
-                errorEl.style.display = 'block';
+                errorEl.classList.remove('d-none');
             }
             return;
         }
         renderInsights(data);
         insightsLoaded = true;
-        if (content) content.style.display = 'block';
+        if (content) content.classList.remove('d-none');
     } catch (e) {
         console.error('[Insights] Error:', e);
         if (errorEl) {
             errorEl.innerHTML = '<div class="alert alert-danger small mb-0 py-1 px-2">' +
                 '<i class="bi bi-x-circle me-1"></i>Error loading insights: ' + e.message + '</div>';
-            errorEl.style.display = 'block';
+            errorEl.classList.remove('d-none');
         }
     } finally {
-        if (loading) loading.style.display = 'none';
+        if (loading) loading.classList.add('d-none');
     }
 }
 
@@ -1136,7 +1145,7 @@ async function _loadDtExistence() {
 }
 
 /**
- * Download the LadybugDB archive from the registry volume and restore it locally.
+ * Download the Graph DB archive from the registry volume and restore it locally.
  */
 async function reloadGraphFromRegistry() {
     var btn = document.getElementById('dtReloadFromRegistry');
@@ -1204,6 +1213,19 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (insightsTab) {
         insightsTab.addEventListener('shown.bs.tab', function () {
             if (!insightsLoaded) loadInsights();
+        });
+    }
+
+    const syncRoot = document.getElementById('sync-section');
+    if (syncRoot) {
+        syncRoot.addEventListener('click', function (e) {
+            var btn = e.target.closest('[data-sync-action]');
+            if (!btn || !syncRoot.contains(btn)) return;
+            var act = btn.getAttribute('data-sync-action');
+            if (act === 'refresh-triple-store') checkTripleStoreStatus(true);
+            else if (act === 'start-triple-store-sync') startTripleStoreSync();
+            else if (act === 'drop-snapshot-table') dropSnapshotTable();
+            else if (act === 'reload-graph-from-registry') reloadGraphFromRegistry();
         });
     }
 

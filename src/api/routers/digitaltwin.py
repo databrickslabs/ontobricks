@@ -501,8 +501,7 @@ async def dt_build(
             try:
                 if new_source_versions:
                     domain.source_versions = new_source_versions
-                domain.snapshot_table = snapshot_table
-                domain.save()
+                    domain.save()
             except Exception:
                 pass
 

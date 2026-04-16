@@ -18,6 +18,7 @@ from back.core.logging import get_logger
 from back.objects.session import SessionManager, get_domain, get_session_manager
 from back.core.task_manager import get_task_manager
 from back.objects.mapping import Mapping
+from back.core.errors import OntoBricksError, ValidationError, InfrastructureError, NotFoundError
 
 logger = get_logger(__name__)
 
@@ -94,7 +95,7 @@ async def delete_entity_mapping(request: Request, session_mgr: SessionManager = 
     
     if Mapping(domain).delete_entity_mapping(ontology_class):
         return {'success': True}
-    return {'success': False, 'message': 'Mapping not found'}
+    raise NotFoundError("Mapping not found")
 
 
 # ===========================================
@@ -119,7 +120,7 @@ async def delete_relationship_mapping(request: Request, session_mgr: SessionMana
     
     if Mapping(domain).delete_relationship_mapping(property_uri):
         return {'success': True}
-    return {'success': False, 'message': 'Mapping not found'}
+    raise NotFoundError("Mapping not found")
 
 
 # ===========================================
@@ -181,22 +182,24 @@ async def test_sql_query(
     limit = data.get('limit', 100)
     
     if not sql_query:
-        return {'success': False, 'message': 'No SQL query provided'}
+        raise ValidationError("No SQL query provided")
     
     try:
         domain = get_domain(session_mgr)
         host, token, warehouse_id = get_databricks_credentials(domain, settings)
         
         if not warehouse_id:
-            return {'success': False, 'message': 'No SQL warehouse configured'}
+            raise ValidationError("No SQL warehouse configured")
         
         client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
         result = await run_blocking(Mapping.test_sql_query, client, sql_query, limit=int(limit))
         
         return {'success': True, **result}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.warning("test_sql_query failed: %s", e, exc_info=True)
-        return {'success': False, 'message': str(e)}
+        raise InfrastructureError("SQL query test failed", detail=str(e)) from e
 
 
 # ===========================================
@@ -214,17 +217,19 @@ async def get_tables(
     catalog, schema = data.get('catalog'), data.get('schema')
     
     if not catalog or not schema:
-        return {'error': 'Catalog and schema are required'}
+        raise ValidationError("Catalog and schema are required")
     
     try:
         domain = get_domain(session_mgr)
         client = get_databricks_client(domain, settings)
         if not client:
-            return {'error': 'Databricks not configured'}
+            raise ValidationError("Databricks not configured")
         return {'tables': await run_blocking(client.get_tables, catalog, schema)}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.warning("get_tables failed for %s.%s: %s", catalog, schema, e, exc_info=True)
-        return {'error': str(e)}
+        raise InfrastructureError("Failed to list tables", detail=str(e)) from e
 
 
 @router.post("/table-columns")
@@ -238,17 +243,19 @@ async def get_table_columns(
     catalog, schema, table = data.get('catalog'), data.get('schema'), data.get('table')
     
     if not all([catalog, schema, table]):
-        return {'error': 'Catalog, schema, and table are required'}
+        raise ValidationError("Catalog, schema, and table are required")
     
     try:
         domain = get_domain(session_mgr)
         client = get_databricks_client(domain, settings)
         if not client:
-            return {'error': 'Databricks not configured'}
+            raise ValidationError("Databricks not configured")
         return {'columns': await run_blocking(client.get_table_columns, catalog, schema, table)}
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("Get table columns failed: %s", e)
-        return {'error': str(e)}
+        raise InfrastructureError("Failed to list table columns", detail=str(e)) from e
 
 
 # ===========================================
@@ -262,13 +269,15 @@ async def parse_r2rml(request: Request, session_mgr: SessionManager = Depends(ge
     r2rml_content = data.get('content', '')
     
     if not r2rml_content:
-        return {'success': False, 'message': 'No R2RML content provided'}
+        raise ValidationError("No R2RML content provided")
     
     try:
         return Mapping(get_domain(session_mgr)).parse_r2rml(r2rml_content)
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("Parse R2RML failed: %s", e)
-        return {'success': False, 'message': str(e)}
+        raise ValidationError("Failed to parse R2RML content", detail=str(e)) from e
 
 
 @router.get("/download")
@@ -278,7 +287,7 @@ async def download_r2rml(session_mgr: SessionManager = Depends(get_session_manag
     r2rml_content = domain.get_r2rml()
     
     if not r2rml_content:
-        return {'success': False, 'message': 'No R2RML to download'}
+        raise ValidationError("No R2RML mapping is available to download")
     
     return Response(
         content=r2rml_content,
@@ -326,15 +335,17 @@ async def get_llm_endpoints(
         client = get_databricks_client(domain, settings)
         
         if not client:
-            return {'success': False, 'error': 'Databricks not configured', 'endpoints': []}
+            raise ValidationError("Databricks not configured")
         
         wizard = SQLWizardService(client)
         endpoints = wizard.get_model_serving_endpoints()
         return {'success': True, 'endpoints': endpoints}
         
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("Get LLM endpoints failed: %s", e)
-        return {'success': False, 'error': str(e), 'endpoints': []}
+        raise InfrastructureError("Failed to list model serving endpoints", detail=str(e)) from e
 
 
 @router.post("/wizard/schema-context")
@@ -352,13 +363,13 @@ async def get_schema_context(
         schema = data.get('schema')
         
         if not catalog or not schema:
-            return {'success': False, 'error': 'Catalog and schema are required'}
+            raise ValidationError("Catalog and schema are required")
         
         domain = get_domain(session_mgr)
         client = get_databricks_client(domain, settings)
         
         if not client:
-            return {'success': False, 'error': 'Databricks not configured'}
+            raise ValidationError("Databricks not configured")
         
         wizard = SQLWizardService(client)
         context = wizard.get_schema_context(catalog, schema)
@@ -371,9 +382,11 @@ async def get_schema_context(
             }
         }
         
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("Get schema context failed: %s", e)
-        return {'success': False, 'error': str(e)}
+        raise InfrastructureError("Failed to load schema context", detail=str(e)) from e
 
 
 @router.post("/wizard/generate-sql")
@@ -409,24 +422,20 @@ async def generate_sql_from_prompt(
         mapping_type = data.get('mapping_type')  # 'entity', 'relationship', or None
         
         if not endpoint_name or not prompt:
-            return {
-                'success': False,
-                'error': 'Missing required fields: endpoint_name, prompt'
-            }
+            raise ValidationError("Missing required fields: endpoint_name, prompt")
         
         # If no schema_context provided, we need catalog/schema to fetch from UC (deprecated path)
         if not schema_context or not schema_context.get('tables'):
             if not catalog or not schema:
-                return {
-                    'success': False,
-                    'error': 'Missing required fields: schema_context with tables (or catalog/schema for legacy fetch)'
-                }
+                raise ValidationError(
+                    "Missing required fields: schema_context with tables (or catalog/schema for legacy fetch)"
+                )
         
         domain = get_domain(session_mgr)
         client = get_databricks_client(domain, settings)
         
         if not client:
-            return {'success': False, 'error': 'Databricks not configured'}
+            raise ValidationError("Databricks not configured")
         
         wizard = SQLWizardService(client)
         
@@ -443,9 +452,11 @@ async def generate_sql_from_prompt(
         
         return result
         
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("Generate SQL from prompt failed: %s", e)
-        return {'success': False, 'error': str(e)}
+        raise InfrastructureError("SQL generation from prompt failed", detail=str(e)) from e
 
 
 @router.post("/wizard/validate-sql")
@@ -473,20 +484,22 @@ async def validate_sql(
         validate_plan = data.get('validate_plan', False)
         
         if not sql:
-            return {'success': False, 'error': 'SQL query is required'}
+            raise ValidationError("SQL query is required")
         
         domain = get_domain(session_mgr)
         client = get_databricks_client(domain, settings)
         
         if not client:
-            return {'success': False, 'error': 'Databricks not configured'}
+            raise ValidationError("Databricks not configured")
         
         wizard = SQLWizardService(client)
         return Mapping.validate_mapping_sql(wizard, sql, catalog, schema, validate_plan)
 
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("Validate SQL failed: %s", e)
-        return {'success': False, 'error': str(e)}
+        raise InfrastructureError("SQL validation failed", detail=str(e)) from e
 
 
 # ===========================================
@@ -519,7 +532,7 @@ async def start_auto_assign(
     )
     if total_items == 0:
         logger.info("Auto-assign: nothing to process — returning early")
-        return {'success': False, 'message': 'No items to process'}
+        raise ValidationError("No items to process")
     
     # Validate configuration
     domain = get_domain(session_mgr)
@@ -530,7 +543,7 @@ async def start_auto_assign(
     )
     if schema_err:
         logger.warning("Auto-assign: %s", schema_err)
-        return {"success": False, "message": schema_err}
+        raise ValidationError("Schema context could not be resolved", detail=schema_err)
     logger.info(
         "Auto-assign: schema_context — %d table(s)",
         len(schema_context.get("tables", [])),
@@ -538,16 +551,16 @@ async def start_auto_assign(
     
     if not host or not token:
         logger.warning("Auto-assign: Databricks credentials missing")
-        return {'success': False, 'message': 'Databricks not configured'}
+        raise ValidationError("Databricks not configured")
     
     if not warehouse_id:
         logger.warning("Auto-assign: no SQL warehouse configured")
-        return {'success': False, 'message': 'No SQL warehouse configured'}
+        raise ValidationError("No SQL warehouse configured")
     
     llm_endpoint = domain.info.get('llm_endpoint', '')
     if not llm_endpoint:
         logger.warning("Auto-assign: no LLM serving endpoint configured")
-        return {'success': False, 'message': 'No LLM serving endpoint configured'}
+        raise ValidationError("No LLM serving endpoint configured")
     
     logger.info(
         "Auto-assign: config OK — host=%s, warehouse=%s, llm_endpoint=%s",
@@ -566,7 +579,7 @@ async def start_auto_assign(
     client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
     if not client:
         logger.error("Auto-assign: failed to create DatabricksClient")
-        return {'success': False, 'message': 'Failed to create Databricks client'}
+        raise InfrastructureError("Failed to create Databricks client")
     
     # Create task
     tm = get_task_manager()
@@ -791,7 +804,7 @@ async def start_auto_assign(
 
         except Exception as e:
             logger.exception("===== AUTO-ASSIGN AGENT FAILED ===== %s", e)
-            tm.fail_task(task.id, str(e))
+            tm.fail_task(task.id, "Auto-assign failed unexpectedly")
 
     # Start thread
     thread = threading.Thread(target=run_auto_assign, daemon=True)
@@ -829,23 +842,23 @@ async def single_auto_assign(
     item = data.get("item")       # entity or relationship dict
 
     if item_type not in ("entity", "relationship") or not item:
-        return {"success": False, "error": "Provide type ('entity'|'relationship') and item."}
+        raise ValidationError("Provide type ('entity'|'relationship') and item.")
 
     domain = get_domain(session_mgr)
     host, token, warehouse_id = get_databricks_credentials(domain, settings)
 
     if not host or not token:
-        return {"success": False, "error": "Databricks not configured"}
+        raise ValidationError("Databricks not configured")
     if not warehouse_id:
-        return {"success": False, "error": "No SQL warehouse configured"}
+        raise ValidationError("No SQL warehouse configured")
 
     llm_endpoint = domain.info.get("llm_endpoint", "")
     if not llm_endpoint:
-        return {"success": False, "error": "No LLM serving endpoint configured"}
+        raise ValidationError("No LLM serving endpoint configured")
 
     schema_context, schema_err = Mapping(domain).resolve_auto_assign_schema_context(None)
     if schema_err:
-        return {"success": False, "error": schema_err}
+        raise ValidationError("Schema context could not be resolved", detail=schema_err)
 
     client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
 
@@ -949,7 +962,7 @@ async def single_auto_assign(
 
         except Exception as exc:
             logger.exception("Single auto-assign thread error: %s", exc)
-            tm.fail_task(task.id, str(exc))
+            tm.fail_task(task.id, "Single auto-assign failed unexpectedly")
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()

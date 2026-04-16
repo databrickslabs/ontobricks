@@ -15,7 +15,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
-  <img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python">
+  <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/fastapi-0.109+-green.svg" alt="FastAPI">
 </p>
 
@@ -166,7 +166,7 @@ Explore your knowledge graph — search, filter, and navigate entities and relat
 
 ### Prerequisites
 
-- Python 3.9 or higher
+- Python 3.10 or higher
 - Databricks workspace access
 - Personal Access Token
 - SQL Warehouse ID
@@ -296,7 +296,7 @@ Domains **never** store:
 
 Synchronize, validate, and explore your knowledge graph:
 
-- **Build** your Digital Twin — creates a zero-copy VIEW in Unity Catalog and populates the LadybugDB graph
+- **Build** your Digital Twin — creates a Triple-Store VIEW in Unity Catalog and populates the LadybugDB graph
 - **Incremental by default** — subsequent builds detect source Delta table changes and apply only the diff (see [Incremental Sync](#incremental-sync-delta-load))
 - **Readiness Status** validates ontology, entity mappings, relationship mappings, and attribute completeness before sync
 - **Quality Checks** run asynchronously with progress tracking; validate cardinality, value constraints, property characteristics, and global rules
@@ -493,7 +493,7 @@ The Digital Twin **Status** page offers two build modes:
 | **Incremental** (default) | Version gate + diff — only changed triples are written |
 | **Full rebuild** | Drops the graph and re-inserts all triples from the VIEW |
 
-The **Zero-Copy Digital Twin** card shows the snapshot table status below the VIEW name. A **Drop** button lets you delete the snapshot to force the next build to be a full rebuild.
+The **Triple-Store Digital Twin** card shows the snapshot table status below the VIEW name. A **Drop** button lets you delete the snapshot to force the next build to be a full rebuild.
 
 #### API
 
@@ -656,7 +656,7 @@ make help
 
 | Layer | Technologies |
 |-------|-------------|
-| **Backend** | Python 3.9+, FastAPI 0.109+, Uvicorn, RDFLib 7.0, Strawberry GraphQL |
+| **Backend** | Python 3.10+, FastAPI 0.109+, Uvicorn, RDFLib 7.0, Strawberry GraphQL |
 | **Reasoning** | owlrl 7.0+ (OWL 2 RL forward chaining), PySHACL 0.26+ (SHACL validation), custom SWRL engine (SQL + Cypher translators) |
 | **Graph Analysis** | NetworkX 3.0+ (community detection: Louvain, Label Propagation, Greedy Modularity), Graphology communities-louvain (client-side) |
 | **Graph** | LadybugDB / real_ladybug (embedded Cypher graph DB), Cypher query language, typed node/rel tables |

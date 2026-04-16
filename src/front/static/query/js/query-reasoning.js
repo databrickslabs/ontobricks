@@ -39,7 +39,7 @@ const ReasoningModule = {
     _syncDeltaInput() {
         const deltaChecked = document.getElementById('materializeDelta')?.checked;
         const grp = document.getElementById('materializeDeltaGroup');
-        if (grp) grp.style.display = deltaChecked ? '' : 'none';
+        if (grp) grp.classList.toggle('d-none', !deltaChecked);
     },
 
     setRunning(running) {
@@ -180,8 +180,8 @@ const ReasoningModule = {
 
         this._renderExecutionReport(stats, result);
 
-        document.getElementById('reasoningInitMessage').style.display = 'none';
-        document.getElementById('reasoningReportContent').style.display = 'block';
+        document.getElementById('reasoningInitMessage').classList.add('d-none');
+        document.getElementById('reasoningReportContent').classList.remove('d-none');
         this._updateTabBadges(inferred.length);
 
         this._showMaterializePanel(result);
@@ -241,11 +241,11 @@ const ReasoningModule = {
         if (!tableWrap || !emptyMsg) return;
 
         if (!data || data.length === 0) {
-            tableWrap.style.display = 'none';
-            emptyMsg.style.display = '';
+            tableWrap.classList.add('d-none');
+            emptyMsg.classList.remove('d-none');
         } else {
-            emptyMsg.style.display = 'none';
-            tableWrap.style.display = '';
+            emptyMsg.classList.add('d-none');
+            tableWrap.classList.remove('d-none');
             this._renderInferredPage();
         }
     },
@@ -294,10 +294,10 @@ const ReasoningModule = {
         if (!nav) return;
 
         if (totalPages <= 1) {
-            nav.setAttribute('style', 'display:none!important');
+            nav.classList.add('d-none');
             return;
         }
-        nav.removeAttribute('style');
+        nav.classList.remove('d-none');
         if (info) info.textContent = `${start + 1}–${Math.min(start + ps, total)} of ${total}`;
         if (prevLi) prevLi.classList.toggle('disabled', page === 0);
         if (nextLi) nextLi.classList.toggle('disabled', page >= totalPages - 1);
@@ -381,10 +381,10 @@ const ReasoningModule = {
         if (!panel) return;
         const inferred = result.inferred_triples || [];
         if (inferred.length > 0) {
-            panel.style.display = '';
-            if (area) { area.style.display = 'none'; area.innerHTML = ''; }
+            panel.classList.remove('d-none');
+            if (area) { area.classList.add('d-none'); area.innerHTML = ''; }
         } else {
-            panel.style.display = 'none';
+            panel.classList.add('d-none');
         }
     },
 
@@ -429,7 +429,7 @@ const ReasoningModule = {
             if (!data.success) {
                 if (typeof showNotification === 'function')
                     showNotification(data.message || 'Materialisation failed.', 'error');
-                if (area) { area.style.display = 'none'; }
+                if (area) { area.classList.add('d-none'); }
                 return;
             }
 
@@ -450,7 +450,7 @@ const ReasoningModule = {
             }
             if (area && lines.length) {
                 area.innerHTML = lines.map(l => `<div class="small">${l}</div>`).join('');
-                area.style.display = '';
+                area.classList.remove('d-none');
             }
             if (typeof showNotification === 'function')
                 showNotification('Materialisation completed!', 'success');
@@ -469,7 +469,7 @@ const ReasoningModule = {
     // ── Progress helpers ─────────────────────────────────────────
 
     showProgress(message) {
-        document.getElementById('reasoningProgressArea').style.display = 'block';
+        document.getElementById('reasoningProgressArea').classList.remove('d-none');
         document.getElementById('reasoningProgressStep').textContent = message;
         document.getElementById('reasoningProgressBar').style.width = '0%';
         document.getElementById('reasoningProgressBar').textContent = '0%';
@@ -484,7 +484,7 @@ const ReasoningModule = {
     },
 
     hideProgress() {
-        document.getElementById('reasoningProgressArea').style.display = 'none';
+        document.getElementById('reasoningProgressArea').classList.add('d-none');
     }
 };
 

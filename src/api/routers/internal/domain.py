@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 
 from shared.config.settings import get_settings, Settings
 from back.core.databricks import VolumeFileService, is_databricks_app
+from back.core.errors import ValidationError, InfrastructureError, NotFoundError
 from back.core.helpers import get_databricks_client, get_databricks_host_and_token, resolve_warehouse_id
 from back.core.logging import get_logger
 from back.objects.session import SessionManager, get_domain, get_session_manager, sanitize_domain_folder
@@ -151,7 +152,7 @@ async def import_domain(request: Request, session_mgr: SessionManager = Depends(
             content = await file.read()
             domain_data = json.loads(content.decode('utf-8'))
         else:
-            return {'success': False, 'message': 'No file provided'}
+            raise ValidationError("No file provided")
     else:
         # Handle JSON body
         data = await request.json()
@@ -203,7 +204,7 @@ async def get_app_debug():
     """
     from shared.config.constants import DEFAULT_LOG_LEVEL
     if os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL).upper() != "DEBUG":
-        return {"success": False, "detail": "app-debug is only available when LOG_LEVEL=DEBUG"}
+        raise ValidationError("app-debug is only available when LOG_LEVEL=DEBUG")
 
     from back.objects.registry.registry_cache import get_registry_cache_snapshot
     from back.objects.domain.version_status import get_version_status_cache_snapshot
@@ -430,7 +431,7 @@ async def set_version_mcp(
     version = data.get("version")
     enabled = bool(data.get("enabled", False))
     if not version:
-        return {"success": False, "message": "version is required"}
+        raise ValidationError("version is required")
     domain = get_domain(session_mgr)
     p = Domain(domain, settings)
     return p.set_version_mcp(p.build_registry_service(), version, enabled)
@@ -602,7 +603,7 @@ async def list_documents(
         domain = get_domain(session_mgr)
         base_path = Domain(domain).get_documents_volume_path()
         if not base_path:
-            return {'success': False, 'message': 'Domain not saved to Unity Catalog'}
+            raise ValidationError("Domain not saved to Unity Catalog")
 
         host, token = get_databricks_host_and_token(domain, settings)
         uc = VolumeFileService(host=host, token=token)
@@ -614,12 +615,14 @@ async def list_documents(
 
         if not success:
             logger.warning("List documents failed for %s: %s", base_path, message)
-            return {'success': False, 'files': [], 'message': message}
+            raise InfrastructureError("Failed to list documents", detail=message)
 
         return {'success': True, 'files': items, 'message': f'{len(items)} file(s)'}
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
     except Exception as e:
         logger.exception("List documents failed: %s", e)
-        return {'success': False, 'message': str(e), 'files': []}
+        raise InfrastructureError("Failed to list documents", detail=str(e))
 
 
 @router.post("/documents/upload")
@@ -636,24 +639,24 @@ async def upload_documents(
         domain = get_domain(session_mgr)
         base_path = Domain(domain).get_documents_volume_path()
         if not base_path:
-            return {'success': False, 'message': 'Domain not saved to Unity Catalog'}
+            raise ValidationError("Domain not saved to Unity Catalog")
 
         host, token = get_databricks_host_and_token(domain, settings)
         uc = VolumeFileService(host=host, token=token)
         if not uc.is_configured():
-            return {'success': False, 'message': 'Databricks authentication not configured'}
+            raise ValidationError("Databricks authentication not configured")
 
         form = await request.form()
         uploaded_files = form.getlist('files')
 
         if not uploaded_files:
-            return {'success': False, 'message': 'No files provided'}
+            raise ValidationError("No files provided")
 
         # Ensure …/domains/<folder>/documents exists (mkdir -p); required before first upload.
         ok_mk, mk_msg = uc.create_directory(base_path)
         if not ok_mk:
             logger.warning("Documents directory could not be created: %s", mk_msg)
-            return {'success': False, 'message': mk_msg}
+            raise InfrastructureError("Documents directory could not be created", detail=mk_msg)
 
         results: List[Dict[str, Any]] = []
         for upload in uploaded_files:
@@ -678,7 +681,12 @@ async def upload_documents(
                     'message': 'Uploaded' if ok else wmsg,
                 })
             except Exception as exc:
-                results.append({'filename': filename, 'success': False, 'message': str(exc)})
+                results.append({
+                    'filename': filename,
+                    'success': False,
+                    'message': 'Failed to upload file',
+                    'detail': str(exc),
+                })
 
         succeeded = sum(1 for r in results if r['success'])
         msg = f'{succeeded}/{len(results)} file(s) uploaded'
@@ -692,9 +700,11 @@ async def upload_documents(
             'results': results,
         }
 
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
     except Exception as e:
         logger.exception("Upload documents failed: %s", e)
-        return {'success': False, 'message': str(e)}
+        raise InfrastructureError("Upload documents failed", detail=str(e))
 
 
 @router.post("/documents/delete")
@@ -708,12 +718,12 @@ async def delete_document(
         data = await request.json()
         filename = data.get('filename', '').strip()
         if not filename:
-            return {'success': False, 'message': 'Filename is required'}
+            raise ValidationError("Filename is required")
 
         domain = get_domain(session_mgr)
         base_path = Domain(domain).get_documents_volume_path()
         if not base_path:
-            return {'success': False, 'message': 'Domain not saved to Unity Catalog'}
+            raise ValidationError("Domain not saved to Unity Catalog")
 
         host, token = get_databricks_host_and_token(domain, settings)
         uc = VolumeFileService(host=host, token=token)
@@ -722,9 +732,11 @@ async def delete_document(
         success, message = uc.delete_file(file_path)
         return {'success': success, 'message': message}
 
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
     except Exception as e:
         logger.exception("Delete document failed: %s", e)
-        return {'success': False, 'message': str(e)}
+        raise InfrastructureError("Delete document failed", detail=str(e))
 
 
 _PREVIEW_CONTENT_TYPES = {
@@ -758,12 +770,12 @@ async def preview_document(
         domain = get_domain(session_mgr)
         base_path = Domain(domain).get_documents_volume_path()
         if not base_path:
-            return {'success': False, 'message': 'Domain not saved to Unity Catalog'}
+            raise ValidationError("Domain not saved to Unity Catalog")
 
         host, token = get_databricks_host_and_token(domain, settings)
         uc = VolumeFileService(host=host, token=token)
         if not uc.is_configured():
-            return {'success': False, 'message': 'Databricks authentication not configured'}
+            raise ValidationError("Databricks authentication not configured")
 
         file_path = f"{base_path}/{filename}"
         ext = (filename.rsplit('.', 1)[-1] if '.' in filename else '').lower()
@@ -773,10 +785,10 @@ async def preview_document(
             ok, data, pmsg = uc.read_binary_file(file_path)
             if not ok:
                 if 'not found' in pmsg.lower():
-                    return {'success': False, 'message': f'File not found: {filename}'}
+                    raise NotFoundError(f"File not found: {filename}")
                 if 'denied' in pmsg.lower():
-                    return {'success': False, 'message': 'Access denied'}
-                return {'success': False, 'message': pmsg}
+                    raise InfrastructureError("Access denied", detail=pmsg)
+                raise InfrastructureError("Failed to read file for preview", detail=pmsg)
             return StreamingResponse(
                 io.BytesIO(data),
                 media_type=content_type,
@@ -787,14 +799,16 @@ async def preview_document(
             ok, text, pmsg = uc.read_file(file_path)
             if not ok:
                 if 'not found' in pmsg.lower():
-                    return {'success': False, 'message': f'File not found: {filename}'}
+                    raise NotFoundError(f"File not found: {filename}")
                 if 'denied' in pmsg.lower():
-                    return {'success': False, 'message': 'Access denied'}
-                return {'success': False, 'message': pmsg}
+                    raise InfrastructureError("Access denied", detail=pmsg)
+                raise InfrastructureError("Failed to read file for preview", detail=pmsg)
             return {'success': True, 'content': text, 'filename': filename, 'ext': ext}
 
-        return {'success': False, 'message': f'Preview not supported for .{ext} files'}
+        raise ValidationError(f"Preview not supported for .{ext} files")
 
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
     except Exception as e:
         logger.exception("Preview document failed: %s", e)
-        return {'success': False, 'message': str(e)}
+        raise InfrastructureError("Preview document failed", detail=str(e))

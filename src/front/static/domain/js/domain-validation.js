@@ -355,7 +355,7 @@ function updateDtwinCard(data) {
         }
     }
 
-    // Zero-Copy VIEW card
+    // Triple-Store VIEW card
     var viewEl = document.getElementById('psDtExistView');
     if (viewEl) viewEl.innerHTML = _dtBadge(dt.view_exists, 'Exists', 'Not found', 'Not configured');
 

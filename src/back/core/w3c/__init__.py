@@ -19,7 +19,10 @@ from back.core.w3c.shacl import (
     SHACLService,
 )
 
+from back.core.w3c.rdf_utils import uri_local_name
+
 __all__ = [
+    "uri_local_name",
     "DIALECT_SPARK",
     "OntologyGenerator",
     "OntologyParser",

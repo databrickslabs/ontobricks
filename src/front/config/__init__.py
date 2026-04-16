@@ -7,9 +7,9 @@ import os
 from functools import lru_cache
 from typing import Optional
 
-import logging
+from back.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _CONFIG_PATH = os.path.join(os.path.dirname(__file__), "menu_config.json")
 
