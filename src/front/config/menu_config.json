@@ -355,6 +355,14 @@
                             "disabled_during": "autoassign"
                         },
                         {
+                            "id": "import",
+                            "label": "Import",
+                            "icon": "bi-box-arrow-in-down",
+                            "default": false,
+                            "requires": null,
+                            "hidden_in_view_mode": true
+                        },
+                        {
                             "id": "design",
                             "label": "Designer",
                             "icon": "bi-diagram-3",

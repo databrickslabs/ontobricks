@@ -261,16 +261,19 @@ class Mapping:
         from back.core.w3c import R2RMLParser
 
         domain = self._domain
-        parser = R2RMLParser()
-        result = parser.parse(r2rml_content)
+        parser = R2RMLParser(r2rml_content)
+        entity_mappings, relationship_mappings = parser.extract_mappings()
 
-        if result.get("success"):
-            domain.assignment["entities"] = result.get("entity_mappings", [])
-            domain.assignment["relationships"] = result.get("relationship_mappings", [])
-            domain.assignment["r2rml_output"] = r2rml_content
-            domain.save()
+        domain.assignment["entities"] = entity_mappings
+        domain.assignment["relationships"] = relationship_mappings
+        domain.assignment["r2rml_output"] = r2rml_content
+        domain.save()
 
-        return result
+        return {
+            "success": True,
+            "entities": entity_mappings,
+            "relationships": relationship_mappings,
+        }
 
     def get_mapping_stats(self) -> Dict[str, int]:
         domain = self._domain
@@ -486,6 +489,13 @@ class Mapping:
             domain_node["assignment_changed"] = True
 
             session_path.write_text(json.dumps(data, default=str))
+
+            # Sync the in-memory session reference so the middleware's
+            # cache stays consistent with the file we just wrote.
+            if session_ref is not None and isinstance(session_ref, dict):
+                session_ref.clear()
+                session_ref.update(data)
+
             e_count = len(assignment.get("entities", []))
             r_count = len(assignment.get("relationships", []))
             logger.info(

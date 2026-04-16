@@ -102,69 +102,78 @@ async function forceRegenerateR2RML() {
 // Expose for global use
 window.forceRegenerateR2RML = forceRegenerateR2RML;
 
-// Regenerate R2RML (manual trigger)
-document.getElementById('regenerateR2RMLBtn')?.addEventListener('click', async function() {
-    const btn = this;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
-    
-    try {
-        const r2rmlPreview = document.getElementById('r2rmlPreview');
-        r2rmlPreview.value = '';
-        r2rmlPreview.placeholder = 'Regenerating R2RML...';
-        
-        await forceRegenerateR2RML();
-        
-        if (r2rmlPreview.value) {
-            showNotification('R2RML regenerated successfully', 'success', 3000);
-        }
-    } catch (error) {
-        showNotification('Error regenerating R2RML: ' + error.message, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Regenerate';
-    }
-});
+// Attach button handlers once the DOM is fully parsed (the script loads
+// before the R2RML partial HTML, so elements don't exist at parse time).
+function _initR2RMLButtons() {
+    // Regenerate R2RML (manual trigger)
+    document.getElementById('regenerateR2RMLBtn')?.addEventListener('click', async function() {
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
 
-// Copy R2RML to clipboard
-document.getElementById('copyR2RMLBtn')?.addEventListener('click', function() {
-    const r2rmlText = document.getElementById('r2rmlPreview').value;
-    if (!r2rmlText) {
-        showNotification('No R2RML content to copy', 'warning');
-        return;
-    }
-    navigator.clipboard.writeText(r2rmlText).then(() => {
-        showNotification('R2RML copied to clipboard', 'success', 2000);
-    }).catch(err => {
-        showNotification('Failed to copy: ' + err.message, 'error');
+        try {
+            const r2rmlPreview = document.getElementById('r2rmlPreview');
+            r2rmlPreview.value = '';
+            r2rmlPreview.placeholder = 'Regenerating R2RML...';
+
+            await forceRegenerateR2RML();
+
+            if (r2rmlPreview.value) {
+                showNotification('R2RML regenerated successfully', 'success', 3000);
+            }
+        } catch (error) {
+            showNotification('Error regenerating R2RML: ' + error.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Regenerate';
+        }
     });
-});
 
-// Download R2RML as file
-document.getElementById('downloadR2RMLBtn')?.addEventListener('click', async function() {
-    const r2rmlText = document.getElementById('r2rmlPreview').value;
-    if (!r2rmlText) {
-        showNotification('No R2RML content to download', 'warning');
-        return;
-    }
-    
-    // Get domain name for filename
-    let domainName = 'mapping';
-    try {
-        const response = await fetch('/domain/info', { credentials: 'same-origin' });
-        const data = await response.json();
-        if (data.success && data.info?.name) {
-            domainName = data.info.name;
+    // Copy R2RML to clipboard
+    document.getElementById('copyR2RMLBtn')?.addEventListener('click', function() {
+        const r2rmlText = document.getElementById('r2rmlPreview').value;
+        if (!r2rmlText) {
+            showNotification('No R2RML content to copy', 'warning');
+            return;
         }
-    } catch (e) {}
-    
-    const filename = domainName.replace(/\s+/g, '_') + '_r2rml.ttl';
-    const blob = new Blob([r2rmlText], { type: 'text/turtle' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    showNotification('R2RML file downloaded: ' + filename, 'success', 3000);
-});
+        navigator.clipboard.writeText(r2rmlText).then(() => {
+            showNotification('R2RML copied to clipboard', 'success', 2000);
+        }).catch(err => {
+            showNotification('Failed to copy: ' + err.message, 'error');
+        });
+    });
+
+    // Download R2RML as file
+    document.getElementById('downloadR2RMLBtn')?.addEventListener('click', async function() {
+        const r2rmlText = document.getElementById('r2rmlPreview').value;
+        if (!r2rmlText) {
+            showNotification('No R2RML content to download', 'warning');
+            return;
+        }
+
+        let domainName = 'mapping';
+        try {
+            const response = await fetch('/domain/info', { credentials: 'same-origin' });
+            const data = await response.json();
+            if (data.success && data.info?.name) {
+                domainName = data.info.name;
+            }
+        } catch (e) {}
+
+        const filename = domainName.replace(/\s+/g, '_') + '_r2rml.ttl';
+        const blob = new Blob([r2rmlText], { type: 'text/turtle' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        showNotification('R2RML file downloaded: ' + filename, 'success', 3000);
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initR2RMLButtons);
+} else {
+    _initR2RMLButtons();
+}

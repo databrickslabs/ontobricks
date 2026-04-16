@@ -47,6 +47,7 @@ window.AutoAssignModule = {
             const data = await response.json();
             if (data.success && data.config) {
                 MappingState.config = data.config;
+                if (typeof _stampExcludedFlags === 'function') _stampExcludedFlags();
                 console.log('[AutoAssign] Mapping config refreshed from server');
             }
         } catch (e) {
@@ -307,23 +308,13 @@ window.AutoAssignModule = {
      * Save mappings from completed task result to the session (frontend-driven save).
      */
     saveMappingsFromTask: async function(taskResult) {
-        // Apply mappings to local state
-        if (taskResult.entity_mappings) {
-            MappingState.config.entities = taskResult.entity_mappings;
-        }
-        if (taskResult.relationship_mappings) {
-            MappingState.config.relationships = taskResult.relationship_mappings;
-        }
-        
-        // Persist to session via the standard save endpoint
-        try {
-            if (typeof autoSaveMappings === 'function') {
-                await autoSaveMappings();
-                console.log('[AutoAssign] Mappings auto-saved to session');
-            }
-        } catch (saveErr) {
-            console.error('[AutoAssign] Auto-save error:', saveErr);
-        }
+        // The backend's save_mappings_to_session already correctly merged the
+        // agent results with existing mappings (preserving excluded flags).
+        // We only need to refresh MappingState from the server — overwriting
+        // MappingState.config here with agent-only results would lose excluded
+        // entries and other pre-existing mappings that the agent did not touch.
+        await this.refreshMappingConfig();
+        console.log('[AutoAssign] Mappings refreshed from server after task completion');
     },
     
     /**

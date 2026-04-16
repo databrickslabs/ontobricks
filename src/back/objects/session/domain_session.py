@@ -1008,7 +1008,20 @@ class DomainSession:
     def get_classes(self) -> List[Dict]:
         """Get ontology classes."""
         return self._data['ontology'].get('classes', [])
-    
+
+    def _ensure_inherited_properties(self) -> None:
+        """Propagate inherited dataProperties down the subClassOf hierarchy.
+
+        Mutates classes in-place so that child classes include their
+        ancestors' datatype properties (marked ``inherited: True``).
+        Safe to call multiple times -- already-inherited entries are
+        detected by name and not duplicated.
+        """
+        from back.core.w3c.owl.OntologyParser import OntologyParser
+        classes = self._data['ontology'].get('classes', [])
+        if classes:
+            OntologyParser._propagate_inherited_properties(classes)
+
     def get_properties(self) -> List[Dict]:
         """Get ontology properties (relationships)."""
         return self._data['ontology'].get('properties', [])
@@ -1322,6 +1335,10 @@ class DomainSession:
         ts.pop('build_last_update', None)
         ts.pop('needs_rebuild', None)
         ts.pop('build_fingerprint', None)
+
+        # Ensure inherited dataProperties are propagated for saved domains
+        # whose classes may have been stored before inheritance resolution.
+        self._ensure_inherited_properties()
 
         # A freshly loaded project has no unsaved changes
         self.clear_change_flags()

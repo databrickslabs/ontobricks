@@ -292,7 +292,7 @@ class OntologyParser:
                     parent = self._extract_local_name(parent_uri)
                     break
             
-            # Get dataProperties (attributes) for this class
+            # Get direct dataProperties (attributes) for this class
             data_properties = domain_to_dataprops.get(uri, [])
 
             # Determine group membership
@@ -312,8 +312,57 @@ class OntologyParser:
                 'dataProperties': data_properties
             })
         
+        classes = self._propagate_inherited_properties(classes)
         return sorted(classes, key=lambda x: x['name'])
     
+    @staticmethod
+    def _propagate_inherited_properties(classes: List[Dict]) -> List[Dict]:
+        """Propagate dataProperties down the subClassOf hierarchy.
+
+        For each class that declares a ``parent``, the parent's own and
+        inherited ``dataProperties`` are appended (marked with
+        ``inherited: true`` and ``inheritedFrom``).  Properties already
+        declared directly on the child (same ``name``) are not duplicated.
+        Multi-level inheritance is handled by processing parents before
+        children.
+        """
+        by_name: Dict[str, Dict] = {c['name']: c for c in classes}
+
+        def _collect_inherited(cls_dict: Dict, visited: set) -> List[Dict]:
+            parent_name = cls_dict.get('parent', '')
+            if not parent_name or parent_name in visited:
+                return []
+            parent = by_name.get(parent_name)
+            if not parent:
+                return []
+            visited.add(parent_name)
+            # Recurse first so grandparent properties are included
+            grandparent_props = _collect_inherited(parent, visited)
+            result = list(grandparent_props)
+            for prop in parent.get('dataProperties', []):
+                inherited_from = prop.get('inheritedFrom', parent_name)
+                if prop.get('inherited'):
+                    inherited_from = prop['inheritedFrom']
+                result.append({
+                    'name': prop.get('name', ''),
+                    'localName': prop.get('localName', prop.get('name', '')),
+                    'label': prop.get('label', prop.get('name', '')),
+                    'uri': prop.get('uri', ''),
+                    'inherited': True,
+                    'inheritedFrom': inherited_from,
+                })
+            return result
+
+        for cls in classes:
+            own_names = {p.get('name', '') for p in cls.get('dataProperties', [])}
+            inherited = _collect_inherited(cls, set())
+            for prop in inherited:
+                if prop['name'] and prop['name'] not in own_names:
+                    cls['dataProperties'].append(prop)
+                    own_names.add(prop['name'])
+
+        return classes
+
     def get_properties(self) -> List[Dict[str, str]]:
         """Extract all OWL properties from the ontology.
         

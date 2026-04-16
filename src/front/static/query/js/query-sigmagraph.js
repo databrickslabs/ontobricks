@@ -1640,7 +1640,7 @@ var SigmaGraph = (function () {
             }
             var color = _typeColor(s.type);
             var shortUri = s.uri.length > 60 ? '...' + s.uri.slice(-57) : s.uri;
-            html += '<tr>'
+            html += '<tr style="cursor:pointer;">'
                 + '<td><input class="form-check-input sg-seed-check" type="checkbox" data-uri="' + _esc(s.uri) + '" onchange="SigmaGraph.updateSeedSelection()"></td>'
                 + '<td><span class="badge sg-type-badge" style="background:' + color + ';">' + _esc(s.type) + '</span></td>'
                 + '<td class="small">' + _esc(s.label) + '</td>'
@@ -1648,6 +1648,21 @@ var SigmaGraph = (function () {
                 + '</tr>';
         }
         tbody.innerHTML = html || '<tr><td colspan="4" class="text-center text-muted small py-3">No matches</td></tr>';
+
+        if (!tbody._rowClickBound) {
+            tbody.addEventListener('click', function (e) {
+                if (e.target.tagName === 'INPUT') return;
+                var tr = e.target.closest('tr');
+                if (!tr) return;
+                var cb = tr.querySelector('.sg-seed-check');
+                if (cb) {
+                    cb.checked = !cb.checked;
+                    _updateSeedSelectedCount();
+                }
+            });
+            tbody._rowClickBound = true;
+        }
+
         _updateSeedSelectedCount();
     }
 
@@ -1708,6 +1723,18 @@ var SigmaGraph = (function () {
             var seeds = data.seeds || [];
             if (seeds.length === 0) {
                 if (info && text) { info.classList.remove('d-none'); text.textContent = data.message || 'No entities found.'; }
+                return;
+            }
+
+            // Single result: skip the selection modal and render directly
+            if (seeds.length === 1) {
+                if (info && text) { info.classList.remove('d-none'); text.textContent = '1 entity found — loading graph...'; }
+                try {
+                    await _expandAndRenderGraph([seeds[0].uri]);
+                } catch (err) {
+                    console.error('[SigmaGraph] single-seed expand error:', err);
+                    if (info && text) { info.classList.remove('d-none'); text.textContent = 'Error: ' + err.message; }
+                }
                 return;
             }
 

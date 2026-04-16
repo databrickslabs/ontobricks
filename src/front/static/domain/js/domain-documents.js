@@ -185,7 +185,8 @@ const DocManager = {
 
     async deleteFile(filename) {
         if (window.isActiveVersion === false) return;
-        if (!confirm(`Delete "${filename}"?`)) return;
+        const confirmed = await showDeleteConfirm(filename, 'document');
+        if (!confirmed) return;
 
         try {
             const resp = await fetch('/domain/documents/delete', {

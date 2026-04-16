@@ -1160,6 +1160,7 @@
     max-height: 75vh;
     overflow: auto;
     background: #f8f9fa;
+    color: #000000;
     white-space: pre-wrap;
     word-break: break-word;
     tab-size: 4;
@@ -1170,6 +1171,7 @@
     overflow: auto;
     font-size: 0.9rem;
     line-height: 1.6;
+    color: #000000;
 }
 .doc-preview-md h3 { font-size: 1.3rem; margin-top: 1.2rem; }
 .doc-preview-md h4 { font-size: 1.1rem; margin-top: 1rem; }

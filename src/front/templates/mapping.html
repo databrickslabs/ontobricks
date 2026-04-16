@@ -26,6 +26,7 @@
 <script src="{{ url_for('static', filename='mapping/js/mapping-shared.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='mapping/js/mapping-entity-modal.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='mapping/js/mapping-relationship-modal.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='mapping/js/mapping-import.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='mapping/js/mapping-r2rml.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='mapping/js/mapping-manual.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='mapping/js/mapping-autoassign.js') }}?v={{ asset_version }}"></script>
@@ -47,6 +48,11 @@
             <!-- Information Section - Default view -->
             <div id="information-section" class="sidebar-section active">
                 {% include "partials/mapping/_mapping_information.html" %}
+            </div>
+
+            <!-- Import Section -->
+            <div id="import-section" class="sidebar-section">
+                {% include "partials/mapping/_mapping_import.html" %}
             </div>
 
             <!-- Design Section -->
