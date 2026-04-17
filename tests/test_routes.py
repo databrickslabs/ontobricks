@@ -105,14 +105,16 @@ class TestOntologyRoutes:
         assert response.status_code == 200
 
     def test_update_class(self, client):
-        client.post('/ontology/class/add', json={'name': 'Updatable', 'label': 'Updatable'})
-        data = {'name': 'Updatable', 'label': 'Updated Label'}
+        uri = 'http://test.org/ontology#Updatable'
+        client.post('/ontology/class/add', json={'name': 'Updatable', 'label': 'Updatable', 'uri': uri})
+        data = {'uri': uri, 'name': 'Updatable', 'label': 'Updated Label'}
         response = client.post('/ontology/class/update', json=data)
         assert response.status_code == 200
 
     def test_delete_class(self, client):
-        client.post('/ontology/class/add', json={'name': 'ToDelete', 'label': 'ToDelete'})
-        response = client.post('/ontology/class/delete', json={'name': 'ToDelete'})
+        uri = 'http://test.org/ontology#ToDelete'
+        client.post('/ontology/class/add', json={'name': 'ToDelete', 'label': 'ToDelete', 'uri': uri})
+        response = client.post('/ontology/class/delete', json={'uri': uri})
         assert response.status_code == 200
 
     def test_add_property(self, client):
@@ -285,8 +287,10 @@ class TestDomainRoutes:
     def test_session_debug_blocked_when_not_debug(self, client, monkeypatch):
         monkeypatch.setenv("LOG_LEVEL", "INFO")
         response = client.get('/domain/session-debug')
-        assert response.status_code == 200
-        assert response.json()['success'] is False
+        assert response.status_code == 400
+        body = response.json()
+        assert body.get('error') == 'validation'
+        assert 'session-debug' in body.get('message', '')
 
     def test_map_layout_get(self, client):
         response = client.get('/domain/map-layout')

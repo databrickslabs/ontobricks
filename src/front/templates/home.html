@@ -44,7 +44,7 @@
     
     <!-- Domain actions -->
     <div class="domain-actions">
-        <button class="domain-btn new" onclick="newDomain()">
+        <button type="button" class="domain-btn new" data-action="newDomain">
             <i class="bi bi-file-earmark-plus"></i>
             <span>New</span>
         </button>
@@ -57,12 +57,12 @@
             <span>Data Sources</span>
         </a>
         <!-- Save Button -->
-        <button class="domain-btn" onclick="domainSave()">
+        <button type="button" class="domain-btn" data-action="domainSave">
             <i class="bi bi-cloud-upload"></i>
             <span>Save</span>
         </button>
         <!-- Load Button -->
-        <button class="domain-btn" onclick="domainLoad()">
+        <button type="button" class="domain-btn" data-action="domainLoad">
             <i class="bi bi-cloud-download"></i>
             <span>Load</span>
         </button>
@@ -87,7 +87,7 @@
             </div>
             <div class="card-actions">
                 <a href="/ontology/" class="card-action">Open Designer <i class="bi bi-arrow-right"></i></a>
-                <button type="button" class="card-reset-btn" onclick="resetTaxonomy(event)" title="Reset Ontology">
+                <button type="button" class="card-reset-btn" data-action="resetTaxonomy" title="Reset Ontology">
                     <i class="bi bi-arrow-counterclockwise"></i> Reset
                 </button>
             </div>
@@ -106,7 +106,7 @@
             </div>
             <div class="card-actions">
                 <a href="/mapping/" class="card-action">Open Mapping <i class="bi bi-arrow-right"></i></a>
-                <button type="button" class="card-reset-btn" onclick="resetMapping(event)" title="Reset Mapping">
+                <button type="button" class="card-reset-btn" data-action="resetMapping" title="Reset Mapping">
                     <i class="bi bi-arrow-counterclockwise"></i> Reset
                 </button>
             </div>

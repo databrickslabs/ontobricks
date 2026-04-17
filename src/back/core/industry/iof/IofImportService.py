@@ -22,6 +22,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
+from back.core.errors import InfrastructureError, ValidationError
 from back.core.logging import get_logger
 from shared.config.constants import HTTP_USER_AGENT
 from rdflib import Graph, RDF, RDFS, OWL, BNode, URIRef
@@ -380,14 +381,7 @@ class IofImportService:
         modules = IofImportService._collect_modules(domain_keys)
 
         if not modules:
-            return {
-                "success": False,
-                "message": "No valid IOF domains selected.",
-                "turtle": "",
-                "stats": {},
-                "fetched": 0,
-                "failed": [],
-            }
+            raise ValidationError("No valid IOF domains selected.")
 
         logger.info("Fetching %d modules for domains: %s", len(modules), domain_keys)
 
@@ -426,14 +420,7 @@ class IofImportService:
                 "may be restricted. Try downloading IOF RDF files manually from "
                 "https://github.com/iofoundry/ontology and importing via 'Import OWL'."
             )
-            return {
-                "success": False,
-                "message": hint,
-                "turtle": "",
-                "stats": {},
-                "fetched": 0,
-                "failed": failed_modules,
-            }
+            raise InfrastructureError(hint, detail=", ".join(failed_modules) or None)
 
         # Serialize merged graph to Turtle
         turtle_content = merged_graph.serialize(format="turtle")

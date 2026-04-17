@@ -1,12 +1,24 @@
 import asyncio
 import os
 from functools import partial
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Tuple
 
 import back.core.databricks as _databricks
+from back.core.errors import ValidationError
 from back.core.logging import get_logger
+from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
+
+
+def make_volume_file_service(domain, settings=None):
+    """Return :class:`VolumeFileService` using host/token from ``get_databricks_host_and_token``."""
+    from back.core.databricks import VolumeFileService
+    from shared.config.settings import get_settings as _get_settings
+
+    resolved = settings if settings is not None else _get_settings()
+    host, token = DatabricksHelpers.get_databricks_host_and_token(domain, resolved)
+    return VolumeFileService(host=host, token=token)
 
 
 class DatabricksHelpers:
@@ -98,11 +110,11 @@ class DatabricksHelpers:
     def resolve_default_base_uri(domain, settings) -> str:
         """Resolve the default ontology base URI domain from global config.
 
-        Falls back to the hard-coded default ``https://databricks-ontology.com``.
+        Falls back to :data:`shared.config.constants.DEFAULT_BASE_URI` (no trailing slash).
         """
         return (
             DatabricksHelpers._resolve_global_setting(domain, settings, "get_default_base_uri")
-            or "https://databricks-ontology.com"
+            or DEFAULT_BASE_URI.rstrip("/")
         )
 
     @staticmethod
@@ -197,25 +209,20 @@ class DatabricksHelpers:
     @staticmethod
     def require_serving_llm(
         domain, settings,
-    ) -> Tuple[Optional[Dict[str, Any]], Optional[Tuple[str, str, str]]]:
+    ) -> Tuple[str, str, str]:
         """Validate host, token, and domain LLM serving endpoint.
 
-        Returns ``(error_response, None)`` or ``(None, (host, token, endpoint_name))``.
-        ``error_response`` uses ``success`` + ``message`` for JSON routes.
+        Returns ``(host, token, endpoint_name)`` or raises :class:`ValidationError`.
         """
         host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
         if not host or not token:
-            return ({"success": False, "message": "Databricks credentials not configured"}, None)
+            raise ValidationError("Databricks credentials not configured")
         endpoint = (domain.info or {}).get("llm_endpoint", "") or ""
         if not endpoint:
-            return (
-                {
-                    "success": False,
-                    "message": "No LLM serving endpoint configured. Please set it in Domain Settings.",
-                },
-                None,
+            raise ValidationError(
+                "No LLM serving endpoint configured. Please set it in Domain Settings.",
             )
-        return (None, (host, token, endpoint))
+        return host, token, endpoint
 
 
 def resolve_ladybug_local_path(domain, db_name: str) -> str:

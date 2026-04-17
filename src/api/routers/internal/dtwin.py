@@ -5,23 +5,27 @@ Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 """
 from fastapi import APIRouter, Request, Depends
 from back.core.logging import get_logger
-from back.core.errors import AuthorizationError, InfrastructureError, NotFoundError, ValidationError
-from back.objects.registry import ROLE_ADMIN, ROLE_BUILDER, role_level
+from back.core.errors import (
+    AuthorizationError,
+    InfrastructureError,
+    NotFoundError,
+    OntoBricksError,
+    ValidationError,
+)
+from back.objects.registry import ROLE_BUILDER, role_level
 from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import get_settings, Settings
-from back.core.w3c import sparql
-from back.core.w3c.rdf_utils import uri_local_name
+from back.core.w3c import sparql, uri_local_name
 from back.core.databricks import DatabricksClient, is_databricks_app
 from back.core.triplestore import get_triplestore
-from back.objects.digitaltwin import DigitalTwin
-from back.objects.digitaltwin.models import DomainSnapshot
+from back.objects.digitaltwin import DigitalTwin, DomainSnapshot
 from back.core.helpers import (
     effective_graph_name,
     effective_view_table,
     get_databricks_client,
     get_databricks_credentials,
-    get_databricks_host_and_token,
+    make_volume_file_service,
     is_uri,
     run_blocking,
 )
@@ -178,6 +182,7 @@ async def start_triplestore_sync(
     config_changed = (domain.last_update or '') > (domain.last_build or '') if domain.last_update else False
 
     domain.triplestore.pop('stats', None)
+    domain.triplestore.pop('_ts_cache_timestamp', None)
     if domain.last_update:
         domain.triplestore['build_last_update'] = domain.last_update
 
@@ -245,12 +250,12 @@ async def start_triplestore_sync(
                 "}"
             )
 
-            result = sparql.translate_sparql_to_spark(
-                all_data_sparql, entity_mappings, None, relationship_mappings, dialect='spark'
-            )
-
-            if not result['success']:
-                tm.fail_task(task.id, result.get('message', 'Failed to translate SPARQL to SQL'))
+            try:
+                result = sparql.translate_sparql_to_spark(
+                    all_data_sparql, entity_mappings, None, relationship_mappings, dialect='spark'
+                )
+            except OntoBricksError as exc:
+                tm.fail_task(task.id, exc.message)
                 return
 
             spark_sql = result['sql']
@@ -439,7 +444,7 @@ async def start_triplestore_sync(
             try:
                 import os
                 from back.core.helpers import effective_uc_version_path, resolve_ladybug_local_path
-                from back.core.graphdb.ladybugdb import graph_volume_path
+                from back.core.graphdb import graph_volume_path
 
                 final_count = total_triple_count or triple_count
                 build_stamp = domain.triplestore.get('build_last_update')
@@ -486,10 +491,9 @@ async def start_triplestore_sync(
             t_phase = time.time()
             tm.advance_step(task.id, "Archiving graph to registry...")
             try:
-                from back.core.databricks import VolumeFileService
                 from back.objects.domain import Domain
 
-                uc_svc = VolumeFileService(host=host, token=token)
+                uc_svc = make_volume_file_service(domain, settings)
                 archive_warning = Domain(domain).sync_ladybug_to_volume(uc_svc)
                 if archive_warning:
                     logger.warning("Post-build graph archive warning: %s", archive_warning)
@@ -880,7 +884,7 @@ async def sync_info(
     """
     import asyncio
     import time as _t
-    from back.services import home as home_service
+    from back.objects.domain.home_service import HomeService as home_service
     from back.objects.domain import Domain
 
     t0 = _t.monotonic()
@@ -969,7 +973,6 @@ async def reload_graph_from_registry(
     settings: Settings = Depends(get_settings),
 ):
     """Download the LadybugDB archive from the registry volume and extract it locally."""
-    from back.core.databricks import VolumeFileService
     from back.objects.domain import Domain
     from back.objects.registry import ROLE_BUILDER, role_level
     effective_role = getattr(request.state, 'user_domain_role', None) or getattr(request.state, 'user_role', '')
@@ -977,11 +980,9 @@ async def reload_graph_from_registry(
         raise AuthorizationError("Only builders and admins can reload the graph from registry")
 
     domain = get_domain(session_mgr)
-    host, token = get_databricks_host_and_token(domain, settings)
-    if not host or not token:
+    uc = make_volume_file_service(domain, settings)
+    if not uc.is_configured():
         raise ValidationError("Databricks credentials are not configured")
-
-    uc = VolumeFileService(host=host, token=token)
     warning = Domain(domain).sync_ladybug_from_volume(uc)
     if warning:
         logger.warning("reload-from-registry failed: %s", warning)
@@ -1527,8 +1528,7 @@ async def materialize_inferred(
 ):
     """Materialise previously inferred triples to Delta and/or LadybugDB."""
     from back.core.task_manager import get_task_manager
-    from back.core.reasoning import ReasoningService
-    from back.core.reasoning.models import ReasoningResult, InferredTriple
+    from back.core.reasoning import InferredTriple, ReasoningResult, ReasoningService
 
     data = await request.json()
     task_id = data.get("task_id", "")

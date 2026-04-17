@@ -7,6 +7,7 @@ import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 
+from back.core.errors import ValidationError
 from shared.fastapi.main import app
 
 
@@ -394,13 +395,10 @@ class TestDomainSparkSQL:
         mock_dt.augment_mappings_from_config.return_value = [{'table': 't'}]
         mock_dt.augment_relationships_from_config.return_value = []
         mock_extract.return_value = ([{'table': 't'}], [])
-        mock_translate.return_value = {
-            'success': False,
-            'message': 'Translation error',
-        }
+        mock_translate.side_effect = ValidationError('Translation error')
 
         response = client.get('/api/v1/domain/sparksql')
-        assert response.status_code == 502
+        assert response.status_code == 400
 
 
 # =========================================================================

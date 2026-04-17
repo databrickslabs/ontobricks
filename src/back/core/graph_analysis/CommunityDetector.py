@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Set
 import networkx as nx
 
 from back.core.logging import get_logger
+from back.core.triplestore.constants import RDF_TYPE, RDFS_LABEL
 from back.core.graph_analysis.models import (
     ClusterRequest,
     ClusterResult,
@@ -18,8 +19,8 @@ logger = get_logger(__name__)
 
 # High-cardinality predicates that create noise in community structure
 _DEFAULT_EXCLUDED_PREDICATES: Set[str] = {
-    "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
-    "http://www.w3.org/2000/01/rdf-schema#label",
+    RDF_TYPE,
+    RDFS_LABEL,
     "http://www.w3.org/2000/01/rdf-schema#comment",
     "http://www.w3.org/2000/01/rdf-schema#seeAlso",
 }
@@ -131,7 +132,7 @@ class CommunityDetector:
             allowed_subjects = {
                 t["subject"]
                 for t in triples
-                if t.get("predicate") == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                if t.get("predicate") == RDF_TYPE
                 and t.get("object") in class_filter
             }
 

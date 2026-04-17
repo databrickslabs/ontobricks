@@ -2,6 +2,7 @@
 from back.core.helpers.DatabricksHelpers import (  # noqa: F401
     DatabricksHelpers,
     effective_uc_version_path,
+    make_volume_file_service,
     resolve_ladybug_local_path,
 )
 from back.core.helpers.SQLHelpers import SQLHelpers  # noqa: F401
@@ -46,6 +47,7 @@ __all__ = [
     "get_databricks_client",
     "get_databricks_credentials",
     "get_databricks_host_and_token",
+    "make_volume_file_service",
     "require_serving_llm",
     "effective_uc_version_path",
     "resolve_ladybug_local_path",

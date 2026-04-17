@@ -11,9 +11,16 @@ import os
 import re
 import threading
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from urllib.parse import quote
 
 from shared.config.settings import Settings
-from back.core.errors import ValidationError
+from back.core.errors import (
+    ConflictError,
+    InfrastructureError,
+    NotFoundError,
+    OntoBricksError,
+    ValidationError,
+)
 from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_LOG_LEVEL, DEFAULT_GRAPH_NAME
 from back.core.databricks import (
     DatabricksClient,
@@ -376,6 +383,84 @@ class Domain:
         """Build a RegistryService from the current domain session."""
         return RegistryService.from_context(self._s, self._require_settings())
 
+    async def _bridge_domain_for_entity_uri(self, entity_uri: str) -> Optional[str]:
+        """Resolve which registry domain folder owns *entity_uri* (async)."""
+        svc = self.build_registry_service()
+        return await svc.resolve_uri_to_domain(
+            entity_uri,
+            (self._s.info.get("name") or "").strip().lower(),
+            (self._s.domain_folder or "").strip().lower(),
+            (self._s.ontology or {}).get("base_uri", "").rstrip("/"),
+        )
+
+    async def _switch_domain_if_needed_for_resolve(self, target_domain: str) -> bool:
+        """Load *target_domain* into the session if it differs from the current one.
+
+        Returns True if the domain was switched (or was already current).
+        """
+        current_folder = (self._s.domain_folder or "").strip().lower()
+        if current_folder == target_domain.strip().lower():
+            return True
+
+        try:
+            svc = self.build_registry_service()
+            result = await run_blocking(self.load_domain_from_uc, svc, target_domain)
+            logger.info(
+                "[Bridge] Server-side domain switch to '%s' v%s",
+                target_domain,
+                result.get("version", "?"),
+            )
+            return True
+        except OntoBricksError as e:
+            logger.warning(
+                "[Bridge] Domain switch to '%s' failed: %s",
+                target_domain,
+                e,
+            )
+        except Exception as e:
+            logger.exception(
+                "[Bridge] Error switching to domain '%s': %s",
+                target_domain,
+                e,
+            )
+        return False
+
+    def _build_resolve_entity_redirect_url(
+        self,
+        entity_uri: str,
+        bridge_domain: Optional[str] = None,
+    ) -> str:
+        """Build ``/dtwin/?section=sigmagraph&focus=...`` URL for entity URI resolution."""
+        encoded = quote(entity_uri, safe="")
+        target = f"/dtwin/?section=sigmagraph&focus={encoded}"
+        if bridge_domain:
+            target += f"&domain={quote(bridge_domain, safe='')}"
+        logger.info("Resolving entity URI %s -> %s", entity_uri, target)
+        return target
+
+    async def resolve_entity_uri_redirect(
+        self,
+        entity_uri: str,
+        domain_hint: Optional[str] = None,
+    ) -> str:
+        """Resolve owning domain, switch session when needed, return redirect URL path/query.
+
+        Used by the ``/resolve`` HTML routes: cross-domain bridges load the target
+        domain server-side; the redirect omits ``&domain=`` when the switch succeeds.
+        """
+        target_domain = domain_hint
+        if not target_domain:
+            target_domain = await self._bridge_domain_for_entity_uri(entity_uri)
+
+        if target_domain:
+            switched = await self._switch_domain_if_needed_for_resolve(target_domain)
+            if switched:
+                return self._build_resolve_entity_redirect_url(entity_uri)
+
+        return self._build_resolve_entity_redirect_url(
+            entity_uri,
+            bridge_domain=target_domain,
+        )
 
     def resolve_ladybug_db_name(self) -> str:
         """Resolve the effective db_name for LadybugDB (domain name + version)."""
@@ -425,14 +510,16 @@ class Domain:
         """List domain folders in the registry Volume."""
         try:
             if not svc.cfg.is_configured:
-                return {'success': False, 'message': 'Registry not configured. Go to Settings.', 'domains': []}
+                raise ValidationError("Registry not configured. Go to Settings.")
             ok, names, msg = svc.list_domains_cached()
             if not ok:
-                return {'success': False, 'message': msg, 'domains': []}
+                raise InfrastructureError("Failed to list domains from registry", detail=msg)
             return {'success': True, 'domains': names}
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("List domains failed: %s", e)
-            return {'success': False, 'message': str(e), 'domains': []}
+            raise InfrastructureError("Failed to list domains", detail=str(e)) from e
 
 
     @staticmethod
@@ -440,14 +527,16 @@ class Domain:
         """List available versions for a domain in the registry."""
         try:
             if not svc.cfg.is_configured:
-                return {'success': False, 'message': 'Registry not configured', 'versions': []}
+                raise ValidationError("Registry not configured")
             ok, versions, msg = svc.list_versions(domain_name)
             if not ok:
-                return {'success': False, 'message': msg, 'versions': []}
+                raise InfrastructureError("Failed to list domain versions", detail=msg)
             return {'success': True, 'versions': versions}
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("List domain versions failed: %s", e)
-            return {'success': False, 'message': str(e), 'versions': []}
+            raise InfrastructureError("Failed to list domain versions", detail=str(e)) from e
 
 
     def list_version_details(self, svc: RegistryService) -> Dict[str, Any]:
@@ -457,11 +546,11 @@ class Domain:
         """
         try:
             if not svc.cfg.is_configured:
-                return {'success': False, 'message': 'Registry not configured', 'versions': []}
+                raise ValidationError("Registry not configured")
 
             folder = self._s.uc_domain_folder
             if not folder:
-                return {'success': False, 'message': 'Domain not saved to registry', 'versions': []}
+                raise ValidationError("Domain not saved to registry")
 
             sorted_versions = svc.list_versions_sorted(folder)
             if not sorted_versions:
@@ -500,9 +589,11 @@ class Domain:
                 'current_version': self._s.current_version,
                 'domain_folder': folder,
             }
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("List version details failed: %s", e)
-            return {'success': False, 'message': str(e), 'versions': []}
+            raise InfrastructureError("List version details failed", detail=str(e)) from e
 
 
     def set_version_mcp(self, svc: RegistryService, version: str, enabled: bool) -> Dict[str, Any]:
@@ -515,11 +606,11 @@ class Domain:
         try:
             folder = self._s.uc_domain_folder
             if not folder:
-                return {'success': False, 'message': 'Domain not saved to registry'}
+                raise ValidationError("Domain not saved to registry")
 
             sorted_versions = svc.list_versions_sorted(folder)
             if version not in sorted_versions:
-                return {'success': False, 'message': f'Version {version} not found'}
+                raise NotFoundError(f"Version {version} not found")
 
             if enabled:
                 for ver in sorted_versions:
@@ -536,7 +627,9 @@ class Domain:
 
             ok, data, msg = svc.read_version(folder, version)
             if not ok:
-                return {'success': False, 'message': msg}
+                if msg and "not found" in msg.lower():
+                    raise NotFoundError(msg)
+                raise InfrastructureError("Failed to read domain version from registry", detail=msg)
 
             data.setdefault('info', {})['mcp_enabled'] = enabled
             svc.write_version(folder, version, json.dumps(data))
@@ -545,9 +638,11 @@ class Domain:
                 self._s.info['mcp_enabled'] = enabled
 
             return {'success': True, 'version': version, 'mcp_enabled': enabled}
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("set_version_mcp failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("set_version_mcp failed", detail=str(e)) from e
 
 
     def save_domain_to_uc(self, svc: RegistryService) -> Dict[str, Any]:
@@ -555,15 +650,14 @@ class Domain:
         try:
             c = svc.cfg
             if not c.is_configured:
-                return {'success': False, 'message': 'Registry not configured. Go to Settings.'}
+                raise ValidationError("Registry not configured. Go to Settings.")
 
             folder = sanitize_domain_folder(self._s.info.get('name', 'untitled_domain'))
             is_new_domain = not self._s.domain_folder
             if is_new_domain and svc.domain_exists(folder):
-                return {
-                    'success': False,
-                    'message': f'A domain named "{folder}" already exists in the registry. Please choose a different name.',
-                }
+                raise ConflictError(
+                    f'A domain named "{folder}" already exists in the registry. Please choose a different name.',
+                )
             version = self._s.current_version or '1'
             export_data = self._s.export_for_save()
             content = json.dumps(export_data, indent=2)
@@ -584,10 +678,12 @@ class Domain:
                 invalidate_registry_cache()
                 msg = f'Domain saved to {c.catalog}.{c.schema}.{c.volume}/domains/{folder}/V{version}/V{version}.json'
                 return {'success': True, 'message': msg}
-            return {'success': False, 'message': message}
+            raise InfrastructureError("Failed to save domain to Unity Catalog registry", detail=message)
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Save domain to UC failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Save domain to UC failed", detail=str(e)) from e
 
 
     def load_domain_from_uc(
@@ -604,7 +700,7 @@ class Domain:
         """
         try:
             if not domain_name:
-                return {'success': False, 'message': 'Domain name is required'}
+                raise ValidationError("Domain name is required")
             if not version:
                 active_ver, _ = svc.find_mcp_version(domain_name)
                 if active_ver:
@@ -613,14 +709,16 @@ class Domain:
                 else:
                     version = svc.get_latest_version(domain_name)
                     if not version:
-                        return {'success': False, 'message': f'No versions found for domain "{domain_name}"'}
+                        raise NotFoundError(f'No versions found for domain "{domain_name}"')
                     logger.info("No version specified for '%s'; no active version, falling back to latest v%s", domain_name, version)
             c = svc.cfg
             if not c.catalog or not c.volume:
-                return {'success': False, 'message': 'Registry not configured'}
+                raise ValidationError("Registry not configured")
             r_ok, domain_data, r_msg = svc.read_version(domain_name, version)
             if not r_ok:
-                return {'success': False, 'message': r_msg}
+                if r_msg and "not found" in r_msg.lower():
+                    raise NotFoundError(r_msg)
+                raise InfrastructureError("Failed to load domain from registry", detail=r_msg)
 
             self._s.clear_generated_content()
             self._s.import_from_file(domain_data, version=version)
@@ -650,6 +748,7 @@ class Domain:
             ts_stats = self._s.triplestore.setdefault('stats', {})
             ts_stats.pop('status', None)
             ts_stats.pop('dt_existence', None)
+            self._s.triplestore.pop('_ts_cache_timestamp', None)
             self._s.save()
             status = "Latest" if is_latest else "Read-only"
             msg = f'Domain loaded: {domain_name} v{version} ({status})'
@@ -661,9 +760,11 @@ class Domain:
                 'is_active': is_latest,
                 'version': version
             }
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Load domain from UC failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Load domain from UC failed", detail=str(e)) from e
 
 
     def create_new_domain_version(self, svc: RegistryService) -> Dict[str, Any]:
@@ -675,12 +776,11 @@ class Domain:
         try:
             reg = self._s.registry
             if not reg.get('catalog') or not self._s.domain_folder:
-                return {'success': False, 'message': 'Domain must be saved to Unity Catalog first'}
+                raise ValidationError("Domain must be saved to Unity Catalog first")
             if not self._s.is_active_version:
-                return {
-                    'success': False,
-                    'message': 'Cannot create a new version from an older version. Load the latest version first.'
-                }
+                raise ConflictError(
+                    "Cannot create a new version from an older version. Load the latest version first."
+                )
             entity_count = len(self._s.get_entity_mappings())
             rel_count = len(self._s.get_relationship_mappings())
             class_count = len(self._s.get_classes())
@@ -709,7 +809,7 @@ class Domain:
             ok, message = svc.write_version(folder, new_version, content)
             if not ok:
                 self._s.current_version = current_version
-                return {'success': False, 'message': f'Failed to save new version: {message}'}
+                raise InfrastructureError("Failed to save new version", detail=message)
 
             copied, doc_errors = svc.copy_version_documents(
                 folder, current_version, new_version,
@@ -734,9 +834,11 @@ class Domain:
                 'new_version': new_version,
                 'previous_version': current_version
             }
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Create new version failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Create new version failed", detail=str(e)) from e
 
 
     def get_version_status(self, refresh: bool = False) -> Dict[str, Any]:
@@ -784,9 +886,11 @@ class Domain:
             }
             set_cached_version_status(cache_key, result)
             return result
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Get version status failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Get version status failed", detail=str(e)) from e
 
 
     # -------------------------------------------------------------------
@@ -815,15 +919,17 @@ class Domain:
                     views = []
                     current_view = None
             return {'success': True, 'views': views, 'current_view': current_view}
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.warning("get_design_views failed: %s", e, exc_info=True)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("get_design_views failed", detail=str(e)) from e
 
 
     def create_design_view(self, view_name: str, copy_from: Optional[str]) -> Dict[str, Any]:
         try:
             if not view_name:
-                return {'success': False, 'message': 'View name is required'}
+                raise ValidationError("View name is required")
             design_layout = self._s._data.get('design_layout', {})
             if 'views' not in design_layout:
                 existing_map = design_layout.get('map', {})
@@ -852,7 +958,7 @@ class Domain:
             design_layout.pop('visibility', None)
             design_layout.pop('positions', None)
             if view_name in design_layout.get('views', {}):
-                return {'success': False, 'message': f'View "{view_name}" already exists'}
+                raise ConflictError(f'View "{view_name}" already exists')
             if copy_from and copy_from in design_layout.get('views', {}):
                 design_layout['views'][view_name] = copy.deepcopy(design_layout['views'][copy_from])
             else:
@@ -860,44 +966,48 @@ class Domain:
             self._s._data['design_layout'] = design_layout
             self._s.save()
             return {'success': True, 'views': list(design_layout['views'].keys())}
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Create design view failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Create design view failed", detail=str(e)) from e
 
 
     def rename_design_view(self, old_name: str, new_name: str) -> Dict[str, Any]:
         try:
             if not old_name or not new_name:
-                return {'success': False, 'message': 'Both old and new names are required'}
+                raise ValidationError("Both old and new names are required")
             design_layout = self._s._data.get('design_layout', {})
             if 'views' not in design_layout:
-                return {'success': False, 'message': 'No views exist'}
+                raise ValidationError("No views exist")
             if old_name not in design_layout['views']:
-                return {'success': False, 'message': f'View "{old_name}" not found'}
+                raise NotFoundError(f'View "{old_name}" not found')
             if new_name in design_layout['views']:
-                return {'success': False, 'message': f'View "{new_name}" already exists'}
+                raise ConflictError(f'View "{new_name}" already exists')
             design_layout['views'][new_name] = design_layout['views'].pop(old_name)
             if design_layout.get('current_view') == old_name:
                 design_layout['current_view'] = new_name
             self._s._data['design_layout'] = design_layout
             self._s.save()
             return {'success': True, 'views': list(design_layout['views'].keys())}
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Rename design view failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Rename design view failed", detail=str(e)) from e
 
 
     def delete_design_view(self, view_name: str) -> Dict[str, Any]:
         try:
             if not view_name:
-                return {'success': False, 'message': 'View name is required'}
+                raise ValidationError("View name is required")
             design_layout = self._s._data.get('design_layout', {})
             if 'views' not in design_layout:
-                return {'success': False, 'message': 'No views exist'}
+                raise ValidationError("No views exist")
             if view_name not in design_layout['views']:
-                return {'success': False, 'message': f'View "{view_name}" not found'}
+                raise NotFoundError(f'View "{view_name}" not found')
             if len(design_layout['views']) <= 1:
-                return {'success': False, 'message': 'Cannot delete the last view'}
+                raise ValidationError("Cannot delete the last view")
             del design_layout['views'][view_name]
             if design_layout.get('current_view') == view_name:
                 design_layout['current_view'] = list(design_layout['views'].keys())[0]
@@ -908,20 +1018,22 @@ class Domain:
                 'views': list(design_layout['views'].keys()),
                 'current_view': design_layout['current_view']
             }
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Delete design view failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Delete design view failed", detail=str(e)) from e
 
 
     def switch_design_view(self, view_name: str) -> Dict[str, Any]:
         try:
             if not view_name:
-                return {'success': False, 'message': 'View name is required'}
+                raise ValidationError("View name is required")
             design_layout = self._s._data.get('design_layout', {})
             if 'views' not in design_layout:
-                return {'success': False, 'message': 'No views exist'}
+                raise ValidationError("No views exist")
             if view_name not in design_layout['views']:
-                return {'success': False, 'message': f'View "{view_name}" not found'}
+                raise NotFoundError(f'View "{view_name}" not found')
             design_layout['current_view'] = view_name
             self._s._data['design_layout'] = design_layout
             self._s.save()
@@ -930,9 +1042,11 @@ class Domain:
                 'current_view': view_name,
                 'layout': design_layout['views'][view_name]
             }
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Switch design view failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Switch design view failed", detail=str(e)) from e
 
 
     def get_current_design_view(self) -> Dict[str, Any]:
@@ -945,9 +1059,11 @@ class Domain:
                 current_view = 'default'
                 layout = {k: v for k, v in design_layout.items() if k not in ['views', 'current_view']}
             return {'success': True, 'current_view': current_view, 'layout': layout}
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Get current design view failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Get current design view failed", detail=str(e)) from e
 
 
     def save_current_design_view(self, layout_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -989,9 +1105,11 @@ class Domain:
             self._s._data['design_layout'] = design_layout
             self._s.save()
             return {'success': True, 'current_view': current_view}
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Save current design view failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Save current design view failed", detail=str(e)) from e
 
 
     def get_map_layout(self) -> Dict[str, Any]:
@@ -999,9 +1117,11 @@ class Domain:
             design_layout = self._s._data.get('design_layout', {})
             map_layout = design_layout.get('map', {})
             return {'success': True, 'layout': map_layout}
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Get map layout failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Get map layout failed", detail=str(e)) from e
 
 
     def save_map_layout(self, layout_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -1011,9 +1131,11 @@ class Domain:
             self._s._data['design_layout']['map'] = layout_data
             self._s.save()
             return {'success': True}
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Save map layout failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Save map layout failed", detail=str(e)) from e
 
 
     # -------------------------------------------------------------------
@@ -1023,7 +1145,7 @@ class Domain:
 
     def get_session_debug_response(self) -> Dict[str, Any]:
         if os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL).upper() != "DEBUG":
-            return {"success": False, "detail": "session-debug is only available when LOG_LEVEL=DEBUG"}
+            raise ValidationError("session-debug is only available when LOG_LEVEL=DEBUG")
         data = self._s._data.copy()
         if 'databricks' in data:
             db = data['databricks'].copy()
@@ -1069,12 +1191,14 @@ class Domain:
     ) -> Dict[str, Any]:
         try:
             if not catalog or not schema:
-                return {'success': False, 'message': 'Catalog and schema are required'}
+                raise ValidationError("Catalog and schema are required")
             st = self._require_settings()
             host, token = get_databricks_host_and_token(self._s, st)
             warehouse_id = resolve_warehouse_id(self._s, st)
             if not host or not warehouse_id:
-                return {'success': False, 'message': 'Databricks not configured. Please configure connection in Settings.'}
+                raise ValidationError(
+                    "Databricks not configured. Please configure connection in Settings.",
+                )
             client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
             tables = await run_blocking(client.get_tables, catalog, schema)
             existing_metadata = self._s.catalog_metadata
@@ -1093,9 +1217,11 @@ class Domain:
                 'total_count': len(tables),
                 'existing_count': len(existing_table_names)
             }
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("List schema tables failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("List schema tables failed", detail=str(e)) from e
 
 
     def initialize_metadata_result(
@@ -1106,12 +1232,14 @@ class Domain:
     ) -> Dict[str, Any]:
         try:
             if not catalog or not schema:
-                return {'success': False, 'message': 'Catalog and schema are required'}
+                raise ValidationError("Catalog and schema are required")
             st = self._require_settings()
             host, token = get_databricks_host_and_token(self._s, st)
             warehouse_id = resolve_warehouse_id(self._s, st)
             if not host or not warehouse_id:
-                return {'success': False, 'message': 'Databricks not configured. Please configure connection in Settings.'}
+                raise ValidationError(
+                    "Databricks not configured. Please configure connection in Settings.",
+                )
             service = MetadataService(host=host, token=token, warehouse_id=warehouse_id)
             existing_metadata = self._s.catalog_metadata
             if selected_tables is not None:
@@ -1128,7 +1256,7 @@ class Domain:
                     existing_metadata=existing_metadata
                 )
             if not success:
-                return {'success': False, 'message': message}
+                raise InfrastructureError("Failed to initialize metadata from Unity Catalog", detail=message)
             self._s._data['domain']['metadata'] = metadata
             self._s.save()
             existing_count = len(existing_metadata.get('tables', []))
@@ -1140,9 +1268,11 @@ class Domain:
                 'new_tables_count': max(0, new_count),
                 'existing_tables_count': existing_count
             }
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Initialize metadata failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Initialize metadata failed", detail=str(e)) from e
 
 
     def save_metadata_tables(self, tables: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1162,7 +1292,7 @@ class Domain:
             metadata = build_metadata_dict(tables)
             is_valid, error_msg = validate_metadata(metadata)
             if not is_valid:
-                return {'success': False, 'message': error_msg}
+                raise ValidationError(error_msg)
             self._s._data['domain']['metadata'] = metadata
             self._s.save()
             return {
@@ -1170,9 +1300,11 @@ class Domain:
                 'message': f'Saved metadata with {len(tables)} tables',
                 'metadata': metadata
             }
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Save metadata failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Save metadata failed", detail=str(e)) from e
 
 
     def clear_metadata(self) -> Dict[str, Any]:
@@ -1197,9 +1329,9 @@ class Domain:
         """
         metadata = self._s.catalog_metadata
         if not check_has_metadata(metadata):
-            return {'success': False, 'message': 'No metadata loaded'}
+            raise ValidationError("No metadata loaded")
         if not catalog or not schema:
-            return {'success': False, 'message': 'Catalog and schema are required'}
+            raise ValidationError("Catalog and schema are required")
 
         target = f"{catalog}.{schema}"
         updated = 0
@@ -1211,7 +1343,7 @@ class Domain:
                     break
 
         if updated == 0:
-            return {'success': False, 'message': f'Table {table_name} not found in metadata'}
+            raise NotFoundError(f"Table {table_name} not found in metadata")
         self._s.save()
         noun = 'table' if updated == 1 else 'tables'
         return {
@@ -1233,7 +1365,7 @@ class Domain:
         """
         metadata = self._s.catalog_metadata
         if not check_has_metadata(metadata):
-            return {'success': False, 'message': 'No metadata loaded'}
+            raise ValidationError("No metadata loaded")
 
         location_lookup: Dict[str, tuple] = {}
         for table in metadata.get('tables', []):
@@ -1244,7 +1376,7 @@ class Domain:
                 location_lookup[tbl] = (cat, sch)
 
         if not location_lookup:
-            return {'success': False, 'message': 'No valid catalog.schema.table entries found in metadata'}
+            raise ValidationError("No valid catalog.schema.table entries found in metadata")
 
         fqn_pattern = re.compile(
             r'((?:FROM|JOIN)\s+)(`?[\w]+`?\.`?[\w]+`?\.`?[\w]+`?)',
@@ -1341,12 +1473,14 @@ class Domain:
     ) -> Dict[str, Any]:
         try:
             if not catalog or not schema:
-                return {'success': False, 'message': 'Catalog and schema are required'}
+                raise ValidationError("Catalog and schema are required")
             st = self._require_settings()
             host, token = get_databricks_host_and_token(self._s, st)
             warehouse_id = resolve_warehouse_id(self._s, st)
             if not host or not warehouse_id:
-                return {'success': False, 'message': 'Databricks not configured. Please configure connection in Settings.'}
+                raise ValidationError(
+                    "Databricks not configured. Please configure connection in Settings.",
+                )
             existing_metadata = self._s.catalog_metadata
             tables_count = len(selected_tables) if selected_tables else 'all'
             tm = get_task_manager()
@@ -1369,9 +1503,11 @@ class Domain:
             )
             thread.start()
             return {'success': True, 'task_id': task.id, 'message': 'Task started'}
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Initialize metadata async failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Initialize metadata async failed", detail=str(e)) from e
 
 
     def start_metadata_update_async(
@@ -1381,22 +1517,24 @@ class Domain:
         try:
             existing_metadata = self._s.catalog_metadata
             if not existing_metadata or not existing_metadata.get('tables'):
-                return {'success': False, 'message': 'No metadata loaded to update'}
+                raise ValidationError("No metadata loaded to update")
             catalog, schema = get_catalog_schema_from_metadata(existing_metadata)
             if not catalog or not schema:
-                return {'success': False, 'message': 'Cannot determine catalog/schema from table full_names'}
+                raise ValidationError("Cannot determine catalog/schema from table full_names")
             st = self._require_settings()
             host, token = get_databricks_host_and_token(self._s, st)
             warehouse_id = resolve_warehouse_id(self._s, st)
             if not host or not warehouse_id:
-                return {'success': False, 'message': 'Databricks not configured. Please configure connection in Settings.'}
+                raise ValidationError(
+                    "Databricks not configured. Please configure connection in Settings.",
+                )
             existing_tables = {t['name']: t for t in existing_metadata.get('tables', [])}
             if table_names:
                 tables_to_update = [name for name in table_names if name in existing_tables]
             else:
                 tables_to_update = list(existing_tables.keys())
             if not tables_to_update:
-                return {'success': False, 'message': 'No tables found to update'}
+                raise ValidationError("No tables found to update")
             tm = get_task_manager()
             task = tm.create_task(
                 name=f"Update Metadata ({len(tables_to_update)} tables)",
@@ -1417,9 +1555,11 @@ class Domain:
             )
             thread.start()
             return {'success': True, 'task_id': task.id, 'message': 'Task started'}
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Update metadata async failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Update metadata async failed", detail=str(e)) from e
 
 
     def update_metadata_tables(
@@ -1431,15 +1571,17 @@ class Domain:
             existing_metadata = self._s.catalog_metadata
             logger.debug("Metadata update: existing metadata has %s tables", len(existing_metadata.get('tables', [])))
             if not existing_metadata or not existing_metadata.get('tables'):
-                return {'success': False, 'message': 'No metadata loaded to update'}
+                raise ValidationError("No metadata loaded to update")
             catalog, schema = get_catalog_schema_from_metadata(existing_metadata)
             if not catalog or not schema:
-                return {'success': False, 'message': 'Cannot determine catalog/schema from table full_names'}
+                raise ValidationError("Cannot determine catalog/schema from table full_names")
             st = self._require_settings()
             host, token = get_databricks_host_and_token(self._s, st)
             warehouse_id = resolve_warehouse_id(self._s, st)
             if not host or not warehouse_id:
-                return {'success': False, 'message': 'Databricks not configured. Please configure connection in Settings.'}
+                raise ValidationError(
+                    "Databricks not configured. Please configure connection in Settings.",
+                )
             client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
             existing_tables = {t['name']: t for t in existing_metadata.get('tables', [])}
             if table_names:
@@ -1447,7 +1589,7 @@ class Domain:
             else:
                 tables_to_update = list(existing_tables.keys())
             if not tables_to_update:
-                return {'success': False, 'message': 'No tables found to update'}
+                raise ValidationError("No tables found to update")
             updated_count = 0
             errors: List[str] = []
             for table_name in tables_to_update:
@@ -1479,9 +1621,11 @@ class Domain:
                 'errors': errors,
                 'metadata': existing_metadata
             }
+        except OntoBricksError:
+            raise
         except Exception as e:
             logger.exception("Update metadata failed: %s", e)
-            return {'success': False, 'message': str(e)}
+            raise InfrastructureError("Update metadata failed", detail=str(e)) from e
 
 
     # -------------------------------------------------------------------

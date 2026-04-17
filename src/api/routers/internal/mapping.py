@@ -538,12 +538,13 @@ async def start_auto_assign(
     domain = get_domain(session_mgr)
     host, token, warehouse_id = get_databricks_credentials(domain, settings)
     
-    schema_context, schema_err = Mapping(domain).resolve_auto_assign_schema_context(
-        data.get("schema_context") or {}
-    )
-    if schema_err:
-        logger.warning("Auto-assign: %s", schema_err)
-        raise ValidationError("Schema context could not be resolved", detail=schema_err)
+    try:
+        schema_context = Mapping(domain).resolve_auto_assign_schema_context(
+            data.get("schema_context") or {}
+        )
+    except ValidationError as exc:
+        logger.warning("Auto-assign: %s", exc.message)
+        raise ValidationError("Schema context could not be resolved", detail=exc.message) from exc
     logger.info(
         "Auto-assign: schema_context — %d table(s)",
         len(schema_context.get("tables", [])),
@@ -856,9 +857,10 @@ async def single_auto_assign(
     if not llm_endpoint:
         raise ValidationError("No LLM serving endpoint configured")
 
-    schema_context, schema_err = Mapping(domain).resolve_auto_assign_schema_context(None)
-    if schema_err:
-        raise ValidationError("Schema context could not be resolved", detail=schema_err)
+    try:
+        schema_context = Mapping(domain).resolve_auto_assign_schema_context(None)
+    except ValidationError as exc:
+        raise ValidationError("Schema context could not be resolved", detail=exc.message) from exc
 
     client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
 

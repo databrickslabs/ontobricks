@@ -1,7 +1,7 @@
 """SPARQL local execution and R2RML extraction from Turtle/XML graphs."""
 import re
 
-from rdflib import Graph, Namespace
+from rdflib import Namespace
 from rdflib.namespace import RDF, RDFS
 
 from back.core.logging import get_logger

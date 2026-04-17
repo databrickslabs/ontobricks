@@ -183,4 +183,39 @@ async function resetMapping(event) {
 // Initialize home page on load
 document.addEventListener('DOMContentLoaded', function() {
     loadSessionStatus();
+    initHomeActionButtons();
 });
+
+/**
+ * Wire domain / workflow buttons (data-action) — keeps home.html free of inline handlers.
+ */
+function initHomeActionButtons() {
+    var root = document.getElementById('sessionPanel') || document.body;
+    root.addEventListener('click', onHomePanelClick);
+    var workflow = document.querySelector('.workflow-section');
+    if (workflow && workflow !== root) {
+        workflow.addEventListener('click', onHomePanelClick);
+    }
+}
+
+function onHomePanelClick(e) {
+    var el = e.target.closest('[data-action]');
+    if (!el) return;
+    var action = el.getAttribute('data-action');
+    if (action === 'newDomain') {
+        e.preventDefault();
+        newDomain();
+    } else if (action === 'domainSave') {
+        e.preventDefault();
+        domainSave();
+    } else if (action === 'domainLoad') {
+        e.preventDefault();
+        domainLoad();
+    } else if (action === 'resetTaxonomy') {
+        e.preventDefault();
+        resetTaxonomy(e);
+    } else if (action === 'resetMapping') {
+        e.preventDefault();
+        resetMapping(e);
+    }
+}

@@ -10,7 +10,7 @@ from typing import Optional, Any
 
 from back.core.errors import ValidationError, NotFoundError
 from shared.config.constants import APP_VERSION
-from back.objects.domain.payload import resolve_domain_slice
+from back.objects.domain import resolve_domain_slice
 from api import service
 
 router = APIRouter()

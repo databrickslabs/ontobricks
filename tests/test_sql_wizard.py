@@ -10,6 +10,8 @@ Tests cover:
 """
 import pytest
 from unittest.mock import Mock, MagicMock, patch
+
+from back.core.errors import InfrastructureError
 from back.core.sqlwizard import SQLWizardService, SchemaContext
 
 
@@ -403,16 +405,15 @@ class TestIntegration:
     def test_generate_sql_handles_timeout(self, mock_post, wizard, mock_client):
         import requests
         mock_post.side_effect = requests.exceptions.Timeout()
-        
-        result = wizard.generate_sql(
-            endpoint_name='test-endpoint',
-            catalog='main',
-            schema='sales',
-            user_prompt='Get all customers'
-        )
-        
-        assert result['success'] is False
-        assert 'timed out' in result['error'].lower()
+
+        with pytest.raises(InfrastructureError) as exc_info:
+            wizard.generate_sql(
+                endpoint_name='test-endpoint',
+                catalog='main',
+                schema='sales',
+                user_prompt='Get all customers',
+            )
+        assert 'timed out' in str(exc_info.value.message).lower()
 
 
 class TestForbiddenKeywords:

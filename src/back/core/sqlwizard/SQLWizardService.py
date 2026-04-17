@@ -9,7 +9,7 @@ import hashlib
 from typing import Dict, List, Any, Optional, Tuple
 
 from back.core.logging import get_logger
-from back.core.errors import ValidationError, InfrastructureError
+from back.core.errors import OntoBricksError, ValidationError, InfrastructureError
 
 from .models import SchemaContext
 
@@ -67,11 +67,11 @@ class SQLWizardService:
                     'endpoint_type': endpoint_type
                 })
             
-            logger.info(f"[SQLWizard] Found {len(endpoints)} serving endpoints")
+            logger.info("[SQLWizard] Found %d serving endpoints", len(endpoints))
             return endpoints
             
         except Exception as e:
-            logger.error(f"[SQLWizard] Error fetching serving endpoints: {e}")
+            logger.error("[SQLWizard] Error fetching serving endpoints: %s", e)
             return []
     
     def get_schema_context(self, catalog: str, schema: str, use_cache: bool = True) -> SchemaContext:
@@ -90,7 +90,7 @@ class SQLWizardService:
         cache_key = f"{catalog}.{schema}"
         
         if use_cache and cache_key in self._schema_cache:
-            logger.info(f"[SQLWizard] Using cached schema context for {cache_key}")
+            logger.info("[SQLWizard] Using cached schema context for %s", cache_key)
             return self._schema_cache[cache_key]
         
         # Get tables in the schema
@@ -107,7 +107,7 @@ class SQLWizardService:
                     'columns': columns
                 })
             except Exception as e:
-                logger.warning(f"[SQLWizard] Could not get columns for {table_name}: {e}")
+                logger.warning("[SQLWizard] Could not get columns for %s: %s", table_name, e)
                 full_name = f"{catalog}.{schema}.{table_name}"
                 table_metadata.append({'name': table_name, 'full_name': full_name, 'columns': []})
         
@@ -115,7 +115,7 @@ class SQLWizardService:
         
         # Cache the result
         self._schema_cache[cache_key] = context
-        logger.info(f"[SQLWizard] Built schema context for {cache_key}: {len(tables)} tables")
+        logger.info("[SQLWizard] Built schema context for %s: %d tables", cache_key, len(tables))
         
         return context
     
@@ -653,11 +653,9 @@ class SQLWizardService:
                 schema_context = self.get_schema_context(catalog, schema)
             else:
                 logger.warning("[SQLWizard] generate_sql: no schema context and no catalog/schema")
-                return {
-                    'success': False,
-                    'error': 'No schema context provided and no catalog/schema specified',
-                    'telemetry': telemetry
-                }
+                raise ValidationError(
+                    'No schema context provided and no catalog/schema specified',
+                )
             telemetry['tables_count'] = len(schema_context.tables)
             
             # Step 2: Compose prompt
@@ -675,11 +673,7 @@ class SQLWizardService:
             
             if not sql:
                 logger.warning("[SQLWizard] generate_sql: could not extract SQL from LLM output")
-                return {
-                    'success': False,
-                    'error': 'Could not extract SQL from LLM output',
-                    'telemetry': telemetry
-                }
+                raise InfrastructureError('Could not extract SQL from LLM output')
             logger.info("[SQLWizard] generate_sql: extracted SQL — %d chars", len(sql))
             
             # Step 5: Static validation
@@ -689,12 +683,7 @@ class SQLWizardService:
             
             if not is_valid:
                 logger.warning("[SQLWizard] generate_sql: static validation FAILED — %s", message)
-                return {
-                    'success': False,
-                    'error': message,
-                    'sql': sql,
-                    'telemetry': telemetry
-                }
+                raise ValidationError(message, detail=sql)
             
             # Step 6: Optional EXPLAIN validation
             plan_warning = None
@@ -720,24 +709,16 @@ class SQLWizardService:
                 'telemetry': telemetry
             }
             
+        except OntoBricksError:
+            raise
         except TimeoutError as e:
             logger.error("[SQLWizard] generate_sql: TIMEOUT — %s", e)
             telemetry['validation_outcomes'].append({'error': 'timeout'})
-            return {
-                'success': False,
-                'error': 'The model request timed out.',
-                'detail': str(e),
-                'telemetry': telemetry
-            }
+            raise InfrastructureError('The model request timed out.', detail=str(e)) from e
         except Exception as e:
             logger.exception("[SQLWizard] generate_sql: FAILED — %s", e)
             telemetry['validation_outcomes'].append({'error': 'generation_failed'})
-            return {
-                'success': False,
-                'error': 'SQL generation failed.',
-                'detail': str(e),
-                'telemetry': telemetry
-            }
+            raise InfrastructureError('SQL generation failed.', detail=str(e)) from e
     
     def clear_cache(self):
         """Clear the schema context cache."""

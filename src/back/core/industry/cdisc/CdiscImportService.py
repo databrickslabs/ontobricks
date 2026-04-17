@@ -22,6 +22,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
+from back.core.errors import InfrastructureError, ValidationError
 from back.core.logging import get_logger
 from shared.config.constants import HTTP_USER_AGENT
 from rdflib import Graph, RDF, URIRef
@@ -620,14 +621,7 @@ class CdiscImportService:
         modules = CdiscImportService._collect_modules(domain_keys)
 
         if not modules:
-            return {
-                "success": False,
-                "message": "No valid CDISC domains selected.",
-                "turtle": "",
-                "stats": {},
-                "fetched": 0,
-                "failed": [],
-            }
+            raise ValidationError("No valid CDISC domains selected.")
 
         logger.info("Fetching %d modules for domains: %s", len(modules), domain_keys)
 
@@ -668,14 +662,7 @@ class CdiscImportService:
                 "from https://github.com/phuse-org/rdf.cdisc.org and importing "
                 "via 'Import OWL'."
             )
-            return {
-                "success": False,
-                "message": hint,
-                "turtle": "",
-                "stats": {},
-                "fetched": 0,
-                "failed": failed_modules,
-            }
+            raise InfrastructureError(hint, detail=", ".join(failed_modules) or None)
 
         # Determine which parsing strategy to use
         has_standard_data = any(k != "SCHEMAS" for k in domain_keys)

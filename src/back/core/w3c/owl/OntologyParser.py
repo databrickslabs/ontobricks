@@ -1,7 +1,7 @@
 """OWL ontology parser."""
 import json
 from rdflib import Graph, RDF, RDFS, OWL, BNode
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError

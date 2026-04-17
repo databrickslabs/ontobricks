@@ -1,5 +1,6 @@
 """Mapping domain: entity/relationship mappings, R2RML, SQL preview, session merge."""
 
+from back.objects.mapping.json_views import get_mapping_info
 from back.objects.mapping.mapping import Mapping
 
-__all__ = ["Mapping"]
+__all__ = ["Mapping", "get_mapping_info"]

@@ -21,7 +21,7 @@ from shared.config.settings import get_settings, Settings
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from back.core.graphql import DEFAULT_DEPTH, MAX_DEPTH
 from back.core.logging import get_logger
-from back.core.errors import ValidationError, NotFoundError, InfrastructureError
+from back.core.errors import OntoBricksError, ValidationError, NotFoundError, InfrastructureError
 from back.objects.registry import RegistryService
 from back.core.triplestore import get_triplestore
 from shared.config.constants import DEFAULT_BASE_URI
@@ -30,6 +30,16 @@ from back.core.helpers import effective_graph_name
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+
+def _graphql_safe_error_message(exc: BaseException) -> str:
+    """Return a client-safe GraphQL error message (no raw exception strings)."""
+    if isinstance(exc, OntoBricksError):
+        return exc.message
+    original = getattr(exc, "original_error", None)
+    if isinstance(original, OntoBricksError):
+        return original.message
+    return "The query could not be executed."
 
 
 # ------------------------------------------------------------------
@@ -288,7 +298,7 @@ async def graphql_execute(
         response["data"] = result.data
     if result.errors:
         response["errors"] = [
-            {"message": str(e), "path": getattr(e, "path", None)}
+            {"message": _graphql_safe_error_message(e), "path": getattr(e, "path", None)}
             for e in result.errors
         ]
 

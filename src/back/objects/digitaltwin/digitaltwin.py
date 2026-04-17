@@ -7,13 +7,15 @@ from typing import Any, Dict, List, Optional, Set
 
 from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.core.helpers import sql_escape as escape_sql_value, extract_local_name
-from back.core.w3c.rdf_utils import uri_local_name
 from back.core.logging import get_logger
 from back.objects.digitaltwin.constants import RDF_TYPE, RDFS_LABEL
 from back.objects.digitaltwin.models import DomainSnapshot
 from back.objects.session import get_domain
 
 logger = get_logger(__name__)
+
+# Session TTL for ``domain.triplestore.stats`` sections (status, dt_existence, aggregate stats).
+_TS_STATS_CACHE_TTL_SECONDS = 300
 
 
 class DigitalTwin:
@@ -51,10 +53,7 @@ class DigitalTwin:
         if name:
             return name
         if class_uri:
-            if '#' in class_uri:
-                name = class_uri.split('#')[-1].strip()
-            elif '/' in class_uri:
-                name = class_uri.rstrip('/').split('/')[-1].strip()
+            name = extract_local_name(class_uri).strip()
             if name:
                 return name.replace(' ', '_')
         return 'Entity'
@@ -151,7 +150,7 @@ class DigitalTwin:
         suggested = suggestions_match.group(1).strip() if suggestions_match else ""
 
         for class_uri, mapping in (entity_mappings or {}).items():
-            local_name = uri_local_name(class_uri)
+            local_name = extract_local_name(class_uri)
             source = (mapping.get("sql_query") or mapping.get("table") or "unknown").strip()
 
             if mapping.get("id_column") == bad_column:
@@ -174,7 +173,7 @@ class DigitalTwin:
                 )
             for pred_uri, pred_info in mapping.get("predicates", {}).items():
                 if pred_info.get("column") == bad_column:
-                    attr_name = uri_local_name(pred_uri)
+                    attr_name = extract_local_name(pred_uri)
                     return (
                         f"Column '{bad_column}' not found in source for entity '{local_name}'.\n"
                         f"  Entity: {local_name} ({class_uri})\n"
@@ -307,7 +306,7 @@ class DigitalTwin:
             if not avail:
                 continue
 
-            local_name = uri_local_name(class_uri)
+            local_name = extract_local_name(class_uri)
             bad_preds = [
                 pred_uri
                 for pred_uri, info in mapping.get('predicates', {}).items()
@@ -317,7 +316,7 @@ class DigitalTwin:
             ]
             for pred_uri in bad_preds:
                 col = mapping['predicates'][pred_uri]['column']
-                attr = uri_local_name(pred_uri)
+                attr = extract_local_name(pred_uri)
                 logger.warning(
                     "Entity '%s': removing predicate '%s' — column '%s' "
                     "is not available in source output columns %s.",
@@ -397,11 +396,8 @@ class DigitalTwin:
             entity_lookup[class_uri] = entity_info
             entity_lookup[full_uri] = entity_info
 
-            if '#' in class_uri:
-                local_name = class_uri.split('#')[-1]
-                entity_lookup[local_name] = entity_info
-            elif '/' in class_uri:
-                local_name = class_uri.split('/')[-1]
+            local_name = extract_local_name(class_uri)
+            if local_name:
                 entity_lookup[local_name] = entity_info
 
         ontology_property_lookup = {}
@@ -453,7 +449,7 @@ class DigitalTwin:
 
             if predicate_uri and predicate_uri.startswith(('http://', 'https://')):
                 if not predicate_uri.startswith(base_uri):
-                    local = predicate_uri.split('#')[-1] if '#' in predicate_uri else predicate_uri.rstrip('/').split('/')[-1]
+                    local = extract_local_name(predicate_uri)
                     predicate_uri = f"{base_uri}{local.replace(' ', '_')}"
             elif predicate_uri:
                 predicate_uri = f"{base_uri}{predicate_uri.replace(' ', '_')}"
@@ -546,12 +542,21 @@ class DigitalTwin:
     # ------------------------------------------------------------------
 
     def get_ts_cache(self, section: str) -> Optional[dict]:
-        """Read a cached triplestore section (e.g. ``'stats'``, ``'status'``) from the domain."""
+        """Read a cached triplestore section (e.g. ``'stats'``, ``'status'``) from the domain.
+
+        Returns ``None`` when the section is missing or the cache is older than
+        :data:`_TS_STATS_CACHE_TTL_SECONDS` (see ``version_status`` for the same TTL pattern).
+        """
         ts = self._domain.triplestore or {}
+        ts_stamp = ts.get('_ts_cache_timestamp')
+        if ts_stamp is None:
+            return None
+        if (time.time() - float(ts_stamp)) > _TS_STATS_CACHE_TTL_SECONDS:
+            return None
         stats = ts.get('stats', {})
-        if isinstance(stats, dict):
-            return stats.get(section)
-        return None
+        if not isinstance(stats, dict):
+            return None
+        return stats.get(section)
 
     def set_ts_cache(self, section: str, data: dict):
         """Write a cached triplestore section and persist to session."""
@@ -559,6 +564,7 @@ class DigitalTwin:
         if 'stats' not in ts:
             ts['stats'] = {}
         ts['stats'][section] = data
+        ts['_ts_cache_timestamp'] = time.time()
         self._domain.save()
 
     async def get_or_fetch_graph_status(self, settings) -> Dict[str, Any]:
@@ -569,8 +575,7 @@ class DigitalTwin:
             return cached
         logger.debug("get_or_fetch_graph_status: cache miss — fetching live")
         result = await self.fetch_graph_triplestore_status(settings)
-        if result.get('success'):
-            self.set_ts_cache('status', result)
+        self.set_ts_cache('status', result)
         return result
 
     async def get_or_fetch_dt_existence(self, settings) -> Dict[str, Any]:
@@ -694,12 +699,10 @@ class DigitalTwin:
             return result
         except Exception as e:
             logger.exception("fetch_graph_triplestore_status failed: %s", e)
-            return {
-                "success": False,
-                "has_data": False,
-                "count": 0,
-                "message": "Could not load graph triplestore status.",
-            }
+            raise InfrastructureError(
+                "Could not load graph triplestore status.",
+                detail=str(e),
+            ) from e
 
     async def fetch_digital_twin_existence(self, settings) -> Dict[str, Any]:
         """Live checks for SQL view, snapshot table, local/registry Ladybug archives."""
@@ -830,16 +833,14 @@ class DigitalTwin:
             client = get_databricks_client(domain, settings)
 
             if not client:
-                return {
-                    'success': False,
-                    'message': 'Databricks is not configured. Please configure your Databricks connection in Settings.'
-                }
+                raise ValidationError(
+                    "Databricks is not configured. Please configure your Databricks connection in Settings."
+                )
 
             if not client.warehouse_id:
-                return {
-                    'success': False,
-                    'message': 'No SQL warehouse configured. Please configure your Databricks connection in Settings.'
-                }
+                raise ValidationError(
+                    "No SQL warehouse configured. Please configure your Databricks connection in Settings."
+                )
 
             if not client.host or not client.warehouse_id:
                 missing = []
@@ -847,10 +848,12 @@ class DigitalTwin:
                     missing.append('host')
                 if not client.warehouse_id:
                     missing.append('warehouse_id')
-                return {'success': False, 'message': f'Databricks configuration incomplete. Missing: {", ".join(missing)}.'}
+                raise ValidationError(
+                    f'Databricks configuration incomplete. Missing: {", ".join(missing)}.'
+                )
 
             if not client.has_valid_auth():
-                return {'success': False, 'message': 'Databricks authentication not configured.'}
+                raise ValidationError("Databricks authentication not configured.")
 
             entity_mappings, relationship_mappings = sparql.extract_r2rml_mappings(r2rml_content)
             base_uri = domain.ontology.get('base_uri', DEFAULT_BASE_URI)
@@ -859,11 +862,11 @@ class DigitalTwin:
             relationship_mappings = DigitalTwin.augment_relationships_from_config(relationship_mappings, domain.assignment, base_uri, domain.ontology)
 
             if not entity_mappings and not relationship_mappings:
-                return {'success': False, 'message': 'No valid R2RML TriplesMap found.'}
+                raise ValidationError("No valid R2RML TriplesMap found.")
 
             result = sparql.translate_sparql_to_spark(sparql_query, entity_mappings, limit, relationship_mappings)
-            if not result['success']:
-                return result
+            if not result.get('success'):
+                raise ValidationError(result.get('message') or 'SPARQL translation failed.')
 
             spark_sql = result['sql']
             select_vars = result['variables']
@@ -874,16 +877,14 @@ class DigitalTwin:
                 logger.exception("Databricks query execution failed: %s", e)
                 error_msg = str(e)
                 if 'NoneType' in error_msg or 'request' in error_msg:
-                    return {
-                        'success': False,
-                        'message': 'Databricks connection failed. Please verify your configuration.',
-                        'generated_sql': spark_sql
-                    }
-                return {
-                    'success': False,
-                    'message': 'Spark SQL execution failed.',
-                    'generated_sql': spark_sql,
-                }
+                    raise InfrastructureError(
+                        "Databricks connection failed. Please verify your configuration.",
+                        detail=error_msg,
+                    ) from e
+                raise InfrastructureError(
+                    "Spark SQL execution failed.",
+                    detail=error_msg,
+                ) from e
 
             if results:
                 columns = select_vars if select_vars else list(results[0].keys())
@@ -902,12 +903,22 @@ class DigitalTwin:
                     'count': 0, 'engine': 'spark', 'generated_sql': spark_sql
                 }
 
+        except ValidationError:
+            raise
+        except InfrastructureError:
+            raise
         except ValueError as e:
             logger.exception("Spark query ValueError: %s", e)
-            return {'success': False, 'message': 'The query or mapping configuration is invalid.'}
+            raise ValidationError(
+                "The query or mapping configuration is invalid.",
+                detail=str(e),
+            ) from e
         except Exception as e:
             logger.exception("Spark query error: %s", e)
-            return {'success': False, 'message': 'An unexpected error occurred while running the Spark query.'}
+            raise InfrastructureError(
+                "An unexpected error occurred while running the Spark query.",
+                detail=str(e),
+            ) from e
 
     # ------------------------------------------------------------------
     # Triplestore stats (instance method)
@@ -1773,7 +1784,6 @@ class DigitalTwin:
     @staticmethod
     def extract_local_id(uri: str) -> str:
         """Extract the local entity identifier from a URI."""
-        from back.core.helpers import extract_local_name
         return extract_local_name(uri) or uri
 
     @staticmethod

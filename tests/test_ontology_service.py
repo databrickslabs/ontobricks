@@ -1,6 +1,9 @@
 """Tests for :class:`back.objects.ontology.Ontology` helpers used by ontology routes."""
 import copy
 
+import pytest
+
+from back.core.errors import NotFoundError, ValidationError
 from back.objects.ontology import Ontology
 
 
@@ -257,7 +260,8 @@ class TestDeleteClassAndPropertyByUri:
         assert len(ps.get_classes()) == 1
 
     def test_delete_class_missing_uri(self, domain_session):
-        assert Ontology(domain_session).delete_class_by_uri(None)["success"] is False
+        with pytest.raises(ValidationError):
+            Ontology(domain_session).delete_class_by_uri(None)
 
     def test_delete_property_cascades_rel_mapping(
         self, domain_session, sample_ontology_config, sample_mapping_config
@@ -273,7 +277,8 @@ class TestDeleteClassAndPropertyByUri:
         assert all(p.get("uri") != "http://test.org/ontology#hasOrder" for p in ps.get_properties())
 
     def test_delete_property_missing_uri(self, domain_session):
-        assert Ontology(domain_session).delete_property_by_uri("")["success"] is False
+        with pytest.raises(ValidationError):
+            Ontology(domain_session).delete_property_by_uri("")
 
 
 class TestAddUpdateClassProperty:
@@ -288,8 +293,8 @@ class TestAddUpdateClassProperty:
     def test_add_class_duplicate(self, domain_session, sample_ontology_config):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
-        r = Ontology(ps).add_class({"name": "Customer", "uri": "http://test.org/ontology#Customer"})
-        assert r["success"] is False
+        with pytest.raises(ValidationError):
+            Ontology(ps).add_class({"name": "Customer", "uri": "http://test.org/ontology#Customer"})
 
     def test_update_class(self, domain_session, sample_ontology_config):
         ps = domain_session
@@ -301,8 +306,8 @@ class TestAddUpdateClassProperty:
     def test_update_class_not_found(self, domain_session, sample_ontology_config):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
-        r = Ontology(ps).update_class({"uri": "http://test.org/ontology#Missing"})
-        assert r["success"] is False
+        with pytest.raises(NotFoundError):
+            Ontology(ps).update_class({"uri": "http://test.org/ontology#Missing"})
 
     def test_add_property(self, domain_session, sample_ontology_config):
         ps = domain_session
@@ -314,8 +319,8 @@ class TestAddUpdateClassProperty:
     def test_add_property_duplicate(self, domain_session, sample_ontology_config):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
-        r = Ontology(ps).add_property({"name": "hasOrder", "uri": "http://test.org/ontology#hasOrder"})
-        assert r["success"] is False
+        with pytest.raises(ValidationError):
+            Ontology(ps).add_property({"name": "hasOrder", "uri": "http://test.org/ontology#hasOrder"})
 
     def test_update_property(self, domain_session, sample_ontology_config):
         ps = domain_session

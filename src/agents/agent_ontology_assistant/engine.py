@@ -9,7 +9,7 @@ along with the mutated ontology state.
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from back.core.logging import get_logger
 from agents.agent_ontology_assistant.tools import (

@@ -32,3 +32,19 @@ Payload helpers
    :members:
    :undoc-members:
    :show-inheritance:
+
+Home service
+------------
+
+.. automodule:: back.objects.domain.home_service
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Settings service
+----------------
+
+.. automodule:: back.objects.domain.settings_service
+   :members:
+   :undoc-members:
+   :show-inheritance:

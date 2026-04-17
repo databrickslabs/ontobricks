@@ -1,6 +1,6 @@
 """Decision table engine — compile tabular business rules to SQL / Cypher."""
 import time
-from typing import Any, Dict, List, Optional
+from typing import Dict
 
 from back.core.logging import get_logger
 from back.core.graphdb.GraphDBBackend import GraphDBBackend

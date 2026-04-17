@@ -13,11 +13,15 @@ volume ``.global_config.json``), admin-only.
 Excluded from export: environment credentials and preferences;
 ``domain.is_active_version``; generated OWL, R2RML, and SQL; and
 ``assignment.r2rml_output`` (all regenerated from source).
+
+**Domain change stamps** — ``domain.last_update``, ``domain.ontology_changed``,
+and ``domain.assignment_changed`` could be inferred from ontology/assignment
+content hashes, but they are stored explicitly: updating the stamp and flags on
+save is cheap and avoids recomputing hashes on every read.
 """
-import copy
 import re
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 from back.core.logging import get_logger
 from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME, DEFAULT_LADYBUG_PATH
@@ -523,6 +527,11 @@ class DomainSession:
         Stamps ``domain.last_update`` when the ontology or mapping data
         has changed during this request.
 
+        ``domain.last_update``, ``domain.ontology_changed``, and
+        ``domain.assignment_changed`` are stored explicitly (they could be
+        derived from content hashes, but the stamp and flags are cheap and
+        avoid recomputation on every read).
+
         Note: Runtime-only data is excluded from session storage:
         - 'generated' (owl, r2rml, sql) - calculated on demand
         - 'available_versions' - fetched from UC on demand
@@ -567,9 +576,6 @@ class DomainSession:
                 settings_copy['databricks'] = db_copy
             data_to_save['settings'] = settings_copy
 
-        # Legacy session keys (computed on demand; do not persist)
-        data_to_save.pop('_validation_cache', None)
-        data_to_save.pop('_document_count', None)
         # Legacy top-level keys (migrated under domain / ontology)
         data_to_save.pop('metadata', None)
         data_to_save.pop('reasoning', None)
@@ -1338,8 +1344,7 @@ class DomainSession:
         # Clear cached triplestore stats — they belong to the previous project
         ts.pop('stats', None)
         ts.pop('build_last_update', None)
-        ts.pop('needs_rebuild', None)
-        ts.pop('build_fingerprint', None)
+        ts.pop('_ts_cache_timestamp', None)
 
         # Ensure inherited dataProperties are propagated for saved domains
         # whose classes may have been stored before inheritance resolution.

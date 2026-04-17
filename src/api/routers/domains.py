@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from api.constants import DEFAULT_BASE_URI
 from shared.config.settings import Settings, get_settings
-from back.core.errors import ValidationError, InfrastructureError, NotFoundError
+from back.core.errors import OntoBricksError, ValidationError, InfrastructureError, NotFoundError
 from back.core.logging import get_logger
 from back.objects.digitaltwin import DigitalTwin
 from back.objects.registry import RegistryCfg, RegistryService
@@ -558,9 +558,6 @@ async def get_domain_sparksql(
             sparql_query, entity_mappings, None, relationship_mappings,
         )
 
-        if not result.get('success'):
-            raise InfrastructureError(result.get('message', 'SQL translation failed'))
-
         sql_content = result.get('sql', '')
         logger.info(
             "API: returning Spark SQL for domain '%s' (%d chars)",
@@ -572,6 +569,8 @@ async def get_domain_sparksql(
             sql=sql_content,
             base_uri=base_uri,
         )
+    except OntoBricksError:
+        raise
     except Exception as e:
         logger.exception("Spark SQL generation failed: %s", e)
         raise InfrastructureError(f"SQL generation failed: {e}") from e

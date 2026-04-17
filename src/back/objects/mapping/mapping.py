@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 import requests
 
@@ -13,7 +13,7 @@ from shared.config.constants import DEFAULT_BASE_URI
 from back.core.databricks import VolumeFileService
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
-from back.core.errors import InfrastructureError
+from back.core.errors import InfrastructureError, ValidationError
 
 logger = get_logger(__name__)
 
@@ -87,25 +87,24 @@ class Mapping:
 
     def resolve_auto_assign_schema_context(
         self, schema_context_override: Optional[Dict[str, Any]] = None
-    ) -> Tuple[Dict[str, Any], Optional[str]]:
+    ) -> Dict[str, Any]:
         """Build ``metadata``/schema payload for auto-assignment.
 
         If ``schema_context_override`` contains ``tables``, it is used; otherwise
         falls back to ``catalog_metadata`` tables.
 
-        Returns ``(context, None)`` on success, or ``({}, error_message)`` when
-        no tables are available.
+        Raises:
+            ValidationError: when no tables are available from override or catalog metadata.
         """
         override = schema_context_override or {}
         if override.get("tables"):
-            return dict(override), None
+            return dict(override)
         tables = (self._domain.catalog_metadata or {}).get("tables", [])
         if not tables:
-            return (
-                {},
+            raise ValidationError(
                 "No metadata loaded. Please load metadata first in Settings.",
             )
-        return {"tables": tables}, None
+        return {"tables": tables}
 
     @staticmethod
     def build_entity_mapping(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -255,11 +254,10 @@ class Mapping:
             InfrastructureError: R2RML generation failed.
         """
         from back.core.w3c import R2RMLGenerator
-        from back.core.errors import ValidationError as _VE
 
         domain = self._domain
         if not domain.get_entity_mappings():
-            raise _VE("No entity mappings configured")
+            raise ValidationError("No entity mappings configured")
 
         try:
             base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
@@ -540,12 +538,7 @@ class Mapping:
             is_valid, message, corrected_sql = wizard.validate_sql_static(sql, context)
 
             if not is_valid:
-                return {
-                    "success": False,
-                    "valid": False,
-                    "error": message,
-                    "sql": sql,
-                }
+                raise ValidationError(message or "SQL validation failed")
 
             if validate_plan:
                 plan_valid, plan_message, plan_info = wizard.validate_sql_explain(corrected_sql)
@@ -567,19 +560,11 @@ class Mapping:
 
         sql_upper = sql.upper().strip()
         if not sql_upper.startswith("SELECT"):
-            return {
-                "success": False,
-                "valid": False,
-                "error": "Query must be a SELECT statement",
-            }
+            raise ValidationError("Query must be a SELECT statement")
 
         for keyword in wizard.FORBIDDEN_KEYWORDS:
             if re.search(rf"\b{keyword}\b", sql_upper):
-                return {
-                    "success": False,
-                    "valid": False,
-                    "error": f"Query contains forbidden keyword: {keyword}",
-                }
+                raise ValidationError(f"Query contains forbidden keyword: {keyword}")
 
         return {
             "success": True,

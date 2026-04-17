@@ -26,8 +26,7 @@ from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
 from back.core.triplestore import get_triplestore
 from back.core.helpers import get_databricks_credentials, sql_escape, effective_view_table, effective_graph_name, is_uri
-from back.objects.digitaltwin import DigitalTwin
-from back.objects.digitaltwin.models import DomainSnapshot
+from back.objects.digitaltwin import DigitalTwin, DomainSnapshot
 
 # Tests may patch ``api.routers.digitaltwin`` for registry resolution helpers.
 _resolve_registry = DigitalTwin.resolve_registry

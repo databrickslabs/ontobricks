@@ -3,16 +3,36 @@
 Reusable request-handling utilities that are used by multiple
 frontend route modules (ontology, mapping, domain, etc.).
 """
+import logging
+from contextlib import contextmanager
+
 from fastapi import Request
 
 from shared.config.settings import Settings
-from back.core.databricks import VolumeFileService
-from back.core.errors import ValidationError, InfrastructureError
-from back.core.helpers import get_databricks_host_and_token
+from back.core.errors import InfrastructureError, OntoBricksError, ValidationError
+from back.core.helpers import make_volume_file_service
 from back.core.logging import get_logger
 from back.objects.session import SessionManager, get_domain
 
 logger = get_logger(__name__)
+
+
+@contextmanager
+def map_route_errors(context: str, logger: logging.Logger):
+    """Map unexpected exceptions to :class:`InfrastructureError` for API routes.
+
+    Re-raises :class:`OntoBricksError` subclasses unchanged. Any other
+    ``Exception`` is logged with ``logger.exception`` and wrapped in
+    ``InfrastructureError(context, detail=str(exc))`` (works inside sync or
+    async handlers because it only wraps a ``with`` block).
+    """
+    try:
+        yield
+    except OntoBricksError:
+        raise
+    except Exception as exc:
+        logger.exception("%s: %s", context, exc)
+        raise InfrastructureError(context, detail=str(exc)) from exc
 
 
 async def save_content_to_uc(
@@ -35,8 +55,7 @@ async def save_content_to_uc(
 
     try:
         domain = get_domain(session_mgr)
-        host, token = get_databricks_host_and_token(domain, settings)
-        uc_service = VolumeFileService(host=host, token=token)
+        uc_service = make_volume_file_service(domain, settings)
         success, message = uc_service.write_file(path, content)
         if not success:
             raise InfrastructureError(f"Failed to save {log_context} to UC", detail=message)

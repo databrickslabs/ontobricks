@@ -33,4 +33,4 @@ When asking for a code review, do all these tasks (in this order):
 
 When asking to deploy:
 * Always synchronize the files with the server.
-* Deploy both the UI and the MCP server.
+* Deploy both the UI and the MCP server via databricks automation/asset bundle (DAB)

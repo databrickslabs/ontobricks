@@ -5,19 +5,14 @@ Moved from app/frontend/ontology/routes.py during the front/back split.
 """
 from fastapi import APIRouter, Request, Depends
 
-from back.core.errors import (
-    InfrastructureError,
-    NotFoundError,
-    OntoBricksError,
-    ValidationError,
-)
+from api.routers.internal._helpers import map_route_errors
+from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
 from back.objects.ontology import Ontology
-from back.core.databricks import VolumeFileService
 from back.objects.session import get_domain
 from back.core.task_manager import get_task_manager
-from back.core.helpers import get_databricks_host_and_token, require_serving_llm
+from back.core.helpers import get_databricks_host_and_token, make_volume_file_service, require_serving_llm
 from agents.serialization import serialize_agent_steps
 from back.core.industry import (
     get_fibo_catalog,
@@ -144,7 +139,7 @@ async def generate_owl_endpoint(request: Request, session_mgr: SessionManager = 
     if not data:
         raise ValidationError("No data provided")
 
-    try:
+    with map_route_errors("OWL generation failed", logger):
         domain = get_domain(session_mgr)
         constraints = data.get('constraints') or domain.constraints
         swrl_rules = data.get('swrl_rules') or domain.swrl_rules
@@ -157,11 +152,6 @@ async def generate_owl_endpoint(request: Request, session_mgr: SessionManager = 
         domain.save()
 
         return {'success': True, 'owl': owl_content, 'format': 'turtle'}
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("OWL generation failed: %s", e)
-        raise InfrastructureError("OWL generation failed", detail=str(e)) from e
 
 
 @router.post("/import-owl")
@@ -171,15 +161,10 @@ async def import_owl(request: Request, session_mgr: SessionManager = Depends(get
     owl_content = data.get('content', '')
     if not owl_content:
         raise ValidationError("No OWL content provided")
-    try:
+    with map_route_errors("OWL import failed", logger):
         return Ontology(get_domain(session_mgr)).ingest_owl(
             owl_content, name_fallback_to_domain=True, outcome="import",
         )
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("OWL import failed: %s", e)
-        raise InfrastructureError("OWL import failed", detail=str(e)) from e
 
 
 @router.get("/export-owl")
@@ -190,7 +175,7 @@ async def export_owl(session_mgr: SessionManager = Depends(get_session_manager))
     if not domain.get_classes():
         raise NotFoundError("No ontology to export")
 
-    try:
+    with map_route_errors("OWL export failed", logger):
         owl_content = Ontology.generate_owl(
             domain.ontology,
             domain.constraints,
@@ -200,11 +185,6 @@ async def export_owl(session_mgr: SessionManager = Depends(get_session_manager))
             domain.groups,
         )
         return {'success': True, 'owl_content': owl_content, 'format': 'turtle'}
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("OWL export failed: %s", e)
-        raise InfrastructureError("OWL export failed", detail=str(e)) from e
 
 
 @router.get("/get-loaded-ontology")
@@ -223,15 +203,10 @@ async def parse_owl_content(request: Request, session_mgr: SessionManager = Depe
     owl_content = data.get('content', '')
     if not owl_content:
         raise ValidationError("No OWL content provided")
-    try:
+    with map_route_errors("OWL parse failed", logger):
         return Ontology(get_domain(session_mgr)).ingest_owl(
             owl_content, name_fallback_to_domain=True, outcome="parse",
         )
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Parse OWL content failed: %s", e)
-        raise InfrastructureError("OWL parse failed", detail=str(e)) from e
 
 
 @router.post("/parse-rdfs")
@@ -241,13 +216,8 @@ async def parse_rdfs_content(request: Request, session_mgr: SessionManager = Dep
     rdfs_content = data.get('content', '')
     if not rdfs_content:
         raise ValidationError("No RDFS content provided")
-    try:
+    with map_route_errors("RDFS parse failed", logger):
         return Ontology(get_domain(session_mgr)).apply_parsed_rdfs_to_domain(rdfs_content)
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Parse RDFS content failed: %s", e)
-        raise InfrastructureError("RDFS parse failed", detail=str(e)) from e
 
 
 # ===========================================
@@ -316,7 +286,7 @@ async def list_shapes(
 @router.post("/dataquality/save")
 async def save_shape(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
     """Add or update a SHACL data-quality shape."""
-    try:
+    with map_route_errors("Saving SHACL shape failed", logger):
         data = await request.json()
         shape_data = data.get("shape", {})
         shape_id = shape_data.get("id", "")
@@ -349,17 +319,12 @@ async def save_shape(request: Request, session_mgr: SessionManager = Depends(get
         domain.shacl_shapes = shapes
         domain.save()
         return {"success": True, "message": "Shape saved", "shapes": shapes}
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Save shape failed: %s", e)
-        raise InfrastructureError("Saving SHACL shape failed", detail=str(e)) from e
 
 
 @router.post("/dataquality/delete")
 async def delete_shape(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
     """Delete a SHACL data-quality shape by id."""
-    try:
+    with map_route_errors("Deleting SHACL shape failed", logger):
         data = await request.json()
         shape_id = data.get("id", "")
         if not shape_id:
@@ -370,34 +335,24 @@ async def delete_shape(request: Request, session_mgr: SessionManager = Depends(g
         domain.shacl_shapes = shapes
         domain.save()
         return {"success": True, "message": "Shape deleted", "shapes": shapes}
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Delete shape failed: %s", e)
-        raise InfrastructureError("Deleting SHACL shape failed", detail=str(e)) from e
 
 
 @router.get("/dataquality/turtle")
 async def get_shacl_turtle(session_mgr: SessionManager = Depends(get_session_manager)):
     """Generate and return the SHACL Turtle for all shapes."""
-    try:
+    with map_route_errors("SHACL Turtle generation failed", logger):
         domain = get_domain(session_mgr)
         turtle = Ontology.generate_shacl(
             domain.shacl_shapes,
             domain.ontology.get("base_uri", ""),
         )
         return {"success": True, "turtle": turtle}
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Generate SHACL turtle failed: %s", e)
-        raise InfrastructureError("SHACL Turtle generation failed", detail=str(e)) from e
 
 
 @router.post("/dataquality/import")
 async def import_shacl(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
     """Import SHACL shapes from Turtle content."""
-    try:
+    with map_route_errors("SHACL import failed", logger):
         data = await request.json()
         turtle_content = data.get("turtle", "")
         if not turtle_content:
@@ -419,11 +374,6 @@ async def import_shacl(request: Request, session_mgr: SessionManager = Depends(g
             "shapes": shapes,
             "imported_count": len(imported),
         }
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Import SHACL failed: %s", e)
-        raise InfrastructureError("SHACL import failed", detail=str(e)) from e
 
 
 @router.get("/dataquality/export")
@@ -448,7 +398,7 @@ async def export_shacl(session_mgr: SessionManager = Depends(get_session_manager
 @router.post("/dataquality/migrate")
 async def migrate_constraints(session_mgr: SessionManager = Depends(get_session_manager)):
     """One-time migration: convert legacy constraints to SHACL shapes."""
-    try:
+    with map_route_errors("SHACL migration failed", logger):
         domain = get_domain(session_mgr)
         legacy = domain.constraints
         if not legacy:
@@ -467,11 +417,6 @@ async def migrate_constraints(session_mgr: SessionManager = Depends(get_session_
             "shapes": domain.shacl_shapes,
             "migrated_count": len(migrated),
         }
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Migration failed: %s", e)
-        raise InfrastructureError("SHACL migration failed", detail=str(e)) from e
 
 
 # ===========================================
@@ -488,55 +433,45 @@ async def list_swrl_rules(session_mgr: SessionManager = Depends(get_session_mana
 @router.post("/swrl/save")
 async def save_swrl_rule(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
     """Save a SWRL rule (add or update)."""
-    try:
+    with map_route_errors("Saving SWRL rule failed", logger):
         data = await request.json()
         rule = data.get('rule', {})
         index = data.get('index', -1)
-        
+
         if not rule.get('name'):
             raise ValidationError("Rule name is required")
         if not rule.get('antecedent') or not rule.get('consequent'):
             raise ValidationError("Rule antecedent and consequent are required")
-        
+
         domain = get_domain(session_mgr)
         rules = domain.swrl_rules
-        
+
         if 0 <= index < len(rules):
             rules[index] = rule
         else:
             rules.append(rule)
-        
+
         domain.swrl_rules = rules
         domain.save()
         return {'success': True, 'message': 'SWRL rule saved successfully', 'rules': rules}
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Save SWRL rule failed: %s", e)
-        raise InfrastructureError("Saving SWRL rule failed", detail=str(e)) from e
 
 
 @router.post("/swrl/delete")
 async def delete_swrl_rule(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
     """Delete a SWRL rule by index."""
-    try:
+    with map_route_errors("Deleting SWRL rule failed", logger):
         data = await request.json()
         index = data.get('index', -1)
         domain = get_domain(session_mgr)
         rules = domain.swrl_rules
-        
+
         if not (0 <= index < len(rules)):
             raise ValidationError("Invalid rule index")
-        
+
         rules.pop(index)
         domain.swrl_rules = rules
         domain.save()
         return {'success': True, 'message': 'SWRL rule deleted', 'rules': rules}
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Delete SWRL rule failed: %s", e)
-        raise InfrastructureError("Deleting SWRL rule failed", detail=str(e)) from e
 
 
 @router.post("/swrl/validate")
@@ -585,7 +520,7 @@ async def save_rule(
     key = _RULE_TYPES.get(rule_type)
     if not key:
         raise ValidationError(f"Unknown rule type: {rule_type}")
-    try:
+    with map_route_errors("Saving rule failed", logger):
         data = await request.json()
         rule = data.get("rule", {})
         index = data.get("index", -1)
@@ -604,11 +539,6 @@ async def save_rule(
         domain._data["ontology"][key] = rules
         domain.save()
         return {"success": True, "message": "Rule saved", "rules": rules}
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Save rule (%s) failed: %s", rule_type, e)
-        raise InfrastructureError("Saving rule failed", detail=str(e)) from e
 
 
 @router.post("/rules/{rule_type}/delete")
@@ -621,7 +551,7 @@ async def delete_rule(
     key = _RULE_TYPES.get(rule_type)
     if not key:
         raise ValidationError(f"Unknown rule type: {rule_type}")
-    try:
+    with map_route_errors("Deleting rule failed", logger):
         data = await request.json()
         index = data.get("index", -1)
 
@@ -635,11 +565,6 @@ async def delete_rule(
         domain._data["ontology"][key] = rules
         domain.save()
         return {"success": True, "message": "Rule deleted", "rules": rules}
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Delete rule (%s) failed: %s", rule_type, e)
-        raise InfrastructureError("Deleting rule failed", detail=str(e)) from e
 
 
 @router.post("/rules/{rule_type}/validate")
@@ -653,21 +578,19 @@ async def validate_rule(rule_type: str, request: Request):
     rule = data.get("rule", {})
     errors: list = []
 
-    try:
+    with map_route_errors("Rule validation failed", logger):
         if key == "decision_tables":
-            from back.core.reasoning.DecisionTableEngine import DecisionTableEngine
+            from back.core.reasoning import DecisionTableEngine
+
             errors = DecisionTableEngine.validate_table(rule)
         elif key == "sparql_rules":
-            from back.core.reasoning.SPARQLRuleEngine import SPARQLRuleEngine
+            from back.core.reasoning import SPARQLRuleEngine
+
             errors = SPARQLRuleEngine.validate_rule(rule)
         elif key == "aggregate_rules":
-            from back.core.reasoning.AggregateRuleEngine import AggregateRuleEngine
+            from back.core.reasoning import AggregateRuleEngine
+
             errors = AggregateRuleEngine.validate_rule(rule)
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Rule validation failed (%s)", rule_type)
-        raise InfrastructureError("Rule validation failed", detail=str(e)) from e
 
     if errors:
         return {"success": False, "valid": False, "errors": errors}
@@ -691,26 +614,26 @@ async def save_axiom(request: Request, session_mgr: SessionManager = Depends(get
 
     Accepts ``collection``: ``"expressions"`` or ``"axioms"`` (default).
     """
-    try:
+    with map_route_errors("Saving axiom failed", logger):
         data = await request.json()
         axiom = data.get('axiom', {})
         index = data.get('index', -1)
         collection = data.get('collection', 'axioms')
-        
+
         if not axiom.get('type'):
             raise ValidationError("Axiom type is required")
-        
+
         domain = get_domain(session_mgr)
         if collection == 'expressions':
             items = domain.expressions
         else:
             items = domain.axioms
-        
+
         if 0 <= index < len(items):
             items[index] = axiom
         else:
             items.append(axiom)
-        
+
         if collection == 'expressions':
             domain.expressions = items
         else:
@@ -722,11 +645,6 @@ async def save_axiom(request: Request, session_mgr: SessionManager = Depends(get
             'axioms': domain.axioms,
             'expressions': domain.expressions,
         }
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Save axiom failed: %s", e)
-        raise InfrastructureError("Saving axiom failed", detail=str(e)) from e
 
 
 @router.post("/axioms/delete")
@@ -735,7 +653,7 @@ async def delete_axiom(request: Request, session_mgr: SessionManager = Depends(g
 
     Accepts ``collection``: ``"expressions"`` or ``"axioms"`` (default).
     """
-    try:
+    with map_route_errors("Deleting axiom failed", logger):
         data = await request.json()
         index = data.get('index', -1)
         collection = data.get('collection', 'axioms')
@@ -745,10 +663,10 @@ async def delete_axiom(request: Request, session_mgr: SessionManager = Depends(g
             items = domain.expressions
         else:
             items = domain.axioms
-        
+
         if not (0 <= index < len(items)):
             raise ValidationError("Invalid axiom index")
-        
+
         items.pop(index)
         if collection == 'expressions':
             domain.expressions = items
@@ -761,11 +679,6 @@ async def delete_axiom(request: Request, session_mgr: SessionManager = Depends(g
             'axioms': domain.axioms,
             'expressions': domain.expressions,
         }
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Delete axiom failed: %s", e)
-        raise InfrastructureError("Deleting axiom failed", detail=str(e)) from e
 
 
 @router.get("/axioms/get-by-class/{class_uri:path}")
@@ -851,25 +764,20 @@ async def list_dashboards(
     settings: Settings = Depends(get_settings)
 ):
     """Get list of available Databricks dashboards."""
-    try:
+    with map_route_errors("Listing Databricks dashboards failed", logger):
         from back.core.databricks import DatabricksClient
 
         domain = get_domain(session_mgr)
         host, token = get_databricks_host_and_token(domain, settings)
-        
+
         if not host:
             raise ValidationError("Databricks host not configured")
-        
+
         from back.core.helpers import run_blocking
         client = DatabricksClient(host=host, token=token)
         dashboards = await run_blocking(client.get_dashboards)
-        
+
         return {'success': True, 'dashboards': dashboards}
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Error listing dashboards: %s", e)
-        raise InfrastructureError("Listing Databricks dashboards failed", detail=str(e)) from e
 
 
 @router.get("/dashboards/{dashboard_id}/parameters")
@@ -879,31 +787,26 @@ async def get_dashboard_parameters(
     settings: Settings = Depends(get_settings)
 ):
     """Get dashboard parameters for mapping to ontology attributes."""
-    try:
+    with map_route_errors("Getting dashboard parameters failed", logger):
         from back.core.databricks import DatabricksClient
 
         domain = get_domain(session_mgr)
         host, token = get_databricks_host_and_token(domain, settings)
-        
+
         if not host:
             raise ValidationError("Databricks host not configured")
-        
+
         from back.core.helpers import run_blocking
         client = DatabricksClient(host=host, token=token)
         result = await run_blocking(client.get_dashboard_parameters, dashboard_id)
-        
+
         if 'error' in result and result['error']:
             raise InfrastructureError(
                 "Failed to load dashboard parameters",
                 detail=str(result["error"]),
             )
-        
+
         return {'success': True, **result}
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Error getting dashboard parameters: %s", e)
-        raise InfrastructureError("Getting dashboard parameters failed", detail=str(e)) from e
 
 
 # ===========================================
@@ -916,7 +819,7 @@ async def list_bridge_domains(
     settings: Settings = Depends(get_settings),
 ):
     """List registry domains available as bridge targets (excludes the current domain)."""
-    try:
+    with map_route_errors("Listing bridge domains failed", logger):
         from back.objects.registry import RegistryService
         from back.core.helpers import run_blocking
 
@@ -934,11 +837,6 @@ async def list_bridge_domains(
             if p["name"].strip().lower() not in (current_name, current_folder)
         ]
         return {'success': True, 'domains': domains, 'projects': domains}
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Error listing bridge domains: %s", e)
-        raise InfrastructureError("Listing bridge domains failed", detail=str(e)) from e
 
 
 @router.get("/bridges/domains/{domain_name}/classes")
@@ -948,7 +846,7 @@ async def list_bridge_domain_classes(
     settings: Settings = Depends(get_settings),
 ):
     """Load a target domain's ontology classes for bridge selection."""
-    try:
+    with map_route_errors("Loading bridge domain classes failed", logger):
         from back.objects.registry import RegistryService
         from back.core.helpers import run_blocking
 
@@ -981,11 +879,6 @@ async def list_bridge_domain_classes(
             'base_uri': ontology.get("base_uri", ""),
             'classes': classes,
         }
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Error loading classes for domain %s: %s", domain_name, e)
-        raise InfrastructureError("Loading bridge domain classes failed", detail=str(e)) from e
 
 
 # ===========================================
@@ -1002,19 +895,13 @@ async def list_owl_files(
     if not all([catalog, schema, volume]):
         raise ValidationError("Missing required parameters")
 
-    try:
+    with map_route_errors("Listing OWL files failed", logger):
         domain = get_domain(session_mgr)
-        host, token = get_databricks_host_and_token(domain, settings)
-        uc_service = VolumeFileService(host=host, token=token)
+        uc_service = make_volume_file_service(domain, settings)
         success, files, message = uc_service.list_files(catalog, schema, volume, extensions=['.ttl', '.owl', '.rdf'])
         if not success:
             raise InfrastructureError("Listing OWL files failed", detail=message)
         return {'success': True, 'files': files}
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("List OWL files failed: %s", e)
-        raise InfrastructureError("Listing OWL files failed", detail=str(e)) from e
 
 
 @router.post("/load-owl-file")
@@ -1030,10 +917,9 @@ async def load_owl_file(
     if not all([catalog, schema, volume, filename]):
         raise ValidationError("Missing required fields")
 
-    try:
+    with map_route_errors("Loading OWL file failed", logger):
         domain = get_domain(session_mgr)
-        host, token = get_databricks_host_and_token(domain, settings)
-        uc_service = VolumeFileService(host=host, token=token)
+        uc_service = make_volume_file_service(domain, settings)
         file_path = f"/Volumes/{catalog}/{schema}/{volume}/{filename}"
 
         success, owl_content, message = uc_service.read_file(file_path)
@@ -1043,11 +929,6 @@ async def load_owl_file(
         return Ontology(domain).ingest_owl(
             owl_content, name_fallback_to_domain=False, outcome="load_file",
         )
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("Load OWL file failed: %s", e)
-        raise InfrastructureError("Loading OWL file failed", detail=str(e)) from e
 
 
 @router.post("/save-to-uc")
@@ -1106,10 +987,7 @@ async def generate_ontology_async(
     tables_count = len(metadata.get('tables', []))
 
     domain = get_domain(session_mgr)
-    err, llm_ctx = require_serving_llm(domain, settings)
-    if err:
-        raise ValidationError(err["message"])
-    host, token, llm_endpoint = llm_ctx
+    host, token, llm_endpoint = require_serving_llm(domain, settings)
 
     tm = get_task_manager()
     task = tm.create_task(
@@ -1191,7 +1069,7 @@ async def auto_assign_icons(
     settings: Settings = Depends(get_settings)
 ):
     """Use the auto-icon-assign agent to suggest emoji icons for entity names."""
-    try:
+    with map_route_errors("Auto-assign icons failed", logger):
         data = await request.json()
         entity_names = data.get('entity_names', [])
 
@@ -1199,10 +1077,7 @@ async def auto_assign_icons(
             raise ValidationError("No entity names provided")
 
         domain = get_domain(session_mgr)
-        err, llm_ctx = require_serving_llm(domain, settings)
-        if err:
-            raise ValidationError(err["message"])
-        host, token, llm_endpoint = llm_ctx
+        host, token, llm_endpoint = require_serving_llm(domain, settings)
 
         logger.info("AutoIcons: launching agent for %d entities", len(entity_names))
 
@@ -1235,12 +1110,6 @@ async def auto_assign_icons(
             'icons': final_map,
             'agent_iterations': agent_result.iterations,
         }
-
-    except OntoBricksError:
-        raise
-    except Exception as e:
-        logger.exception("AutoIcons: Failed: %s", e)
-        raise InfrastructureError("Auto-assign icons failed", detail=str(e)) from e
 
 
 # ===========================================
@@ -1279,10 +1148,7 @@ async def ontology_assistant_chat(
         raise ValidationError("No message provided")
 
     domain = get_domain(session_mgr)
-    err, llm_ctx = require_serving_llm(domain, settings)
-    if err:
-        raise ValidationError(err["message"])
-    host, token, llm_endpoint = llm_ctx
+    host, token, llm_endpoint = require_serving_llm(domain, settings)
 
     classes = list(domain.get_classes())
     properties = list(domain.get_properties())
@@ -1291,7 +1157,7 @@ async def ontology_assistant_chat(
     logger.info("OntologyAssistant: user_message=%s, classes=%d, properties=%d",
                 user_message[:80], len(classes), len(properties))
 
-    try:
+    with map_route_errors("Ontology assistant request failed", logger):
         agent_result = run_assistant(
             host=host,
             token=token,
@@ -1302,11 +1168,6 @@ async def ontology_assistant_chat(
             user_message=user_message,
             conversation_history=history,
         )
-    except OntoBricksError:
-        raise
-    except Exception as exc:
-        logger.exception("OntologyAssistant: agent failed: %s", exc)
-        raise InfrastructureError("Ontology assistant request failed", detail=str(exc)) from exc
 
     if not agent_result.success:
         raise InfrastructureError(
@@ -1387,7 +1248,7 @@ async def ontology_assistant_invoke(
     if not custom_inputs.get("endpoint_name"):
         raise ValidationError("No LLM serving endpoint configured.")
 
-    try:
+    with map_route_errors("Ontology assistant invoke failed", logger):
         agent = OntologyAssistantResponsesAgent()
         ra_request = RAReq(**data)
         response = agent.predict(ra_request)
@@ -1400,10 +1261,5 @@ async def ontology_assistant_invoke(
             )
 
         return response.model_dump()
-    except OntoBricksError:
-        raise
-    except Exception as exc:
-        logger.exception("ontology_assistant_invoke failed: %s", exc)
-        raise InfrastructureError("Ontology assistant invoke failed", detail=str(exc)) from exc
 
 

@@ -4,10 +4,10 @@ Reads SHACL Turtle (or other RDF serialisations) and extracts internal
 shape dicts compatible with ``SHACLService``.
 """
 import uuid
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-from rdflib import Graph, Literal, URIRef
-from rdflib.namespace import RDF, RDFS
+from rdflib import Graph
+from rdflib.namespace import RDF
 
 from back.core.logging import get_logger
 from back.core.w3c.shacl.constants import PARAM_CATEGORY_HINTS, SEVERITY_REVERSE, SH

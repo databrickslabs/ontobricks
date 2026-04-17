@@ -31,7 +31,6 @@ def _read_version() -> str:
 # =====================================================
 APP_NAME: str = "OntoBricks"
 APP_VERSION: str = _read_version()
-APP_DESCRIPTION: str = "Ontology-driven data integration for Databricks"
 HTTP_USER_AGENT: str = f"{APP_NAME}/{APP_VERSION}"
 
 # =====================================================
@@ -68,17 +67,6 @@ MSG_WAREHOUSE_ID_REQUIRED: str = "SQL Warehouse ID is required"
 SESSION_COOKIE_NAME: str = "ontobricks_session"
 
 # =====================================================
-# LLM / Wizard Defaults
-# =====================================================
-LLM_DEFAULT_MAX_TOKENS: int = 4096
-LLM_DEFAULT_TEMPERATURE: float = 0.1
-
-# =====================================================
-# Mapping Defaults
-# =====================================================
-MAPPING_SQL_LIMIT: int = 100
-
-# =====================================================
 # Auto-Mapping Chunking
 # =====================================================
 AUTO_ASSIGN_CHUNK_SIZE: int = 5       # max entities + relationships per agent run
@@ -87,7 +75,6 @@ AUTO_ASSIGN_CHUNK_COOLDOWN: int = 15  # seconds to wait between chunks
 # =====================================================
 # UI Defaults
 # =====================================================
-MAX_PREVIEW_ROWS: int = 50
 MAX_NOTIFICATIONS: int = 10
 
 # =====================================================

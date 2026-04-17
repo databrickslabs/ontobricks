@@ -5,6 +5,7 @@ Moved from app/frontend/tasks/routes.py during the front/back split.
 """
 from fastapi import APIRouter
 
+from back.core.errors import ConflictError, NotFoundError
 from back.core.task_manager import get_task_manager, TaskStatus
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -30,7 +31,7 @@ async def get_task(task_id: str):
     task = tm.get_task(task_id)
     
     if not task:
-        return {'success': False, 'message': 'Task not found'}
+        raise NotFoundError('Task not found')
     
     return {
         'success': True,
@@ -45,8 +46,7 @@ async def cancel_task(task_id: str):
     
     if tm.cancel_task(task_id):
         return {'success': True, 'message': 'Task cancelled'}
-    else:
-        return {'success': False, 'message': 'Cannot cancel task (not found or already completed)'}
+    raise ConflictError('Cannot cancel task (not found or already completed)')
 
 
 @router.post("/clear-completed")

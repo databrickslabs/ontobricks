@@ -10,7 +10,6 @@ class TestGlobalConfig:
         from shared.config.constants import (
             APP_NAME,
             APP_VERSION,
-            APP_DESCRIPTION,
             APP_LOGGER_NAME,
             DEFAULT_LOG_LEVEL,
             DEFAULT_LOG_FILE,
@@ -19,10 +18,6 @@ class TestGlobalConfig:
             ONTOBRICKS_NS,
             DEFAULT_BASE_URI,
             SESSION_COOKIE_NAME,
-            LLM_DEFAULT_MAX_TOKENS,
-            LLM_DEFAULT_TEMPERATURE,
-            MAPPING_SQL_LIMIT,
-            MAX_PREVIEW_ROWS,
             WIZARD_TEMPLATES,
         )
         assert APP_NAME

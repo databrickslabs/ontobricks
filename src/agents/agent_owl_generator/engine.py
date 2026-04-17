@@ -12,7 +12,7 @@ engine transparently degrades to a single-shot generation (no tool calls).
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import requests
 

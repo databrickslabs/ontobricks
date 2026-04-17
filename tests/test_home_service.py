@@ -3,10 +3,7 @@ import asyncio
 import concurrent.futures
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from back.services.home import (
-    get_session_status, validate_ontology,
-    get_detailed_validation, validate_status,
-)
+from back.objects.domain.home_service import HomeService
 from back.core.helpers import DatabricksHelpers
 from back.objects.digitaltwin import DigitalTwin
 from back.objects.domain import Domain as DomainOps
@@ -52,7 +49,7 @@ def _make_domain(classes=None, properties=None, entity_mappings=None,
 class TestGetSessionStatus:
     def test_empty_domain(self):
         domain = _make_domain()
-        status = get_session_status(domain)
+        status = HomeService.get_session_status(domain)
         assert status['success'] is True
         assert status['class_count'] == 0
         assert status['domain_name'] == 'Test'
@@ -64,7 +61,7 @@ class TestGetSessionStatus:
             entity_mappings=[{}],
             r2rml='some content',
         )
-        status = get_session_status(domain)
+        status = HomeService.get_session_status(domain)
         assert status['class_count'] == 1
         assert status['property_count'] == 1
         assert status['has_r2rml'] is True
@@ -73,25 +70,25 @@ class TestGetSessionStatus:
 class TestValidateOntology:
     def test_no_classes(self):
         domain = _make_domain()
-        result = validate_ontology(domain)
+        result = HomeService.validate_ontology(domain)
         assert result['valid'] is False
         assert 'No classes defined' in result['errors']
 
     def test_valid(self):
         domain = _make_domain(classes=[{'uri': 'http://test/A', 'name': 'A'}])
-        result = validate_ontology(domain)
+        result = HomeService.validate_ontology(domain)
         assert result['valid'] is True
 
     def test_class_missing_uri(self):
         domain = _make_domain(classes=[{'label': 'NoUri'}])
-        result = validate_ontology(domain)
+        result = HomeService.validate_ontology(domain)
         assert result['valid'] is False
 
 
 class TestValidateStatus:
     def test_empty_domain(self):
         domain = _make_domain()
-        result = validate_status(domain)
+        result = HomeService.validate_status(domain)
         assert result['ontology_valid'] is False
 
     def test_valid_domain(self):
@@ -102,7 +99,7 @@ class TestValidateStatus:
             entity_mappings=mappings,
             assignment={'entities': mappings, 'relationships': []}
         )
-        result = validate_status(domain)
+        result = HomeService.validate_status(domain)
         assert result['ontology_valid'] is True
 
 
@@ -161,7 +158,7 @@ class TestGetDetailedValidation:
                 MagicMock(return_value=0),
             ),
         ):
-            result = _run_async(get_detailed_validation(domain, settings))
+            result = _run_async(HomeService.get_detailed_validation(domain, settings))
         assert 'ontology_valid' in result
         assert 'mapping_valid' in result
         assert 'ontology' in result

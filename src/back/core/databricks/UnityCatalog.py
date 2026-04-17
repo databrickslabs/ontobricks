@@ -6,7 +6,7 @@ volume management).
 """
 import requests
 from databricks import sql
-from typing import Any, Dict, List
+from typing import Dict, List
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError

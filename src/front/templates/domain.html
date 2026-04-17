@@ -65,7 +65,7 @@
 </div>
 
 <!-- Hidden file input for loading domains from file -->
-<input type="file" id="domainFileInput" accept=".json" class="file-input-hidden" onchange="handleDomainFileUpload(this)">
+<input type="file" id="domainFileInput" accept=".json" class="file-input-hidden" aria-label="Load domain JSON file">
 
 <!-- Triplestore config injected from session for Build section -->
 <script id="triplestore-config" type="application/json">
@@ -87,15 +87,7 @@
 <script src="{{ url_for('static', filename='domain/js/domain-documents.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='domain/js/domain-owl-content.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='domain/js/domain-r2rml.js') }}?v={{ asset_version }}"></script>
-<!-- Build section (sync) -->
-<script>
-(function() {
-    var el = document.getElementById('triplestore-config');
-    if (el) {
-        try { window.__TRIPLESTORE_CONFIG = JSON.parse(el.textContent); }
-        catch (e) { window.__TRIPLESTORE_CONFIG = {}; }
-    }
-})();
-</script>
+<!-- Build section (sync): parse injected JSON before query-sync -->
+<script src="{{ url_for('static', filename='domain/js/domain_init.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='query/js/query-sync.js') }}?v={{ asset_version }}"></script>
 {% endblock %}

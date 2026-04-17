@@ -12,9 +12,9 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import StreamingResponse
 
 from shared.config.settings import get_settings, Settings
-from back.core.databricks import VolumeFileService, is_databricks_app
+from back.core.databricks import is_databricks_app
 from back.core.errors import ValidationError, InfrastructureError, NotFoundError
-from back.core.helpers import get_databricks_client, get_databricks_host_and_token, resolve_warehouse_id
+from back.core.helpers import get_databricks_client, make_volume_file_service, resolve_warehouse_id
 from back.core.logging import get_logger
 from back.objects.session import SessionManager, get_domain, get_session_manager, sanitize_domain_folder
 from back.objects.domain import Domain
@@ -206,8 +206,8 @@ async def get_app_debug():
     if os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL).upper() != "DEBUG":
         raise ValidationError("app-debug is only available when LOG_LEVEL=DEBUG")
 
-    from back.objects.registry.registry_cache import get_registry_cache_snapshot
-    from back.objects.domain.version_status import get_version_status_cache_snapshot
+    from back.objects.domain import get_version_status_cache_snapshot
+    from back.objects.registry import get_registry_cache_snapshot
 
     return {
         "success": True,
@@ -605,8 +605,7 @@ async def list_documents(
         if not base_path:
             raise ValidationError("Domain not saved to Unity Catalog")
 
-        host, token = get_databricks_host_and_token(domain, settings)
-        uc = VolumeFileService(host=host, token=token)
+        uc = make_volume_file_service(domain, settings)
 
         success, items, message = uc.list_directory(base_path)
 
@@ -641,8 +640,7 @@ async def upload_documents(
         if not base_path:
             raise ValidationError("Domain not saved to Unity Catalog")
 
-        host, token = get_databricks_host_and_token(domain, settings)
-        uc = VolumeFileService(host=host, token=token)
+        uc = make_volume_file_service(domain, settings)
         if not uc.is_configured():
             raise ValidationError("Databricks authentication not configured")
 
@@ -725,8 +723,7 @@ async def delete_document(
         if not base_path:
             raise ValidationError("Domain not saved to Unity Catalog")
 
-        host, token = get_databricks_host_and_token(domain, settings)
-        uc = VolumeFileService(host=host, token=token)
+        uc = make_volume_file_service(domain, settings)
 
         file_path = f"{base_path}/{filename}"
         success, message = uc.delete_file(file_path)
@@ -772,8 +769,7 @@ async def preview_document(
         if not base_path:
             raise ValidationError("Domain not saved to Unity Catalog")
 
-        host, token = get_databricks_host_and_token(domain, settings)
-        uc = VolumeFileService(host=host, token=token)
+        uc = make_volume_file_service(domain, settings)
         if not uc.is_configured():
             raise ValidationError("Databricks authentication not configured")
 

@@ -7,7 +7,7 @@ graph on every sync.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError, InfrastructureError

@@ -3,8 +3,8 @@
 Parses RDFS (RDF Schema) files to extract classes and properties.
 RDFS is simpler than OWL and uses rdfs:Class instead of owl:Class.
 """
-from rdflib import Graph, RDF, RDFS, Namespace
-from typing import List, Dict, Optional
+from rdflib import Graph, RDF, RDFS
+from typing import List, Dict
 
 from back.core.errors import ValidationError
 

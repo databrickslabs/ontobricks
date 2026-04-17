@@ -407,7 +407,6 @@ def _load_domain_for_build(
     Returns ``(domain, loaded_version, domain_path, latest_filename)``.
     """
     from back.objects.session.DomainSession import DomainSession
-    from back.core.helpers import resolve_warehouse_id
 
     if version and version != "latest":
         ok, data, err = svc.read_version(domain_name, version)
@@ -480,8 +479,6 @@ def _generate_sql_from_r2rml(domain, domain_name: str):
         "WHERE {\n    ?subject ?predicate ?object .\n}"
     )
     res = sparql.translate_sparql_to_spark(sparql_q, ent, None, rels, dialect="spark")
-    if not res["success"]:
-        raise InfrastructureError(res.get("message", "Translation failed"))
 
     return res["sql"], view_table, graph_name, base_uri, ent, rels
 

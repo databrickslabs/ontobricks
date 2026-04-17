@@ -77,15 +77,8 @@ Internal JSON API routers
    :undoc-members:
    :show-inheritance:
 
-Services
---------
+Home and settings orchestration
+-------------------------------
 
-.. automodule:: back.services.home
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: back.services.settings
-   :members:
-   :undoc-members:
-   :show-inheritance:
+Internal JSON routers above delegate to ``HomeService`` and ``SettingsService`` in
+``back.objects.domain`` — see :doc:`app.objects.domain`.

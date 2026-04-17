@@ -6,12 +6,13 @@ Moved from app/frontend/settings/routes.py during the front/back split.
 from fastapi import APIRouter, Request, Depends
 
 from shared.config.settings import get_settings, Settings
+from shared.config.constants import DEFAULT_BASE_URI
 from back.core.errors import ValidationError
 from back.objects.session import SessionManager, get_session_manager
 from back.core.helpers import resolve_default_base_uri, resolve_default_emoji
 from back.objects.session import get_domain
 
-from back.services import settings as config_service
+from back.objects.domain.settings_service import SettingsService as config_service
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
@@ -248,7 +249,7 @@ async def save_base_uri(
 ):
     """Save default base URI domain (admin only, stored globally)."""
     data = await request.json()
-    base_uri = data.get('base_uri', 'https://databricks-ontology.com')
+    base_uri = data.get('base_uri', DEFAULT_BASE_URI.rstrip('/'))
     return config_service.save_base_uri_result(base_uri, request, session_mgr, settings)
 
 

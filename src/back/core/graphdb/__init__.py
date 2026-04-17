@@ -5,6 +5,7 @@ Provides a pluggable graph DB layer separate from the triple store
 """
 from back.core.graphdb.GraphDBBackend import GraphDBBackend  # noqa: F401
 from back.core.graphdb.GraphDBFactory import GraphDBFactory  # noqa: F401
+from back.core.graphdb.ladybugdb import graph_volume_path  # noqa: F401
 
 get_graphdb = GraphDBFactory.get_graphdb
 GRAPHDB_AVAILABLE = GraphDBFactory.LADYBUG_AVAILABLE
@@ -12,6 +13,7 @@ GRAPHDB_AVAILABLE = GraphDBFactory.LADYBUG_AVAILABLE
 __all__ = [
     "GraphDBBackend",
     "GraphDBFactory",
-    "get_graphdb",
     "GRAPHDB_AVAILABLE",
+    "get_graphdb",
+    "graph_volume_path",
 ]

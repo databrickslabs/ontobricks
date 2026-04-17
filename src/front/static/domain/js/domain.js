@@ -56,6 +56,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load initial data
     loadDomainInfo();
+
+    var domainFileInput = document.getElementById('domainFileInput');
+    if (domainFileInput) {
+        domainFileInput.addEventListener('change', function () {
+            handleDomainFileUpload(domainFileInput);
+        });
+    }
     
     // If section parameter was passed, navigate to that section
     if (initialSection) {

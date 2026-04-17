@@ -1,6 +1,7 @@
 """SPARQL query translation to Spark SQL (via R2RML mappings)."""
 import re
 
+from back.core.errors import ValidationError
 from back.core.logging import get_logger
 from back.core.helpers import sql_escape as _escape_sql, extract_local_name as _extract_local
 from back.core.w3c.sparql.constants import DIALECT_SPARK
@@ -30,6 +31,15 @@ class SparqlTranslator:
         """COALESCE(CAST(<expr> AS STRING), '')."""
         return f"COALESCE({SparqlTranslator._cast_str(expr, dialect)}, '')"
 
+    @staticmethod
+    def _predicate_local_name_key(uri: str) -> str:
+        """Lower-case RDF local name for SQL filter / column-key matching."""
+        return _extract_local(uri).lower()
+
+    @staticmethod
+    def _relationship_predicate_local_name(uri: str) -> str:
+        """Case-sensitive RDF local name for relationship predicate URI matching."""
+        return _extract_local(uri) if uri else ""
 
     @staticmethod
     def _unpivot_select(
@@ -159,12 +169,12 @@ class SparqlTranslator:
         
         # Check if SELECT query
         if not re.search(r'\bSELECT\b', query_body, re.IGNORECASE):
-            return {'success': False, 'message': 'Only SELECT queries are supported for Spark SQL engine.'}
+            raise ValidationError('Only SELECT queries are supported for Spark SQL engine.')
         
         # Extract SELECT variables
         select_match = re.search(r'SELECT\s+(DISTINCT\s+)?((?:\?\w+\s*)+|\*)', query_body, re.IGNORECASE)
         if not select_match:
-            return {'success': False, 'message': 'Could not parse SELECT clause.'}
+            raise ValidationError('Could not parse SELECT clause.')
         
         is_distinct = bool(select_match.group(1))
         select_vars_str = select_match.group(2).strip()
@@ -177,7 +187,7 @@ class SparqlTranslator:
         # Extract WHERE clause
         where_match = re.search(r'WHERE\s*\{(.+)\}', query_body, re.IGNORECASE | re.DOTALL)
         if not where_match:
-            return {'success': False, 'message': 'Could not parse WHERE clause.'}
+            raise ValidationError('Could not parse WHERE clause.')
         
         where_content = where_match.group(1).strip()
         
@@ -204,7 +214,7 @@ class SparqlTranslator:
             optional_patterns.extend(parsed)
         
         if not patterns:
-            return {'success': False, 'message': 'Could not parse any triple patterns.'}
+            raise ValidationError('Could not parse any triple patterns.')
         
         # Parse BIND statements from both main and optional content
         bind_values = SparqlTranslator._parse_bind_statements(main_content)
@@ -601,11 +611,12 @@ class SparqlTranslator:
         """
         logger.debug("Building CTE-based filtered query with relationships")
 
-        def get_local_name(uri):
-            return _extract_local(uri).lower()
-
         # Build filter set for classes
-        filter_local_names = set(get_local_name(uri) for uri in filter_class_uris) if filter_class_uris else None
+        filter_local_names = (
+            set(SparqlTranslator._predicate_local_name_key(uri) for uri in filter_class_uris)
+            if filter_class_uris
+            else None
+        )
         
         # Build helper to get subject expression from template
         def get_subject_expr(uri_template, id_column, alias="e"):
@@ -625,8 +636,8 @@ class SparqlTranslator:
                 for p_uri, p_info in mapping.get('predicates', {}).items():
                     if p_info.get('type') == 'column':
                         pred_to_column[p_uri] = p_info['column']
-                        pred_to_column[get_local_name(p_uri)] = p_info['column']
-                if pred_uri in pred_to_column or get_local_name(pred_uri) in pred_to_column:
+                        pred_to_column[SparqlTranslator._predicate_local_name_key(p_uri)] = p_info['column']
+                if pred_uri in pred_to_column or SparqlTranslator._predicate_local_name_key(pred_uri) in pred_to_column:
                     filtered_entity_types.add(class_uri)
         
         logger.debug("Entity types with filters: %s", filtered_entity_types)
@@ -638,7 +649,7 @@ class SparqlTranslator:
         seed_unions = []
         for class_uri, mapping in (mappings or {}).items():
             if filter_class_uris is not None:
-                if class_uri not in filter_class_uris and get_local_name(class_uri) not in filter_local_names:
+                if class_uri not in filter_class_uris and SparqlTranslator._predicate_local_name_key(class_uri) not in filter_local_names:
                     continue
             
             if class_uri not in filtered_entity_types:
@@ -663,12 +674,12 @@ class SparqlTranslator:
             for pred_uri, pred_info in mapping.get('predicates', {}).items():
                 if pred_info.get('type') == 'column':
                     pred_to_column[pred_uri] = pred_info['column']
-                    pred_to_column[get_local_name(pred_uri)] = pred_info['column']
+                    pred_to_column[SparqlTranslator._predicate_local_name_key(pred_uri)] = pred_info['column']
             
             where_conditions = []
             for vf in value_filters:
                 pred_uri = vf['predicate_uri']
-                column = pred_to_column.get(pred_uri) or pred_to_column.get(get_local_name(pred_uri))
+                column = pred_to_column.get(pred_uri) or pred_to_column.get(SparqlTranslator._predicate_local_name_key(pred_uri))
                 if column:
                     operator = vf['operator']
                     value = vf['value'].replace("'", "''")
@@ -693,7 +704,7 @@ class SparqlTranslator:
         entity_queries = []
         for class_uri, mapping in (mappings or {}).items():
             if filter_class_uris is not None:
-                if class_uri not in filter_class_uris and get_local_name(class_uri) not in filter_local_names:
+                if class_uri not in filter_class_uris and SparqlTranslator._predicate_local_name_key(class_uri) not in filter_local_names:
                     continue
             
             table = mapping.get('table')
@@ -731,7 +742,7 @@ class SparqlTranslator:
         for rel in (relationship_mappings or []):
             predicate = rel.get('predicate', '')
             if relationship_filter:
-                if not any(predicate == f or get_local_name(predicate) == get_local_name(f) for f in relationship_filter):
+                if not any(predicate == f or SparqlTranslator._predicate_local_name_key(predicate) == SparqlTranslator._predicate_local_name_key(f) for f in relationship_filter):
                     continue
             
             rel_sql = (rel.get('sql_query') or '').strip()
@@ -797,10 +808,9 @@ class SparqlTranslator:
             relationship_filter: Optional list of relationship URIs to include (even when filter_class_uris is set)
         """
         if not mappings and not relationship_mappings:
-            return {
-                'success': False,
-                'message': 'No R2RML mappings found. Please load an R2RML mapping first.'
-            }
+            raise ValidationError(
+                'No R2RML mappings found. Please load an R2RML mapping first.'
+            )
         
         # Note: When relationships are included with value filters, we DON'T use CTE-based filtering
         # because the SPARQL filter applies to specific entity types only (e.g., filter on Person doesn't apply to Manager)
@@ -808,9 +818,6 @@ class SparqlTranslator:
         # and let the user see the complete graph with relationships
         
         table_queries = []
-        
-        def get_local_name(uri):
-            return _extract_local(uri).lower()
 
         # Helper to extract class name from URI template (e.g., "http://example.org/Person/{id}" -> "person")
         def get_class_from_template(template):
@@ -825,7 +832,7 @@ class SparqlTranslator:
         # Build filter set with both full URIs and local names for classes
         filter_local_names = None
         if filter_class_uris:
-            filter_local_names = set(get_local_name(uri) for uri in filter_class_uris)
+            filter_local_names = set(SparqlTranslator._predicate_local_name_key(uri) for uri in filter_class_uris)
             logger.debug("Filtering by class URIs: %s", filter_class_uris)
             logger.debug("Filter local names: %s", filter_local_names)
         
@@ -839,7 +846,7 @@ class SparqlTranslator:
                 # Check if this relationship is in the filter
                 matches = False
                 for filter_uri in relationship_filter:
-                    if predicate == filter_uri or get_local_name(predicate) == get_local_name(filter_uri):
+                    if predicate == filter_uri or SparqlTranslator._predicate_local_name_key(predicate) == SparqlTranslator._predicate_local_name_key(filter_uri):
                         matches = True
                         break
                 if matches:
@@ -860,7 +867,7 @@ class SparqlTranslator:
         predicate_filter_local = None
         if predicate_filter and not value_filters:
             predicate_filter_set = set(p.lower() for p in predicate_filter)
-            predicate_filter_local = set(get_local_name(p) for p in predicate_filter)
+            predicate_filter_local = set(SparqlTranslator._predicate_local_name_key(p) for p in predicate_filter)
             logger.debug("Filtering by predicate URIs: %s", predicate_filter)
             logger.debug("Predicate filter local names: %s", predicate_filter_local)
         elif predicate_filter and value_filters:
@@ -874,7 +881,7 @@ class SparqlTranslator:
             if pred_uri.lower() in predicate_filter_set:
                 return True
             # Check local name match
-            if predicate_filter_local and get_local_name(pred_uri) in predicate_filter_local:
+            if predicate_filter_local and SparqlTranslator._predicate_local_name_key(pred_uri) in predicate_filter_local:
                 return True
             return False
         
@@ -885,7 +892,7 @@ class SparqlTranslator:
         for class_uri, mapping in (mappings or {}).items():
             # If filter_class_uris is specified, only include matching classes
             if filter_class_uris is not None:
-                class_local = get_local_name(class_uri)
+                class_local = SparqlTranslator._predicate_local_name_key(class_uri)
                 # Check exact URI match
                 if class_uri in filter_class_uris:
                     logger.debug("Including class (exact match): %s", class_uri)
@@ -945,13 +952,13 @@ class SparqlTranslator:
                     if pred_info.get('type') == 'column':
                         pred_to_column[pred_uri] = pred_info['column']
                         # Also map by local name
-                        local_name = get_local_name(pred_uri)
+                        local_name = SparqlTranslator._predicate_local_name_key(pred_uri)
                         pred_to_column[local_name] = pred_info['column']
                 
                 # Generate WHERE conditions for each value filter
                 for vf in value_filters:
                     pred_uri = vf['predicate_uri']
-                    column = pred_to_column.get(pred_uri) or pred_to_column.get(get_local_name(pred_uri))
+                    column = pred_to_column.get(pred_uri) or pred_to_column.get(SparqlTranslator._predicate_local_name_key(pred_uri))
                     
                     if column:
                         operator = vf['operator']
@@ -1003,7 +1010,7 @@ class SparqlTranslator:
                 for filter_uri in relationship_filter:
                     if rel_uri == filter_uri:
                         return True
-                    if get_local_name(rel_uri) == get_local_name(filter_uri):
+                    if SparqlTranslator._predicate_local_name_key(rel_uri) == SparqlTranslator._predicate_local_name_key(filter_uri):
                         return True
                 return False
             
@@ -1071,10 +1078,7 @@ class SparqlTranslator:
         logger.debug("Total table_queries: %s", len(table_queries))
         
         if not table_queries:
-            return {
-                'success': False,
-                'message': 'No tables found in R2RML mapping.'
-            }
+            raise ValidationError('No tables found in R2RML mapping.')
         
         distinct_str = "DISTINCT " if is_distinct else ""
         limit_clause = f"\n    LIMIT {limit}" if limit else ""
@@ -1194,10 +1198,9 @@ class SparqlTranslator:
                             break
         
         if not var_to_table or all(v is None for v in var_to_table.values()):
-            return {
-                'success': False,
-                'message': 'Could not determine which tables to query. Ensure your mapping has table or sql_query defined.'
-            }
+            raise ValidationError(
+                'Could not determine which tables to query. Ensure your mapping has table or sql_query defined.'
+            )
         
         # Build SELECT columns
         select_columns = []
@@ -1280,9 +1283,9 @@ class SparqlTranslator:
                     for rel in relationship_mappings:
                         rel_pred = rel.get('predicate', '')
                         # Match by full URI or local name
-                        pred_local = pred_uri.split('#')[-1].split('/')[-1] if pred_uri else ''
-                        rel_local = rel_pred.split('#')[-1].split('/')[-1] if rel_pred else ''
-                        
+                        pred_local = SparqlTranslator._relationship_predicate_local_name(pred_uri)
+                        rel_local = SparqlTranslator._relationship_predicate_local_name(rel_pred)
+
                         if rel_pred == pred_uri or (pred_local and pred_local == rel_local):
                             rel_sql = rel.get('sql_query', '').strip()
                             source_col = rel.get('subject_column')
@@ -1360,8 +1363,8 @@ class SparqlTranslator:
                             if rel_pred == pred_uri:
                                 matched_rel = rel
                                 break
-                            pred_local = pred_uri.split('#')[-1].split('/')[-1] if pred_uri else ''
-                            rel_local = rel_pred.split('#')[-1].split('/')[-1] if rel_pred else ''
+                            pred_local = SparqlTranslator._relationship_predicate_local_name(pred_uri)
+                            rel_local = SparqlTranslator._relationship_predicate_local_name(rel_pred)
                             if pred_local and pred_local == rel_local:
                                 matched_rel = rel
                                 break
@@ -1456,9 +1459,9 @@ class SparqlTranslator:
                 if relationship_mappings:
                     for rel in relationship_mappings:
                         rel_pred = rel.get('predicate', '')
-                        pred_local = pred_uri.split('#')[-1].split('/')[-1] if pred_uri else ''
-                        rel_local = rel_pred.split('#')[-1].split('/')[-1] if rel_pred else ''
-                        
+                        pred_local = SparqlTranslator._relationship_predicate_local_name(pred_uri)
+                        rel_local = SparqlTranslator._relationship_predicate_local_name(rel_pred)
+
                         if rel_pred == pred_uri or (pred_local and pred_local == rel_local):
                             rel_sql = rel.get('sql_query', '').strip()
                             source_col = rel.get('subject_column')
@@ -1520,8 +1523,8 @@ class SparqlTranslator:
                                 matched_rel = rel
                                 break
                             # Try matching just the local name (after # or last /)
-                            pred_local = pred_uri.split('#')[-1].split('/')[-1] if pred_uri else ''
-                            rel_local = rel_pred.split('#')[-1].split('/')[-1] if rel_pred else ''
+                            pred_local = SparqlTranslator._relationship_predicate_local_name(pred_uri)
+                            rel_local = SparqlTranslator._relationship_predicate_local_name(rel_pred)
                             if pred_local and pred_local == rel_local:
                                 logger.debug("Matched by local name: %s", pred_local)
                                 matched_rel = rel
@@ -1613,10 +1616,7 @@ class SparqlTranslator:
                     logger.debug("Could not find mapping for %s", var)
         
         if not select_columns:
-            return {
-                'success': False,
-                'message': 'Could not map any SELECT variables to table columns.'
-            }
+            raise ValidationError('Could not map any SELECT variables to table columns.')
         
         distinct_str = "DISTINCT " if is_distinct else ""
         

@@ -14,4 +14,3 @@ FIBO_BASE_URL = "https://spec.edmcouncil.org/fibo/ontology/master/latest"
 IOF_BASE_URL = "https://raw.githubusercontent.com/iofoundry/ontology/master"
 
 MMS = Namespace("http://rdf.cdisc.org/mms#")
-CDISCS = Namespace("http://rdf.cdisc.org/std/schema#")

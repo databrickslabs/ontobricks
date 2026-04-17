@@ -327,9 +327,9 @@ class SHACLService:
         except Exception:
             return []
 
-        RDF_TYPE = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+        rdf_type_ref = URIRef(RDF_TYPE)
         violations = []
-        for result in g.subjects(RDF_TYPE, SH_NS.ValidationResult):
+        for result in g.subjects(rdf_type_ref, SH_NS.ValidationResult):
             focus = ""
             for f in g.objects(result, SH_NS.focusNode):
                 focus = str(f)

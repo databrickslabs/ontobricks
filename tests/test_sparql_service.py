@@ -1,5 +1,7 @@
 """Tests for SPARQL translation and execution service."""
 import pytest
+
+from back.core.errors import ValidationError
 from back.core.w3c.sparql.constants import DIALECT_SPARK
 from back.core.w3c.sparql.SparqlQueryRunner import SparqlQueryRunner
 from back.core.w3c.sparql.SparqlTranslator import SparqlTranslator
@@ -85,11 +87,11 @@ class TestExecuteLocalQuery:
 class TestTranslateSparqlToSpark:
     def test_non_select_rejected(self):
         entities, _ = extract_r2rml_mappings(SAMPLE_R2RML)
-        result = translate_sparql_to_spark(
-            "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }",
-            entities, limit=100
-        )
-        assert result['success'] is False
+        with pytest.raises(ValidationError):
+            translate_sparql_to_spark(
+                "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }",
+                entities, limit=100,
+            )
 
     def test_basic_select(self):
         entities, rels = extract_r2rml_mappings(SAMPLE_R2RML)

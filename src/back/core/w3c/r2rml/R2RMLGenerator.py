@@ -1,5 +1,5 @@
 """R2RML mapping generator."""
-from typing import List, Dict, Any
+from typing import Dict, Any
 from rdflib import Graph, Namespace, Literal, URIRef, BNode
 from rdflib.namespace import RDF, RDFS, XSD
 import re

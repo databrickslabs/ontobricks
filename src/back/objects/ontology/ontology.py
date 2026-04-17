@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Set
 
 from back.core.logging import get_logger
-from back.core.errors import ValidationError, InfrastructureError
+from back.core.errors import InfrastructureError, NotFoundError, OntoBricksError, ValidationError
 from shared.config.constants import DEFAULT_BASE_URI
 from back.core.industry import (
     fetch_and_parse_cdisc,
@@ -334,13 +334,13 @@ class Ontology:
     def delete_class_by_uri(self, class_uri: Optional[str]) -> Dict[str, Any]:
         """Remove a class by URI and drop entity mappings that reference it."""
         if not class_uri:
-            return {"success": False, "message": "Class not found"}
+            raise ValidationError("Class URI is required")
         s = self._domain
         classes = list(s.get_classes())
         original_len = len(classes)
         classes = [c for c in classes if c.get("uri") != class_uri]
         if len(classes) >= original_len:
-            return {"success": False, "message": "Class not found"}
+            raise NotFoundError("Class not found")
 
         s.ontology["classes"] = classes
         entity_mappings = s.get_entity_mappings()
@@ -359,13 +359,13 @@ class Ontology:
     def delete_property_by_uri(self, property_uri: Optional[str]) -> Dict[str, Any]:
         """Remove an object property by URI and drop relationship mappings that reference it."""
         if not property_uri:
-            return {"success": False, "message": "Property not found"}
+            raise ValidationError("Property URI is required")
         s = self._domain
         properties = list(s.get_properties())
         original_len = len(properties)
         properties = [p for p in properties if p.get("uri") != property_uri]
         if len(properties) >= original_len:
-            return {"success": False, "message": "Property not found"}
+            raise NotFoundError("Property not found")
 
         s.ontology["properties"] = properties
         rel_mappings = s.get_relationship_mappings()
@@ -387,7 +387,7 @@ class Ontology:
         classes = list(s.get_classes())
         new_class = Ontology.build_class_from_data(data)
         if any(c.get("uri") == new_class["uri"] for c in classes):
-            return {"success": False, "message": "Class with this URI already exists"}
+            raise ValidationError("Class with this URI already exists")
         classes.append(new_class)
         s.ontology["classes"] = classes
         s.clear_generated_content()
@@ -406,7 +406,7 @@ class Ontology:
                 s.clear_generated_content()
                 s.save()
                 return {"success": True, "class": classes[i]}
-        return {"success": False, "message": "Class not found"}
+        raise NotFoundError("Class not found")
 
     def add_property(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Build a property from *data*, append if unique URI, clear cache and save."""
@@ -414,7 +414,7 @@ class Ontology:
         properties = list(s.get_properties())
         new_property = Ontology.build_property_from_data(data)
         if any(p.get("uri") == new_property["uri"] for p in properties):
-            return {"success": False, "message": "Property with this URI already exists"}
+            raise ValidationError("Property with this URI already exists")
         properties.append(new_property)
         s.ontology["properties"] = properties
         s.clear_generated_content()
@@ -433,7 +433,7 @@ class Ontology:
                 s.clear_generated_content()
                 s.save()
                 return {"success": True, "property": properties[i]}
-        return {"success": False, "message": "Property not found"}
+        raise NotFoundError("Property not found")
 
     def ingest_owl(
         self,
@@ -805,18 +805,11 @@ class Ontology:
         Returns the same dict shape as the former /import-fibo|cdisc|iof handlers.
         """
         if not domain_keys:
-            return {"success": False, "message": _INDUSTRY_EMPTY_MESSAGE[kind]}
+            raise ValidationError(_INDUSTRY_EMPTY_MESSAGE[kind])
     
         try:
             result = _INDUSTRY_FETCH[kind](domain_keys)
-    
-            if not result["success"]:
-                return {
-                    "success": False,
-                    "message": result["message"],
-                    "failed": result.get("failed", []),
-                }
-    
+
             info = result["ontology_info"]
             if kind == "cdisc":
                 ont_name = info.get("label", "CDISC")
@@ -850,6 +843,8 @@ class Ontology:
                 "stats": result["stats"],
                 "failed": result["failed"],
             }
+        except OntoBricksError:
+            raise
         except Exception as exc:
             logger.exception("%s import failed: %s", _INDUSTRY_LOG_LABEL[kind], exc)
             raise InfrastructureError(
@@ -1133,7 +1128,7 @@ class Ontology:
             groups.append(group)
 
         self._enforce_exclusive_membership(groups, name)
-        self._domainync_class_group_field(groups)
+        self._sync_class_group_field(groups)
         self._domain.groups = groups
         self._domain.save()
         return self._domain.groups
@@ -1156,7 +1151,7 @@ class Ontology:
         else:
             raise ValidationError("Provide index or name to identify the group")
 
-        self._domainync_class_group_field(groups)
+        self._sync_class_group_field(groups)
         self._domain.groups = groups
         self._domain.save()
         return self._domain.groups
@@ -1190,7 +1185,7 @@ class Ontology:
         target['members'] = members
 
         self._enforce_exclusive_membership(groups, group_name)
-        self._domainync_class_group_field(groups)
+        self._sync_class_group_field(groups)
         self._domain.groups = groups
         self._domain.save()
         return self._domain.groups
