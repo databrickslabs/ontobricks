@@ -439,7 +439,7 @@ async def start_triplestore_sync(
             try:
                 import os
                 from back.core.helpers import effective_uc_version_path, resolve_ladybug_local_path
-                from back.core.triplestore.ladybugdb import graph_volume_path
+                from back.core.graphdb.ladybugdb import graph_volume_path
 
                 final_count = total_triple_count or triple_count
                 build_stamp = domain.triplestore.get('build_last_update')

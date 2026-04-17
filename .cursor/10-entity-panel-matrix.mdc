@@ -1,0 +1,66 @@
+---
+name: Error Handling and Logging
+priority: 70
+scope:
+  globs: ["src/**"]
+  languages: ["python"]
+---
+
+### Error Handling Convention
+
+All application errors go through the centralized hierarchy in `back/core/errors/`. A global exception handler in `shared/fastapi/main.create_app()` translates them into a uniform `ErrorResponse` JSON body.
+
+**Rules:**
+
+- Always raise from the `OntoBricksError` hierarchy, never return `{'success': False, ...}` or bare `HTTPException`.
+- Services must not catch-and-swallow. Let errors propagate to the global handler.
+- Never expose `str(e)` to clients. Put safe descriptions in `message`; internal details in `detail` (stripped in production).
+
+**Error classes:**
+
+| Class | HTTP | When |
+|-------|------|------|
+| `ValidationError` | 400 | Bad client input, missing params, invalid query syntax |
+| `NotFoundError` | 404 | Resource, domain, or task does not exist |
+| `AuthorizationError` | 403 | Caller lacks permission |
+| `ConflictError` | 409 | Duplicate entity, version conflict |
+| `InfrastructureError` | 502 | External system failure (Databricks, network, file I/O) |
+| `OntoBricksError` | 500 | Catch-all for unexpected domain errors |
+
+**Error response shape:**
+```json
+{
+  "error": "not_found",
+  "message": "Domain not found",
+  "detail": "...",
+  "request_id": "abc-123"
+}
+```
+
+### Logging Convention
+
+All logging goes through `back/core/logging/LogManager`.
+
+- **Never** use `print()` — use a logger.
+- **Never** call `logging.basicConfig()` — `setup_logging()` in `run.py` handles it once.
+- Get a logger: `from back.core.logging import get_logger; logger = get_logger(__name__)`.
+- **Never** use f-strings or `.format()` in logging calls with dynamic variables. Use %-style formatting.
+- Log all errors and warnings to help debugging.
+- When running async processes, add logs at every step.
+- Level / directory / filename controlled via `LOG_LEVEL`, `LOG_DIR`, `LOG_FILE` env vars.
+- Always use the standard `logging` library with `logging.config.dictConfig` for configuration (log4J-style structure with `version`, `formatters`, `handlers`, `loggers`, `root`).
+- All logging configuration lives in `back/core/logging/` (the `LogManager` class in `LogManager.py`) and is reused across the app.
+
+### Logging Inside Error Paths
+
+- The **global handler** already logs every error — `WARNING` for known `OntoBricksError`, `ERROR` with traceback for unexpected exceptions.
+- If you need to add *extra* context before re-raising, use `logger.warning(...)` — **never** `logger.exception(...)` followed by a `return`, which swallows the error.
+- Only catch exceptions when you need to *translate* them to a more specific `OntoBricksError` subclass.
+- Error import pattern:
+  ```python
+  from back.core.errors import ValidationError, NotFoundError, InfrastructureError
+
+  raise ValidationError("Missing required field: name")
+  raise NotFoundError("Domain not found")
+  raise InfrastructureError("Databricks SQL Warehouse unreachable", detail=str(e))
+  ```

@@ -3,6 +3,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
+from back.core.graphdb.GraphDBBackend import GraphDBBackend
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.reasoning.models import InferredTriple, ReasoningResult, RuleViolation
 from back.core.reasoning.constants import (
@@ -92,7 +93,7 @@ class DecisionTableEngine:
         t0 = time.time()
         result = ReasoningResult()
         base_uri = ontology.get("base_uri", "")
-        is_cypher = self._is_cypher_backend(store)
+        is_cypher = GraphDBBackend.is_cypher_backend(store)
         uri_map = self._build_uri_map(ontology)
         for dt in tables:
             if not dt.get("enabled", True):
@@ -147,7 +148,7 @@ class DecisionTableEngine:
                           result, dt_name, output_prop_uri, output_prop_name,
                           rows, output_default_val=""):
         if is_cypher:
-            query = self.build_violation_cypher(dt, table_name, base_uri)
+            query = self.build_violation_cypher(dt, table_name, base_uri, store)
         else:
             query = self.build_violation_sql(dt, table_name, base_uri)
         if not query:
@@ -184,7 +185,7 @@ class DecisionTableEngine:
             single_dt["rows"] = [row]
             single_dt["row_logic"] = "or"
             if is_cypher:
-                query = self.build_violation_cypher(single_dt, table_name, base_uri)
+                query = self.build_violation_cypher(single_dt, table_name, base_uri, store)
             else:
                 query = self.build_violation_sql(single_dt, table_name, base_uri)
             if not query:
@@ -213,7 +214,7 @@ class DecisionTableEngine:
         subjects = []
         try:
             if is_cypher:
-                conn = store._get_connection()
+                conn = store.get_connection()
                 raw = conn.execute(query)
                 for row in raw:
                     if row:
@@ -279,17 +280,13 @@ class DecisionTableEngine:
         )
         return sql
 
-    def build_violation_cypher(self, dt, table_name, base_uri):
+    def build_violation_cypher(self, dt, table_name, base_uri, store):
         target_cls_uri = dt.get("target_class_uri", "")
         inputs = dt.get("input_columns", [])
         rows = dt.get("rows", [])
         if not target_cls_uri or not inputs or not rows:
             return None
-        try:
-            from back.core.triplestore.ladybugdb.LadybugBase import LadybugBase
-            tbl = LadybugBase.safe_table_id(table_name)
-        except ImportError:
-            tbl = table_name
+        tbl = store.get_node_table(table_name)
         match_parts = [f"MATCH (t0:{tbl})"]
         where_parts = [f"t0.predicate = '{RDF_TYPE}'", f"t0.object = '{target_cls_uri}'"]
         valid_inputs = []
@@ -352,11 +349,3 @@ class DecisionTableEngine:
             if len(conds) != expected:
                 errors.append(f"Row {i+1}: expected {expected} conditions, got {len(conds)}")
         return errors
-
-    @staticmethod
-    def _is_cypher_backend(store):
-        try:
-            from back.core.triplestore.ladybugdb.LadybugBase import LadybugBase
-            return isinstance(store, LadybugBase)
-        except ImportError:
-            return False

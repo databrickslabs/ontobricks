@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>shared.fastapi.main &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../_static/documentation_options.js?v=a58bc63e"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for shared.fastapi.main</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">FastAPI Application Factory - OntoBricks</span>
+
+<span class="sd">This is the main FastAPI application (UI, GraphQL, health).</span>
+<span class="sd">Run with: uvicorn shared.fastapi.main:app --reload --port 8000</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">FastAPI</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.staticfiles</span><span class="w"> </span><span class="kn">import</span> <span class="n">StaticFiles</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.middleware.cors</span><span class="w"> </span><span class="kn">import</span> <span class="n">CORSMiddleware</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">JSONResponse</span><span class="p">,</span> <span class="n">RedirectResponse</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">starlette.middleware.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseHTTPMiddleware</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">starlette.requests</span><span class="w"> </span><span class="kn">import</span> <span class="n">Request</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">starlette.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">Response</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">asynccontextmanager</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">APP_VERSION</span><span class="p">,</span> <span class="n">SESSION_COOKIE_NAME</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">FileSessionMiddleware</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">setup_logging</span><span class="p">,</span> <span class="n">get_logger</span>
+
+<span class="n">setup_logging</span><span class="p">()</span>
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<span class="c1"># OpenAPI Tags Metadata</span>
+<span class="n">tags_metadata</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Health&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Health check endpoints for monitoring and deployment verification.&quot;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Settings&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Databricks connection configuration and application settings.&quot;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Ontology&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Ontology management - Create and manage OWL ontologies with classes, &quot;</span>
+                       <span class="s2">&quot;properties, relationships, constraints, and SWRL rules.&quot;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Mapping&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Data source mapping - Map ontology entities to Databricks tables and columns. &quot;</span>
+                       <span class="s2">&quot;Generate R2RML mappings for SPARQL-to-SQL translation.&quot;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Query&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;SPARQL query execution - Execute SPARQL queries against mapped data sources. &quot;</span>
+                       <span class="s2">&quot;Queries are translated to SQL and executed on Databricks.&quot;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Domain&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Domain management - Save, load, import/export complete domain configurations &quot;</span>
+                       <span class="s2">&quot;including ontology, mappings, and settings.&quot;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;GraphQL&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;**GraphQL API** - Auto-generated typed GraphQL schema from ontology. &quot;</span>
+                       <span class="s2">&quot;Query the knowledge graph with nested traversal and introspection.&quot;</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">]</span>
+
+<span class="c1"># API Description (Markdown)</span>
+<span class="n">API_DESCRIPTION</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2"># OntoBricks API</span>
+
+<span class="s2">**Knowledge Graph Builder for Databricks**</span>
+
+<span class="s2">OntoBricks enables you to build knowledge graphs from Databricks tables using ontologies </span>
+<span class="s2">and R2RML mappings. Design an ontology, map it to your data, and materialize triples </span>
+<span class="s2">into a Delta triple store for visual exploration and quality validation.</span>
+
+<span class="s2">## Features</span>
+
+<span class="s2">- 🏗️ **Ontology Design** - Visual ontology editor with OWL export</span>
+<span class="s2">- 🔗 **Data Mapping** - Map ontology concepts to Databricks tables</span>
+<span class="s2">- 🔍 **SPARQL Queries** - Query data using W3C standard SPARQL</span>
+<span class="s2">- 📊 **Digital Twin Knowledge Graph** - Interactive sigma.js WebGL graph exploration with SPARQL-based quality checks</span>
+<span class="s2">- 📦 **Domain Management** - Save/load domains to Unity Catalog volumes</span>
+<span class="s2">- 🔮 **GraphQL API** - Auto-generated typed schema from ontology with nested entity traversal</span>
+
+<span class="s2">## Quick Start</span>
+
+<span class="s2">1. Configure Databricks connection in **Settings**</span>
+<span class="s2">2. Create or import an **Ontology**</span>
+<span class="s2">3. **Map** ontology entities to your tables</span>
+<span class="s2">4. Execute **SPARQL queries**</span>
+
+<span class="s2">## External API</span>
+
+<span class="s2">Programmatic REST endpoints live under `/api/v1/*`. **Swagger UI:** [`/api/docs`](/api/docs) · **OpenAPI JSON:** [`/api/openapi.json`](/api/openapi.json)</span>
+
+<span class="s2">This page documents the **application** surface (UI JSON routes, GraphQL, settings). It is separate from the external contract.</span>
+
+<span class="s2">---</span>
+<span class="s2">*Built with FastAPI • Powered by Databricks*</span>
+<span class="s2">&quot;&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="lifespan">
+<a class="viewcode-back" href="../../../api/app.fastapi.html#shared.fastapi.main.lifespan">[docs]</a>
+<span class="nd">@asynccontextmanager</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">lifespan</span><span class="p">(</span><span class="n">app</span><span class="p">:</span> <span class="n">FastAPI</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Application lifespan - startup and shutdown events.&quot;&quot;&quot;</span>
+    <span class="n">settings</span> <span class="o">=</span> <span class="n">get_settings</span><span class="p">()</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">session_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;OntoBricks FastAPI starting — session_dir=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">settings</span><span class="o">.</span><span class="n">session_dir</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;App docs: /docs | External REST: /api/docs&quot;</span><span class="p">)</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">agents.tracing</span><span class="w"> </span><span class="kn">import</span> <span class="n">setup_tracing</span>
+    <span class="n">setup_tracing</span><span class="p">()</span>
+
+    <span class="n">build_scheduler</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_scheduler</span>
+        <span class="n">build_scheduler</span> <span class="o">=</span> <span class="n">get_scheduler</span><span class="p">()</span>
+        <span class="n">build_scheduler</span><span class="o">.</span><span class="n">start</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not start build scheduler: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+    <span class="k">yield</span>
+
+    <span class="k">if</span> <span class="n">build_scheduler</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">build_scheduler</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;OntoBricks FastAPI shutting down&quot;</span><span class="p">)</span></div>
+
+
+
+<span class="n">_PERM_BYPASS_PREFIXES</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">&quot;/static/&quot;</span><span class="p">,</span> <span class="s2">&quot;/health&quot;</span><span class="p">,</span> <span class="s2">&quot;/docs&quot;</span><span class="p">,</span> <span class="s2">&quot;/redoc&quot;</span><span class="p">,</span> <span class="s2">&quot;/openapi.json&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;/access-denied&quot;</span><span class="p">,</span> <span class="s2">&quot;/settings/permissions/me&quot;</span><span class="p">,</span> <span class="s2">&quot;/settings/permissions/diag&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;/api/&quot;</span><span class="p">,</span> <span class="s2">&quot;/graphql/&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">_VIEWER_BLOCKED_METHODS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;POST&quot;</span><span class="p">,</span> <span class="s2">&quot;PUT&quot;</span><span class="p">,</span> <span class="s2">&quot;PATCH&quot;</span><span class="p">,</span> <span class="s2">&quot;DELETE&quot;</span><span class="p">}</span>
+
+<span class="n">_PERM_ADMIN_ONLY_PREFIXES</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;/settings/permissions&quot;</span><span class="p">,</span> <span class="s2">&quot;/settings/domain-permissions&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="PermissionMiddleware">
+<a class="viewcode-back" href="../../../api/app.fastapi.html#shared.fastapi.main.PermissionMiddleware">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">PermissionMiddleware</span><span class="p">(</span><span class="n">BaseHTTPMiddleware</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Enforce Viewer / Editor / Builder / Admin access rules.</span>
+
+<span class="sd">    Only active when running as a Databricks App (``DATABRICKS_APP_PORT``</span>
+<span class="sd">    is set).  In local-dev mode every request passes through.</span>
+
+<span class="sd">    Sets ``request.state.user_role`` (app-level) and</span>
+<span class="sd">    ``request.state.user_domain_role`` (effective role for the loaded domain).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="PermissionMiddleware.dispatch">
+<a class="viewcode-back" href="../../../api/app.fastapi.html#shared.fastapi.main.PermissionMiddleware.dispatch">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">dispatch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">call_next</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Response</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_databricks_app</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">ROLE_NONE</span><span class="p">,</span> <span class="n">ROLE_VIEWER</span>
+
+        <span class="n">email</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;x-forwarded-email&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">user_email</span> <span class="o">=</span> <span class="n">email</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_databricks_app</span><span class="p">():</span>
+            <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">user_role</span> <span class="o">=</span> <span class="s2">&quot;admin&quot;</span>
+            <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">user_domain_role</span> <span class="o">=</span> <span class="s2">&quot;admin&quot;</span>
+            <span class="k">return</span> <span class="k">await</span> <span class="n">call_next</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+
+        <span class="n">path</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">url</span><span class="o">.</span><span class="n">path</span>
+
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">path</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">_PERM_BYPASS_PREFIXES</span><span class="p">):</span>
+            <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">user_role</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">user_domain_role</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">return</span> <span class="k">await</span> <span class="n">call_next</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">role</span><span class="p">,</span> <span class="n">domain_role</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_roles</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">email</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                <span class="s2">&quot;PermissionMiddleware: error resolving role for </span><span class="si">%s</span><span class="s2"> on </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">email</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">exc</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">role</span> <span class="o">=</span> <span class="n">ROLE_NONE</span>
+            <span class="n">domain_role</span> <span class="o">=</span> <span class="n">ROLE_NONE</span>
+
+        <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">user_role</span> <span class="o">=</span> <span class="n">role</span>
+        <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">user_domain_role</span> <span class="o">=</span> <span class="n">domain_role</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;PermissionMiddleware: </span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2"> email=</span><span class="si">%s</span><span class="s2"> → role=</span><span class="si">%s</span><span class="s2"> domain_role=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">request</span><span class="o">.</span><span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">email</span><span class="p">,</span> <span class="n">role</span><span class="p">,</span> <span class="n">domain_role</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">role</span> <span class="o">==</span> <span class="n">ROLE_NONE</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_wants_json</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forbidden_json</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;Access denied&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="s2">&quot;/access-denied&quot;</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">302</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">role</span> <span class="o">==</span> <span class="n">ROLE_VIEWER</span> <span class="ow">and</span> <span class="n">request</span><span class="o">.</span><span class="n">method</span> <span class="ow">in</span> <span class="n">_VIEWER_BLOCKED_METHODS</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forbidden_json</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;Viewer role does not allow write operations&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">user_role</span> <span class="o">!=</span> <span class="s2">&quot;admin&quot;</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">prefix</span> <span class="ow">in</span> <span class="n">_PERM_ADMIN_ONLY_PREFIXES</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">path</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">prefix</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_wants_json</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
+                        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forbidden_json</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;Only administrators can access settings&quot;</span><span class="p">)</span>
+                    <span class="k">return</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">302</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="k">await</span> <span class="n">call_next</span><span class="p">(</span><span class="n">request</span><span class="p">)</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_forbidden_json</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">JSONResponse</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a 403 response matching the standard ErrorResponse shape.&quot;&quot;&quot;</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_uuid</span>
+        <span class="n">request_id</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;x-request-id&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">str</span><span class="p">(</span><span class="n">_uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">JSONResponse</span><span class="p">(</span>
+            <span class="p">{</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;authorization&quot;</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span> <span class="s2">&quot;request_id&quot;</span><span class="p">:</span> <span class="n">request_id</span><span class="p">},</span>
+            <span class="n">status_code</span><span class="o">=</span><span class="mi">403</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_wants_json</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;True when the client expects JSON (fetch / XHR), not a page.&quot;&quot;&quot;</span>
+        <span class="n">accept</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;accept&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;application/json&quot;</span> <span class="ow">in</span> <span class="n">accept</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;x-requested-with&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;xmlhttprequest&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sec-fetch-dest&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;empty&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+            <span class="n">sec_mode</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sec-fetch-mode&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">sec_mode</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;cors&quot;</span><span class="p">,</span> <span class="s2">&quot;no-cors&quot;</span><span class="p">,</span> <span class="s2">&quot;same-origin&quot;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_roles</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">email</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return ``(app_role, domain_role)``.&quot;&quot;&quot;</span>
+        <span class="n">settings</span> <span class="o">=</span> <span class="n">get_settings</span><span class="p">()</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">permission_service</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_databricks_host_and_token</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_domain</span><span class="p">,</span> <span class="n">SessionManager</span>
+
+        <span class="n">session_mgr</span> <span class="o">=</span> <span class="n">SessionManager</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">user_token</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;x-forwarded-access-token&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
+        <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span>
+
+        <span class="n">app_role</span> <span class="o">=</span> <span class="n">permission_service</span><span class="o">.</span><span class="n">get_user_role</span><span class="p">(</span>
+            <span class="n">email</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">settings</span><span class="o">.</span><span class="n">ontobricks_app_name</span><span class="p">,</span>
+            <span class="n">user_token</span><span class="o">=</span><span class="n">user_token</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">domain_folder</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;domain_folder&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span>
+        <span class="n">domain_role</span> <span class="o">=</span> <span class="n">permission_service</span><span class="o">.</span><span class="n">get_domain_role</span><span class="p">(</span>
+            <span class="n">email</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">settings</span><span class="o">.</span><span class="n">ontobricks_app_name</span><span class="p">,</span>
+            <span class="n">domain_folder</span><span class="p">,</span> <span class="n">user_token</span><span class="o">=</span><span class="n">user_token</span><span class="p">,</span> <span class="n">app_role</span><span class="o">=</span><span class="n">app_role</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">app_role</span><span class="p">,</span> <span class="n">domain_role</span></div>
+
+
+
+<div class="viewcode-block" id="create_app">
+<a class="viewcode-back" href="../../../api/app.fastapi.html#shared.fastapi.main.create_app">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">create_app</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">FastAPI</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create and configure the FastAPI application.&quot;&quot;&quot;</span>
+    <span class="n">settings</span> <span class="o">=</span> <span class="n">get_settings</span><span class="p">()</span>
+
+    <span class="n">app</span> <span class="o">=</span> <span class="n">FastAPI</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="s2">&quot;OntoBricks&quot;</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">API_DESCRIPTION</span><span class="p">,</span>
+        <span class="n">version</span><span class="o">=</span><span class="n">APP_VERSION</span><span class="p">,</span>
+        <span class="n">docs_url</span><span class="o">=</span><span class="s2">&quot;/docs&quot;</span><span class="p">,</span>
+        <span class="n">redoc_url</span><span class="o">=</span><span class="s2">&quot;/redoc&quot;</span><span class="p">,</span>
+        <span class="n">openapi_url</span><span class="o">=</span><span class="s2">&quot;/openapi.json&quot;</span><span class="p">,</span>
+        <span class="n">openapi_tags</span><span class="o">=</span><span class="n">tags_metadata</span><span class="p">,</span>
+        <span class="n">contact</span><span class="o">=</span><span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;OntoBricks Support&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="s2">&quot;https://github.com/databricks/ontobricks&quot;</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="n">license_info</span><span class="o">=</span><span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Apache 2.0&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="s2">&quot;https://www.apache.org/licenses/LICENSE-2.0.html&quot;</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="n">lifespan</span><span class="o">=</span><span class="n">lifespan</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># CORS middleware - allow credentials (cookies)</span>
+    <span class="n">app</span><span class="o">.</span><span class="n">add_middleware</span><span class="p">(</span>
+        <span class="n">CORSMiddleware</span><span class="p">,</span>
+        <span class="n">allow_origins</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;http://127.0.0.1:8000&quot;</span><span class="p">,</span> <span class="s2">&quot;http://localhost:8000&quot;</span><span class="p">,</span> <span class="s2">&quot;*&quot;</span><span class="p">],</span>
+        <span class="n">allow_credentials</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">allow_methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;*&quot;</span><span class="p">],</span>
+        <span class="n">allow_headers</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;*&quot;</span><span class="p">],</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Permission enforcement (runs after session is available)</span>
+    <span class="n">app</span><span class="o">.</span><span class="n">add_middleware</span><span class="p">(</span><span class="n">PermissionMiddleware</span><span class="p">)</span>
+
+    <span class="c1"># Custom file-based session middleware</span>
+    <span class="n">app</span><span class="o">.</span><span class="n">add_middleware</span><span class="p">(</span>
+        <span class="n">FileSessionMiddleware</span><span class="p">,</span>
+        <span class="n">secret_key</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">secret_key</span><span class="p">,</span>
+        <span class="n">session_dir</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">session_dir</span><span class="p">,</span>
+        <span class="n">session_cookie</span><span class="o">=</span><span class="n">SESSION_COOKIE_NAME</span><span class="p">,</span>
+        <span class="n">max_age</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">session_max_age</span><span class="p">,</span>
+        <span class="n">same_site</span><span class="o">=</span><span class="s2">&quot;lax&quot;</span><span class="p">,</span>
+        <span class="n">https_only</span><span class="o">=</span><span class="kc">False</span>  <span class="c1"># Set to True in production</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Static files -- served from front/static/</span>
+    <span class="n">_src_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)))</span>
+    <span class="n">static_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_src_dir</span><span class="p">,</span> <span class="s2">&quot;front&quot;</span><span class="p">,</span> <span class="s2">&quot;static&quot;</span><span class="p">)</span>
+    <span class="n">app</span><span class="o">.</span><span class="n">mount</span><span class="p">(</span><span class="s2">&quot;/static&quot;</span><span class="p">,</span> <span class="n">StaticFiles</span><span class="p">(</span><span class="n">directory</span><span class="o">=</span><span class="n">static_dir</span><span class="p">),</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;static&quot;</span><span class="p">)</span>
+
+    <span class="n">_register_routers</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">api.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">EXTERNAL_API_MOUNT_PREFIX</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">api.external_app</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_external_api_app</span>
+
+    <span class="n">app</span><span class="o">.</span><span class="n">mount</span><span class="p">(</span><span class="n">EXTERNAL_API_MOUNT_PREFIX</span><span class="p">,</span> <span class="n">create_external_api_app</span><span class="p">())</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_exception_handlers</span>
+    <span class="n">register_exception_handlers</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">app</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_register_routers</span><span class="p">(</span><span class="n">app</span><span class="p">:</span> <span class="n">FastAPI</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register all routers: health, frontend HTML, internal API, GraphQL.&quot;&quot;&quot;</span>
+
+    <span class="c1"># --- Health ---</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">shared.fastapi.health</span><span class="w"> </span><span class="kn">import</span> <span class="n">router</span> <span class="k">as</span> <span class="n">health_router</span>
+    <span class="n">app</span><span class="o">.</span><span class="n">include_router</span><span class="p">(</span><span class="n">health_router</span><span class="p">)</span>
+
+    <span class="c1"># --- Frontend HTML routes (from src/front/) ---</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">front.routes</span><span class="w"> </span><span class="kn">import</span> <span class="n">all_frontend_routers</span>
+    <span class="k">for</span> <span class="n">router</span> <span class="ow">in</span> <span class="n">all_frontend_routers</span><span class="p">:</span>
+        <span class="n">app</span><span class="o">.</span><span class="n">include_router</span><span class="p">(</span><span class="n">router</span><span class="p">)</span>
+
+    <span class="c1"># --- Internal API (session-aware JSON, from src/api/routers/internal/) ---</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">api.routers.internal</span><span class="w"> </span><span class="kn">import</span> <span class="n">all_internal_routers</span>
+    <span class="k">for</span> <span class="n">router</span> <span class="ow">in</span> <span class="n">all_internal_routers</span><span class="p">:</span>
+        <span class="n">app</span><span class="o">.</span><span class="n">include_router</span><span class="p">(</span><span class="n">router</span><span class="p">)</span>
+
+    <span class="c1"># --- GraphQL ---</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.fastapi.graphql_routes</span><span class="w"> </span><span class="kn">import</span> <span class="n">router</span> <span class="k">as</span> <span class="n">graphql_router</span>
+    <span class="n">app</span><span class="o">.</span><span class="n">include_router</span><span class="p">(</span><span class="n">graphql_router</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/graphql&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;GraphQL&quot;</span><span class="p">])</span>
+
+
+<span class="c1"># Create the app instance</span>
+<span class="n">app</span> <span class="o">=</span> <span class="n">create_app</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

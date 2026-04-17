@@ -11,6 +11,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
+from back.core.graphdb.GraphDBBackend import GraphDBBackend
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.reasoning.models import InferredTriple, ReasoningResult
 
@@ -47,8 +48,8 @@ class SWRLEngine:
         t0 = time.time()
         result = ReasoningResult()
         is_graph = self._is_graph_backend(store)
-        is_ladybug = self._is_ladybug_backend(store)
-        uses_cypher = is_graph or is_ladybug
+        is_cypher_store = self._is_cypher_backend(store)
+        uses_cypher = is_graph or is_cypher_store
 
         base_uri = self._ontology.get("base_uri", "")
         uri_map = self._build_uri_map()
@@ -122,7 +123,7 @@ class SWRLEngine:
         t_rule = time.time()
         count = 0
         if uses_cypher:
-            conn = store._get_connection()
+            conn = store.get_connection()
             r = conn.execute(query)
             for row in r:
                 result.inferred_triples.append(InferredTriple(
@@ -155,7 +156,7 @@ class SWRLEngine:
             if uses_cypher:
                 query = translator.build_materialization_query(params)
                 if query:
-                    conn = store._get_connection()
+                    conn = store.get_connection()
                     conn.execute(query)
                     result.inferred_triples.append(InferredTriple(
                         subject="(batch)",
@@ -222,42 +223,19 @@ class SWRLEngine:
         return uri_map
 
     @staticmethod
-    def _is_ladybug_backend(store) -> bool:
-        """Check if the store is any LadybugDB backend (graph or flat)."""
-        try:
-            from back.core.triplestore.ladybugdb.LadybugBase import LadybugBase
-            return isinstance(store, LadybugBase)
-        except ImportError:
-            return False
+    def _is_cypher_backend(store) -> bool:
+        """True when the store executes SWRL via Cypher (graph-capable backend)."""
+        return GraphDBBackend.is_cypher_backend(store)
 
     @staticmethod
     def _is_graph_backend(store) -> bool:
-        """Check if the store is a LadybugDB graph-model backend."""
-        try:
-            from back.core.triplestore.ladybugdb.LadybugGraphStore import LadybugGraphStore
-            return isinstance(store, LadybugGraphStore) and store.use_graph_model
-        except ImportError:
-            return False
+        """True when the store uses a typed graph schema for SWRL translation."""
+        return isinstance(store, GraphDBBackend) and store.supports_graph_model
 
     @staticmethod
     def _get_translator(store, table_name: str = ""):
         """Return the appropriate translator for the backend."""
-        try:
-            from back.core.triplestore.ladybugdb.LadybugGraphStore import LadybugGraphStore
-            if isinstance(store, LadybugGraphStore) and store.use_graph_model:
-                from back.core.reasoning.SWRLCypherTranslator import SWRLCypherTranslator
-                return SWRLCypherTranslator(graph_schema=store._graph_schema)
-        except ImportError:
-            pass
-
-        try:
-            from back.core.triplestore.ladybugdb.LadybugBase import LadybugBase
-            if isinstance(store, LadybugBase):
-                from back.core.reasoning.SWRLFlatCypherTranslator import SWRLFlatCypherTranslator
-                node_table = LadybugBase.safe_table_id(table_name) if table_name else "Triple"
-                return SWRLFlatCypherTranslator(node_table=node_table)
-        except ImportError:
-            pass
-
+        if isinstance(store, GraphDBBackend):
+            return store.get_query_translator(table_name)
         from back.core.reasoning.SWRLSQLTranslator import SWRLSQLTranslator
         return SWRLSQLTranslator()

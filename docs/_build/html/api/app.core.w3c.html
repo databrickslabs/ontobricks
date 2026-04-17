@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>back.core.w3c – W3C Standard Parsers &amp; Generators &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=a58bc63e"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="back.objects – Application domain objects" href="app.objects.html" />
+    <link rel="prev" title="back.core.triplestore – Pluggable RDF/Graph Backends" href="app.core.triplestore.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.w3c.owl.OntologyGenerator">OWL (Web Ontology Language)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.w3c.rdfs.RDFSParser">RDFS (RDF Schema)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.w3c.r2rml.R2RMLGenerator">R2RML (RDB to RDF Mapping Language)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.w3c.sparql.SparqlTranslator">SPARQL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.w3c.shacl.SHACLService">SHACL (Shapes Constraint Language)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="app.html">OntoBricks Application Packages</a><ul>
+  <li><a href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a><ul>
+      <li>Previous: <a href="app.core.triplestore.html" title="previous chapter"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+      <li>Next: <a href="app.objects.html" title="next chapter"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="back-core-w3c-w3c-standard-parsers-generators">
+<h1><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators<a class="headerlink" href="#back-core-w3c-w3c-standard-parsers-generators" title="Link to this heading">¶</a></h1>
+<section id="module-back.core.w3c.owl.OntologyGenerator">
+<span id="owl-web-ontology-language"></span><h2>OWL (Web Ontology Language)<a class="headerlink" href="#module-back.core.w3c.owl.OntologyGenerator" title="Link to this heading">¶</a></h2>
+<p>OWL ontology generator.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyGenerator.OntologyGenerator">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.owl.OntologyGenerator.</span></span><span class="sig-name descname"><span class="pre">OntologyGenerator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expressions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groups</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyGenerator.html#OntologyGenerator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyGenerator.OntologyGenerator" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Generate OWL ontologies from configuration.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>ontology_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>classes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>properties</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>constraints</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>swrl_rules</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>axioms</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>expressions</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>groups</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyGenerator.OntologyGenerator.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expressions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groups</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyGenerator.html#OntologyGenerator.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyGenerator.OntologyGenerator.__init__" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize the OWL generator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Base URI for the ontology (e.g., <a class="reference external" href="http://example.org">http://example.org</a>/ontology#)</p></li>
+<li><p><strong>ontology_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Name of the ontology</p></li>
+<li><p><strong>classes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of class definitions</p></li>
+<li><p><strong>properties</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of property definitions</p></li>
+<li><p><strong>constraints</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of property constraints (cardinality, characteristics)</p></li>
+<li><p><strong>swrl_rules</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of SWRL rules</p></li>
+<li><p><strong>axioms</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of OWL axioms (logical assertions)</p></li>
+<li><p><strong>expressions</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of OWL class expressions (unionOf, intersectionOf, etc.)</p></li>
+<li><p><strong>groups</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of entity group definitions (name, label, color, icon, members)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyGenerator.OntologyGenerator.generate">
+<span class="sig-name descname"><span class="pre">generate</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyGenerator.html#OntologyGenerator.generate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyGenerator.OntologyGenerator.generate" title="Link to this definition">¶</a></dt>
+<dd><p>Generate OWL content.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>OWL content as string (Turtle format)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<p id="module-back.core.w3c.owl.OntologyParser">OWL ontology parser.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.owl.OntologyParser.</span></span><span class="sig-name descname"><span class="pre">OntologyParser</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">owl_content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Parse OWL ontologies to extract classes and properties.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>owl_content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">owl_content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser.__init__" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize the parser with OWL content.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>owl_content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – OWL content (Turtle, RDF/XML, etc.)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser.get_groups">
+<span class="sig-name descname"><span class="pre">get_groups</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser.get_groups"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_groups" title="Link to this definition">¶</a></dt>
+<dd><p>Extract entity groups from the ontology.</p>
+<p>Groups are OWL classes annotated with <code class="docutils literal notranslate"><span class="pre">ontobricks:isGroup</span> <span class="pre">true</span></code> whose
+<code class="docutils literal notranslate"><span class="pre">owl:equivalentClass</span></code> points to an anonymous <code class="docutils literal notranslate"><span class="pre">owl:unionOf</span></code> list.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of group dicts with name, label, description, color, icon, members.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser.get_classes">
+<span class="sig-name descname"><span class="pre">get_classes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser.get_classes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_classes" title="Link to this definition">¶</a></dt>
+<dd><p>Extract all OWL classes from the ontology.</p>
+<p>Classes annotated with <code class="docutils literal notranslate"><span class="pre">ontobricks:isGroup</span> <span class="pre">true</span></code> are excluded (they
+are returned by <a class="reference internal" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_groups" title="back.core.w3c.owl.OntologyParser.OntologyParser.get_groups"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_groups()</span></code></a> instead).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of dicts with ‘uri’, ‘name’, ‘label’, ‘comment’, ‘emoji’, ‘parent’, ‘group’, ‘dashboard’, ‘dashboardParams’, ‘dataProperties’</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser.get_properties">
+<span class="sig-name descname"><span class="pre">get_properties</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser.get_properties"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_properties" title="Link to this definition">¶</a></dt>
+<dd><p>Extract all OWL properties from the ontology.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of dicts with ‘uri’, ‘name’, ‘label’, ‘comment’, ‘type’, ‘domain’, ‘range’</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser.get_ontology_info">
+<span class="sig-name descname"><span class="pre">get_ontology_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser.get_ontology_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_ontology_info" title="Link to this definition">¶</a></dt>
+<dd><p>Get basic ontology information.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict with ‘uri’, ‘label’, ‘comment’, ‘namespace’</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser.get_constraints">
+<span class="sig-name descname"><span class="pre">get_constraints</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser.get_constraints"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_constraints" title="Link to this definition">¶</a></dt>
+<dd><p>Extract property constraints from the ontology.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of constraint dicts with ‘type’, ‘property’, ‘className’, ‘value’, etc.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser.get_swrl_rules">
+<span class="sig-name descname"><span class="pre">get_swrl_rules</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser.get_swrl_rules"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_swrl_rules" title="Link to this definition">¶</a></dt>
+<dd><p>Extract SWRL rules from the ontology.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of rule dicts with ‘name’, ‘description’, ‘antecedent’, ‘consequent’</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser.get_axioms_and_expressions">
+<span class="sig-name descname"><span class="pre">get_axioms_and_expressions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser.get_axioms_and_expressions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_axioms_and_expressions" title="Link to this definition">¶</a></dt>
+<dd><p>Extract OWL axioms and class expressions as two separate lists.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict with <code class="docutils literal notranslate"><span class="pre">'axioms'</span></code> (logical assertions) and <code class="docutils literal notranslate"><span class="pre">'expressions'</span></code>
+(class compositions: unionOf, intersectionOf, complementOf, oneOf).</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.owl.OntologyParser.OntologyParser.get_axioms">
+<span class="sig-name descname"><span class="pre">get_axioms</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/owl/OntologyParser.html#OntologyParser.get_axioms"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.owl.OntologyParser.OntologyParser.get_axioms" title="Link to this definition">¶</a></dt>
+<dd><p>Extract OWL axioms from the ontology (backward-compat: returns all items).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of axiom dicts with ‘type’, ‘subject’, ‘objects’, etc.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.w3c.rdfs.RDFSParser">
+<span id="rdfs-rdf-schema"></span><h2>RDFS (RDF Schema)<a class="headerlink" href="#module-back.core.w3c.rdfs.RDFSParser" title="Link to this heading">¶</a></h2>
+<p>RDFS vocabulary parser.</p>
+<p>Parses RDFS (RDF Schema) files to extract classes and properties.
+RDFS is simpler than OWL and uses rdfs:Class instead of owl:Class.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.w3c.rdfs.RDFSParser.RDFSParser">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.rdfs.RDFSParser.</span></span><span class="sig-name descname"><span class="pre">RDFSParser</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rdfs_content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/rdfs/RDFSParser.html#RDFSParser"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.rdfs.RDFSParser.RDFSParser" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Parse RDFS vocabularies to extract classes and properties.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>rdfs_content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.rdfs.RDFSParser.RDFSParser.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rdfs_content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/rdfs/RDFSParser.html#RDFSParser.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.rdfs.RDFSParser.RDFSParser.__init__" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize the parser with RDFS content.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>rdfs_content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – RDFS content (Turtle, RDF/XML, N-Triples, etc.)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.rdfs.RDFSParser.RDFSParser.get_classes">
+<span class="sig-name descname"><span class="pre">get_classes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/rdfs/RDFSParser.html#RDFSParser.get_classes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.rdfs.RDFSParser.RDFSParser.get_classes" title="Link to this definition">¶</a></dt>
+<dd><p>Extract all RDFS classes from the vocabulary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of dicts with ‘uri’, ‘name’, ‘label’, ‘comment’, ‘emoji’, ‘parent’</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.rdfs.RDFSParser.RDFSParser.get_properties">
+<span class="sig-name descname"><span class="pre">get_properties</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/rdfs/RDFSParser.html#RDFSParser.get_properties"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.rdfs.RDFSParser.RDFSParser.get_properties" title="Link to this definition">¶</a></dt>
+<dd><p>Extract all RDFS properties from the vocabulary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of dicts with ‘uri’, ‘name’, ‘label’, ‘comment’, ‘type’, ‘domain’, ‘range’</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.rdfs.RDFSParser.RDFSParser.get_ontology_info">
+<span class="sig-name descname"><span class="pre">get_ontology_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/rdfs/RDFSParser.html#RDFSParser.get_ontology_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.rdfs.RDFSParser.RDFSParser.get_ontology_info" title="Link to this definition">¶</a></dt>
+<dd><p>Get basic vocabulary information.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict with ‘uri’, ‘label’, ‘comment’, ‘namespace’</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.w3c.r2rml.R2RMLGenerator">
+<span id="r2rml-rdb-to-rdf-mapping-language"></span><h2>R2RML (RDB to RDF Mapping Language)<a class="headerlink" href="#module-back.core.w3c.r2rml.R2RMLGenerator" title="Link to this heading">¶</a></h2>
+<p>R2RML mapping generator.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.w3c.r2rml.R2RMLGenerator.R2RMLGenerator">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.r2rml.R2RMLGenerator.</span></span><span class="sig-name descname"><span class="pre">R2RMLGenerator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'https://databricks-ontology.com/'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/r2rml/R2RMLGenerator.html#R2RMLGenerator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.r2rml.R2RMLGenerator.R2RMLGenerator" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Generate R2RML mappings from configuration.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.r2rml.R2RMLGenerator.R2RMLGenerator.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'https://databricks-ontology.com/'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/r2rml/R2RMLGenerator.html#R2RMLGenerator.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.r2rml.R2RMLGenerator.R2RMLGenerator.__init__" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize the R2RML generator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.r2rml.R2RMLGenerator.R2RMLGenerator.generate_mapping">
+<span class="sig-name descname"><span class="pre">generate_mapping</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mapping_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/r2rml/R2RMLGenerator.html#R2RMLGenerator.generate_mapping"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.r2rml.R2RMLGenerator.R2RMLGenerator.generate_mapping" title="Link to this definition">¶</a></dt>
+<dd><p>Generate R2RML mapping from configuration.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mapping_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>) – Dictionary containing:
+- entities: List of entity mappings (with sql_query and attribute_mappings)
+- relationships: List of relationship mappings with SQL queries</p></li>
+<li><p><strong>ontology_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>) – Optional dictionary containing:
+- properties: List of ontology properties with ‘uri’, ‘domain’, ‘range’
+- classes: List of ontology classes with ‘uri’, ‘label’, ‘name’</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>R2RML mapping as Turtle string</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.r2rml.R2RMLGenerator.R2RMLGenerator.generate_r2rml_from_config">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">generate_r2rml_from_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mapping_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/r2rml/R2RMLGenerator.html#R2RMLGenerator.generate_r2rml_from_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.r2rml.R2RMLGenerator.R2RMLGenerator.generate_r2rml_from_config" title="Link to this definition">¶</a></dt>
+<dd><p>Generate R2RML mapping from mapping configuration and ontology.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mapping_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>) – Mapping configuration with entities and relationships</p></li>
+<li><p><strong>ontology_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>) – Ontology with base_uri, classes, and properties (info.uri)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>R2RML mapping in Turtle format</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<p id="module-back.core.w3c.r2rml.R2RMLParser">R2RML parsing service for extracting mappings from R2RML content.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.w3c.r2rml.R2RMLParser.R2RMLParser">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.r2rml.R2RMLParser.</span></span><span class="sig-name descname"><span class="pre">R2RMLParser</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/r2rml/R2RMLParser.html#R2RMLParser"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.r2rml.R2RMLParser.R2RMLParser" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Parser for R2RML mapping files.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.r2rml.R2RMLParser.R2RMLParser.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/r2rml/R2RMLParser.html#R2RMLParser.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.r2rml.R2RMLParser.R2RMLParser.__init__" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize parser with R2RML content.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>content</strong> – R2RML content in Turtle or XML format</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.r2rml.R2RMLParser.R2RMLParser.extract_mappings">
+<span class="sig-name descname"><span class="pre">extract_mappings</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/r2rml/R2RMLParser.html#R2RMLParser.extract_mappings"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.r2rml.R2RMLParser.R2RMLParser.extract_mappings" title="Link to this definition">¶</a></dt>
+<dd><p>Extract entity and relationship mappings from R2RML.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(entity_mappings list, relationship_mappings list)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.r2rml.R2RMLParser.R2RMLParser.parse_r2rml_content">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">parse_r2rml_content</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/r2rml/R2RMLParser.html#R2RMLParser.parse_r2rml_content"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.r2rml.R2RMLParser.R2RMLParser.parse_r2rml_content" title="Link to this definition">¶</a></dt>
+<dd><p>Parse R2RML content and return entity and relationship mappings.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>content</strong> – R2RML content string</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>(entity_mappings, relationship_mappings)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.w3c.sparql.SparqlTranslator">
+<span id="sparql"></span><h2>SPARQL<a class="headerlink" href="#module-back.core.w3c.sparql.SparqlTranslator" title="Link to this heading">¶</a></h2>
+<p>SPARQL query translation to Spark SQL (via R2RML mappings).</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.w3c.sparql.SparqlTranslator.SparqlTranslator">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.sparql.SparqlTranslator.</span></span><span class="sig-name descname"><span class="pre">SparqlTranslator</span></span><a class="reference internal" href="../_modules/back/core/w3c/sparql/SparqlTranslator.html#SparqlTranslator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.sparql.SparqlTranslator.SparqlTranslator" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.sparql.SparqlTranslator.SparqlTranslator.translate_sparql_to_spark">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">translate_sparql_to_spark</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sparql_query</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">entity_mappings</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relationship_mappings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dialect</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'spark'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/sparql/SparqlTranslator.html#SparqlTranslator.translate_sparql_to_spark"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.sparql.SparqlTranslator.SparqlTranslator.translate_sparql_to_spark" title="Link to this definition">¶</a></dt>
+<dd><p>Translate SPARQL query to SQL (Spark or PostgreSQL) using R2RML mappings.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sparql_query</strong> – SPARQL query string</p></li>
+<li><p><strong>entity_mappings</strong> – Entity mappings from R2RML</p></li>
+<li><p><strong>limit</strong> – Maximum results</p></li>
+<li><p><strong>relationship_mappings</strong> – Relationship mappings from R2RML</p></li>
+<li><p><strong>dialect</strong> – SQL dialect — ‘spark’ (default) or ‘postgres’</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Translation result with SQL and variables</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<p id="module-back.core.w3c.sparql.SparqlQueryRunner">SPARQL local execution and R2RML extraction from Turtle/XML graphs.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.w3c.sparql.SparqlQueryRunner.SparqlQueryRunner">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.sparql.SparqlQueryRunner.</span></span><span class="sig-name descname"><span class="pre">SparqlQueryRunner</span></span><a class="reference internal" href="../_modules/back/core/w3c/sparql/SparqlQueryRunner.html#SparqlQueryRunner"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.sparql.SparqlQueryRunner.SparqlQueryRunner" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Run SPARQL locally (RDFLib) and extract R2RML mapping structures from content.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.sparql.SparqlQueryRunner.SparqlQueryRunner.execute_local_query">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">execute_local_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_content</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/sparql/SparqlQueryRunner.html#SparqlQueryRunner.execute_local_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.sparql.SparqlQueryRunner.SparqlQueryRunner.execute_local_query" title="Link to this definition">¶</a></dt>
+<dd><p>Execute SPARQL query locally using RDFLib.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>query</strong> – SPARQL query string</p></li>
+<li><p><strong>rdf_content</strong> – RDF/Turtle content to query</p></li>
+<li><p><strong>limit</strong> – Maximum number of results</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Query results with columns and data</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.sparql.SparqlQueryRunner.SparqlQueryRunner.extract_r2rml_mappings">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">extract_r2rml_mappings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">r2rml_content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/sparql/SparqlQueryRunner.html#SparqlQueryRunner.extract_r2rml_mappings"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.sparql.SparqlQueryRunner.SparqlQueryRunner.extract_r2rml_mappings" title="Link to this definition">¶</a></dt>
+<dd><p>Extract mapping information from R2RML content.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>r2rml_content</strong> – R2RML Turtle content</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>(entity_mappings dict, relationship_mappings list)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<p id="module-back.core.w3c.sparql.DomainQueryService">SPARQL validation, execution, and samples over domain JSON (R2RML in assignment).</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.w3c.sparql.DomainQueryService.DomainQueryService">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.sparql.DomainQueryService.</span></span><span class="sig-name descname"><span class="pre">DomainQueryService</span></span><a class="reference internal" href="../_modules/back/core/w3c/sparql/DomainQueryService.html#DomainQueryService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.sparql.DomainQueryService.DomainQueryService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Validate and run SPARQL against domain slice data; build sample queries.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.sparql.DomainQueryService.DomainQueryService.validate_sparql_query">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_sparql_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/sparql/DomainQueryService.html#DomainQueryService.validate_sparql_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.sparql.DomainQueryService.DomainQueryService.validate_sparql_query" title="Link to this definition">¶</a></dt>
+<dd><p>Validate SPARQL query syntax.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple of (is_valid, error_message)</p>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>query</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.sparql.DomainQueryService.DomainQueryService.execute_sparql_query">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">execute_sparql_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'local'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/sparql/DomainQueryService.html#DomainQueryService.execute_sparql_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.sparql.DomainQueryService.DomainQueryService.execute_sparql_query" title="Link to this definition">¶</a></dt>
+<dd><p>Execute a SPARQL query against domain data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference internal" href="app.core.errors.html#back.core.errors.ValidationError.ValidationError" title="back.core.errors.ValidationError.ValidationError"><strong>ValidationError</strong></a> – No R2RML mapping or unsupported engine.</p></li>
+<li><p><a class="reference internal" href="app.core.errors.html#back.core.errors.InfrastructureError.InfrastructureError" title="back.core.errors.InfrastructureError.InfrastructureError"><strong>InfrastructureError</strong></a> – Query execution failure.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>domain_data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p></li>
+<li><p><strong>query</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>engine</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.sparql.DomainQueryService.DomainQueryService.generate_sample_queries">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">generate_sample_queries</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/sparql/DomainQueryService.html#DomainQueryService.generate_sample_queries"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.sparql.DomainQueryService.DomainQueryService.generate_sample_queries" title="Link to this definition">¶</a></dt>
+<dd><p>Generate sample SPARQL queries based on the ontology.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>domain_data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.w3c.shacl.SHACLService">
+<span id="shacl-shapes-constraint-language"></span><h2>SHACL (Shapes Constraint Language)<a class="headerlink" href="#module-back.core.w3c.shacl.SHACLService" title="Link to this heading">¶</a></h2>
+<p>SHACL service — shape CRUD, Turtle generation, validation, migration.</p>
+<p>Central orchestrator for all SHACL data-quality operations.  Routes and
+UI code should only import <code class="docutils literal notranslate"><span class="pre">SHACLService</span></code>; the generator and parser
+are internal implementation details.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.SHACLService.</span></span><span class="sig-name descname"><span class="pre">SHACLService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://example.org/ontology#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Manage SHACL shapes for a domain’s data-quality rules.</p>
+<p>Constructor receives the base URI for the ontology so that the
+generator can produce correct shape URIs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.create_shape">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">create_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">category</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_class_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shacl_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sh:minCount'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">severity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sh:Violation'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enabled</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.create_shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.create_shape" title="Link to this definition">¶</a></dt>
+<dd><p>Build a new shape dict (not yet persisted).</p>
+<p>When <em>shape_id</em> is <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) a random UUID suffix is used,
+which is correct for user-created shapes.  Callers that need a
+<strong>deterministic</strong> ID (e.g. legacy-constraint migration) should
+pass an explicit <em>shape_id</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>category</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>target_class</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>target_class_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>property_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>property_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>shacl_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>parameters</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>severity</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>message</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>label</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>enabled</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+<li><p><strong>shape_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.update_shape">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">update_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shapes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">updates</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.update_shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.update_shape" title="Link to this definition">¶</a></dt>
+<dd><p>Return a new list with the matching shape updated.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>shapes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>shape_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>updates</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.delete_shape">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">delete_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shapes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape_id</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.delete_shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.delete_shape" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>shapes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>shape_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.generate_turtle">
+<span class="sig-name descname"><span class="pre">generate_turtle</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shapes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.generate_turtle"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.generate_turtle" title="Link to this definition">¶</a></dt>
+<dd><p>Generate SHACL Turtle from the shapes list.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>shapes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.import_shapes">
+<span class="sig-name descname"><span class="pre">import_shapes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">turtle_content</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'turtle'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.import_shapes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.import_shapes" title="Link to this definition">¶</a></dt>
+<dd><p>Parse SHACL Turtle and return shape dicts.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>turtle_content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>fmt</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.run_inference">
+<span class="sig-name descname"><span class="pre">run_inference</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_turtle</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rule_shapes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.run_inference"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.run_inference" title="Link to this definition">¶</a></dt>
+<dd><p>Run SHACL-AF inference rules and return newly inferred triples.</p>
+<p>Uses <code class="docutils literal notranslate"><span class="pre">pyshacl.validate(advanced=True,</span> <span class="pre">inplace=True)</span></code> to execute
+<code class="docutils literal notranslate"><span class="pre">sh:TripleRule</span></code> and <code class="docutils literal notranslate"><span class="pre">sh:SPARQLRule</span></code> shapes.  The data graph is
+expanded in-place and then diffed against the original to extract
+the inferred triples.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict with <code class="docutils literal notranslate"><span class="pre">inferred_triples</span></code> (list of triple dicts) and
+<code class="docutils literal notranslate"><span class="pre">count</span></code> (int).</p>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>data_turtle</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>rule_shapes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.validate_graph">
+<span class="sig-name descname"><span class="pre">validate_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_turtle</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shapes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.validate_graph"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.validate_graph" title="Link to this definition">¶</a></dt>
+<dd><p>Run PySHACL validation and return a result dict.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_turtle</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The data graph serialised as Turtle.</p></li>
+<li><p><strong>shapes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – Internal shape dicts to validate against.</p></li>
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Optional override for shape URI generation.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dict with <code class="docutils literal notranslate"><span class="pre">conforms</span></code> (bool), <code class="docutils literal notranslate"><span class="pre">violations</span></code> (list of dicts),
+and <code class="docutils literal notranslate"><span class="pre">report_text</span></code> (human-readable report).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.migrate_legacy_constraints">
+<span class="sig-name descname"><span class="pre">migrate_legacy_constraints</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">constraints</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.migrate_legacy_constraints"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.migrate_legacy_constraints" title="Link to this definition">¶</a></dt>
+<dd><p>Convert old OntoBricks constraint dicts to SHACL shape dicts.</p>
+<p>Handles all types stored in <code class="docutils literal notranslate"><span class="pre">ontology.constraints</span></code>:
+cardinality, functional, inverseFunctional, transitive, symmetric,
+asymmetric, reflexive, irreflexive, allValuesFrom, someValuesFrom,
+hasValue, valueCheck, entityValueCheck, entityLabelCheck, and
+globalRule.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>constraints</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.resolve_prop_uri">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_prop_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prop_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">available_predicates</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.resolve_prop_uri"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.resolve_prop_uri" title="Link to this definition">¶</a></dt>
+<dd><p>Return <em>prop_uri</em> or a matching variant from <em>available_predicates</em>.</p>
+<p>Tries, in order:
+1. Exact match.
+2. <code class="docutils literal notranslate"><span class="pre">#</span></code> ↔ <code class="docutils literal notranslate"><span class="pre">/</span></code> separator swap.
+3. Local-name match (for short-name property URIs without a scheme).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>prop_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>available_predicates</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#set" title="(in Python v3.14)"><em>set</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.shape_to_sql">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">shape_to_sql</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.shape_to_sql"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.shape_to_sql" title="Link to this definition">¶</a></dt>
+<dd><p>Translate a single SHACL shape dict into Spark SQL.</p>
+<p>The SQL checks against a triple store table with columns
+<code class="docutils literal notranslate"><span class="pre">(subject,</span> <span class="pre">predicate,</span> <span class="pre">object)</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>SQL string, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if the shape cannot be translated.</p>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>shape</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+<li><p><strong>table</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.evaluate_shape_in_memory">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">evaluate_shape_in_memory</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triples</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.evaluate_shape_in_memory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.evaluate_shape_in_memory" title="Link to this definition">¶</a></dt>
+<dd><p>Evaluate a single SHACL shape against an in-memory list of triples.</p>
+<p>Each triple is <code class="docutils literal notranslate"><span class="pre">{&quot;subject&quot;:</span> <span class="pre">...,</span> <span class="pre">&quot;predicate&quot;:</span> <span class="pre">...,</span> <span class="pre">&quot;object&quot;:</span> <span class="pre">...}</span></code>.
+Returns a list of violation dicts (empty if no violations).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>shape</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+<li><p><strong>triples</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<p id="module-back.core.w3c.shacl.SHACLGenerator">SHACL shapes graph generator.</p>
+<p>Builds an RDFLib graph of <code class="docutils literal notranslate"><span class="pre">sh:NodeShape</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:PropertyShape</span></code>
+resources from the internal shape-dict representation and serialises
+the result to Turtle.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLGenerator.SHACLGenerator">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.SHACLGenerator.</span></span><span class="sig-name descname"><span class="pre">SHACLGenerator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLGenerator.html#SHACLGenerator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLGenerator.SHACLGenerator" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Build a SHACL shapes graph from internal shape dicts.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLGenerator.SHACLGenerator.generate">
+<span class="sig-name descname"><span class="pre">generate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shapes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLGenerator.html#SHACLGenerator.generate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLGenerator.SHACLGenerator.generate" title="Link to this definition">¶</a></dt>
+<dd><p>Return SHACL Turtle for the given shape dicts.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>shapes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of internal shape dicts (see <code class="docutils literal notranslate"><span class="pre">SHACLService</span></code>).</p></li>
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – Override the base URI used at construction time.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>SHACL Turtle string.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<p id="module-back.core.w3c.shacl.SHACLParser">SHACL shapes graph parser.</p>
+<p>Reads SHACL Turtle (or other RDF serialisations) and extracts internal
+shape dicts compatible with <code class="docutils literal notranslate"><span class="pre">SHACLService</span></code>.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLParser.SHACLParser">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.SHACLParser.</span></span><span class="sig-name descname"><span class="pre">SHACLParser</span></span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLParser.html#SHACLParser"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLParser.SHACLParser" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Parse a SHACL shapes graph into internal shape dicts.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLParser.SHACLParser.parse">
+<span class="sig-name descname"><span class="pre">parse</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">turtle_content</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'turtle'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLParser.html#SHACLParser.parse"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLParser.SHACLParser.parse" title="Link to this definition">¶</a></dt>
+<dd><p>Parse SHACL Turtle and return a list of shape dicts.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>turtle_content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – SHACL serialised as Turtle (or another RDF format).</p></li>
+<li><p><strong>format</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – RDFLib parse format (default <code class="docutils literal notranslate"><span class="pre">turtle</span></code>).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of internal shape dicts.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<p id="module-back.core.w3c.shacl.constants">SHACL-related constants shared by parser, generator, and service.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/api/app.core.w3c.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

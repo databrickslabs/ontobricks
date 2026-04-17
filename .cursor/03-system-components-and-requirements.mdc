@@ -1,0 +1,27 @@
+---
+name: System Components and Requirements
+priority: 90
+scope:
+  globs: ["**/*"]
+---
+
+### System Components & Requirements
+
+- **Frontend:** Jinja2 templates in `src/front/templates/`, served by HTML route files in `src/front/routes/`. Static assets (CSS, JS, images) in `src/front/static/`.
+- **Backend:** FastAPI with a layered architecture: routes → domain classes → core infrastructure.
+- **Domain Classes:** Business logic lives in `back/objects/` (not in route handlers). Current classes:
+  - `Ontology` — OWL/RDFS/SHACL operations, class/property CRUD, URI management.
+  - `Mapping` — entity/relationship mapping CRUD, R2RML, SQL validation, auto-assign.
+  - `DigitalTwin` — knowledge graph build, sync, query, quality.
+  - `Domain` — UC save/load, version status, metadata, layout persistence.
+- **Core Infrastructure:** `back/core/` hosts shared infrastructure with no dependency on HTTP/FastAPI types: Databricks clients, triple store, graph DB, W3C parsers, reasoning engines, agents, logging, errors.
+- **Internal API:** Session-aware JSON endpoints in `api/routers/internal/`, delegating to domain classes.
+- **External API:** Stateless REST endpoints under `/api/v1/*` (OpenAPI docs at `/api/docs`).
+- **GraphQL API:** Auto-generated Strawberry schema in `back/fastapi/graphql_routes.py`.
+- **Session Management:** `FileSessionMiddleware` + `SessionManager` + `DomainSession` in `back/objects/session/`.
+- **Registry:** UC Volume-backed domain registry with permissions (`RegistryService`, `PermissionService`) and scheduled builds (`BuildScheduler`).
+- **Error Handling:** Centralized `OntoBricksError` hierarchy in `back/core/errors/`. Global handler translates errors into uniform `ErrorResponse` JSON with correct HTTP status codes. Never use bare `HTTPException`.
+- **Logging:** Centralized via `back/core/logging/LogManager`. All modules use `from back.core.logging import get_logger; logger = get_logger(__name__)`. Never use `print()`.
+- **Agent Abstraction:** `AgentClient` in `back/core/agents/` provides a single gateway to all LLM agents.
+- **Background Tasks:** `TaskManager` in `back/core/task_manager/` for async in-memory task tracking.
+- **App Factory:** `shared/fastapi/main.py` — `create_app()`, permission middleware, router registration. Entry point: `run.py`.

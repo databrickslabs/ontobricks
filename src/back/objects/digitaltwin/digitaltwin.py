@@ -719,7 +719,7 @@ class DigitalTwin:
         )
         from back.core.triplestore import get_triplestore
         from back.core.triplestore import IncrementalBuildService
-        from back.core.triplestore.ladybugdb import graph_volume_path
+        from back.core.graphdb.ladybugdb import graph_volume_path
 
         domain = self._domain
         view_table = effective_view_table(domain)
@@ -1444,7 +1444,7 @@ class DigitalTwin:
                 continue
             try:
                 t_rule = time.time()
-                conn = store._get_connection()
+                conn = store.get_connection()
                 rows = conn.execute(query)
                 violations = [{"s": str(row[0])} for row in rows]
                 violation_total = len(violations)
@@ -1493,13 +1493,13 @@ class DigitalTwin:
             progress = 15 + int(((shape_count + idx) / total) * 80)
             tm.update_progress(task.id, progress, f"DT {idx + 1}/{len(decision_tables)}: {dt_name}")
             resolved = engine._resolve_dt(dt, uri_map, base_uri)
-            query = engine.build_violation_cypher(resolved, graph_name, base_uri)
+            query = engine.build_violation_cypher(resolved, graph_name, base_uri, store)
             if not query:
                 results.append({"name": dt_name, "category": "conformance", "shape_id": f"dt:{dt.get('name', idx)}", "status": "info", "message": "Cannot translate to Cypher", "violations": [], "sql": ""})
                 continue
             try:
                 t_rule = time.time()
-                conn = store._get_connection()
+                conn = store.get_connection()
                 rows = conn.execute(query)
                 violations = [{"s": str(row[0])} for row in rows]
                 violation_total = len(violations)
@@ -1547,13 +1547,13 @@ class DigitalTwin:
             progress = 15 + int(((shape_count + idx) / total) * 80)
             tm.update_progress(task.id, progress, f"Agg {idx + 1}/{len(aggregate_rules)}: {agg_name}")
             resolved = engine._resolve_rule(dict(rule), ontology)
-            query = engine.build_cypher(resolved, graph_name, base_uri)
+            query = engine.build_cypher(resolved, graph_name, base_uri, store)
             if not query:
                 results.append({"name": agg_name, "category": "conformance", "shape_id": f"agg:{rule.get('name', idx)}", "status": "info", "message": "Cannot translate to Cypher", "violations": [], "sql": ""})
                 continue
             try:
                 t_rule = time.time()
-                conn = store._get_connection()
+                conn = store.get_connection()
                 rows = conn.execute(query)
                 violations = [{"s": str(row[0]), "agg_val": str(row[1]) if len(row) > 1 else ""} for row in rows]
                 violation_total = len(violations)

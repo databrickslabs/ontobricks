@@ -10,6 +10,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
+from back.core.graphdb.GraphDBBackend import GraphDBBackend
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.reasoning.constants import CONSTRUCT_RE, NS_PREFIX_MAP, RDF_TYPE, TRIPLE_PATTERN_RE
 from back.core.reasoning.models import InferredTriple, ReasoningResult, RuleViolation
@@ -60,7 +61,7 @@ class SPARQLRuleEngine:
         """Run all SPARQL rules and collect results."""
         t0 = time.time()
         result = ReasoningResult()
-        is_cypher = self._is_cypher_backend(store)
+        is_cypher = GraphDBBackend.is_cypher_backend(store)
         self._uri_map = self._build_uri_map(ontology)
 
         for rule in rules:
@@ -102,7 +103,9 @@ class SPARQLRuleEngine:
         result = ReasoningResult()
 
         if is_cypher:
-            sql = self._construct_to_flat_cypher_select(query, table_name, ontology)
+            sql = self._construct_to_flat_cypher_select(
+                query, table_name, ontology, store,
+            )
         else:
             sql = self._construct_to_sql(query, table_name, ontology)
 
@@ -114,7 +117,7 @@ class SPARQLRuleEngine:
 
         try:
             if is_cypher:
-                conn = store._get_connection()
+                conn = store.get_connection()
                 raw = conn.execute(sql)
                 for row in raw:
                     s = row[0] if len(row) > 0 else ""
@@ -232,7 +235,7 @@ class SPARQLRuleEngine:
         return sql
 
     def _construct_to_flat_cypher_select(
-        self, query: str, table_name: str, ontology: Dict,
+        self, query: str, table_name: str, ontology: Dict, store: Any,
     ) -> Optional[str]:
         """Translate CONSTRUCT to a Cypher SELECT on the flat triple table."""
         m = CONSTRUCT_RE.search(query)
@@ -252,6 +255,11 @@ class SPARQLRuleEngine:
             return None
 
         um = getattr(self, '_uri_map', None)
+        node_tbl = (
+            store.get_node_table(table_name)
+            if isinstance(store, GraphDBBackend)
+            else table_name
+        )
         match_parts: List[str] = []
         where_parts: List[str] = []
         var_alias: Dict[str, str] = {}
@@ -260,7 +268,7 @@ class SPARQLRuleEngine:
         for ws, wp, wo in where_triples:
             alias = f"w{alias_idx}"
             alias_idx += 1
-            match_parts.append(f"MATCH ({alias}:{table_name})")
+            match_parts.append(f"MATCH ({alias}:{node_tbl})")
 
             wp_resolved = self._resolve_term(wp, base_uri, um)
             if wp_resolved == "a":
@@ -354,11 +362,3 @@ class SPARQLRuleEngine:
         elif not CONSTRUCT_RE.search(query):
             errors.append("Query must be a SPARQL CONSTRUCT (CONSTRUCT { ... } WHERE { ... })")
         return errors
-
-    @staticmethod
-    def _is_cypher_backend(store) -> bool:
-        try:
-            from back.core.triplestore.ladybugdb.LadybugBase import LadybugBase
-            return isinstance(store, LadybugBase)
-        except ImportError:
-            return False

@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>api.routers.internal.settings &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../_static/documentation_options.js?v=a58bc63e"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for api.routers.internal.settings</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Internal API -- Settings / configuration JSON endpoints.</span>
+
+<span class="sd">Moved from app/frontend/settings/routes.py during the front/back split.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Request</span><span class="p">,</span> <span class="n">Depends</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings</span><span class="p">,</span> <span class="n">Settings</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">get_session_manager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">resolve_default_base_uri</span><span class="p">,</span> <span class="n">resolve_default_emoji</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_domain</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.services</span><span class="w"> </span><span class="kn">import</span> <span class="n">settings</span> <span class="k">as</span> <span class="n">config_service</span>
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">APIRouter</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/settings&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Settings&quot;</span><span class="p">])</span>
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Main Configuration</span>
+<span class="c1"># ===========================================</span>
+
+<div class="viewcode-block" id="get_current_config">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_current_config">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/current&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_current_config</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get current Databricks configuration.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">build_current_config</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="save_config">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.save_config">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/save&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">save_config</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Save Databricks configuration.</span>
+
+<span class="sd">    Host/token are per-session.  Warehouse ID is instance-global (admin only).</span>
+<span class="sd">    Catalog/schema are NOT stored -- they are selected dynamically when needed.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">apply_config_save</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="test_connection_post">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.test_connection_post">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/test-connection&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">test_connection_post</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Test Databricks connection (POST).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">config_service</span><span class="o">.</span><span class="n">test_connection</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Warehouse Selection</span>
+<span class="c1"># ===========================================</span>
+
+<div class="viewcode-block" id="get_warehouses">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_warehouses">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/warehouses&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_warehouses</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get available SQL warehouses.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">config_service</span><span class="o">.</span><span class="n">fetch_warehouses</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="select_warehouse">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.select_warehouse">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/select-warehouse&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">select_warehouse</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Select a SQL warehouse.</span>
+
+<span class="sd">    Tries to persist the choice globally (UC Volume) so all users</span>
+<span class="sd">    share it.  When the registry is not configured yet (bootstrap</span>
+<span class="sd">    scenario), falls back to storing in the session so the user</span>
+<span class="sd">    can immediately browse catalogs and set up the registry.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">select_warehouse</span><span class="p">(</span>
+        <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;warehouse_id&#39;</span><span class="p">),</span> <span class="n">request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Catalog/Schema/Volume Navigation</span>
+<span class="c1"># ===========================================</span>
+
+<div class="viewcode-block" id="get_catalogs">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_catalogs">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/catalogs&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_catalogs</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get available Unity Catalog catalogs.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">config_service</span><span class="o">.</span><span class="n">fetch_catalogs</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_schemas">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_schemas">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/schemas&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_schemas</span><span class="p">(</span><span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get schemas in a catalog (query param version).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">config_service</span><span class="o">.</span><span class="n">fetch_schemas</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_schemas_path">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_schemas_path">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/schemas/</span><span class="si">{catalog}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_schemas_path</span><span class="p">(</span><span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get schemas in a catalog (path param version).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">config_service</span><span class="o">.</span><span class="n">fetch_schemas</span><span class="p">(</span>
+        <span class="n">catalog</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">log_label</span><span class="o">=</span><span class="s2">&quot;Get schemas (path)&quot;</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_volumes">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_volumes">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/volumes&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_volumes</span><span class="p">(</span><span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get volumes in a schema (query param version).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">config_service</span><span class="o">.</span><span class="n">fetch_volumes</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_volumes_path">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_volumes_path">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/volumes/</span><span class="si">{catalog}</span><span class="s2">/</span><span class="si">{schema}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_volumes_path</span><span class="p">(</span><span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get volumes in a schema (path param version).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">config_service</span><span class="o">.</span><span class="n">fetch_volumes</span><span class="p">(</span>
+        <span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">log_label</span><span class="o">=</span><span class="s2">&quot;Get volumes (path)&quot;</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Domain Registry</span>
+<span class="c1"># ===========================================</span>
+
+
+<div class="viewcode-block" id="get_registry">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_registry">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/registry&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_registry</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+                       <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return current domain-registry configuration and initialization status.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">build_registry_get_payload</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="save_registry">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.save_registry">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/registry&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">save_registry</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+                        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+                        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Persist registry catalog / schema / volume in settings.registry.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">config_service</span><span class="o">.</span><span class="n">is_registry_locked</span><span class="p">(</span><span class="n">settings</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+            <span class="s1">&#39;Registry is configured via Databricks App resources and cannot be changed here.&#39;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">apply_registry_save</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="initialize_registry">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.initialize_registry">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/registry/initialize&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">initialize_registry</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+                              <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create the registry Volume (and root marker) if they do not exist.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">initialize_registry_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="list_registry_domains">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.list_registry_domains">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/registry/domains&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_registry_domains</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List domains in the registry with name and description.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">list_registry_domains_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="list_registry_bridges">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.list_registry_bridges">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/registry/bridges&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_registry_bridges</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List all bridges across every domain in the registry.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">list_registry_bridges_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="delete_registry_domain">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.delete_registry_domain">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="s2">&quot;/registry/domains/</span><span class="si">{domain_name}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_registry_domain</span><span class="p">(</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Delete a domain folder and all its versions from the registry.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">delete_registry_domain_result</span><span class="p">(</span><span class="n">domain_name</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="delete_registry_version">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.delete_registry_version">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="s2">&quot;/registry/domains/</span><span class="si">{domain_name}</span><span class="s2">/versions/</span><span class="si">{version}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_registry_version</span><span class="p">(</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">version</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Delete a single version file from a domain in the registry.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">delete_registry_version_result</span><span class="p">(</span>
+        <span class="n">domain_name</span><span class="p">,</span> <span class="n">version</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="set_registry_version_active">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.set_registry_version_active">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/registry/domains/</span><span class="si">{domain_name}</span><span class="s2">/versions/</span><span class="si">{version}</span><span class="s2">/active&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">set_registry_version_active</span><span class="p">(</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">version</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Set or clear the Active flag on a version in the registry.&quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="n">enabled</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">set_registry_version_active_result</span><span class="p">(</span>
+        <span class="n">domain_name</span><span class="p">,</span> <span class="n">version</span><span class="p">,</span> <span class="n">enabled</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Emoji &amp; Base URI Settings</span>
+<span class="c1"># ===========================================</span>
+
+<div class="viewcode-block" id="get_default_emoji">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_default_emoji">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/get-default-emoji&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_default_emoji</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get default emoji setting (instance-global).&quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;emoji&#39;</span><span class="p">:</span> <span class="n">resolve_default_emoji</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)}</span></div>
+
+
+
+<div class="viewcode-block" id="set_default_emoji">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.set_default_emoji">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/set-default-emoji&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">set_default_emoji</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Set default emoji (admin only, stored globally).&quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="n">emoji</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;emoji&#39;</span><span class="p">,</span> <span class="s1">&#39;📦&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">set_default_emoji_result</span><span class="p">(</span><span class="n">emoji</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_base_uri">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_base_uri">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/get-base-uri&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_base_uri</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get default base URI domain (instance-global).&quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;base_uri&#39;</span><span class="p">:</span> <span class="n">resolve_default_base_uri</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)}</span></div>
+
+
+
+<div class="viewcode-block" id="save_base_uri">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.save_base_uri">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/save-base-uri&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">save_base_uri</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Save default base URI domain (admin only, stored globally).&quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="n">base_uri</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;base_uri&#39;</span><span class="p">,</span> <span class="s1">&#39;https://databricks-ontology.com&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">save_base_uri_result</span><span class="p">(</span><span class="n">base_uri</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_registry_cache_ttl">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_registry_cache_ttl">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/get-registry-cache-ttl&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_registry_cache_ttl</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get registry cache TTL in seconds (instance-global).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">get_registry_cache_ttl_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="save_registry_cache_ttl">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.save_registry_cache_ttl">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/save-registry-cache-ttl&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">save_registry_cache_ttl</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Save registry cache TTL in seconds (admin only, stored globally).&quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="n">ttl</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;registry_cache_ttl&#39;</span><span class="p">,</span> <span class="mi">300</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">save_registry_cache_ttl_result</span><span class="p">(</span><span class="n">ttl</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Permissions Management</span>
+<span class="c1"># ===========================================</span>
+
+
+<div class="viewcode-block" id="permissions_me">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.permissions_me">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/permissions/me&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">permissions_me</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the current user&#39;s identity and resolved role.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">build_permissions_me</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="permissions_diag">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.permissions_diag">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/permissions/diag&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">permissions_diag</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Diagnostic: run the admin check in detail and return raw results.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">build_permissions_diag</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="list_permissions">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.list_permissions">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/permissions&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_permissions</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List all permission entries (admin only).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">list_permissions_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="add_permission">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.add_permission">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/permissions&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">add_permission</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Add or update a permission entry (admin only).&quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">add_permission_result</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="delete_permission">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.delete_permission">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="s2">&quot;/permissions/{principal:path}&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_permission</span><span class="p">(</span>
+    <span class="n">principal</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a permission entry (admin only).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">delete_permission_result</span><span class="p">(</span><span class="n">principal</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="list_principals">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.list_principals">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/permissions/principals&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_principals</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List users and groups from the Databricks App permissions for the picker.</span>
+
+<span class="sd">    Always fetches fresh data (bypasses cache) so newly added app users</span>
+<span class="sd">    appear immediately in the dropdown.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">list_principals_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="search_principals">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.search_principals">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/permissions/search&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">search_principals</span><span class="p">(</span>
+    <span class="n">q</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="nb">type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Search all workspace users or groups via SCIM.</span>
+
+<span class="sd">    Query parameter ``q`` is the search term (min 2 chars).</span>
+<span class="sd">    Query parameter ``type`` is ``user`` or ``group``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;results&quot;</span><span class="p">:</span> <span class="p">[]}</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">search_workspace_principals</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span> <span class="nb">type</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Domain-Level Permissions</span>
+<span class="c1"># ===========================================</span>
+
+
+<div class="viewcode-block" id="list_domain_permissions">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.list_domain_permissions">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/domain-permissions/</span><span class="si">{domain_name}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_domain_permissions</span><span class="p">(</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List permission entries for a specific domain (admin only).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">list_domain_permissions_result</span><span class="p">(</span><span class="n">domain_name</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="add_domain_permission">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.add_domain_permission">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/domain-permissions/</span><span class="si">{domain_name}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">add_domain_permission</span><span class="p">(</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Add or update a permission entry for a specific domain (admin only).&quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">add_domain_permission_result</span><span class="p">(</span><span class="n">domain_name</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="delete_domain_permission">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.delete_domain_permission">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="s2">&quot;/domain-permissions/</span><span class="si">{domain_name}</span><span class="s2">/{principal:path}&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_domain_permission</span><span class="p">(</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">principal</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a permission entry for a specific domain (admin only).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">delete_domain_permission_result</span><span class="p">(</span><span class="n">domain_name</span><span class="p">,</span> <span class="n">principal</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># LadybugDB Local Files</span>
+<span class="c1"># ===========================================</span>
+
+
+<div class="viewcode-block" id="list_ladybugdb_files">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.list_ladybugdb_files">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/ladybugdb/files&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_ladybugdb_files</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List files and directories stored in the LadybugDB local directory.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">list_ladybugdb_files</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="delete_ladybugdb_file">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.delete_ladybugdb_file">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="s2">&quot;/ladybugdb/files/{filename:path}&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_ladybugdb_file</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Delete a file or directory from the LadybugDB local directory.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">delete_ladybugdb_file</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Scheduled Builds</span>
+<span class="c1"># ===========================================</span>
+
+<div class="viewcode-block" id="list_schedules">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.list_schedules">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/schedules&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_schedules</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return all per-domain build schedules.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">list_schedules_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="save_schedule">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.save_schedule">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/schedules&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">save_schedule</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create or update a build schedule for a domain.&quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">save_schedule_result</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_schedule_history">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_schedule_history">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/schedules/</span><span class="si">{domain_name}</span><span class="s2">/history&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_schedule_history</span><span class="p">(</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the run history for a single domain schedule.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">get_schedule_history_result</span><span class="p">(</span><span class="n">domain_name</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="scheduler_status">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.scheduler_status">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/schedules/status&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">scheduler_status</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Diagnostic: return the APScheduler internal state (running, jobs, next-run times).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">scheduler_status_payload</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="delete_schedule">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.delete_schedule">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="s2">&quot;/schedules/</span><span class="si">{domain_name}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_schedule</span><span class="p">(</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a build schedule for a domain.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">delete_schedule_result</span><span class="p">(</span><span class="n">domain_name</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

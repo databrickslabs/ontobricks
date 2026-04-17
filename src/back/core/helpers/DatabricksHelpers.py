@@ -220,7 +220,7 @@ class DatabricksHelpers:
 
 def resolve_ladybug_local_path(domain, db_name: str) -> str:
     """Return the local file-system path for a LadybugDB archive."""
-    from back.core.triplestore.ladybugdb import local_db_path
+    from back.core.graphdb.ladybugdb import local_db_path
     from shared.config.constants import DEFAULT_LADYBUG_PATH
 
     return local_db_path(db_name, DEFAULT_LADYBUG_PATH)

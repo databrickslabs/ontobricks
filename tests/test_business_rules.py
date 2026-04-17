@@ -23,6 +23,19 @@ from back.core.reasoning.AggregateRuleEngine import AggregateRuleEngine
 from back.core.reasoning.ReasoningService import ReasoningService
 
 
+class _StubLadybugStyleNodeTable:
+    """Mimics ``LadybugBase.get_node_table`` for Cypher query-builder tests."""
+
+    @staticmethod
+    def get_node_table(table_name: str) -> str:
+        from back.core.helpers import safe_identifier
+
+        base = table_name.split(".")[-1] if "." in table_name else table_name
+        if not base:
+            return "triples"
+        return safe_identifier(base) or "triples"
+
+
 # ===========================================================================
 # Phase 1: SWRL Built-ins
 # ===========================================================================
@@ -237,7 +250,10 @@ class TestDecisionTableEngine:
 
     def test_build_violation_cypher(self, sample_table):
         engine = DecisionTableEngine()
-        cypher = engine.build_violation_cypher(sample_table, "Triple", "http://test.org/ontology#")
+        store = _StubLadybugStyleNodeTable()
+        cypher = engine.build_violation_cypher(
+            sample_table, "Triple", "http://test.org/ontology#", store,
+        )
         assert cypher is not None
         assert "RETURN DISTINCT" in cypher
 
@@ -333,7 +349,10 @@ class TestAggregateRuleEngine:
 
     def test_build_cypher(self, sample_rule):
         engine = AggregateRuleEngine()
-        cypher = engine.build_cypher(sample_rule, "Triple", "http://test.org/ontology#")
+        store = _StubLadybugStyleNodeTable()
+        cypher = engine.build_cypher(
+            sample_rule, "Triple", "http://test.org/ontology#", store,
+        )
         assert cypher is not None
         assert "count" in cypher.lower()
         assert "> 5" in cypher
@@ -390,6 +409,7 @@ class TestAggregateRuleEngine:
 
     def test_build_cypher_count_only(self):
         engine = AggregateRuleEngine()
+        store = _StubLadybugStyleNodeTable()
         rule = {
             "target_class_uri": "http://test.org/Customer",
             "group_by_property_uri": "",
@@ -398,7 +418,7 @@ class TestAggregateRuleEngine:
             "operator": "gte",
             "threshold": "50",
         }
-        cypher = engine.build_cypher(rule, "Triple", "http://test.org/")
+        cypher = engine.build_cypher(rule, "Triple", "http://test.org/", store)
         assert cypher is not None
         assert "count" in cypher.lower()
         assert ">= 50" in cypher
@@ -421,6 +441,7 @@ class TestAggregateRuleEngine:
 
     def test_build_cypher_group_by_sum(self):
         engine = AggregateRuleEngine()
+        store = _StubLadybugStyleNodeTable()
         rule = {
             "target_class_uri": "http://test.org/Customer",
             "group_by_property_uri": "http://test.org/orderAmount",
@@ -429,7 +450,7 @@ class TestAggregateRuleEngine:
             "operator": "gt",
             "threshold": "1000",
         }
-        cypher = engine.build_cypher(rule, "Triple", "http://test.org/")
+        cypher = engine.build_cypher(rule, "Triple", "http://test.org/", store)
         assert cypher is not None
         assert "sum" in cypher.lower()
 

@@ -1,0 +1,95 @@
+---
+name: Code Style and Structure
+priority: 80
+scope:
+  globs: ["src/**"]
+  languages: ["python", "javascript"]
+---
+
+### Code Style and Structure
+
+**Backend (Python/FastAPI)**
+
+- Follow a layered structure: routes (HTTP) → domain classes (`back/objects`) → core infrastructure (`back/core`).
+- Use `def` for pure functions and `async def` for asynchronous operations (FastAPI route handlers, SDK calls).
+- **Type Hints**: Use Python type hints extensively.
+- **RORO Pattern**: API handlers follow "Receive an Object, Return an Object".
+- **Class-first policy**: Encapsulate behaviour in classes, not loose module-level functions. One public class per file, named in PascalCase matching the class name.
+
+- **Error Handling**:
+  - Always raise from the `OntoBricksError` hierarchy, never return `{'success': False, ...}` or bare `HTTPException`.
+  - Use the right subclass: `ValidationError` (400), `NotFoundError` (404), `AuthorizationError` (403), `ConflictError` (409), `InfrastructureError` (502).
+  - Never expose `str(e)` to clients. Put safe descriptions in `message`; internal details in `detail`.
+  - Services must not catch-and-swallow. Let errors propagate to the global handler.
+  - Guard clauses and early returns are preferred.
+
+- **Logging Security**:
+  - NEVER use f-strings or `.format()` in logging statements with dynamic variables.
+  - Always use %-style formatting: `logger.error("Error for user %s", user_email, exc_info=True)`.
+  - Never use `print()` — always use `from back.core.logging import get_logger`.
+
+- **Dependency Injection**:
+  - Use FastAPI `Depends` for wiring (sessions, services, auth), not core business logic.
+  - Session management: simplify and centralize; minimize session variables.
+
+- **Route patterns**:
+  - HTML route files (`front/routes/`) serve `TemplateResponse` only — no business logic, no JSON.
+  - Internal API handlers (`api/routers/internal/`) return JSON and delegate to domain classes.
+  - External API endpoints (`api/routers/v1.py`, etc.) are stateless REST.
+
+- **Refactoring vocabulary**:
+  - When refactoring, use Martin Fowler's named refactorings: Extract Function, Extract Class, Introduce Parameter Object, Move Function, etc.
+  - Work in small, reversible steps. Keep code runnable and testable after every step.
+
+- **Internal API handler pattern** (preferred):
+  ```python
+  # api/routers/internal/mapping.py — JSON only
+  from back.objects.mapping import Mapping
+
+  @router.post("/entity/add")
+  async def add_entity_mapping(request: Request, session_mgr = Depends(get_session_manager)):
+      data = await request.json()
+      domain = get_domain(session_mgr)
+      _, new_mapping = Mapping(domain).add_or_update_entity_mapping(data)
+      return {'success': True, 'mapping': new_mapping}
+  ```
+- **Frontend HTML handler pattern:**
+  ```python
+  # front/routes/mapping.py — HTML only
+  @router.get("/", response_class=HTMLResponse, include_in_schema=False)
+  async def mapping_page(request: Request):
+      return templates.TemplateResponse(request, "mapping.html")
+  ```
+
+### Code Smells and Preferred Refactorings
+
+When refactoring, explicitly name smells and apply suitable refactorings from Fowler's catalog, adapted to FastAPI and Python.
+
+- **Long route handlers** (`@router.get/post/...`):
+  - Extract Function/Method to move business logic into the domain class in `back/objects/`.
+  - Introduce Explaining Variable for complex expressions or conditions.
+- **Large "god" services or utility modules:**
+  - Extract Class or Extract Module by domain.
+  - Move Function closer to the data or concept it operates on.
+- **Repeated request/response boilerplate:**
+  - Extract Function for common response building, error mapping, or conversion logic.
+  - Replace Magic Number/String with named constants for status codes, error codes, and paths.
+- **Data clumps / long parameter lists:**
+  - Introduce Parameter Object (Pydantic model or dataclass).
+  - Replace Parameter with Query when values can be derived from an existing object.
+- **Tight coupling between routes and ORM models:**
+  - Introduce Pydantic schemas for input/output and map explicitly to/from ORM models.
+  - Encapsulate Field / Encapsulate Collection instead of exposing ORM internals.
+
+**Frontend (HTML/CSS/JS)**
+
+- HTML templates use Jinja2 with `base.html` and partial templates for modularity.
+- Templates must NOT contain inline CSS or JavaScript.
+- Treat the OntoViz JS/CSS as a reusable library across pages.
+- Put shared, reusable front-end code (CSS, JS, images) under `front/static/`.
+
+**JavaScript extraction procedure** (when moving inline JS out of templates):
+1. If a JS file with the same area name does not exist, create it in `src/front/static/<area>/js/` (e.g., `mapping`, `domain`, `ontology`).
+2. Move the JavaScript code into that file.
+3. Remove the moved JavaScript from the HTML template and add a `<script src="...">` reference to the new JS file.
+Apply the same procedure for inline CSS → `src/front/static/<area>/css/`.

@@ -1,0 +1,113 @@
+---
+name: Project Conventions
+priority: 75
+scope:
+  globs: ["**/*"]
+---
+
+### Project Conventions
+
+**Architecture**
+
+1. Follow a **layered architecture**: routes → domain classes (`back/objects`) → core infrastructure (`back/core`).
+2. **Domain classes own all business logic.** Routes are thin: extract parameters, call a domain method, return response.
+3. **`service.py` files are deprecated.** The preferred pattern is routes → domain class directly. Existing service files are legacy and should be migrated.
+4. Core infrastructure (`back/core`) has **no dependency on HTTP/FastAPI types**.
+5. Domain objects (`back/objects`) have **no `Request`/`Response` inside the package**.
+
+**Class-First Policy**
+
+1. Default to a **service class** when adding new functionality.
+2. Constructor receives dependencies (configuration, credentials, collaborators) for testability.
+3. Methods over functions — reserve module-level functions only for thin factory/accessor helpers or pure stateless utilities.
+4. **One public class per file** — name the file after the class in PascalCase (e.g., `OWLRLReasoner.py`).
+5. Small helper dataclasses in the same file are fine. Shared constants go in `constants.py`, shared DTOs in `models.py`.
+
+**Package Organisation**
+
+1. Every subpackage `__init__.py` must re-export public symbols. Consumers import from the package, never from internal modules.
+2. Use `__all__` when the public surface is well-defined.
+3. Keep `__init__.py` files short — only imports, `__all__`, and thin backward-compatible wrappers.
+4. When refactoring functions into class methods, provide backward-compatible wrappers in `__init__.py`.
+
+**Where to Put New Code**
+
+| Location | Purpose |
+|----------|---------|
+| `back/core/<pkg>/` | Shared infrastructure (Databricks, triplestore, W3C, reasoning, …). No HTTP dependency. |
+| `back/objects/<pkg>/` | Application domain classes (Ontology, Mapping, DigitalTwin, Domain, registry, session). No `Request`/`Response`. |
+| `front/routes/<area>.py` | HTML routing only — parameter extraction, domain method call, `TemplateResponse`. |
+| `api/routers/internal/` | Internal JSON API — session-aware, delegates to domain classes. |
+| `api/routers/v1.py` etc. | External REST API — stateless. |
+
+**Domain Security**
+
+- A domain must **never** include tokens, passwords, or other secrets.
+- A domain must **never** include query results or transient data.
+- If you see secrets in domain structures, move them to configuration, env vars, or temporary storage.
+
+### Subpackage Patterns (reference)
+
+**`back/objects/registry/`** — service + scheduler + permissions (reference pattern for multi-concern domain areas):
+- `service.py` — `RegistryService` owns all CRUD against UC Volume-backed registry. Constructor receives `RegistryCfg` (dataclass).
+- `permissions.py` — `PermissionService` encapsulates permission checks. Role constants are module-level.
+- `scheduler.py` — `BuildScheduler` wraps APScheduler. Module-level `get_scheduler()` returns singleton.
+- When to add here: persisting/loading domains from UC, permissions, scheduling.
+
+**`back/objects/session/`** — middleware + managers + domain state:
+- `middleware.py` — ASGI middleware + convenience helpers.
+- `SessionManager.py` — request-scoped (FastAPI dependency).
+- `DomainSession.py` — session-scoped in-memory domain data (ontology, mapping, triplestore metadata, caches).
+- `global_config.py` — instance-wide configuration in registry volume.
+
+**`back/objects/ontology/`, `mapping/`, `digitaltwin/`** — Routes delegate here directly, no `service.py` intermediary.
+
+**`triplestore/`** — Strategy pattern with factory:
+- `TripleStoreBackend.py` — abstract interface.
+- `TripleStoreFactory.py` — `get_triplestore()`. For `backend="graph"` delegates to `GraphDBFactory`.
+- `delta/DeltaTripleStore.py` — SQL Warehouse backend.
+
+**`graphdb/`** — Pluggable graph DB engine abstraction:
+- `GraphDBBackend.py` — abstract, extends `TripleStoreBackend` with capability flags.
+- `GraphDBFactory.py` — `get_graphdb()`. `engine` parameter is the extension point.
+- When adding a new graph DB engine: create subdirectory (e.g. `neo4j/`), extend `GraphDBBackend`, register in `GraphDBFactory`, update `__init__.py`.
+
+**`databricks/`** — One service class per API surface. `DatabricksClient` is a thin Facade composing all services. When adding new Databricks functionality: new API surface → new PascalCase file + wire into `DatabricksClient`; existing surface → add methods to existing class.
+
+**`w3c/`** — One subdirectory per W3C standard (OWL, RDFS, R2RML, SPARQL, SHACL) with PascalCase parser/generator classes.
+
+**`industry/`** — One subdirectory per industry standard (CDISC, FIBO, IOF). Shared URL constants at `industry/constants.py`. New importer: create subdirectory + PascalCase service class + wire into parent `__init__.py`.
+
+**`reasoning/`** — Each class in its own PascalCase file. `ReasoningService` orchestrates all phases. New reasoning: new PascalCase file, add constants to `constants.py`, wire into `ReasoningService`, re-export from `__init__.py`.
+
+### Adding a New Subpackage Checklist
+
+1. **Choose the parent:** infrastructure → `back/core`; registry/session/domain → `back/objects`.
+2. **Create the directory** with an `__init__.py`.
+3. **Define the service class** in a PascalCase file matching the class name. Constructor receives config/dependencies. Use `from back.core.logging import get_logger`.
+4. **Add supporting files** if needed (dataclasses, constants, secondary services).
+5. **Re-export** all public symbols from `__init__.py`.
+6. **Update `back/core/__init__.py`** only if the new package is widely-used infrastructure.
+7. **Wire into routes** via FastAPI dependencies or direct imports from the package.
+8. **Update Sphinx** under `docs/sphinx/api/`.
+
+### `__init__.py` Conventions (detailed)
+
+- Every subpackage `__init__.py` must explicitly import and re-export its public API.
+- Use `__all__` when the public surface is well-defined.
+- Keep `__init__.py` short — only imports, `__all__`, and thin backward-compatible wrappers; no business logic.
+- Backward-compatible wrappers when refactoring functions into class methods:
+  ```python
+  # __init__.py
+  from back.core.industry.cdisc.CdiscImportService import CdiscImportService
+
+  def get_cdisc_catalog(*a, **kw):
+      return CdiscImportService.get_cdisc_catalog(*a, **kw)
+  ```
+- Consumers must always import from the package:
+  ```python
+  # Good
+  from back.objects.registry import RegistryService, BuildScheduler
+  # Bad
+  from back.objects.registry.service import RegistryService
+  ```

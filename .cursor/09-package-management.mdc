@@ -1,0 +1,14 @@
+---
+name: Package Management
+priority: 60
+scope:
+  globs: ["src/**", "pyproject.toml"]
+  languages: ["python"]
+---
+
+### Package Management
+
+- This project uses **uv** for Python package management and virtual environment management.
+- Dependencies are declared in `pyproject.toml`.
+- Run commands via `uv run <command>` (e.g., `uv run pytest -q`, `uv run python run.py`).
+- When adding or removing dependencies, update `docs/development.md` with a short description, link, and license type for each dependency.

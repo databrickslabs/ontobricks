@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>back.core.reasoning – OWL 2 RL &amp; SWRL Inference &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=a58bc63e"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="back.core.sqlwizard – LLM-Assisted SQL Generation" href="app.core.sqlwizard.html" />
+    <link rel="prev" title="back.core.industry – Industry Standard Ontology Importers" href="app.core.industry.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.reasoning.constants">Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.reasoning.models">Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.reasoning.ReasoningService">Reasoning Service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.reasoning.OWLRLReasoner">OWL RL Reasoner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.reasoning.SWRLEngine">SWRL Engine</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.reasoning.SWRLBuiltinRegistry">SWRL Built-in Registry</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.reasoning.SWRLParser">SWRL Parser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.reasoning.SWRLSQLTranslator">SWRL SQL Translator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.reasoning.SWRLCypherTranslator">SWRL Cypher Translator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.reasoning.SWRLFlatCypherTranslator">SWRL Flat Cypher Translator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.reasoning.DecisionTableEngine">Decision Table Engine</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.reasoning.SPARQLRuleEngine">SPARQL Rule Engine</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.reasoning.AggregateRuleEngine">Aggregate Rule Engine</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="app.html">OntoBricks Application Packages</a><ul>
+  <li><a href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a><ul>
+      <li>Previous: <a href="app.core.industry.html" title="previous chapter"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+      <li>Next: <a href="app.core.sqlwizard.html" title="next chapter"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="back-core-reasoning-owl-2-rl-swrl-inference">
+<h1><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference<a class="headerlink" href="#back-core-reasoning-owl-2-rl-swrl-inference" title="Link to this heading">¶</a></h1>
+<section id="module-back.core.reasoning.constants">
+<span id="constants"></span><h2>Constants<a class="headerlink" href="#module-back.core.reasoning.constants" title="Link to this heading">¶</a></h2>
+<p>Centralised constants for the reasoning package.</p>
+<p>All shared URIs, compiled regexes, operator maps, and vocabulary sets
+used across the reasoning engines live here as a single source of truth.</p>
+</section>
+<section id="module-back.core.reasoning.models">
+<span id="models"></span><h2>Models<a class="headerlink" href="#module-back.core.reasoning.models" title="Link to this heading">¶</a></h2>
+<p>Data models for the reasoning engine.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.models.InferredTriple">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.models.</span></span><span class="sig-name descname"><span class="pre">InferredTriple</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">subject</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predicate</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">provenance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rule_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/models.html#InferredTriple"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.models.InferredTriple" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#back.core.reasoning.models.InferredTriple.object" title="back.core.reasoning.models.InferredTriple.object"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>A triple produced by a reasoning phase.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>subject</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>predicate</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>object</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>provenance</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>rule_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.InferredTriple.subject">
+<span class="sig-name descname"><span class="pre">subject</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.reasoning.models.InferredTriple.subject" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.InferredTriple.predicate">
+<span class="sig-name descname"><span class="pre">predicate</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.reasoning.models.InferredTriple.predicate" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.InferredTriple.object">
+<span class="sig-name descname"><span class="pre">object</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.reasoning.models.InferredTriple.object" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.InferredTriple.provenance">
+<span class="sig-name descname"><span class="pre">provenance</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.reasoning.models.InferredTriple.provenance" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.InferredTriple.rule_name">
+<span class="sig-name descname"><span class="pre">rule_name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="headerlink" href="#back.core.reasoning.models.InferredTriple.rule_name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.models.RuleViolation">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.models.</span></span><span class="sig-name descname"><span class="pre">RuleViolation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subject</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rule_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/models.html#RuleViolation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.models.RuleViolation" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>A constraint or rule violation found during reasoning.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rule_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>subject</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>message</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>check_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>rule_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.RuleViolation.rule_name">
+<span class="sig-name descname"><span class="pre">rule_name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.reasoning.models.RuleViolation.rule_name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.RuleViolation.subject">
+<span class="sig-name descname"><span class="pre">subject</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.reasoning.models.RuleViolation.subject" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.RuleViolation.message">
+<span class="sig-name descname"><span class="pre">message</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.reasoning.models.RuleViolation.message" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.RuleViolation.check_type">
+<span class="sig-name descname"><span class="pre">check_type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.reasoning.models.RuleViolation.check_type" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.RuleViolation.rule_type">
+<span class="sig-name descname"><span class="pre">rule_type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="headerlink" href="#back.core.reasoning.models.RuleViolation.rule_type" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.models.ReasoningResult">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.models.</span></span><span class="sig-name descname"><span class="pre">ReasoningResult</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inferred_triples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">violations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stats</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/models.html#ReasoningResult"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.models.ReasoningResult" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Aggregated output of one or more reasoning phases.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>inferred_triples</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference internal" href="#back.core.reasoning.models.InferredTriple" title="back.core.reasoning.models.InferredTriple"><em>InferredTriple</em></a><em>]</em>)</p></li>
+<li><p><strong>violations</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference internal" href="#back.core.reasoning.models.RuleViolation" title="back.core.reasoning.models.RuleViolation"><em>RuleViolation</em></a><em>]</em>)</p></li>
+<li><p><strong>stats</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.ReasoningResult.inferred_triples">
+<span class="sig-name descname"><span class="pre">inferred_triples</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#back.core.reasoning.models.InferredTriple" title="back.core.reasoning.models.InferredTriple"><span class="pre">InferredTriple</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.reasoning.models.ReasoningResult.inferred_triples" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.ReasoningResult.violations">
+<span class="sig-name descname"><span class="pre">violations</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#back.core.reasoning.models.RuleViolation" title="back.core.reasoning.models.RuleViolation"><span class="pre">RuleViolation</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.reasoning.models.ReasoningResult.violations" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.ReasoningResult.stats">
+<span class="sig-name descname"><span class="pre">stats</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a></span><a class="headerlink" href="#back.core.reasoning.models.ReasoningResult.stats" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.models.ReasoningResult.merge">
+<span class="sig-name descname"><span class="pre">merge</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/models.html#ReasoningResult.merge"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.models.ReasoningResult.merge" title="Link to this definition">¶</a></dt>
+<dd><p>Merge another result into this one.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>other</strong> (<a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.models.ReasoningResult.deduplicate">
+<span class="sig-name descname"><span class="pre">deduplicate</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/models.html#ReasoningResult.deduplicate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.models.ReasoningResult.deduplicate" title="Link to this definition">¶</a></dt>
+<dd><p>Remove duplicate inferred triples (same subject, predicate, object).</p>
+<p>When the same triple is inferred by multiple phases, keeps the first
+occurrence (preserving provenance of the earliest phase).</p>
+<p>Returns the number of duplicates removed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.models.ReasoningResult.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/models.html#ReasoningResult.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.models.ReasoningResult.to_dict" title="Link to this definition">¶</a></dt>
+<dd><p>Serialise for JSON transport / session storage.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.models.SWRLAtomPartition">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.models.</span></span><span class="sig-name descname"><span class="pre">SWRLAtomPartition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">class_atoms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prop_atoms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">builtin_atoms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">negated_atoms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">consequent_atoms</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/models.html#SWRLAtomPartition"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.models.SWRLAtomPartition" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Partitioned antecedent/consequent atoms for SWRL rule translation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>class_atoms</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em><em>]</em>)</p></li>
+<li><p><strong>prop_atoms</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em><em>]</em>)</p></li>
+<li><p><strong>builtin_atoms</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em><em>]</em>)</p></li>
+<li><p><strong>negated_atoms</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em><em>]</em>)</p></li>
+<li><p><strong>consequent_atoms</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em><em>]</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.SWRLAtomPartition.class_atoms">
+<span class="sig-name descname"><span class="pre">class_atoms</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.reasoning.models.SWRLAtomPartition.class_atoms" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.SWRLAtomPartition.prop_atoms">
+<span class="sig-name descname"><span class="pre">prop_atoms</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.reasoning.models.SWRLAtomPartition.prop_atoms" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.SWRLAtomPartition.builtin_atoms">
+<span class="sig-name descname"><span class="pre">builtin_atoms</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.reasoning.models.SWRLAtomPartition.builtin_atoms" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.SWRLAtomPartition.negated_atoms">
+<span class="sig-name descname"><span class="pre">negated_atoms</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.reasoning.models.SWRLAtomPartition.negated_atoms" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.models.SWRLAtomPartition.consequent_atoms">
+<span class="sig-name descname"><span class="pre">consequent_atoms</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.reasoning.models.SWRLAtomPartition.consequent_atoms" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.reasoning.ReasoningService">
+<span id="reasoning-service"></span><h2>Reasoning Service<a class="headerlink" href="#module-back.core.reasoning.ReasoningService" title="Link to this heading">¶</a></h2>
+<p>Reasoning service — orchestrates T-Box, SWRL, Graph, Constraint,
+Decision Table, SPARQL CONSTRUCT, and Aggregate rule phases.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.ReasoningService.ReasoningService">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.ReasoningService.</span></span><span class="sig-name descname"><span class="pre">ReasoningService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_session</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triplestore_backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Orchestrate all reasoning phases over a domain’s ontology and data.</p>
+<p>Phases (in order):</p>
+<ul class="simple">
+<li><p><strong>T-Box</strong> — OWL 2 RL closure via owlrl on the ontology graph.</p></li>
+<li><p><strong>SWRL</strong> — Rule execution (violation and materialisation) on the
+triple-store backend (SQL or Cypher).  Supports built-in predicates
+(comparison, math, string, date) and negated atoms (closed-world).</p></li>
+<li><p><strong>Graph</strong> — Structural reasoning (transitive closure, symmetric
+expansion, etc.).</p></li>
+<li><p><strong>Decision Tables</strong> — DMN-style tabular business rules.</p></li>
+<li><p><strong>SPARQL Rules</strong> — SPARQL CONSTRUCT inference rules.</p></li>
+<li><p><strong>Aggregate Rules</strong> — GROUP BY / HAVING statistical rules.</p></li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Legacy constraint checks (cardinality, functional, value, global
+rules) have been moved to the <strong>Data Quality</strong> pipeline where they
+are executed as SHACL shapes under the <em>structural</em> and
+<em>consistency</em> dimensions.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>domain_session</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>triplestore_backend</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.ReasoningService.ReasoningService.run_full_reasoning">
+<span class="sig-name descname"><span class="pre">run_full_reasoning</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">progress_callback</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService.run_full_reasoning"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService.run_full_reasoning" title="Link to this definition">¶</a></dt>
+<dd><p>Run all enabled reasoning phases and merge results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>options</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>progress_callback</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.ReasoningService.ReasoningService.run_tbox_reasoning">
+<span class="sig-name descname"><span class="pre">run_tbox_reasoning</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService.run_tbox_reasoning"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService.run_tbox_reasoning" title="Link to this definition">¶</a></dt>
+<dd><p>Run OWL 2 RL deductive closure on the domain ontology.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.ReasoningService.ReasoningService.run_swrl_rules">
+<span class="sig-name descname"><span class="pre">run_swrl_rules</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">materialize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inference_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">progress_callback</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService.run_swrl_rules"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService.run_swrl_rules" title="Link to this definition">¶</a></dt>
+<dd><p>Execute SWRL rules against the triple store.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>materialize</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+<li><p><strong>inference_limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>progress_callback</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.ReasoningService.ReasoningService.run_graph_reasoning">
+<span class="sig-name descname"><span class="pre">run_graph_reasoning</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService.run_graph_reasoning"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService.run_graph_reasoning" title="Link to this definition">¶</a></dt>
+<dd><p>Run graph-structural reasoning (transitive closure, etc.).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>options</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em> | </em><em>None</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.ReasoningService.ReasoningService.run_constraint_checks">
+<span class="sig-name descname"><span class="pre">run_constraint_checks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService.run_constraint_checks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService.run_constraint_checks" title="Link to this definition">¶</a></dt>
+<dd><p>Validate instance data against ontology constraints.</p>
+<p>Supports cardinality, value checks, functional / inverseFunctional,
+and global rules (noOrphans, requireLabels).  Runs Cypher queries
+on the LadybugDB flat store.</p>
+<p>Falls back to legacy <code class="docutils literal notranslate"><span class="pre">constraints</span></code> if <code class="docutils literal notranslate"><span class="pre">shacl_shapes</span></code> is empty.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.ReasoningService.ReasoningService.run_decision_tables">
+<span class="sig-name descname"><span class="pre">run_decision_tables</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">materialize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService.run_decision_tables"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService.run_decision_tables" title="Link to this definition">¶</a></dt>
+<dd><p>Execute decision tables against the triple store.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>materialize</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.ReasoningService.ReasoningService.run_sparql_rules">
+<span class="sig-name descname"><span class="pre">run_sparql_rules</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">materialize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService.run_sparql_rules"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService.run_sparql_rules" title="Link to this definition">¶</a></dt>
+<dd><p>Execute SPARQL CONSTRUCT rules against the triple store.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>materialize</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.ReasoningService.ReasoningService.run_aggregate_rules">
+<span class="sig-name descname"><span class="pre">run_aggregate_rules</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">materialize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService.run_aggregate_rules"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService.run_aggregate_rules" title="Link to this definition">¶</a></dt>
+<dd><p>Execute aggregate rules against the triple store.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>materialize</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.ReasoningService.ReasoningService.materialize_inferred">
+<span class="sig-name descname"><span class="pre">materialize_inferred</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">result</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService.materialize_inferred"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService.materialize_inferred" title="Link to this definition">¶</a></dt>
+<dd><p>Insert inferred triples into the triplestore.</p>
+<p>Returns the number of triples inserted.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>result</strong> (<a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.ReasoningService.ReasoningService.materialize_to_delta">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">materialize_to_delta</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">client</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triples</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/ReasoningService.html#ReasoningService.materialize_to_delta"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.ReasoningService.ReasoningService.materialize_to_delta" title="Link to this definition">¶</a></dt>
+<dd><p>Materialise inferred triples into a Databricks Delta table.</p>
+<p>Performs CREATE TABLE IF NOT EXISTS, DELETE FROM, then INSERT INTO.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>client</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – A <code class="docutils literal notranslate"><span class="pre">DatabricksClient</span></code> instance with SQL Warehouse access.</p></li>
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Fully-qualified Delta table (catalog.schema.table).</p></li>
+<li><p><strong>triples</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>]</em>) – List of dicts with <code class="docutils literal notranslate"><span class="pre">subject</span></code>, <code class="docutils literal notranslate"><span class="pre">predicate</span></code>, <code class="docutils literal notranslate"><span class="pre">object</span></code> keys.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Number of triples inserted.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.reasoning.OWLRLReasoner">
+<span id="owl-rl-reasoner"></span><h2>OWL RL Reasoner<a class="headerlink" href="#module-back.core.reasoning.OWLRLReasoner" title="Link to this heading">¶</a></h2>
+<p>T-Box reasoning using owlrl (OWL 2 RL profile) on RDFLib graphs.</p>
+<p>Runs a forward-chaining deductive closure over OWL Turtle content and
+returns the inferred triples that were not present in the original graph.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.OWLRLReasoner.OWLRLReasoner">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.OWLRLReasoner.</span></span><span class="sig-name descname"><span class="pre">OWLRLReasoner</span></span><a class="reference internal" href="../_modules/back/core/reasoning/OWLRLReasoner.html#OWLRLReasoner"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.OWLRLReasoner.OWLRLReasoner" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Compute OWL 2 RL deductive closure over RDFLib graphs.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.OWLRLReasoner.OWLRLReasoner.compute_closure">
+<span class="sig-name descname"><span class="pre">compute_closure</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">owl_content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/OWLRLReasoner.html#OWLRLReasoner.compute_closure"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.OWLRLReasoner.OWLRLReasoner.compute_closure" title="Link to this definition">¶</a></dt>
+<dd><p>Parse OWL Turtle and run OWL 2 RL forward chaining.</p>
+<p>Returns a <code class="xref py py-class docutils literal notranslate"><span class="pre">ReasoningResult</span></code> containing only the <em>new</em>
+(inferred) triples that the closure added to the graph.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>owl_content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.OWLRLReasoner.OWLRLReasoner.compute_closure_with_instances">
+<span class="sig-name descname"><span class="pre">compute_closure_with_instances</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">owl_content</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_triples</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/OWLRLReasoner.html#OWLRLReasoner.compute_closure_with_instances"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.OWLRLReasoner.OWLRLReasoner.compute_closure_with_instances" title="Link to this definition">¶</a></dt>
+<dd><p>Run OWL 2 RL over ontology + instance data.</p>
+<p>Suitable for small instance datasets (&lt; ~50 000 triples).
+For large datasets, use graph or SQL reasoning instead.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>owl_content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>instance_triples</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.reasoning.SWRLEngine">
+<span id="swrl-engine"></span><h2>SWRL Engine<a class="headerlink" href="#module-back.core.reasoning.SWRLEngine" title="Link to this heading">¶</a></h2>
+<p>SWRL rule execution engine.</p>
+<p>Selects the appropriate translator (SQL or Cypher) based on the
+triple-store backend and executes inference (producing inferred triples).</p>
+<p>Violation detection for SWRL rules is handled separately by the
+Data Quality runner (see <code class="docutils literal notranslate"><span class="pre">run_sql_checks</span></code> / <code class="docutils literal notranslate"><span class="pre">run_graph_checks</span></code>
+in <code class="docutils literal notranslate"><span class="pre">back.objects.digitaltwin</span></code>).</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLEngine.SWRLEngine">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.SWRLEngine.</span></span><span class="sig-name descname"><span class="pre">SWRLEngine</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ontology</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLEngine.html#SWRLEngine"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLEngine.SWRLEngine" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Execute SWRL rules against a triple-store backend.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ontology</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>] </em><em>| </em><em>None</em>)</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLEngine.SWRLEngine.execute_rules">
+<span class="sig-name descname"><span class="pre">execute_rules</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rules</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">store</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">materialize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inference_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">progress_callback</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLEngine.html#SWRLEngine.execute_rules"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLEngine.SWRLEngine.execute_rules" title="Link to this definition">¶</a></dt>
+<dd><p>Run all SWRL rules and collect inferred triples.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rules</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>) – List of rule dicts with <code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">antecedent</span></code>,
+<code class="docutils literal notranslate"><span class="pre">consequent</span></code>, and optionally <code class="docutils literal notranslate"><span class="pre">description</span></code>.</p></li>
+<li><p><strong>store</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – A <code class="xref py py-class docutils literal notranslate"><span class="pre">TripleStoreBackend</span></code> instance.</p></li>
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The logical triple-store table/graph name.</p></li>
+<li><p><strong>materialize</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If True, also insert inferred triples into the store.</p></li>
+<li><p><strong>inference_limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Max inferred triples per rule (None = unlimited).</p></li>
+<li><p><strong>progress_callback</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>) – Optional <code class="docutils literal notranslate"><span class="pre">(idx,</span> <span class="pre">total,</span> <span class="pre">rule_name)</span></code> callable
+for progress reporting.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.reasoning.SWRLBuiltinRegistry">
+<span id="swrl-built-in-registry"></span><h2>SWRL Built-in Registry<a class="headerlink" href="#module-back.core.reasoning.SWRLBuiltinRegistry" title="Link to this heading">¶</a></h2>
+<p>SWRL built-in registry — maps built-in names to SQL / Cypher expressions.</p>
+<p>Each built-in has a <code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">arity</span></code>, <code class="docutils literal notranslate"><span class="pre">category</span></code>, and templates for
+both SQL and Cypher translation.  Templates use positional placeholders
+<code class="docutils literal notranslate"><span class="pre">{0}</span></code>, <code class="docutils literal notranslate"><span class="pre">{1}</span></code>, … that the translator fills with bound variable
+references or literal values.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.SWRLBuiltinRegistry.</span></span><span class="sig-name descname"><span class="pre">SWRLBuiltin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">arity</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">category</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sql_template</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cypher_template</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cast_numeric</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLBuiltinRegistry.html#SWRLBuiltin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Descriptor for a single SWRL built-in predicate.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>arity</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>category</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>sql_template</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>cypher_template</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>cast_numeric</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.name">
+<span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.arity">
+<span class="sig-name descname"><span class="pre">arity</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.arity" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.category">
+<span class="sig-name descname"><span class="pre">category</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.category" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.sql_template">
+<span class="sig-name descname"><span class="pre">sql_template</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.sql_template" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.cypher_template">
+<span class="sig-name descname"><span class="pre">cypher_template</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.cypher_template" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.cast_numeric">
+<span class="sig-name descname"><span class="pre">cast_numeric</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></span><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.cast_numeric" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.SWRLBuiltinRegistry.</span></span><span class="sig-name descname"><span class="pre">SWRLBuiltinRegistry</span></span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLBuiltinRegistry.html#SWRLBuiltinRegistry"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Class-based registry for SWRL built-in predicates.</p>
+<p>All methods are class-level or static; no instance is needed.
+The registry is populated once at class-definition time.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.get">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLBuiltinRegistry.html#SWRLBuiltinRegistry.get"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.get" title="Link to this definition">¶</a></dt>
+<dd><p>Look up a built-in by name (case-insensitive).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin" title="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin"><em>SWRLBuiltin</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.is_builtin">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">is_builtin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLBuiltinRegistry.html#SWRLBuiltinRegistry.is_builtin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.is_builtin" title="Link to this definition">¶</a></dt>
+<dd><p>Return True if <em>name</em> is a registered built-in.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.all">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">all</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLBuiltinRegistry.html#SWRLBuiltinRegistry.all"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.all" title="Link to this definition">¶</a></dt>
+<dd><p>Return a copy of the full registry.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference internal" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin" title="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin"><em>SWRLBuiltin</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.by_category">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">by_category</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLBuiltinRegistry.html#SWRLBuiltinRegistry.by_category"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.by_category" title="Link to this definition">¶</a></dt>
+<dd><p>Return built-ins grouped by category for UI consumption.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.is_literal">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">is_literal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">token</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLBuiltinRegistry.html#SWRLBuiltinRegistry.is_literal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.is_literal" title="Link to this definition">¶</a></dt>
+<dd><p>Return True if <em>token</em> is a literal value (not a variable).</p>
+<p>Variables start with <code class="docutils literal notranslate"><span class="pre">?</span></code>.  Quoted strings and bare numbers are literals.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.literal_sql">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">literal_sql</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">token</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLBuiltinRegistry.html#SWRLBuiltinRegistry.literal_sql"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.literal_sql" title="Link to this definition">¶</a></dt>
+<dd><p>Convert a SWRL literal token to a SQL literal expression.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.literal_cypher">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">literal_cypher</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">token</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLBuiltinRegistry.html#SWRLBuiltinRegistry.literal_cypher"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.literal_cypher" title="Link to this definition">¶</a></dt>
+<dd><p>Convert a SWRL literal token to a Cypher literal expression.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.reasoning.SWRLParser">
+<span id="swrl-parser"></span><h2>SWRL Parser<a class="headerlink" href="#module-back.core.reasoning.SWRLParser" title="Link to this heading">¶</a></h2>
+<p>SWRL expression parser — shared parsing utilities for SWRL translators.</p>
+<p>Extracts atoms from SWRL rule strings and provides URI resolution,
+violation-subject detection, and variable connectivity analysis used
+by both the SQL and Cypher translation paths.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLParser.SWRLParser">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.SWRLParser.</span></span><span class="sig-name descname"><span class="pre">SWRLParser</span></span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLParser.html#SWRLParser"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLParser.SWRLParser" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Parse and analyse SWRL rule expressions.</p>
+<p>All methods are static — no instance state is needed.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLParser.SWRLParser.partition_rule_atoms">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">partition_rule_atoms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLParser.html#SWRLParser.partition_rule_atoms"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLParser.SWRLParser.partition_rule_atoms" title="Link to this definition">¶</a></dt>
+<dd><p>Parse and partition a SWRL rule’s atoms for translation.</p>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">None</span></code> if the antecedent or consequent is empty, or if
+the antecedent has no class atoms.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>rule</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.reasoning.models.SWRLAtomPartition" title="back.core.reasoning.models.SWRLAtomPartition"><em>SWRLAtomPartition</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLParser.SWRLParser.parse_atoms">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">parse_atoms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expression</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLParser.html#SWRLParser.parse_atoms"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLParser.SWRLParser.parse_atoms" title="Link to this definition">¶</a></dt>
+<dd><p>Parse a SWRL expression into a list of atom dicts.</p>
+<p>Supported forms:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ClassName(?x)</span></code> — class atom (arity 1)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">propName(?x,</span> <span class="pre">?y)</span></code> — property atom (arity 2)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">greaterThan(?x,</span> <span class="pre">18)</span></code> — built-in atom (arity varies)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">not(propName(?x,</span> <span class="pre">?y))</span></code> — negated atom</p></li>
+</ul>
+<p>Each returned dict has <code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">args</span></code>, <code class="docutils literal notranslate"><span class="pre">arity</span></code>, <code class="docutils literal notranslate"><span class="pre">negated</span></code>
+(bool), and <code class="docutils literal notranslate"><span class="pre">builtin</span></code> (bool).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>expression</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLParser.SWRLParser.resolve_uri">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uri_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLParser.html#SWRLParser.resolve_uri"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLParser.SWRLParser.resolve_uri" title="Link to this definition">¶</a></dt>
+<dd><p>Resolve a short name to a full URI.</p>
+<p>Resolution order:
+1. Already a full URI — return as-is.
+2. Found (case-insensitive) in <em>uri_map</em> — return canonical URI.
+3. Fall back to <code class="docutils literal notranslate"><span class="pre">base_uri</span> <span class="pre">+</span> <span class="pre">name</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>uri_map</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLParser.SWRLParser.determine_violation_subject">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">determine_violation_subject</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cons_atoms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ante_class_atoms</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLParser.html#SWRLParser.determine_violation_subject"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLParser.SWRLParser.determine_violation_subject" title="Link to this definition">¶</a></dt>
+<dd><p>Return the SWRL variable whose instances are reported as violations.</p>
+<p>Prefers the subject of the first consequent property atom, then
+the first consequent class atom variable, then the first antecedent
+class atom.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cons_atoms</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>ante_class_atoms</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLParser.SWRLParser.find_connected_vars">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">find_connected_vars</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_var</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prop_atoms</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLParser.html#SWRLParser.find_connected_vars"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLParser.SWRLParser.find_connected_vars" title="Link to this definition">¶</a></dt>
+<dd><p>Return all SWRL variables reachable from <em>start_var</em> through property atoms.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>start_var</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>prop_atoms</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#set" title="(in Python v3.14)">set</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLParser.SWRLParser.order_connected_props">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">order_connected_props</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">violation_var</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connected_props</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLParser.html#SWRLParser.order_connected_props"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLParser.SWRLParser.order_connected_props" title="Link to this definition">¶</a></dt>
+<dd><p>Order property atoms so each has at least one previously-bound variable.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>violation_var</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>connected_props</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.reasoning.SWRLSQLTranslator">
+<span id="swrl-sql-translator"></span><h2>SWRL SQL Translator<a class="headerlink" href="#module-back.core.reasoning.SWRLSQLTranslator" title="Link to this heading">¶</a></h2>
+<p>Translate SWRL rules to SQL for violation detection and materialisation.</p>
+<p>Extracted from <code class="docutils literal notranslate"><span class="pre">app/frontend/digitaltwin/routes.py</span></code> to be reusable across the
+reasoning engine and quality-check pipeline.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.SWRLSQLTranslator.</span></span><span class="sig-name descname"><span class="pre">SWRLSQLTranslator</span></span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLSQLTranslator.html#SWRLSQLTranslator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Build SQL from SWRL rules for the flat triple-store table.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator.build_violation_sql">
+<span class="sig-name descname"><span class="pre">build_violation_sql</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLSQLTranslator.html#SWRLSQLTranslator.build_violation_sql"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator.build_violation_sql" title="Link to this definition">¶</a></dt>
+<dd><p>Build SQL that finds subjects violating a SWRL rule.</p>
+<p>The violation subject is determined from the consequent (first
+property-atom subject, or first class-atom variable).  When
+antecedent variables are not connected through property atoms,
+their type constraints are folded into the NOT EXISTS sub-query
+instead of creating a Cartesian product in the main query.</p>
+<p>Supports built-in filter atoms (comparison, math, string, date)
+and negated antecedent atoms (closed-world assumption).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator.build_antecedent_count_sql">
+<span class="sig-name descname"><span class="pre">build_antecedent_count_sql</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLSQLTranslator.html#SWRLSQLTranslator.build_antecedent_count_sql"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator.build_antecedent_count_sql" title="Link to this definition">¶</a></dt>
+<dd><p>Build SQL that counts entities matching the antecedent.</p>
+<p>Returns a query with a single <code class="docutils literal notranslate"><span class="pre">cnt</span></code> column — the number of
+distinct subjects that satisfy the antecedent conditions
+(ignoring the consequent).  This is the denominator for
+computing the pass rate of a SWRL rule used as a DQ indicator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator.build_materialization_sql">
+<span class="sig-name descname"><span class="pre">build_materialization_sql</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLSQLTranslator.html#SWRLSQLTranslator.build_materialization_sql"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator.build_materialization_sql" title="Link to this definition">¶</a></dt>
+<dd><p>Build INSERT SQL that materialises consequent triples.</p>
+<p>Finds rows where the antecedent matches AND the consequent is
+missing, then inserts the missing consequent triples.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator.build_inference_sql">
+<span class="sig-name descname"><span class="pre">build_inference_sql</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLSQLTranslator.html#SWRLSQLTranslator.build_inference_sql"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator.build_inference_sql" title="Link to this definition">¶</a></dt>
+<dd><p>Build SELECT SQL that returns inferred consequent triples.</p>
+<p>Uses the same antecedent binding as <code class="docutils literal notranslate"><span class="pre">build_materialization_sql</span></code>
+but emits <code class="docutils literal notranslate"><span class="pre">SELECT</span> <span class="pre">subject,</span> <span class="pre">predicate,</span> <span class="pre">object</span></code> instead of
+<code class="docutils literal notranslate"><span class="pre">INSERT</span> <span class="pre">INTO</span></code>.  Multiple consequent atoms are combined with
+<code class="docutils literal notranslate"><span class="pre">UNION</span> <span class="pre">ALL</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.reasoning.SWRLCypherTranslator">
+<span id="swrl-cypher-translator"></span><h2>SWRL Cypher Translator<a class="headerlink" href="#module-back.core.reasoning.SWRLCypherTranslator" title="Link to this heading">¶</a></h2>
+<p>Translate SWRL rules to Cypher for LadybugDB graph-model backends.</p>
+<p>Uses typed node/relationship tables from the graph schema.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLCypherTranslator.SWRLCypherTranslator">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.SWRLCypherTranslator.</span></span><span class="sig-name descname"><span class="pre">SWRLCypherTranslator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph_schema</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLCypherTranslator.html#SWRLCypherTranslator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLCypherTranslator.SWRLCypherTranslator" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Build Cypher queries from SWRL rules for LadybugDB.</p>
+<dl class="field-list simple">
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLCypherTranslator.SWRLCypherTranslator.build_violation_query">
+<span class="sig-name descname"><span class="pre">build_violation_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLCypherTranslator.html#SWRLCypherTranslator.build_violation_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLCypherTranslator.SWRLCypherTranslator.build_violation_query" title="Link to this definition">¶</a></dt>
+<dd><p>Build Cypher that returns subjects violating a SWRL rule.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLCypherTranslator.SWRLCypherTranslator.build_materialization_query">
+<span class="sig-name descname"><span class="pre">build_materialization_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLCypherTranslator.html#SWRLCypherTranslator.build_materialization_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLCypherTranslator.SWRLCypherTranslator.build_materialization_query" title="Link to this definition">¶</a></dt>
+<dd><p>Build Cypher CREATE for inferred consequent triples.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLCypherTranslator.SWRLCypherTranslator.build_inference_query">
+<span class="sig-name descname"><span class="pre">build_inference_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLCypherTranslator.html#SWRLCypherTranslator.build_inference_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLCypherTranslator.SWRLCypherTranslator.build_inference_query" title="Link to this definition">¶</a></dt>
+<dd><p>Build Cypher RETURN for inferred consequent triples.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.reasoning.SWRLFlatCypherTranslator">
+<span id="swrl-flat-cypher-translator"></span><h2>SWRL Flat Cypher Translator<a class="headerlink" href="#module-back.core.reasoning.SWRLFlatCypherTranslator" title="Link to this heading">¶</a></h2>
+<p>Translate SWRL rules to Cypher for LadybugDB flat-model backends.</p>
+<p>The flat model stores every triple as a node in a single table with
+<code class="docutils literal notranslate"><span class="pre">subject</span></code>, <code class="docutils literal notranslate"><span class="pre">predicate</span></code>, <code class="docutils literal notranslate"><span class="pre">object</span></code> columns.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.SWRLFlatCypherTranslator.</span></span><span class="sig-name descname"><span class="pre">SWRLFlatCypherTranslator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node_table</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Triple'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLFlatCypherTranslator.html#SWRLFlatCypherTranslator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Build Cypher queries from SWRL rules for LadybugDB flat-model stores.</p>
+<p>The flat model stores every triple as a node in a single table:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Triple</span><span class="p">(</span><span class="nb">id</span><span class="p">,</span> <span class="n">subject</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="nb">object</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Each SWRL class atom <code class="docutils literal notranslate"><span class="pre">ClassName(?x)</span></code> becomes a MATCH on a Triple
+node whose <code class="docutils literal notranslate"><span class="pre">predicate</span> <span class="pre">=</span> <span class="pre">rdf:type</span></code> and <code class="docutils literal notranslate"><span class="pre">object</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">URI&gt;</span></code>.
+Each property atom <code class="docutils literal notranslate"><span class="pre">propName(?x,</span> <span class="pre">?y)</span></code> becomes a MATCH on a Triple
+node whose <code class="docutils literal notranslate"><span class="pre">predicate</span> <span class="pre">=</span> <span class="pre">&lt;prop</span> <span class="pre">URI&gt;</span></code> with variable binding via
+<code class="docutils literal notranslate"><span class="pre">subject</span></code>/<code class="docutils literal notranslate"><span class="pre">object</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>node_table</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator.build_violation_query">
+<span class="sig-name descname"><span class="pre">build_violation_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLFlatCypherTranslator.html#SWRLFlatCypherTranslator.build_violation_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator.build_violation_query" title="Link to this definition">¶</a></dt>
+<dd><p>Return Cypher that finds subjects violating a SWRL rule.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator.build_violation_sql">
+<span class="sig-name descname"><span class="pre">build_violation_sql</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLFlatCypherTranslator.html#SWRLFlatCypherTranslator.build_violation_sql"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator.build_violation_sql" title="Link to this definition">¶</a></dt>
+<dd><p>Alias so the engine can call the same method name as SQL translator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator.build_materialization_query">
+<span class="sig-name descname"><span class="pre">build_materialization_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLFlatCypherTranslator.html#SWRLFlatCypherTranslator.build_materialization_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator.build_materialization_query" title="Link to this definition">¶</a></dt>
+<dd><p>Build Cypher CREATE for inferred triples on the flat model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator.build_materialization_sql">
+<span class="sig-name descname"><span class="pre">build_materialization_sql</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLFlatCypherTranslator.html#SWRLFlatCypherTranslator.build_materialization_sql"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator.build_materialization_sql" title="Link to this definition">¶</a></dt>
+<dd><p>Alias so the engine can call the same method name as SQL translator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator.build_inference_query">
+<span class="sig-name descname"><span class="pre">build_inference_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLFlatCypherTranslator.html#SWRLFlatCypherTranslator.build_inference_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator.build_inference_query" title="Link to this definition">¶</a></dt>
+<dd><p>Build Cypher RETURN for inferred triples on the flat model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator.build_inference_sql">
+<span class="sig-name descname"><span class="pre">build_inference_sql</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SWRLFlatCypherTranslator.html#SWRLFlatCypherTranslator.build_inference_sql"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SWRLFlatCypherTranslator.SWRLFlatCypherTranslator.build_inference_sql" title="Link to this definition">¶</a></dt>
+<dd><p>Alias so the engine can call the same method name as SQL translator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>params</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.reasoning.DecisionTableEngine">
+<span id="decision-table-engine"></span><h2>Decision Table Engine<a class="headerlink" href="#module-back.core.reasoning.DecisionTableEngine" title="Link to this heading">¶</a></h2>
+<p>Decision table engine — compile tabular business rules to SQL / Cypher.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.DecisionTableEngine.DecisionTableEngine">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.DecisionTableEngine.</span></span><span class="sig-name descname"><span class="pre">DecisionTableEngine</span></span><a class="reference internal" href="../_modules/back/core/reasoning/DecisionTableEngine.html#DecisionTableEngine"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.DecisionTableEngine.DecisionTableEngine" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Decision table engine — compile tabular business rules to SQL / Cypher.</p>
+<p>A decision table has:</p>
+<ul class="simple">
+<li><p><em>input_columns</em>: each maps to a class property (conditions)</p></li>
+<li><p><em>output_column</em>: the inferred predicate or class assignment (action)</p></li>
+<li><p><em>rows</em>: each row has condition cells and an action cell</p></li>
+<li><p><em>hit_policy</em>: <code class="docutils literal notranslate"><span class="pre">first</span></code> (first matching row wins), <code class="docutils literal notranslate"><span class="pre">all</span></code> (all matching
+rows fire), or <code class="docutils literal notranslate"><span class="pre">unique</span></code> (at most one row should match)</p></li>
+</ul>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.DecisionTableEngine.DecisionTableEngine.execute_tables">
+<span class="sig-name descname"><span class="pre">execute_tables</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tables</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">store</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">materialize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/DecisionTableEngine.html#DecisionTableEngine.execute_tables"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.DecisionTableEngine.DecisionTableEngine.execute_tables" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.DecisionTableEngine.DecisionTableEngine.build_violation_sql">
+<span class="sig-name descname"><span class="pre">build_violation_sql</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dt</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/DecisionTableEngine.html#DecisionTableEngine.build_violation_sql"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.DecisionTableEngine.DecisionTableEngine.build_violation_sql" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.DecisionTableEngine.DecisionTableEngine.build_violation_cypher">
+<span class="sig-name descname"><span class="pre">build_violation_cypher</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dt</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">store</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/DecisionTableEngine.html#DecisionTableEngine.build_violation_cypher"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.DecisionTableEngine.DecisionTableEngine.build_violation_cypher" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.DecisionTableEngine.DecisionTableEngine.validate_table">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dt</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/DecisionTableEngine.html#DecisionTableEngine.validate_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.DecisionTableEngine.DecisionTableEngine.validate_table" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.reasoning.SPARQLRuleEngine">
+<span id="sparql-rule-engine"></span><h2>SPARQL Rule Engine<a class="headerlink" href="#module-back.core.reasoning.SPARQLRuleEngine" title="Link to this heading">¶</a></h2>
+<p>SPARQL CONSTRUCT rule engine — execute inference rules as SPARQL queries.</p>
+<p>Each rule is a SPARQL CONSTRUCT query that produces new triples from
+existing graph data.  For LadybugDB backends the CONSTRUCT is converted
+to Cypher; for Delta backends the existing <code class="docutils literal notranslate"><span class="pre">translate_sparql_to_spark()</span></code>
+infrastructure is used.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.SPARQLRuleEngine.SPARQLRuleEngine">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.SPARQLRuleEngine.</span></span><span class="sig-name descname"><span class="pre">SPARQLRuleEngine</span></span><a class="reference internal" href="../_modules/back/core/reasoning/SPARQLRuleEngine.html#SPARQLRuleEngine"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SPARQLRuleEngine.SPARQLRuleEngine" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Execute SPARQL CONSTRUCT rules against a triple store.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SPARQLRuleEngine.SPARQLRuleEngine.execute_rules">
+<span class="sig-name descname"><span class="pre">execute_rules</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rules</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">store</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">materialize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SPARQLRuleEngine.html#SPARQLRuleEngine.execute_rules"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SPARQLRuleEngine.SPARQLRuleEngine.execute_rules" title="Link to this definition">¶</a></dt>
+<dd><p>Run all SPARQL rules and collect results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rules</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>store</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>ontology</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+<li><p><strong>materialize</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.SPARQLRuleEngine.SPARQLRuleEngine.validate_rule">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_rule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/SPARQLRuleEngine.html#SPARQLRuleEngine.validate_rule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.SPARQLRuleEngine.SPARQLRuleEngine.validate_rule" title="Link to this definition">¶</a></dt>
+<dd><p>Return validation error messages (empty if valid).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>rule</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.reasoning.AggregateRuleEngine">
+<span id="aggregate-rule-engine"></span><h2>Aggregate Rule Engine<a class="headerlink" href="#module-back.core.reasoning.AggregateRuleEngine" title="Link to this heading">¶</a></h2>
+<p>Aggregate rule engine — rules that use GROUP BY / HAVING for statistical conditions.</p>
+<p>Each rule defines:</p>
+<ul class="simple">
+<li><p><em>target_class</em>: the class whose instances are grouped</p></li>
+<li><p><em>group_by_property</em>: the relationship used for grouping</p></li>
+<li><p><em>aggregate_property</em>: the property to aggregate</p></li>
+<li><p><em>aggregate_function</em>: count, sum, avg, min, max</p></li>
+<li><p><em>operator</em> + <em>threshold</em>: the condition on the aggregate</p></li>
+<li><p><em>result_class</em>: the class to assign to matching instances</p></li>
+</ul>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.reasoning.AggregateRuleEngine.</span></span><span class="sig-name descname"><span class="pre">AggregateRuleEngine</span></span><a class="reference internal" href="../_modules/back/core/reasoning/AggregateRuleEngine.html#AggregateRuleEngine"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Compile and execute aggregate rules against a triple store.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine.execute_rules">
+<span class="sig-name descname"><span class="pre">execute_rules</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rules</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">store</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">materialize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/AggregateRuleEngine.html#AggregateRuleEngine.execute_rules"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine.execute_rules" title="Link to this definition">¶</a></dt>
+<dd><p>Run all aggregate rules and collect results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rules</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>store</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>ontology</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+<li><p><strong>materialize</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.reasoning.models.ReasoningResult" title="back.core.reasoning.models.ReasoningResult"><em>ReasoningResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine.build_sql">
+<span class="sig-name descname"><span class="pre">build_sql</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/AggregateRuleEngine.html#AggregateRuleEngine.build_sql"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine.build_sql" title="Link to this definition">¶</a></dt>
+<dd><p>Build SQL with GROUP BY / HAVING for an aggregate rule.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rule</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+<li><p><strong>table</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine.build_cypher">
+<span class="sig-name descname"><span class="pre">build_cypher</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">store</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/AggregateRuleEngine.html#AggregateRuleEngine.build_cypher"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine.build_cypher" title="Link to this definition">¶</a></dt>
+<dd><p>Build Cypher aggregate query for the flat triple table.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rule</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>store</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine.validate_rule">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_rule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/reasoning/AggregateRuleEngine.html#AggregateRuleEngine.validate_rule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine.validate_rule" title="Link to this definition">¶</a></dt>
+<dd><p>Return validation error messages (empty if valid).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>rule</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/api/app.core.reasoning.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

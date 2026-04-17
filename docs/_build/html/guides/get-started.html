@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Getting Started with OntoBricks &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=a58bc63e"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="OntoBricks Deployment Guide" href="deployment.html" />
+    <link rel="prev" title="OntoBricks Documentation" href="documentation.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Getting Started with OntoBricks</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#running-the-application">Running the Application</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#permission-management-databricks-app-only">Permission Management (Databricks App Only)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#first-steps-in-ontobricks">First Steps in OntoBricks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#common-commands">Common Commands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#understanding-the-navigation">Understanding the Navigation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#ontology-sidebar-navigation">Ontology Sidebar Navigation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#troubleshooting">Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#environment-variables-full-reference">Environment variables (full reference)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="documentation.html" title="previous chapter">OntoBricks Documentation</a></li>
+      <li>Next: <a href="deployment.html" title="next chapter">OntoBricks Deployment Guide</a></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="getting-started-with-ontobricks">
+<h1>Getting Started with OntoBricks<a class="headerlink" href="#getting-started-with-ontobricks" title="Link to this heading">¶</a></h1>
+<p>By the end of this guide you will have OntoBricks running locally and connected to your Databricks workspace, ready to design your first ontology and explore a knowledge graph.</p>
+<section id="prerequisites">
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">¶</a></h2>
+<p>Before you begin, ensure you have:</p>
+<ul class="simple">
+<li><p><strong>Python 3.10+</strong> installed on your system</p></li>
+<li><p><strong>Databricks workspace</strong> access</p></li>
+<li><p><strong>Personal Access Token</strong> from Databricks</p></li>
+<li><p><strong>SQL Warehouse ID</strong> from Databricks</p></li>
+</ul>
+</section>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
+<section id="option-1-using-the-setup-script-recommended">
+<h3>Option 1: Using the Setup Script (Recommended)<a class="headerlink" href="#option-1-using-the-setup-script-recommended" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Clone the repository</span>
+git<span class="w"> </span>clone<span class="w"> </span>&lt;repository-url&gt;
+<span class="nb">cd</span><span class="w"> </span>OntoBricks
+
+<span class="c1"># Make the setup script executable and run it</span>
+chmod<span class="w"> </span>+x<span class="w"> </span>setup.sh
+./setup.sh
+</pre></div>
+</div>
+<p>The setup script will:</p>
+<ol class="arabic simple">
+<li><p>Check your Python version</p></li>
+<li><p>Install uv package manager (if not present)</p></li>
+<li><p>Create a virtual environment</p></li>
+<li><p>Install all dependencies</p></li>
+<li><p>Create a <code class="docutils literal notranslate"><span class="pre">.env</span></code> template file</p></li>
+</ol>
+</section>
+<section id="option-2-manual-installation">
+<h3>Option 2: Manual Installation<a class="headerlink" href="#option-2-manual-installation" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Clone the repository</span>
+<span class="nb">cd</span><span class="w"> </span>OntoBricks
+
+<span class="c1"># Create virtual environment</span>
+python<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv
+
+<span class="c1"># Activate virtual environment</span>
+<span class="nb">source</span><span class="w"> </span>.venv/bin/activate<span class="w">  </span><span class="c1"># On macOS/Linux</span>
+<span class="c1"># .venv\Scripts\activate   # On Windows</span>
+
+<span class="c1"># Install dependencies</span>
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+</pre></div>
+</div>
+</section>
+</section>
+<section id="configuration">
+<h2>Configuration<a class="headerlink" href="#configuration" title="Link to this heading">¶</a></h2>
+<section id="step-1-get-your-databricks-credentials">
+<h3>Step 1: Get Your Databricks Credentials<a class="headerlink" href="#step-1-get-your-databricks-credentials" title="Link to this heading">¶</a></h3>
+<section id="databricks-host">
+<h4>Databricks Host<a class="headerlink" href="#databricks-host" title="Link to this heading">¶</a></h4>
+<p>Your workspace URL, for example:</p>
+<ul class="simple">
+<li><p>Azure: <code class="docutils literal notranslate"><span class="pre">https://adb-1234567890123456.7.azuredatabricks.net</span></code></p></li>
+<li><p>AWS: <code class="docutils literal notranslate"><span class="pre">https://dbc-a1b2c3d4-e5f6.cloud.databricks.com</span></code></p></li>
+<li><p>GCP: <code class="docutils literal notranslate"><span class="pre">https://12345678901234.8.gcp.databricks.com</span></code></p></li>
+</ul>
+</section>
+<section id="personal-access-token">
+<h4>Personal Access Token<a class="headerlink" href="#personal-access-token" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p>In Databricks, click your username (top right)</p></li>
+<li><p>Select <strong>User Settings</strong></p></li>
+<li><p>Go to <strong>Access tokens</strong> tab</p></li>
+<li><p>Click <strong>Generate new token</strong></p></li>
+<li><p>Give it a name (e.g., “OntoBricks”)</p></li>
+<li><p>Set expiration (e.g., 90 days)</p></li>
+<li><p>Click <strong>Generate</strong> and <strong>copy the token immediately</strong></p></li>
+</ol>
+</section>
+<section id="sql-warehouse-id">
+<h4>SQL Warehouse ID<a class="headerlink" href="#sql-warehouse-id" title="Link to this heading">¶</a></h4>
+<ol class="arabic">
+<li><p>In Databricks, go to <strong>SQL Warehouses</strong></p></li>
+<li><p>Click on your warehouse</p></li>
+<li><p>Find the ID in the URL or <strong>Connection Details</strong> tab:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>/sql/1.0/warehouses/abc123def456
+                     ↑ This is your ID
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+</section>
+<section id="step-2-create-the-env-file">
+<h3>Step 2: Create the .env File<a class="headerlink" href="#step-2-create-the-env-file" title="Link to this heading">¶</a></h3>
+<p>Create a <code class="docutils literal notranslate"><span class="pre">.env</span></code> file in the OntoBricks directory:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Databricks Configuration (Required)</span>
+<span class="nv">DATABRICKS_HOST</span><span class="o">=</span>https://your-workspace.cloud.databricks.com
+<span class="nv">DATABRICKS_TOKEN</span><span class="o">=</span>dapi1234567890abcdef
+<span class="nv">DATABRICKS_SQL_WAREHOUSE_ID</span><span class="o">=</span>abc123def456
+
+<span class="c1"># Optional Configuration</span>
+<span class="nv">DATABRICKS_CATALOG</span><span class="o">=</span>main
+<span class="nv">DATABRICKS_SCHEMA</span><span class="o">=</span>default
+<span class="nv">SECRET_KEY</span><span class="o">=</span>your-secret-key-here
+<span class="nv">DATABRICKS_APP_PORT</span><span class="o">=</span><span class="m">8000</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="running-the-application">
+<h2>Running the Application<a class="headerlink" href="#running-the-application" title="Link to this heading">¶</a></h2>
+<section id="start-the-application">
+<h3>Start the Application<a class="headerlink" href="#start-the-application" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Using the start script (recommended)</span>
+./start.sh
+
+<span class="c1"># Run in background</span>
+./start.sh<span class="w"> </span>--background
+
+<span class="c1"># Or using make</span>
+make<span class="w"> </span>run
+
+<span class="c1"># Or manually</span>
+<span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+python<span class="w"> </span>run.py
+</pre></div>
+</div>
+</section>
+<section id="stop-the-application">
+<h3>Stop the Application<a class="headerlink" href="#stop-the-application" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Using the stop script</span>
+./stop.sh
+
+<span class="c1"># Or press Ctrl+C if running in foreground</span>
+</pre></div>
+</div>
+</section>
+<section id="access-the-application">
+<h3>Access the Application<a class="headerlink" href="#access-the-application" title="Link to this heading">¶</a></h3>
+<p>Open your browser to: <strong>http://localhost:8000</strong></p>
+</section>
+</section>
+<section id="permission-management-databricks-app-only">
+<h2>Permission Management (Databricks App Only)<a class="headerlink" href="#permission-management-databricks-app-only" title="Link to this heading">¶</a></h2>
+<p>When running as a Databricks App, OntoBricks enforces role-based access control:</p>
+<ul class="simple">
+<li><p><strong>Admin</strong>: Users with <strong>CAN_MANAGE</strong> on the Databricks App. They can manage the permission list in <strong>Settings → Permissions</strong>.</p></li>
+<li><p><strong>Editor</strong>: Full read/write access to all features.</p></li>
+<li><p><strong>Viewer</strong>: Read-only access.</p></li>
+<li><p><strong>No role</strong>: Blocked from accessing the app entirely.</p></li>
+</ul>
+<blockquote>
+<div><p><strong>First-time setup</strong>: When no permissions are configured yet, only users with <strong>CAN_MANAGE</strong> on the Databricks App have access. Everyone else is blocked. Add users via <strong>Settings -&gt; Permissions</strong> to grant them access.</p>
+</div></blockquote>
+<p>To manage permissions, you must:</p>
+<ol class="arabic simple">
+<li><p>Have <strong>CAN_MANAGE</strong> set on the app in the Databricks UI (Compute → Apps → ontobricks → Permissions)</p></li>
+<li><p>The app’s service principal must have <strong>CAN_MANAGE</strong> on itself (see <a class="reference internal" href="deployment.html#permission-management-setup"><span class="std std-ref">Deployment Guide</span></a>)</p></li>
+</ol>
+<p>In local development mode, there are no restrictions — all users have full admin access.</p>
+</section>
+<section id="first-steps-in-ontobricks">
+<h2>First Steps in OntoBricks<a class="headerlink" href="#first-steps-in-ontobricks" title="Link to this heading">¶</a></h2>
+<section id="verify-configuration">
+<h3>1. Verify Configuration<a class="headerlink" href="#verify-configuration" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Click <strong>Settings</strong> in the navigation bar</p></li>
+<li><p>Your credentials should be loaded from <code class="docutils literal notranslate"><span class="pre">.env</span></code></p></li>
+<li><p>Select a <strong>SQL Warehouse</strong> from the dropdown</p></li>
+<li><p>Click <strong>Test Connection</strong> to verify</p></li>
+<li><p>You should see “Connection successful”</p></li>
+</ol>
+</section>
+<section id="design-an-ontology-visual-designer">
+<h3>2. Design an Ontology (Visual Designer)<a class="headerlink" href="#design-an-ontology-visual-designer" title="Link to this heading">¶</a></h3>
+<p>The fastest way to create an ontology is using the visual <strong>Design</strong> interface:</p>
+<ol class="arabic simple">
+<li><p>Go to the <strong>Ontology</strong> page (click on “Ontology” in the navbar)</p></li>
+<li><p>Click <strong>Design</strong> in the sidebar</p></li>
+</ol>
+<section id="create-entities">
+<h4>Create Entities<a class="headerlink" href="#create-entities" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p>Click <strong>+ Add Entity</strong> button</p></li>
+<li><p>A new entity appears on the canvas</p></li>
+<li><p>Click on the entity name to edit it (e.g., “Person”)</p></li>
+<li><p>Click the <strong>+</strong> button on the entity to add attributes</p></li>
+<li><p>Click the <strong>🎨</strong> button to add an icon</p></li>
+<li><p>Click the <strong>📝</strong> button to add a description</p></li>
+</ol>
+</section>
+<section id="create-relationships">
+<h4>Create Relationships<a class="headerlink" href="#create-relationships" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p>Click and drag from one entity’s connector (○) to another</p></li>
+<li><p>Click on the relationship label to rename it (e.g., “worksIn”)</p></li>
+<li><p>Click the direction button (→/←/↔) to set the relationship direction</p></li>
+<li><p>Click <strong>+</strong> on the relationship to add attributes</p></li>
+</ol>
+</section>
+<section id="organize-the-diagram">
+<h4>Organize the Diagram<a class="headerlink" href="#organize-the-diagram" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Drag</strong> entities to reposition them</p></li>
+<li><p>Click <strong>Auto Layout</strong> to organize automatically</p></li>
+<li><p>Click <strong>Center</strong> to fit everything in view</p></li>
+<li><p>Use the <strong>scroll wheel</strong> to zoom</p></li>
+</ul>
+<p>All changes are <strong>automatically saved</strong>.</p>
+</section>
+</section>
+<section id="design-an-ontology-form-based">
+<h3>3. Design an Ontology (Form-Based)<a class="headerlink" href="#design-an-ontology-form-based" title="Link to this heading">¶</a></h3>
+<p>Alternatively, use the traditional form interface:</p>
+<ol class="arabic simple">
+<li><p>Click <strong>Information</strong> in the sidebar</p></li>
+<li><p>Set an <strong>Ontology Name</strong> (e.g., “MyOrganization”)</p></li>
+<li><p>The <strong>Base URI</strong> is auto-generated from the configured domain</p></li>
+</ol>
+<section id="add-entities">
+<h4>Add Entities<a class="headerlink" href="#add-entities" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p>Click <strong>Entities</strong> in the sidebar</p></li>
+<li><p>Click “Add Class”</p></li>
+<li><p>Enter a name (e.g., “Person”, “Department”)</p></li>
+<li><p>Add attributes in the Attributes section</p></li>
+<li><p>Choose an icon</p></li>
+<li><p>Click “Add”</p></li>
+</ol>
+</section>
+<section id="add-relationships">
+<h4>Add Relationships<a class="headerlink" href="#add-relationships" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p>Click <strong>Relationships</strong> in the sidebar</p></li>
+<li><p>Click “Add Property”</p></li>
+<li><p>Select source entity (Domain)</p></li>
+<li><p>Select target entity (Range)</p></li>
+<li><p>Set the direction (Forward/Reverse/Bidirectional)</p></li>
+<li><p>Add relationship attributes if needed</p></li>
+<li><p>Click “Add”</p></li>
+</ol>
+</section>
+</section>
+<section id="preview-and-save">
+<h3>4. Preview and Save<a class="headerlink" href="#preview-and-save" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Click <strong>OWL Content</strong> to see your generated ontology in Turtle format</p></li>
+<li><p>Click <strong>Validate</strong> to check your ontology</p></li>
+<li><p>Click <strong>Save</strong> to store in Unity Catalog</p></li>
+</ol>
+</section>
+<section id="assign-data-sources">
+<h3>5. Assign Data Sources<a class="headerlink" href="#assign-data-sources" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Go to the <strong>Mapping</strong> page (click on “Mapping” in the navbar)</p></li>
+<li><p>Your ontology must be loaded (indicated by green checkmark)</p></li>
+</ol>
+<section id="visual-mapping-designer-view">
+<h4>Visual Mapping (Designer View)<a class="headerlink" href="#visual-mapping-designer-view" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p>Click <strong>Designer</strong> in the sidebar to use the visual mapping interface</p></li>
+<li><p>Click on entities to open the mapping dialog:</p>
+<ul class="simple">
+<li><p>Enter a SQL query that returns entity data (e.g., <code class="docutils literal notranslate"><span class="pre">SELECT</span> <span class="pre">*</span> <span class="pre">FROM</span> <span class="pre">main.default.person</span></code>)</p></li>
+<li><p>Click <strong>Test Query</strong> to validate and preview results</p></li>
+<li><p>Select the <strong>ID Column</strong> for generating unique URIs</p></li>
+<li><p>Select the <strong>Label Column</strong> for display names</p></li>
+<li><p>Map each entity attribute to a query column</p></li>
+<li><p>Click “Save Mapping”</p></li>
+</ul>
+</li>
+<li><p>Click on relationships to map them:</p>
+<ul class="simple">
+<li><p>Write a SQL query that returns source and target IDs</p></li>
+<li><p>Click <strong>Test Query</strong> to validate</p></li>
+<li><p>Select source and target ID columns from results</p></li>
+<li><p>Click “Save Mapping”</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="manual-mapping">
+<h4>Manual Mapping<a class="headerlink" href="#manual-mapping" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p>Click <strong>Manual</strong> in the sidebar for advanced mapping options</p></li>
+</ol>
+</section>
+<section id="r2rml-output">
+<h4>R2RML Output<a class="headerlink" href="#r2rml-output" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p>Navigate to <strong>Domain</strong> → <strong>Export</strong></p></li>
+<li><p>View the auto-generated R2RML mapping</p></li>
+<li><p>Copy or download as needed</p></li>
+<li><p>Click <strong>Validate</strong> (in navbar) to verify all mappings are complete</p></li>
+</ol>
+</section>
+</section>
+<section id="explore-your-data-digital-twin">
+<h3>6. Explore Your Data (Digital Twin)<a class="headerlink" href="#explore-your-data-digital-twin" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Go to the <strong>Digital Twin</strong> page</p></li>
+<li><p>Click <strong>Synchronize</strong> to generate triples from your mappings and write them to the configured Unity Catalog table</p></li>
+<li><p>Once synced, browse the <strong>Triples</strong> tab to see the generated data in a sortable grid</p></li>
+<li><p>Explore the <strong>Knowledge Graph</strong> tab for an interactive graph:</p>
+<ul class="simple">
+<li><p>Click on entities to see details in the right panel</p></li>
+<li><p>Use <strong>Find</strong> to search for specific entities</p></li>
+<li><p>Use <strong>Filters</strong> to narrow down by entity type, field, or depth</p></li>
+<li><p>View all mapped attributes, values, and relationships</p></li>
+</ul>
+</li>
+<li><p>Run <strong>Quality</strong> checks to validate your data against ontology constraints</p></li>
+<li><p>Run <strong>Data Quality</strong> (SHACL) checks from the <strong>Data Quality</strong> sidebar section — validates cardinality, datatypes, patterns, and custom SPARQL rules against the triple store</p></li>
+<li><p>Run <strong>Reasoning</strong> from the <strong>Reasoning</strong> sidebar section — executes OWL 2 RL inference and SWRL business rules to discover inferred triples</p></li>
+<li><p>Access the <strong>GraphQL</strong> playground to query your knowledge graph with auto-generated typed queries</p></li>
+</ol>
+</section>
+</section>
+<section id="common-commands">
+<h2>Common Commands<a class="headerlink" href="#common-commands" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Start application</span>
+./start.sh
+
+<span class="c1"># Start in background</span>
+./start.sh<span class="w"> </span>--background
+
+<span class="c1"># Stop application</span>
+./stop.sh
+
+<span class="c1"># Run tests</span>
+make<span class="w"> </span><span class="nb">test</span>
+
+<span class="c1"># Format code</span>
+make<span class="w"> </span>format
+
+<span class="c1"># Clean up</span>
+make<span class="w"> </span>clean
+
+<span class="c1"># Show all make commands</span>
+make<span class="w"> </span><span class="nb">help</span>
+</pre></div>
+</div>
+</section>
+<section id="understanding-the-navigation">
+<h2>Understanding the Navigation<a class="headerlink" href="#understanding-the-navigation" title="Link to this heading">¶</a></h2>
+<p>The OntoBricks interface has a navigation bar with status indicators:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Element</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>SQL Warehouse</strong></p></td>
+<td><p>Dropdown to select/switch SQL warehouses</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Ontology</strong></p></td>
+<td><p>Shows ✓ (green) when ontology is loaded, ✗ (red) otherwise</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Mapping</strong></p></td>
+<td><p>Shows ✓ (green) when R2RML mapping exists, ✗ (red) otherwise</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Digital Twin</strong></p></td>
+<td><p>Access the sync, knowledge graph, and quality checks interface</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Settings</strong></p></td>
+<td><p>Manage Databricks connection and settings</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="ontology-sidebar-navigation">
+<h2>Ontology Sidebar Navigation<a class="headerlink" href="#ontology-sidebar-navigation" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Menu Item</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Wizard</strong></p></td>
+<td><p>AI-powered ontology generation with quick templates</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Design</strong></p></td>
+<td><p>Visual drag-and-drop ontology designer</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Information</strong></p></td>
+<td><p>Basic ontology settings (name, URI)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Entities</strong></p></td>
+<td><p>Manage classes with form interface</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Relationships</strong></p></td>
+<td><p>Manage object properties</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Model</strong></p></td>
+<td><p>Interactive force-directed ontology graph</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>SWRL Rules</strong></p></td>
+<td><p>Define SWRL inference rules</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Data Quality</strong></p></td>
+<td><p>SHACL shape-based data quality rules</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Constraints</strong></p></td>
+<td><p>Property cardinality and value constraints</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Expr. &amp; Axioms</strong></p></td>
+<td><p>OWL class expressions and axioms</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Import</strong></p></td>
+<td><p>Import OWL, RDFS, FIBO, CDISC, IOF standards</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>OWL Content</strong></p></td>
+<td><p>View generated Turtle/OWL</p></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<div><p><strong>Tip</strong>: The Wizard provides domain-specific quick templates (CRM, E-Commerce, IoT, Healthcare, Energy). These are defined in <code class="docutils literal notranslate"><span class="pre">src/shared/config/constants.py</span></code> and can be customised or extended.</p>
+</div></blockquote>
+</section>
+<section id="troubleshooting">
+<h2>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading">¶</a></h2>
+<section id="connection-failed-error">
+<h3>“Connection failed” Error<a class="headerlink" href="#connection-failed-error" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Verify your <code class="docutils literal notranslate"><span class="pre">DATABRICKS_HOST</span></code> includes <code class="docutils literal notranslate"><span class="pre">https://</span></code></p></li>
+<li><p>Check your token hasn’t expired</p></li>
+<li><p>Ensure the SQL Warehouse is running (check Databricks UI)</p></li>
+<li><p>Verify network connectivity</p></li>
+</ul>
+</section>
+<section id="no-tables-showing">
+<h3>No Tables Showing<a class="headerlink" href="#no-tables-showing" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Check catalog and schema names are correct (case-sensitive)</p></li>
+<li><p>Verify you have permissions to access the schema</p></li>
+<li><p>Try listing tables directly in Databricks SQL</p></li>
+</ul>
+</section>
+<section id="port-already-in-use">
+<h3>Port Already in Use<a class="headerlink" href="#port-already-in-use" title="Link to this heading">¶</a></h3>
+<p>Change the port in <code class="docutils literal notranslate"><span class="pre">.env</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">DATABRICKS_APP_PORT</span><span class="o">=</span><span class="m">8080</span>
+</pre></div>
+</div>
+<p>Then restart the application.</p>
+</section>
+<section id="virtual-environment-issues">
+<h3>Virtual Environment Issues<a class="headerlink" href="#virtual-environment-issues" title="Link to this heading">¶</a></h3>
+<p>If you have issues with the virtual environment:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Remove existing environment</span>
+rm<span class="w"> </span>-rf<span class="w"> </span>.venv
+
+<span class="c1"># Run setup again</span>
+./setup.sh
+</pre></div>
+</div>
+</section>
+<section id="sync-or-knowledge-graph-fails">
+<h3>Sync or Knowledge Graph Fails<a class="headerlink" href="#sync-or-knowledge-graph-fails" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Ensure both Ontology and Mapping have green checkmarks in the navbar</p></li>
+<li><p>Check that the R2RML mapping is generated (visible in Domain → Export)</p></li>
+<li><p>Verify the SQL Warehouse is running and accessible</p></li>
+<li><p>Check browser console for any errors</p></li>
+</ul>
+</section>
+<section id="design-changes-not-appearing">
+<h3>Design Changes Not Appearing<a class="headerlink" href="#design-changes-not-appearing" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Wait for the “Saving…” indicator to complete</p></li>
+<li><p>Switch to another tab and back to refresh</p></li>
+<li><p>Check browser console for any errors</p></li>
+</ul>
+</section>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Read the <a class="reference internal" href="user-guide.html"><span class="std std-doc">User Guide</span></a> for detailed instructions</p></li>
+<li><p>See the <a class="reference internal" href="architecture.html"><span class="std std-doc">Architecture</span></a> for technical details</p></li>
+<li><p>Check <a class="reference internal" href="deployment.html"><span class="std std-doc">Deployment</span></a> for Databricks Apps deployment</p></li>
+<li><p>Explore the <a class="reference internal" href="mcp.html"><span class="std std-doc">MCP Server</span></a> for Databricks Playground integration</p></li>
+<li><p>Review <a class="reference internal" href="user-guide.html#data-quality"><span class="std std-ref">Data Quality</span></a> for SHACL shape validation</p></li>
+<li><p>Explore <a class="reference internal" href="user-guide.html#reasoning"><span class="std std-ref">Reasoning</span></a> for OWL 2 RL and SWRL inference</p></li>
+<li><p>See the <a class="reference internal" href="api.html"><span class="std std-doc">External API</span></a> for REST and GraphQL programmatic access</p></li>
+</ul>
+<hr class="docutils" />
+<p>Need help? Check the troubleshooting section or review the logs in <code class="docutils literal notranslate"><span class="pre">.ontobricks.log</span></code> when running in background mode.</p>
+</section>
+<hr class="docutils" />
+<section id="environment-variables-full-reference">
+<h2>Environment variables (full reference)<a class="headerlink" href="#environment-variables-full-reference" title="Link to this heading">¶</a></h2>
+<p>OntoBricks uses environment variables for configuration, making it easy to deploy in different environments without code changes.</p>
+<section id="configuration-variables">
+<h3>Configuration Variables<a class="headerlink" href="#configuration-variables" title="Link to this heading">¶</a></h3>
+<section id="required-for-databricks-connectivity">
+<h4>Required for Databricks Connectivity<a class="headerlink" href="#required-for-databricks-connectivity" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>Example</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_HOST</span></code></p></td>
+<td><p>Your Databricks workspace URL</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">https://your-workspace.cloud.databricks.com</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_TOKEN</span></code></p></td>
+<td><p>Personal access token or service principal token</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dapi1234567890abcdef...</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_SQL_WAREHOUSE_ID</span></code></p></td>
+<td><p>SQL Warehouse identifier</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">abc123def456...</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="optional-configuration">
+<h4>Optional Configuration<a class="headerlink" href="#optional-configuration" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_CATALOG</span></code></p></td>
+<td><p>Default catalog to use</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">main</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_SCHEMA</span></code></p></td>
+<td><p>Default schema to use</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">default</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SECRET_KEY</span></code></p></td>
+<td><p>Secret key for session encryption</p></td>
+<td><p>Random (dev only)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_APP_PORT</span></code></p></td>
+<td><p>Port the application listens on</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">8000</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_VOLUME_PATH</span></code></p></td>
+<td><p>Full volume path injected by the Databricks App <code class="docutils literal notranslate"><span class="pre">volume</span></code> resource (<code class="docutils literal notranslate"><span class="pre">/Volumes/&lt;catalog&gt;/&lt;schema&gt;/&lt;volume&gt;</span></code>). When set, overrides the three <code class="docutils literal notranslate"><span class="pre">REGISTRY_*</span></code> variables below.</p></td>
+<td><p><em>(from volume resource)</em></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_CATALOG</span></code></p></td>
+<td><p>Unity Catalog catalog for the domain registry (local dev fallback)</p></td>
+<td><p><em>(from session or Settings)</em></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_SCHEMA</span></code></p></td>
+<td><p>Schema for the domain registry (local dev fallback)</p></td>
+<td><p><em>(from session or Settings)</em></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_VOLUME</span></code></p></td>
+<td><p>Volume name for domain storage (local dev fallback)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">OntoBricksRegistry</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_TRIPLESTORE_TABLE</span></code></p></td>
+<td><p>Default triple store table (catalog.schema.table)</p></td>
+<td><p><em>(none)</em></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT</span></code></p></td>
+<td><p>Fallback SQL Warehouse ID for MCP/API calls</p></td>
+<td><p><em>(none)</em></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="mlflow-agent-tracing">
+<h4>MLflow / Agent Tracing<a class="headerlink" href="#mlflow-agent-tracing" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">MLFLOW_TRACKING_URI</span></code></p></td>
+<td><p>Set to <code class="docutils literal notranslate"><span class="pre">databricks</span></code> to persist agent traces to the workspace tracking server. When unset, traces go to a local <code class="docutils literal notranslate"><span class="pre">mlflow.db</span></code> file.</p></td>
+<td><p><em>(none)</em></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_MLFLOW_EXPERIMENT</span></code></p></td>
+<td><p>Experiment name for agent traces. On Databricks, relative names are automatically prefixed with <code class="docutils literal notranslate"><span class="pre">/Shared/</span></code>.</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ontobricks-agents</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="mcp-server">
+<h4>MCP Server<a class="headerlink" href="#mcp-server" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_URL</span></code></p></td>
+<td><p>URL of the main OntoBricks app (used by the MCP server)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">http://localhost:8000</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="databricks-runtime-detection">
+<h4>Databricks Runtime Detection<a class="headerlink" href="#databricks-runtime-detection" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>Set By</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_RUNTIME_VERSION</span></code></p></td>
+<td><p>Databricks runtime version</p></td>
+<td><p>Databricks (automatic)</p></td>
+</tr>
+</tbody>
+</table>
+<p>When this variable is present, OntoBricks automatically switches to production mode and uses service principal authentication.</p>
+</section>
+</section>
+<section id="setting-environment-variables">
+<h3>Setting Environment Variables<a class="headerlink" href="#setting-environment-variables" title="Link to this heading">¶</a></h3>
+<section id="local-development-env-file">
+<h4>Local Development (.env file)<a class="headerlink" href="#local-development-env-file" title="Link to this heading">¶</a></h4>
+<p>Create a <code class="docutils literal notranslate"><span class="pre">.env</span></code> file in the project root:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1">## Databricks Configuration</span>
+<span class="nv">DATABRICKS_HOST</span><span class="o">=</span>https://your-workspace.cloud.databricks.com
+<span class="nv">DATABRICKS_TOKEN</span><span class="o">=</span>dapi1234567890abcdef...
+<span class="nv">DATABRICKS_SQL_WAREHOUSE_ID</span><span class="o">=</span>abc123def456...
+
+<span class="c1">## Optional Configuration</span>
+<span class="nv">DATABRICKS_CATALOG</span><span class="o">=</span>main
+<span class="nv">DATABRICKS_SCHEMA</span><span class="o">=</span>default
+<span class="nv">SECRET_KEY</span><span class="o">=</span>your-secret-key-here
+<span class="nv">DATABRICKS_APP_PORT</span><span class="o">=</span><span class="m">8000</span>
+</pre></div>
+</div>
+</section>
+<section id="shell-export">
+<h4>Shell Export<a class="headerlink" href="#shell-export" title="Link to this heading">¶</a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">DATABRICKS_HOST</span><span class="o">=</span>https://your-workspace.cloud.databricks.com
+<span class="nb">export</span><span class="w"> </span><span class="nv">DATABRICKS_TOKEN</span><span class="o">=</span>dapi1234567890abcdef...
+<span class="nb">export</span><span class="w"> </span><span class="nv">DATABRICKS_SQL_WAREHOUSE_ID</span><span class="o">=</span>abc123def456...
+</pre></div>
+</div>
+</section>
+<section id="databricks-apps-deployment">
+<h4>Databricks Apps Deployment<a class="headerlink" href="#databricks-apps-deployment" title="Link to this heading">¶</a></h4>
+<p>When deploying to Databricks Apps, set environment variables in the app configuration:</p>
+<ol class="arabic simple">
+<li><p>Navigate to your app in Databricks UI</p></li>
+<li><p>Go to Configuration → Environment Variables</p></li>
+<li><p>Add the required variables</p></li>
+<li><p>Restart the app</p></li>
+</ol>
+<p><strong>Note</strong>: In Databricks Apps, <code class="docutils literal notranslate"><span class="pre">DATABRICKS_HOST</span></code> and authentication are typically handled automatically by the service principal.</p>
+</section>
+</section>
+<section id="automatic-configuration-detection">
+<h3>Automatic Configuration Detection<a class="headerlink" href="#automatic-configuration-detection" title="Link to this heading">¶</a></h3>
+<p>OntoBricks automatically detects and uses environment variables in the following priority:</p>
+<ol class="arabic simple">
+<li><p><strong>Environment Variables</strong>: Direct OS environment variables</p></li>
+<li><p><strong>App Settings</strong>: Application configuration (loaded from environment via Pydantic)</p></li>
+<li><p><strong>Manual Entry</strong>: User input through the settings page</p></li>
+</ol>
+<section id="settings-page-behavior">
+<h4>Settings Page Behavior<a class="headerlink" href="#settings-page-behavior" title="Link to this heading">¶</a></h4>
+<p>When you open the Settings page:</p>
+<ul class="simple">
+<li><p><strong>Environment Variables Set</strong>: Fields are pre-populated and marked as read-only</p></li>
+<li><p><strong>No Environment Variables</strong>: Fields are empty and editable</p></li>
+<li><p><strong>Partial Configuration</strong>: Mix of pre-populated and editable fields</p></li>
+</ul>
+</section>
+<section id="resource-locked-controls-databricks-apps">
+<h4>Resource-Locked Controls (Databricks Apps)<a class="headerlink" href="#resource-locked-controls-databricks-apps" title="Link to this heading">¶</a></h4>
+<p>When the app is deployed with Databricks App resource bindings (<code class="docutils literal notranslate"><span class="pre">sql-warehouse</span></code> and/or <code class="docutils literal notranslate"><span class="pre">volume</span></code>), the corresponding Settings controls are <strong>locked</strong>:</p>
+<ul class="simple">
+<li><p><strong>SQL Warehouse</strong>: The warehouse dropdown and refresh button are disabled. A lock icon indicates the value is configured via the Databricks App resource.</p></li>
+<li><p><strong>Registry</strong>: The Change button is disabled. If the volume is bound but the registry is not yet initialized, the <strong>Initialize</strong> button remains available so an admin can bootstrap the registry.</p></li>
+</ul>
+<p>To change these values, update the resource bindings in <strong>Compute &gt; Apps &gt; Resources</strong> and restart the app.</p>
+</section>
+<section id="visual-indicators">
+<h4>Visual Indicators<a class="headerlink" href="#visual-indicators" title="Link to this heading">¶</a></h4>
+<p>The configuration page shows:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ℹ️</span> <span class="n">Using</span> <span class="n">credentials</span> <span class="kn">from</span><span class="w"> </span><span class="nn">environment</span>
+</pre></div>
+</div>
+<p>And individual fields show:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>✓ Loaded from environment
+</pre></div>
+</div>
+<p>For fields that are automatically configured.</p>
+</section>
+</section>
+<section id="security-best-practices">
+<h3>Security Best Practices<a class="headerlink" href="#security-best-practices" title="Link to this heading">¶</a></h3>
+<section id="development">
+<h4>Development<a class="headerlink" href="#development" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p><strong>Use .env file</strong>: Keep credentials in <code class="docutils literal notranslate"><span class="pre">.env</span></code> (never commit to git)</p></li>
+<li><p><strong>Add to .gitignore</strong>: Ensure <code class="docutils literal notranslate"><span class="pre">.env</span></code> is in <code class="docutils literal notranslate"><span class="pre">.gitignore</span></code></p></li>
+<li><p><strong>Use example file</strong>: Provide <code class="docutils literal notranslate"><span class="pre">.env.example</span></code> for team members</p></li>
+</ol>
+</section>
+<section id="production">
+<h4>Production<a class="headerlink" href="#production" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p><strong>Use Service Principal</strong>: Avoid personal access tokens in production</p></li>
+<li><p><strong>Environment-Only</strong>: Set all credentials as environment variables</p></li>
+<li><p><strong>Secret Management</strong>: Use Databricks Secrets or similar</p></li>
+<li><p><strong>Rotate Regularly</strong>: Change tokens and secrets periodically</p></li>
+</ol>
+</section>
+</section>
+<section id="id1">
+<h3>Troubleshooting<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h3>
+<section id="variables-not-loading">
+<h4>Variables Not Loading<a class="headerlink" href="#variables-not-loading" title="Link to this heading">¶</a></h4>
+<p><strong>Problem</strong>: Configuration page is empty despite setting environment variables</p>
+<p><strong>Solutions</strong>:</p>
+<ol class="arabic simple">
+<li><p>Restart the application after setting variables</p></li>
+<li><p>Check variable names match exactly (case-sensitive)</p></li>
+<li><p>Verify variables are exported in the shell</p></li>
+<li><p>Check <code class="docutils literal notranslate"><span class="pre">.env</span></code> file location (must be in project root)</p></li>
+</ol>
+</section>
+<section id="read-only-fields">
+<h4>Read-Only Fields<a class="headerlink" href="#read-only-fields" title="Link to this heading">¶</a></h4>
+<p><strong>Problem</strong>: Can’t edit configuration fields</p>
+<p><strong>Reason</strong>: Fields are loaded from environment variables</p>
+<p><strong>Solutions</strong>:</p>
+<ol class="arabic">
+<li><p>Unset environment variables to allow manual entry:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">unset</span><span class="w"> </span>DATABRICKS_HOST
+<span class="nb">unset</span><span class="w"> </span>DATABRICKS_TOKEN
+</pre></div>
+</div>
+</li>
+<li><p>Or override by restarting app without loading <code class="docutils literal notranslate"><span class="pre">.env</span></code></p></li>
+</ol>
+</section>
+<section id="token-not-working">
+<h4>Token Not Working<a class="headerlink" href="#token-not-working" title="Link to this heading">¶</a></h4>
+<p><strong>Problem</strong>: Connection fails despite token being set</p>
+<p><strong>Solutions</strong>:</p>
+<ol class="arabic">
+<li><p>Verify token hasn’t expired</p></li>
+<li><p>Check token has correct permissions</p></li>
+<li><p>Ensure no extra spaces or quotes in <code class="docutils literal notranslate"><span class="pre">.env</span></code> file</p></li>
+<li><p>Test token with curl:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$DATABRICKS_TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">     </span><span class="nv">$DATABRICKS_HOST</span>/api/2.0/clusters/list
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+</section>
+<section id="example-configurations">
+<h3>Example Configurations<a class="headerlink" href="#example-configurations" title="Link to this heading">¶</a></h3>
+<section id="local-development">
+<h4>Local Development<a class="headerlink" href="#local-development" title="Link to this heading">¶</a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1">## .env</span>
+<span class="nv">DATABRICKS_HOST</span><span class="o">=</span>https://my-workspace.cloud.databricks.com
+<span class="nv">DATABRICKS_TOKEN</span><span class="o">=</span>dapi1234567890abcdef
+<span class="nv">DATABRICKS_SQL_WAREHOUSE_ID</span><span class="o">=</span>abc123
+<span class="nv">DATABRICKS_CATALOG</span><span class="o">=</span>main
+<span class="nv">DATABRICKS_SCHEMA</span><span class="o">=</span>default
+<span class="nv">SECRET_KEY</span><span class="o">=</span>dev-secret-key
+<span class="nv">DATABRICKS_APP_PORT</span><span class="o">=</span><span class="m">8000</span>
+
+<span class="c1">## MLflow (optional — persist traces to Databricks)</span>
+<span class="nv">MLFLOW_TRACKING_URI</span><span class="o">=</span>databricks
+</pre></div>
+</div>
+</section>
+<section id="databricks-apps">
+<h4>Databricks Apps<a class="headerlink" href="#databricks-apps" title="Link to this heading">¶</a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1">## Injected from app.yaml resource bindings</span>
+<span class="nv">DATABRICKS_SQL_WAREHOUSE_ID</span><span class="o">=</span>&lt;from<span class="w"> </span>sql-warehouse<span class="w"> </span>resource&gt;
+<span class="nv">REGISTRY_VOLUME_PATH</span><span class="o">=</span>&lt;from<span class="w"> </span>volume<span class="w"> </span>resource,<span class="w"> </span>e.g.<span class="w"> </span>/Volumes/catalog/schema/volume&gt;
+
+<span class="c1">## Set via app.yaml env section</span>
+<span class="nv">DATABRICKS_CATALOG</span><span class="o">=</span>main
+<span class="nv">DATABRICKS_SCHEMA</span><span class="o">=</span>default
+<span class="nv">MLFLOW_TRACKING_URI</span><span class="o">=</span>databricks
+<span class="nv">DATABRICKS_APP_PORT</span><span class="o">=</span><span class="m">8000</span>
+
+<span class="c1">## Static fallbacks (used for local dev / MCP when no resource is bound)</span>
+<span class="nv">REGISTRY_CATALOG</span><span class="o">=</span>main
+<span class="nv">REGISTRY_SCHEMA</span><span class="o">=</span>default
+<span class="nv">REGISTRY_VOLUME</span><span class="o">=</span>OntoBricksRegistry
+
+<span class="c1">## MCP server (when deployed as separate app)</span>
+<span class="nv">ONTOBRICKS_URL</span><span class="o">=</span>https://your-ontobricks-app-url.databricks-apps.com
+
+<span class="c1">## Automatically set by Databricks</span>
+<span class="nv">DATABRICKS_HOST</span><span class="o">=</span>&lt;automatically-configured&gt;
+<span class="c1">## Authentication via service principal (automatic)</span>
+</pre></div>
+</div>
+<p>When both the <code class="docutils literal notranslate"><span class="pre">sql-warehouse</span></code> and <code class="docutils literal notranslate"><span class="pre">volume</span></code> resources are bound, the Settings UI locks the warehouse and registry controls. See the <a class="reference internal" href="deployment.html"><span class="std std-doc">Deployment Guide</span></a> for details.</p>
+</section>
+<section id="ci-cd-pipeline">
+<h4>CI/CD Pipeline<a class="headerlink" href="#ci-cd-pipeline" title="Link to this heading">¶</a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1">## Set as secrets in CI/CD system</span>
+<span class="nv">DATABRICKS_HOST</span><span class="o">=</span><span class="si">${</span><span class="p">{ secrets.DATABRICKS_HOST </span><span class="si">}</span><span class="o">}</span>
+<span class="nv">DATABRICKS_TOKEN</span><span class="o">=</span><span class="si">${</span><span class="p">{ secrets.DATABRICKS_TOKEN </span><span class="si">}</span><span class="o">}</span>
+<span class="nv">DATABRICKS_SQL_WAREHOUSE_ID</span><span class="o">=</span><span class="si">${</span><span class="p">{ secrets.WAREHOUSE_ID </span><span class="si">}</span><span class="o">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="global-constants-non-environment">
+<h3>Global Constants (Non-Environment)<a class="headerlink" href="#global-constants-non-environment" title="Link to this heading">¶</a></h3>
+<p>Some application-wide constants are not controlled by environment variables. These live in <code class="docutils literal notranslate"><span class="pre">src/shared/config/constants.py</span></code> and include:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Constant</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">APP_NAME</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;OntoBricks&quot;</span></code></p></td>
+<td><p>Application display name</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">APP_VERSION</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;0.9.0&quot;</span></code></p></td>
+<td><p>Current version string</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_NS</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">http://ontobricks.com/schema#</span></code></p></td>
+<td><p>RDF namespace for OntoBricks extensions</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DEFAULT_BASE_URI</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">http://ontobricks.com/ontology#</span></code></p></td>
+<td><p>Default ontology base URI</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">LLM_DEFAULT_MAX_TOKENS</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">4096</span></code></p></td>
+<td><p>Default max tokens for LLM generation</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">LLM_DEFAULT_TEMPERATURE</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.1</span></code></p></td>
+<td><p>Default temperature for LLM generation</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">WIZARD_TEMPLATES</span></code></p></td>
+<td><p><em>(dict)</em></p></td>
+<td><p>Ontology Wizard quick-template definitions (CRM, IoT, Energy, etc.)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">MAX_NOTIFICATIONS</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">10</span></code></p></td>
+<td><p>Max notification messages shown in the notification center</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">AUTO_ASSIGN_CHUNK_SIZE</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">5</span></code></p></td>
+<td><p>Max entities + relationships per auto-map agent run</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">AUTO_ASSIGN_CHUNK_COOLDOWN</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">15</span></code></p></td>
+<td><p>Seconds to wait between auto-map chunks (avoids LLM rate limits)</p></td>
+</tr>
+</tbody>
+</table>
+<p>These values are edited directly in the Python file. They do not depend on <code class="docutils literal notranslate"><span class="pre">.env</span></code> or OS environment variables.</p>
+</section>
+<section id="loading-priority">
+<h3>Loading Priority<a class="headerlink" href="#loading-priority" title="Link to this heading">¶</a></h3>
+<p>When the application starts, configuration is loaded in this order (later values override earlier ones):</p>
+<ol class="arabic simple">
+<li><p>Default values in code (including <code class="docutils literal notranslate"><span class="pre">src/shared/config/constants.py</span></code>)</p></li>
+<li><p>Environment variables from OS</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">.env</span></code> file (if present)</p></li>
+<li><p>Manual user input (stored in session)</p></li>
+</ol>
+</section>
+<section id="validation">
+<h3>Validation<a class="headerlink" href="#validation" title="Link to this heading">¶</a></h3>
+<p>The application validates environment variables on startup:</p>
+<ul class="simple">
+<li><p>✅ <strong>Valid</strong>: All required variables present and well-formed</p></li>
+<li><p>⚠️ <strong>Partial</strong>: Some variables missing (manual input required)</p></li>
+<li><p>❌ <strong>Invalid</strong>: Variables present but malformed (check format)</p></li>
+</ul>
+<p>Check the terminal output on startup for validation messages.</p>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/guides/get-started.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

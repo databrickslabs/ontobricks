@@ -129,7 +129,7 @@ def _ensure_ladybug_synced(domain, uc_service):
     try:
         import os
         from back.core.helpers import effective_uc_version_path, resolve_ladybug_local_path
-        from back.core.triplestore.ladybugdb import sync_from_volume
+        from back.core.graphdb.ladybugdb import sync_from_volume
 
         uc_path = effective_uc_version_path(domain)
         if not uc_path:

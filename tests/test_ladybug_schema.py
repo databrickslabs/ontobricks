@@ -1,7 +1,7 @@
 """Tests for the LadybugDB graph schema generation module."""
 import pytest
 
-from back.core.triplestore.ladybugdb import (
+from back.core.graphdb.ladybugdb import (
     GraphSchema,
     NodeTableDef,
     RelTableDef,

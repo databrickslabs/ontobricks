@@ -6,7 +6,7 @@ import tarfile
 import pytest
 from unittest.mock import MagicMock
 
-from back.core.triplestore.ladybugdb import (
+from back.core.graphdb.ladybugdb import (
     local_db_path,
     _sanitize_db_name,
     graph_volume_path,

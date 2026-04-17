@@ -1,0 +1,24 @@
+---
+name: Performance Optimization
+priority: 70
+scope:
+  globs: ["src/**"]
+  languages: ["python", "javascript"]
+---
+
+### Performance Optimization
+
+**Backend**
+
+- **Asynchronous Operations**: Use `async/await` for Databricks SDK calls and I/O-bound operations.
+- **Logging**: Use %-style formatting (not f-strings) in logging calls for both security and performance.
+- **Session Data**: Minimize the number of session variables. Prefer computed values over stored ones when the cost is low.
+- **Caching**: Use TTL caches for frequently accessed, rarely changing data (e.g., version status in `version_status.py`).
+- **Triple Store / Graph DB**: Be mindful of query complexity; use incremental builds (`IncrementalBuildService`) when possible rather than full rebuilds.
+- **Background Tasks**: Offload heavy operations to `TaskManager` or Databricks Workflows. Log progress at each async step.
+
+**Frontend**
+
+- **Template Reuse**: Use base templates and partials to keep the UI modular and DRY.
+- **Static Assets**: Minimise inline scripts/styles. Reference external CSS/JS files for cacheability.
+- **Lazy Loading**: Load heavy visualisation libraries (OntoViz) only when needed.

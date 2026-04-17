@@ -1,0 +1,32 @@
+---
+name: Project Overview
+priority: 95
+scope:
+  globs: ["**/*"]
+---
+
+### Project Overview
+
+OntoBricks is a **Python FastAPI** web application designed to run as a **Databricks App**. It provides ontology management, knowledge graph engineering, and metadata governance tools on top of Databricks Unity Catalog.
+
+**Core Features:**
+
+- **Ontology Management:** OWL/RDFS/SHACL import/export, class/property CRUD, URI management, industry ontology imports (CDISC, FIBO, IOF). Managed by the `Ontology` domain class.
+- **Mapping:** Entity/relationship mapping CRUD, R2RML generation/parsing, SQL validation, LLM-assisted auto-assign. Managed by the `Mapping` domain class.
+- **Digital Twin:** Knowledge graph build, sync, SPARQL query, quality checks, graph visualization, community detection. Managed by the `DigitalTwin` domain class.
+- **Domain Management:** Unity Catalog save/load, version status, metadata, design layout persistence. Managed by the `Domain` domain class.
+- **Registry:** UC Volume-backed domain registry with permissions and scheduled builds.
+- **Reasoning:** OWL 2 RL inference, SWRL rule execution, decision tables, SPARQL CONSTRUCT rules, aggregate rules.
+- **GraphQL API:** Auto-generated Strawberry GraphQL schema from ontology metadata.
+- **Graph DB:** Pluggable graph database engine abstraction (currently LadybugDB, extensible to others).
+- **Triple Store:** Delta views in Unity Catalog, queried via SQL Warehouse.
+- **LLM Agents:** OWL generator, auto-assign, icon assign, assistant (abstracted behind `AgentClient`).
+- **SQL Wizard:** LLM-assisted text-to-SQL pipeline.
+
+**General Architecture:**
+
+- The app follows a **layered architecture**: routes (HTTP) → domain classes (`back/objects`) → core infrastructure (`back/core`).
+- **Frontend** uses Jinja2 templates with vanilla JS/CSS (no React, no TypeScript).
+- **Backend** is pure Python with FastAPI.
+- Metadata is stored in Databricks Unity Catalog; the graph DB (LadybugDB) runs as an embedded engine with UC Volume persistence.
+- A domain includes ontology details, ontology design layout, and configuration parameters. A domain must **never** include tokens, passwords, secrets, or transient query results.

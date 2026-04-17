@@ -63,14 +63,14 @@ class SWRLCypherTranslator:
                             uri_map: Optional[Dict] = None) -> str:
         """Map a SWRL class name to a graph-schema node table name."""
         if self._schema is None:
-            from back.core.triplestore.ladybugdb.GraphSchema import GraphSchema
+            from back.core.graphdb.ladybugdb.GraphSchema import GraphSchema
             return GraphSchema.safe_identifier(class_name)
 
         uri = SWRLParser.resolve_uri(class_name, base_uri, uri_map)
         tbl = self._schema.class_uri_to_table.get(uri)
         if tbl:
             return tbl
-        from back.core.triplestore.ladybugdb.GraphSchema import GraphSchema
+        from back.core.graphdb.ladybugdb.GraphSchema import GraphSchema
         safe = GraphSchema.safe_identifier(class_name)
         if safe in self._schema.node_tables:
             return safe
@@ -80,14 +80,14 @@ class SWRLCypherTranslator:
                            uri_map: Optional[Dict] = None) -> str:
         """Map a SWRL property name to a graph-schema relationship table."""
         if self._schema is None:
-            from back.core.triplestore.ladybugdb.GraphSchema import GraphSchema
+            from back.core.graphdb.ladybugdb.GraphSchema import GraphSchema
             return GraphSchema.safe_identifier(prop_name)
 
         uri = SWRLParser.resolve_uri(prop_name, base_uri, uri_map)
         tbl = self._schema.property_uri_to_table.get(uri)
         if tbl:
             return tbl
-        from back.core.triplestore.ladybugdb.GraphSchema import GraphSchema
+        from back.core.graphdb.ladybugdb.GraphSchema import GraphSchema
         safe = GraphSchema.safe_identifier(prop_name)
         if safe in self._schema.rel_tables:
             return safe

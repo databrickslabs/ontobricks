@@ -6,8 +6,8 @@ import pytest
 
 real_ladybug = pytest.importorskip("real_ladybug", reason="real_ladybug not installed")
 
-from back.core.triplestore.ladybugdb import _safe_table_id
-from back.core.triplestore.ladybugdb.LadybugFlatStore import LadybugFlatStore
+from back.core.graphdb.ladybugdb import _safe_table_id
+from back.core.graphdb.ladybugdb.LadybugFlatStore import LadybugFlatStore
 from back.core.triplestore.constants import RDF_TYPE, RDFS_LABEL
 from back.core.errors import ValidationError
 

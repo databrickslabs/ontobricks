@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>back.objects.session – Session Management &amp; Project State &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=a58bc63e"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="front.routes &amp; internal JSON API – Web UI and HTMX/API helpers" href="app.frontend.html" />
+    <link rel="prev" title="back.objects.registry – Project Registry &amp; Permissions" href="app.objects.registry.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="app.objects.html#subpackages">Subpackages</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="app.html">OntoBricks Application Packages</a><ul>
+  <li><a href="app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a><ul>
+      <li>Previous: <a href="app.objects.registry.html" title="previous chapter"><code class="docutils literal notranslate"><span class="pre">back.objects.registry</span></code> – Project Registry &amp; Permissions</a></li>
+      <li>Next: <a href="app.frontend.html" title="next chapter"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="back-objects-session-session-management-project-state">
+<h1><code class="docutils literal notranslate"><span class="pre">back.objects.session</span></code> – Session Management &amp; Project State<a class="headerlink" href="#back-objects-session-session-management-project-state" title="Link to this heading">¶</a></h1>
+<section id="module-back.objects.session.middleware">
+<span id="middleware"></span><h2>Middleware<a class="headerlink" href="#module-back.objects.session.middleware" title="Link to this heading">¶</a></h2>
+<p>Custom File-Based Session Middleware for FastAPI</p>
+<p>This middleware provides file-based session storage for FastAPI.
+It stores session data as JSON files in a configurable directory.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.objects.session.middleware.FileSessionMiddleware">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.session.middleware.</span></span><span class="sig-name descname"><span class="pre">FileSessionMiddleware</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">app</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">secret_key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'./fastapi_session'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_cookie</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'session'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_age</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">86400</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">same_site</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'lax'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">https_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/middleware.html#FileSessionMiddleware"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.middleware.FileSessionMiddleware" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseHTTPMiddleware</span></code></p>
+<p>File-based session middleware for FastAPI.</p>
+<p>Register with <code class="docutils literal notranslate"><span class="pre">app.add_middleware(FileSessionMiddleware,</span> <span class="pre">secret_key=...,</span>
+<span class="pre">session_dir=...,</span> <span class="pre">max_age=...)</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>secret_key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>session_dir</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>session_cookie</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>max_age</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>same_site</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>https_only</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.middleware.FileSessionMiddleware.dispatch">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">dispatch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">call_next</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/middleware.html#FileSessionMiddleware.dispatch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.middleware.FileSessionMiddleware.dispatch" title="Link to this definition">¶</a></dt>
+<dd><p>Process request with session handling.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Response</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.objects.session.middleware.get_session">
+<span class="sig-prename descclassname"><span class="pre">back.objects.session.middleware.</span></span><span class="sig-name descname"><span class="pre">get_session</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/middleware.html#get_session"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.middleware.get_session" title="Link to this definition">¶</a></dt>
+<dd><p>Dependency that returns the session dict from <code class="docutils literal notranslate"><span class="pre">request.state</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-back.objects.session.SessionManager">
+<span id="session-manager"></span><h2>Session manager<a class="headerlink" href="#module-back.objects.session.SessionManager" title="Link to this heading">¶</a></h2>
+<p>Session manager — request-scoped accessor for session data.</p>
+<p>Wraps the raw <code class="docutils literal notranslate"><span class="pre">request.state.session</span></code> dictionary with <code class="docutils literal notranslate"><span class="pre">get</span></code> /
+<code class="docutils literal notranslate"><span class="pre">set</span></code> / <code class="docutils literal notranslate"><span class="pre">delete</span></code> / <code class="docutils literal notranslate"><span class="pre">clear</span></code> methods and automatically marks the
+session as modified so the middleware persists it on response.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.objects.session.SessionManager.SessionManager">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.session.SessionManager.</span></span><span class="sig-name descname"><span class="pre">SessionManager</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/SessionManager.html#SessionManager"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.SessionManager.SessionManager" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Session manager dependency for modifying session data.</p>
+<p>Inject with <code class="docutils literal notranslate"><span class="pre">SessionManager</span> <span class="pre">=</span> <span class="pre">Depends(get_session_manager)</span></code>, then call
+<code class="docutils literal notranslate"><span class="pre">set</span></code>, <code class="docutils literal notranslate"><span class="pre">get</span></code>, <code class="docutils literal notranslate"><span class="pre">delete</span></code>, or <code class="docutils literal notranslate"><span class="pre">clear</span></code> and <code class="docutils literal notranslate"><span class="pre">save</span></code> when done.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.SessionManager.SessionManager.get">
+<span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/SessionManager.html#SessionManager.get"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.SessionManager.SessionManager.get" title="Link to this definition">¶</a></dt>
+<dd><p>Get a value from session.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>default</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.SessionManager.SessionManager.set">
+<span class="sig-name descname"><span class="pre">set</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/SessionManager.html#SessionManager.set"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.SessionManager.SessionManager.set" title="Link to this definition">¶</a></dt>
+<dd><p>Set a value in session.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.SessionManager.SessionManager.delete">
+<span class="sig-name descname"><span class="pre">delete</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/SessionManager.html#SessionManager.delete"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.SessionManager.SessionManager.delete" title="Link to this definition">¶</a></dt>
+<dd><p>Delete a key from session.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.SessionManager.SessionManager.clear">
+<span class="sig-name descname"><span class="pre">clear</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/SessionManager.html#SessionManager.clear"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.SessionManager.SessionManager.clear" title="Link to this definition">¶</a></dt>
+<dd><p>Clear all session data.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.SessionManager.SessionManager.data">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">data</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.SessionManager.SessionManager.data" title="Link to this definition">¶</a></dt>
+<dd><p>Get the raw session dictionary.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.objects.session.SessionManager.get_session_manager">
+<span class="sig-prename descclassname"><span class="pre">back.objects.session.SessionManager.</span></span><span class="sig-name descname"><span class="pre">get_session_manager</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/SessionManager.html#get_session_manager"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.SessionManager.get_session_manager" title="Link to this definition">¶</a></dt>
+<dd><p>Dependency to get session manager.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-back.objects.session.DomainSession">
+<span id="domain-session"></span><h2>Domain session<a class="headerlink" href="#module-back.objects.session.DomainSession" title="Link to this heading">¶</a></h2>
+<p>Domain session service — unified session management for OntoBricks.</p>
+<p>Runtime payload is a nested dict with <strong>domain</strong> (info, current_version,
+domain_folder, is_active_version, UC <strong>metadata</strong> tables, triplestore), <strong>ontology</strong>
+(classes, rules, constraints), <strong>assignment</strong>,
+<strong>design_layout</strong>, and <strong>settings</strong>.</p>
+<p>Instance-wide options (<strong>warehouse_id</strong>, <strong>default_base_uri</strong>, <strong>default_emoji</strong>)
+are <em>not</em> stored here; they are read from <code class="docutils literal notranslate"><span class="pre">GlobalConfigService</span></code> (registry
+volume <code class="docutils literal notranslate"><span class="pre">.global_config.json</span></code>), admin-only.</p>
+<p>Excluded from export: environment credentials and preferences;
+<code class="docutils literal notranslate"><span class="pre">domain.is_active_version</span></code>; generated OWL, R2RML, and SQL; and
+<code class="docutils literal notranslate"><span class="pre">assignment.r2rml_output</span></code> (all regenerated from source).</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.sanitize_domain_folder">
+<span class="sig-prename descclassname"><span class="pre">back.objects.session.DomainSession.</span></span><span class="sig-name descname"><span class="pre">sanitize_domain_folder</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#sanitize_domain_folder"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.sanitize_domain_folder" title="Link to this definition">¶</a></dt>
+<dd><p>Turn a domain name into a safe folder name (lowercase, underscores).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.get_empty_domain">
+<span class="sig-prename descclassname"><span class="pre">back.objects.session.DomainSession.</span></span><span class="sig-name descname"><span class="pre">get_empty_domain</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#get_empty_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.get_empty_domain" title="Link to this definition">¶</a></dt>
+<dd><p>Return an empty domain data structure.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.session.DomainSession.</span></span><span class="sig-name descname"><span class="pre">DomainSession</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Unified domain session manager.</p>
+<dl>
+<dt>Usage:</dt><dd><p>domain = DomainSession(session_mgr)</p>
+<p># Get values
+name = domain.info.name
+classes = domain.ontology.classes</p>
+<p># Set values
+domain.info.name = “My Domain”
+domain.ontology.classes.append(new_class)</p>
+<p># Save changes
+domain.save()</p>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.SESSION_KEY">
+<span class="sig-name descname"><span class="pre">SESSION_KEY</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'domain_data'</span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.SESSION_KEY" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.__init__" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize with a session manager.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.save">
+<span class="sig-name descname"><span class="pre">save</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.save"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.save" title="Link to this definition">¶</a></dt>
+<dd><p>Save project data to session.</p>
+<p>Stamps <code class="docutils literal notranslate"><span class="pre">domain.last_update</span></code> when the ontology or mapping data
+has changed during this request.</p>
+<p>Note: Runtime-only data is excluded from session storage:
+- ‘generated’ (owl, r2rml, sql) - calculated on demand
+- ‘available_versions’ - fetched from UC on demand
+- ‘assignment.r2rml_output’ - generated on demand (mapping data)
+- ‘excluded’ on ontology classes/properties (lives in mapping entries)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.reset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset project to empty state, preserving settings.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.clear_generated_content">
+<span class="sig-name descname"><span class="pre">clear_generated_content</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.clear_generated_content"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.clear_generated_content" title="Link to this definition">¶</a></dt>
+<dd><p>Clear all generated/cached content (OWL, R2RML, query results).</p>
+<p>Call this when creating a new version or switching versions to ensure
+fresh generation of derived content.</p>
+<p>Note: Generated content is runtime-only, so no need to save().</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.get_session_status">
+<span class="sig-name descname"><span class="pre">get_session_status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.get_session_status"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.get_session_status" title="Link to this definition">¶</a></dt>
+<dd><p>Return a summary dict of session state for navbar indicators.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.reset_ontology">
+<span class="sig-name descname"><span class="pre">reset_ontology</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.reset_ontology"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.reset_ontology" title="Link to this definition">¶</a></dt>
+<dd><p>Clear ontology, mappings, and design layout in one atomic operation.</p>
+<p>Resets the session to a blank ontology state while preserving
+Databricks/project settings.  Saves the session afterwards.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.clear_uc_metadata">
+<span class="sig-name descname"><span class="pre">clear_uc_metadata</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.clear_uc_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.clear_uc_metadata" title="Link to this definition">¶</a></dt>
+<dd><p>Clear Unity Catalog metadata for a fresh project.</p>
+<p>Call this when creating a new project to ensure no stale UC references.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.data">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">data</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.data" title="Link to this definition">¶</a></dt>
+<dd><p>Get raw project data.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.domain">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">domain</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.domain" title="Link to this definition">¶</a></dt>
+<dd><p>Get domain metadata (info, current_version, domain_folder).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.info">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">info</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.info" title="Link to this definition">¶</a></dt>
+<dd><p>Get project info.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.current_version">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">current_version</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.current_version" title="Link to this definition">¶</a></dt>
+<dd><p>Get current version.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.domain_folder">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">domain_folder</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.domain_folder" title="Link to this definition">¶</a></dt>
+<dd><p>The folder name under which this domain is saved in the registry.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.uc_domain_folder">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">uc_domain_folder</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.uc_domain_folder" title="Link to this definition">¶</a></dt>
+<dd><p>Sanitized project folder name for registry storage.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.registry">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">registry</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.registry" title="Link to this definition">¶</a></dt>
+<dd><p>Get the registry configuration (catalog, schema, volume).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.uc_domain_path">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">uc_domain_path</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.uc_domain_path" title="Link to this definition">¶</a></dt>
+<dd><p>Full /Volumes/…/domains/&lt;folder&gt; path, or ‘’ if registry not set.</p>
+<p>This is the <strong>domain-level</strong> path (shared across all versions).
+Use <a class="reference internal" href="#back.objects.session.DomainSession.DomainSession.uc_version_path" title="back.objects.session.DomainSession.DomainSession.uc_version_path"><code class="xref py py-attr docutils literal notranslate"><span class="pre">uc_version_path</span></code></a> for version-scoped operations
+(documents, LadybugDB archives).</p>
+<p>Resolves catalog/schema/volume via <code class="xref py py-class docutils literal notranslate"><span class="pre">RegistryCfg</span></code> so the injected
+app-bound volume path (<code class="docutils literal notranslate"><span class="pre">Settings.registry_volume_path</span></code>) matches
+listing/upload code paths that already use <code class="docutils literal notranslate"><span class="pre">RegistryCfg.from_domain</span></code>.</p>
+<p>Uses the <code class="docutils literal notranslate"><span class="pre">domains/</span></code> sub-folder (the canonical name).  The actual
+on-disk folder may be <code class="docutils literal notranslate"><span class="pre">projects/</span></code> for legacy registries; that
+resolution happens inside <code class="xref py py-class docutils literal notranslate"><span class="pre">RegistryService</span></code> at I/O time.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.uc_version_path">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">uc_version_path</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.uc_version_path" title="Link to this definition">¶</a></dt>
+<dd><p>Full /Volumes/…/domains/&lt;folder&gt;/V&lt;version&gt; path, or ‘’ if registry not set.</p>
+<p>This is the <strong>version-scoped</strong> path for per-version artifacts
+(<code class="docutils literal notranslate"><span class="pre">V{N}.json</span></code>, <code class="docutils literal notranslate"><span class="pre">documents/</span></code>, LadybugDB archives).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.is_active_version">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">is_active_version</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.is_active_version" title="Link to this definition">¶</a></dt>
+<dd><p>Get whether current version is active (latest).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.last_update">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">last_update</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.last_update" title="Link to this definition">¶</a></dt>
+<dd><p>ISO timestamp of the last ontology or mapping modification.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.last_build">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">last_build</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.last_build" title="Link to this definition">¶</a></dt>
+<dd><p>ISO timestamp of the last successful Digital Twin build.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.snapshot_table">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">snapshot_table</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.snapshot_table" title="Link to this definition">¶</a></dt>
+<dd><p>Fully-qualified name of the incremental-sync snapshot Delta table (computed).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.source_versions">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">source_versions</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.source_versions" title="Link to this definition">¶</a></dt>
+<dd><p>Source Delta table versions recorded at the last successful build.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.ontology_changed">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">ontology_changed</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.ontology_changed" title="Link to this definition">¶</a></dt>
+<dd><p>Whether the ontology has been modified since the last project save.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.assignment_changed">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">assignment_changed</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.assignment_changed" title="Link to this definition">¶</a></dt>
+<dd><p>Whether the mapping has been modified since the last project save.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.clear_change_flags">
+<span class="sig-name descname"><span class="pre">clear_change_flags</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.clear_change_flags"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.clear_change_flags" title="Link to this definition">¶</a></dt>
+<dd><p>Reset both change flags to False (called when saving the project to registry).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.ontology">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">ontology</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.ontology" title="Link to this definition">¶</a></dt>
+<dd><p>Get ontology configuration.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.constraints">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">constraints</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.constraints" title="Link to this definition">¶</a></dt>
+<dd><p>Get property constraints.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.shacl_shapes">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">shacl_shapes</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.shacl_shapes" title="Link to this definition">¶</a></dt>
+<dd><p>Get SHACL data-quality shapes.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.deduplicate_shacl_shapes">
+<span class="sig-name descname"><span class="pre">deduplicate_shacl_shapes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.deduplicate_shacl_shapes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.deduplicate_shacl_shapes" title="Link to this definition">¶</a></dt>
+<dd><p>One-time cleanup: remove duplicate SHACL shapes in place.</p>
+<p>Two shapes are considered duplicates when they share the same
+content fingerprint (category + target_class + property_path +
+shacl_type + message).  Keeps only the first occurrence.</p>
+<p>Call once after loading a project (e.g. from the list endpoint)
+rather than on every request.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.swrl_rules">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">swrl_rules</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.swrl_rules" title="Link to this definition">¶</a></dt>
+<dd><p>Get SWRL rules.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.decision_tables">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">decision_tables</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.decision_tables" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.sparql_rules">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">sparql_rules</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.sparql_rules" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.aggregate_rules">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">aggregate_rules</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.aggregate_rules" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.axioms">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">axioms</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.axioms" title="Link to this definition">¶</a></dt>
+<dd><p>equivalentClass, disjointWith, etc.).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Get OWL axioms (logical assertions</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.expressions">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">expressions</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.expressions" title="Link to this definition">¶</a></dt>
+<dd><p>Get OWL class expressions (unionOf, intersectionOf, complementOf, oneOf).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.groups">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">groups</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.groups" title="Link to this definition">¶</a></dt>
+<dd><p>unionOf).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Get entity groups (OWL defined classes using owl</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.catalog_metadata">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">catalog_metadata</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.catalog_metadata" title="Link to this definition">¶</a></dt>
+<dd><p>Unity Catalog table/column metadata (stored under <code class="docutils literal notranslate"><span class="pre">domain</span></code>).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.assignment">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">assignment</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.assignment" title="Link to this definition">¶</a></dt>
+<dd><p>Get mapping configuration (entity and relationship mappings).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.design_layout">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">design_layout</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.design_layout" title="Link to this definition">¶</a></dt>
+<dd><p>Get design layout.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.triplestore">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">triplestore</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.triplestore" title="Link to this definition">¶</a></dt>
+<dd><p>Get the triplestore configuration node (stats, delta, ladybug).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.delta">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">delta</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.delta" title="Link to this definition">¶</a></dt>
+<dd><p>Get Delta triplestore settings (catalog, schema, table_name).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.ladybug">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">ladybug</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.ladybug" title="Link to this definition">¶</a></dt>
+<dd><p>LadybugDB settings (computed constant, no longer stored in session).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.databricks">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">databricks</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.databricks" title="Link to this definition">¶</a></dt>
+<dd><p>Get Databricks connection settings (inside settings node).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.settings">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">settings</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.settings" title="Link to this definition">¶</a></dt>
+<dd><p>Get settings (replaces old preferences + databricks).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.preferences">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">preferences</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.preferences" title="Link to this definition">¶</a></dt>
+<dd><p>Backward-compatible alias for settings.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.generated">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">generated</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.generated" title="Link to this definition">¶</a></dt>
+<dd><p>Get generated content (OWL, SQL, R2RML).</p>
+<p>Note: This is runtime-only data, not persisted to session.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.get_classes">
+<span class="sig-name descname"><span class="pre">get_classes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.get_classes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.get_classes" title="Link to this definition">¶</a></dt>
+<dd><p>Get ontology classes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.get_properties">
+<span class="sig-name descname"><span class="pre">get_properties</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.get_properties"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.get_properties" title="Link to this definition">¶</a></dt>
+<dd><p>Get ontology properties (relationships).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.get_entity_mappings">
+<span class="sig-name descname"><span class="pre">get_entity_mappings</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.get_entity_mappings"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.get_entity_mappings" title="Link to this definition">¶</a></dt>
+<dd><p>Get entity/data source mappings.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.get_relationship_mappings">
+<span class="sig-name descname"><span class="pre">get_relationship_mappings</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.get_relationship_mappings"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.get_relationship_mappings" title="Link to this definition">¶</a></dt>
+<dd><p>Get relationship mappings.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.get_r2rml">
+<span class="sig-name descname"><span class="pre">get_r2rml</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.get_r2rml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.get_r2rml" title="Link to this definition">¶</a></dt>
+<dd><p>Get R2RML output (runtime-only, not persisted).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.set_r2rml">
+<span class="sig-name descname"><span class="pre">set_r2rml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.set_r2rml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.set_r2rml" title="Link to this definition">¶</a></dt>
+<dd><p>Set R2RML output (runtime-only, not persisted).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.is_ontology_valid">
+<span class="sig-name descname"><span class="pre">is_ontology_valid</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.is_ontology_valid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.is_ontology_valid" title="Link to this definition">¶</a></dt>
+<dd><p>Check if ontology has required data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.ensure_generated_content">
+<span class="sig-name descname"><span class="pre">ensure_generated_content</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.ensure_generated_content"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.ensure_generated_content" title="Link to this definition">¶</a></dt>
+<dd><p>Ensure OWL and R2RML are generated if source data exists.</p>
+<p>This method regenerates content that was not saved to file
+(R2RML and OWL are session-only, not saved to project files).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict with ‘owl’ and ‘r2rml’ keys indicating what was generated.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.export_for_save">
+<span class="sig-name descname"><span class="pre">export_for_save</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.export_for_save"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.export_for_save" title="Link to this definition">¶</a></dt>
+<dd><p>Export project data in versioned format suitable for saving to file.</p>
+<p>Top-level shape (conceptual; keys under <code class="docutils literal notranslate"><span class="pre">versions</span></code> hold per-version payloads):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;info&quot;</span><span class="p">:</span> <span class="p">{</span> <span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;author&quot;</span><span class="p">,</span> <span class="s2">&quot;llm_endpoint&quot;</span><span class="p">,</span> <span class="o">...</span> <span class="p">},</span>
+    <span class="s2">&quot;versions&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;1.0&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;ontology&quot;</span><span class="p">:</span> <span class="p">{</span> <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">shacl_shapes</span><span class="p">,</span> <span class="o">...</span> <span class="p">},</span>
+            <span class="s2">&quot;assignment&quot;</span><span class="p">:</span> <span class="p">{</span> <span class="n">entities</span><span class="p">,</span> <span class="n">relationships</span> <span class="p">},</span>
+            <span class="s2">&quot;design_layout&quot;</span><span class="p">:</span> <span class="p">{</span> <span class="n">current_view</span><span class="p">,</span> <span class="n">views</span><span class="p">,</span> <span class="nb">map</span> <span class="p">},</span>
+            <span class="s2">&quot;metadata&quot;</span><span class="p">:</span> <span class="p">{</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">tables</span><span class="p">,</span> <span class="n">table_count</span> <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Excludes: Databricks/registry settings and preferences; generated R2RML, OWL,
+and SQL (rebuilt from source). Constraints, SWRL rules, and axioms live only
+under <code class="docutils literal notranslate"><span class="pre">ontology</span></code>, not at the project root.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.import_from_file">
+<span class="sig-name descname"><span class="pre">import_from_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#DomainSession.import_from_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.import_from_file" title="Link to this definition">¶</a></dt>
+<dd><p>Import domain data from loaded file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>) – Domain data dictionary</p></li>
+<li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Optional specific version to load (for versioned format)</p></li>
+</ul>
+</dd>
+</dl>
+<p>Supports multiple formats:
+1. New versioned format: { info: {…}, versions: { “1”: { ontology, mapping, design_layout } } }
+2. Legacy flat format: { info: {…}, ontology: {…}, mapping: {…}, … }
+3. Very old format: constraints/swrl_rules/axioms at top level</p>
+<p>Note:
+- Databricks connection settings are NOT imported (credentials stay local).
+- R2RML output is NOT imported (it’s regenerated from mappings).
+- Root-level constraints/swrl_rules/axioms are migrated to ontology.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.get_domain">
+<span class="sig-prename descclassname"><span class="pre">back.objects.session.DomainSession.</span></span><span class="sig-name descname"><span class="pre">get_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/session/DomainSession.html#get_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.session.DomainSession.get_domain" title="Link to this definition">¶</a></dt>
+<dd><p>Get or create a DomainSession for this request.</p>
+<p>The instance is cached on <code class="docutils literal notranslate"><span class="pre">request.state</span></code> so that multiple
+callers within the same request (e.g. middleware + route handler)
+share one <code class="docutils literal notranslate"><span class="pre">DomainSession</span></code> and avoid repeated
+<code class="docutils literal notranslate"><span class="pre">_ensure_structure()</span></code> work.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#back.objects.session.DomainSession.DomainSession" title="back.objects.session.DomainSession.DomainSession"><em>DomainSession</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-back.objects.session.global_config">
+<span id="global-config"></span><h2>Global config<a class="headerlink" href="#module-back.objects.session.global_config" title="Link to this heading">¶</a></h2>
+<p>Backward-compatible alias — canonical module is <code class="docutils literal notranslate"><span class="pre">GlobalConfigService.py</span></code>.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/api/app.objects.session.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

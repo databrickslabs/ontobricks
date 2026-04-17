@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>agents.agent_owl_generator.engine &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../_static/documentation_options.js?v=a58bc63e"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for agents.agent_owl_generator.engine</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">OntoBricks OWL Generator Agent Engine.</span>
+
+<span class="sd">Implements an agentic loop that uses the Databricks Foundation Model API</span>
+<span class="sd">with function calling to autonomously gather context (metadata + documents)</span>
+<span class="sd">and generate an OWL ontology in Turtle format.</span>
+
+<span class="sd">Fallback: if the LLM endpoint does not support the ``tools`` parameter the</span>
+<span class="sd">engine transparently degrades to a single-shot generation (no tool calls).</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">agents.agent_owl_generator.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="n">TOOL_DEFINITIONS</span><span class="p">,</span> <span class="n">TOOL_HANDLERS</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">agents.engine_base</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AgentStep</span><span class="p">,</span>
+    <span class="n">call_serving_endpoint</span><span class="p">,</span>
+    <span class="n">dispatch_tool</span><span class="p">,</span>
+    <span class="n">extract_message_content</span><span class="p">,</span>
+    <span class="n">accumulate_usage</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">agents.tracing</span><span class="w"> </span><span class="kn">import</span> <span class="n">trace_agent</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="n">MAX_ITERATIONS</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="n">LLM_TIMEOUT</span> <span class="o">=</span> <span class="mi">180</span>
+
+<span class="n">_TRACE_NAME</span> <span class="o">=</span> <span class="s2">&quot;owl_generator&quot;</span>
+
+
+<span class="c1"># =====================================================</span>
+<span class="c1"># Data classes</span>
+<span class="c1"># =====================================================</span>
+
+<div class="viewcode-block" id="AgentResult">
+<a class="viewcode-back" href="../../../api/agents.html#agents.agent_owl_generator.engine.AgentResult">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AgentResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Outcome of a full agent run.&quot;&quot;&quot;</span>
+    <span class="n">success</span><span class="p">:</span> <span class="nb">bool</span>
+    <span class="n">owl_content</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">steps</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">AgentStep</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">iterations</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">error</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">usage</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># =====================================================</span>
+<span class="c1"># System prompt</span>
+<span class="c1"># =====================================================</span>
+
+<span class="n">SYSTEM_PROMPT</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span><span class="se">\</span>
+
+<span class="s2">You are an ontology engineer.  </span>
+<span class="s2">Your goal is to generate a concise, logically consistent OWL ontology (**Turtle** format) from business documents and requirements, </span><span class="se">\</span>
+<span class="s2">    suitable for automated reasoning and query answering.</span>
+
+<span class="s2"># TOOLS</span>
+<span class="s2">You have four tools:</span>
+<span class="s2">  • list_documents  – discover documents in the domain volume</span>
+<span class="s2">  • read_document   – read a document&#39;s text content</span>
+<span class="s2">  • get_metadata    – get all table schemas (names, columns, types)</span>
+<span class="s2">  • get_table_detail – get detailed info for one table</span>
+
+<span class="s2"># WORKFLOW</span>
+<span class="s2">1. Call get_metadata to understand the database schema.</span>
+<span class="s2">2. Call list_documents to discover available documents.</span>
+<span class="s2">3. Read relevant documents with read_document.</span>
+<span class="s2">4. Generate the Turtle ontology from all gathered information.</span>
+
+<span class="s2"># NAMING RULES (CRITICAL – NO EXCEPTIONS)</span>
+<span class="s2">• Classes: PascalCase (Customer, SalesOrder)</span>
+<span class="s2">• Properties: lowerCamelCase (hasName, firstName)</span>
+<span class="s2">• NO spaces, underscores or hyphens in local names.</span>
+<span class="s2">• Convert: street_address → streetAddress, Sales Order → SalesOrder</span>
+
+<span class="s2"># PROPERTY TYPES</span>
+<span class="s2">• owl:DatatypeProperty + xsd:type for attributes (string, integer, date …)</span>
+<span class="s2">• owl:ObjectProperty for relationships between classes only</span>
+
+<span class="s2"># RELATIONSHIP RULES</span>
+<span class="s2">• NEVER create bidirectional relationships.</span>
+<span class="s2">• Between any two classes A and B create at most ONE ObjectProperty.</span>
+<span class="s2">• Choose the most natural direction.</span>
+
+<span class="s2"># CRITICAL OUTPUT RULES:</span>
+<span class="s2">• When you have gathered enough context, output ONLY valid Turtle syntax.</span>
+<span class="s2">• Do NOT include any natural language, explanations, or commentary.</span>
+<span class="s2">• Do NOT wrap in markdown code fences.</span>
+<span class="s2">• Your ENTIRE response must be valid Turtle starting with @prefix declarations.</span>
+<span class="s2">• NEVER start with phrases like &quot;Here is&quot;, &quot;Now I will&quot;, &quot;Based on&quot;, etc.&quot;&quot;&quot;</span>
+
+<span class="n">GENERIC_GUIDELINES</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span><span class="se">\</span>
+
+<span class="s2"># OWL GENERATION GUIDELINES:</span>
+
+<span class="s2">## Role and goal</span>
+<span class="s2">Always follow the constraints and checks below.  </span>
+<span class="s2">If you cannot satisfy them with the given input, say so explicitly and ask for clarification instead of guessing.</span>
+
+<span class="s2">## 1. Scope and requirements</span>
+<span class="s2">1. Work in a **narrow** and clearly defined domain.  </span>
+<span class="s2">   - Ignore concepts that are not supported by the provided documents or requirements.</span>
+<span class="s2">2. Model only what is needed to answer the specified competency questions (CQs).  </span>
+<span class="s2">   - Every class or property you introduce must support at least one CQ or explicit requirement.</span>
+<span class="s2">3. Size limits per iteration:  </span>
+<span class="s2">   - 30–60 classes.  </span>
+<span class="s2">   - At most 4 subclass levels (max depth = 4).  </span>
+<span class="s2">   - At most 3 direct superclasses per class; default is a single superclass.</span>
+<span class="s2">If the user does not give CQs, propose a short list of candidate CQs first, get them confirmed, then model.</span>
+
+<span class="s2">## 2. Class and property design rules</span>
+<span class="s2">For each **class** you create:[1][2][3][4]</span>
+<span class="s2">1. Provide:  </span>
+<span class="s2">   - A short, clear natural-language definition (1–2 sentences).  </span>
+<span class="s2">   - At least 1 object property (unless the class is explicitly abstract).  </span>
+<span class="s2">   - At least 2 datatype properties, when meaningful in the domain.  </span>
+<span class="s2">2. Naming conventions:  </span>
+<span class="s2">   - Classes: UpperCamelCase (e.g., `CustomerOrder`).  </span>
+<span class="s2">   - Object properties: lowerCamelCase verbs or verb-like phrases (e.g., `placesOrder`).  </span>
+<span class="s2">   - Datatype properties: lowerCamelCase nouns or attributes (e.g., `orderDate`).  </span>
+<span class="s2">   - Do not create two classes or properties that are synonyms or near-duplicates; merge or explain the difference in their definitions.</span>
+<span class="s2">3. Inheritance constraints:  </span>
+<span class="s2">   - Default to single inheritance (`rdfs:subClassOf` one parent).  </span>
+<span class="s2">   - Allow multiple inheritance only if strictly necessary and documented in a comment.  </span>
+<span class="s2">   - Avoid deep chains: no more than 4 levels from the topmost domain root.</span>
+<span class="s2">For each **property** you create:</span>
+<span class="s2">1. Always specify:  </span>
+<span class="s2">   - Domain class.  </span>
+<span class="s2">   - Range class (for object properties) or XSD datatype (for datatype properties).  </span>
+<span class="s2">2. Use functional properties only when the domain concept is truly single-valued (e.g., `hasIdentifier`).  </span>
+<span class="s2">   - Default cardinality is “0..*” unless a stricter constraint is clearly justified by the documents or CQs.  </span>
+<span class="s2">3. Do not duplicate properties with the same domain and range and similar meaning.  </span>
+
+<span class="s2">## 3. Logical expressivity and OWL profile</span>
+<span class="s2">1. Use OWL 2 **EL-like** modeling by default, prioritizing tractable reasoning:  </span>
+<span class="s2">   - Allowed: class hierarchies, existential restrictions, simple domain and range axioms, disjointness when clear.  </span>
+<span class="s2">   - Avoid unless explicitly required: property chains, complex nested class expressions, qualified cardinalities, heavy use of `owl:equivalentClass`.[5][14][2]</span>
+<span class="s2">2. Only introduce complex axioms when they directly implement a CQ or an explicit business rule shown in the input.</span>
+<span class="s2">3. Use disjointness, covering axioms, and equivalence axioms sparingly.  </span>
+<span class="s2">   - Add them only when the source text or CQs strongly justify the constraint.</span>
+<span class="s2">When in doubt between a simpler or more complex axiom, choose the simpler one.</span>
+
+<span class="s2">## 4. Anti-pattern and complexity constraints</span>
+<span class="s2">Avoid the following **anti-patterns**:</span>
+<span class="s2">1. Cycles in subclass hierarchies or property hierarchies.  </span>
+<span class="s2">2. Very generic “container” or “bag” classes with no clear semantics (e.g., `Entity`, `Thing` as domain-specific classes).  </span>
+<span class="s2">3. Unsatisfiable classes (e.g., a class declared as a subclass of two disjoint classes without justification).  </span>
+<span class="s2">4. Mixing roles and types in the same class (e.g., `CustomerWhoPaidInvoice` as a primitive type).  </span>
+<span class="s2">5. Huge classes with dozens of unrelated properties; split into more specific concepts when needed.  </span>
+<span class="s2">Additionally:</span>
+<span class="s2">- Prefer flat, readable structures over deep or overly intricate constructions.  </span>
+<span class="s2">- Do not invent complex patterns if a simple subclass or property restriction is enough.  </span>
+
+<span class="s2">## 5. Traceability and grounding in documents</span>
+<span class="s2">For every class and property, indicate its **origin**:</span>
+<span class="s2">- Reference at least one:  </span>
+<span class="s2">  - Document snippet or paragraph ID.  </span>
+<span class="s2">  - Competency question ID.  </span>
+<span class="s2">  - User-provided requirement.  </span>
+<span class="s2">If you cannot find any support in the documents or CQs, do not introduce that class or property.  </span>
+
+<span class="s2">## 6. Output format and quality checks</span>
+<span class="s2">1. Output structure:  </span>
+<span class="s2">   - First: a short natural-language summary of the ontology (1–2 paragraphs).  </span>
+<span class="s2">   - Second: a list of classes and properties with their informal definitions and traceability information.  </span>
+<span class="s2">   - Third: the OWL ontology in Turtle syntax only.[5][1][2]</span>
+<span class="s2">2. Before you output, perform **self-checks** in natural language:</span>
+<span class="s2">   - Check that no class is a subclass of two disjoint classes.  </span>
+<span class="s2">   - Check there are no explicit subclass cycles.  </span>
+<span class="s2">   - Check that every class and property has a clear name, definition, and at least one traceability reference.  </span>
+<span class="s2">   - Check that the ontology stays within the intended OWL 2 EL-like subset.  </span>
+<span class="s2">If you detect a likely inconsistency or anti-pattern, correct it before output and briefly explain what you changed.  </span>
+<span class="s2">3. Never leave the ontology empty.  </span>
+<span class="s2">   - If the input is insufficient, explain what is missing and ask the user for more precise domain descriptions or CQs instead of fabricating content.</span>
+
+<span class="s2">## 7. In general</span>
+<span class="s2">- Avoid orphans entities (try to have entities with relationships)</span>
+
+<span class="s2">&quot;&quot;&quot;</span>
+
+
+<span class="c1"># =====================================================</span>
+<span class="c1"># Internal helpers</span>
+<span class="c1"># =====================================================</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_user_prompt</span><span class="p">(</span>
+    <span class="n">guidelines</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">options</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
+    <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">selected_tables</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">selected_docs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;_build_user_prompt: base_uri=</span><span class="si">%s</span><span class="s2">, options=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+        <span class="s2">&quot;_build_user_prompt: selected_tables=</span><span class="si">%s</span><span class="s2">, selected_docs=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">selected_tables</span><span class="p">,</span> <span class="n">selected_docs</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">include_attrs</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;includeDataProperties&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="n">include_rels</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;includeRelationships&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="n">include_inherit</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;includeInheritance&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+
+    <span class="n">parts</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;Base URI: </span><span class="si">{</span><span class="n">base_uri</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">selected_tables</span><span class="p">:</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Selected tables: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">selected_tables</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">selected_docs</span><span class="p">:</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Selected documents: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">selected_docs</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;Guidelines: </span><span class="si">{</span><span class="n">guidelines</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;Create a domain ontology from the available schema and documents.&#39;</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">gen</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">include_attrs</span><span class="p">:</span>
+        <span class="n">gen</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;DatatypeProperties for attributes&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">include_rels</span><span class="p">:</span>
+        <span class="n">gen</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;ObjectProperties for relationships&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">include_inherit</span><span class="p">:</span>
+        <span class="n">gen</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;class hierarchy with rdfs:subClassOf&quot;</span><span class="p">)</span>
+    <span class="n">gen</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;rdfs:labels for all elements&quot;</span><span class="p">)</span>
+    <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generate OWL with: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">gen</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+    <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="s2">&quot;Start by using your tools to gather the metadata and read the &quot;</span>
+        <span class="s2">&quot;relevant documents, then generate the ontology.&quot;</span>
+    <span class="p">)</span>
+    <span class="n">prompt</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;_build_user_prompt: final prompt (</span><span class="si">%d</span><span class="s2"> chars):</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">prompt</span><span class="p">),</span> <span class="n">prompt</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">prompt</span>
+
+
+<span class="c1"># =====================================================</span>
+<span class="c1"># Public entry point</span>
+<span class="c1"># =====================================================</span>
+
+<div class="viewcode-block" id="run_agent">
+<a class="viewcode-back" href="../../../api/agents.html#agents.agent_owl_generator.engine.run_agent">[docs]</a>
+<span class="nd">@trace_agent</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;owl_generator&quot;</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">run_agent</span><span class="p">(</span>
+    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">endpoint_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">registry</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
+    <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
+    <span class="n">guidelines</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">options</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
+    <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">domain_folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">domain_version</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">selected_tables</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">selected_docs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">on_step</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AgentResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run the ontology-generation agent.</span>
+
+<span class="sd">    The agent autonomously gathers context via tool calls and produces an</span>
+<span class="sd">    OWL/Turtle ontology.  If the serving endpoint does not support</span>
+<span class="sd">    function calling the engine falls back to a direct single-shot prompt.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;===== AGENT START ===== endpoint=</span><span class="si">%s</span><span class="s2">, base_uri=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">endpoint_name</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+        <span class="s2">&quot;run_agent params: registry=</span><span class="si">%s</span><span class="s2">, guidelines=</span><span class="si">%d</span><span class="s2"> chars, options=</span><span class="si">%s</span><span class="s2">, &quot;</span>
+        <span class="s2">&quot;selected_tables=</span><span class="si">%s</span><span class="s2">, selected_docs=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">registry</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">guidelines</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span> <span class="n">options</span><span class="p">,</span> <span class="n">selected_tables</span><span class="p">,</span> <span class="n">selected_docs</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">ctx</span> <span class="o">=</span> <span class="n">ToolContext</span><span class="p">(</span>
+        <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">),</span>
+        <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
+        <span class="n">registry</span><span class="o">=</span><span class="n">registry</span> <span class="ow">or</span> <span class="p">{},</span>
+        <span class="n">domain_name</span><span class="o">=</span><span class="n">domain_name</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">domain_folder</span><span class="o">=</span><span class="n">domain_folder</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">domain_version</span><span class="o">=</span><span class="n">domain_version</span> <span class="ow">or</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span>
+        <span class="n">metadata</span><span class="o">=</span><span class="n">metadata</span> <span class="ow">or</span> <span class="p">{},</span>
+    <span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Agent context created — host=</span><span class="si">%s</span><span class="s2">, registry=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">ctx</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">registry</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+        <span class="s2">&quot;Agent metadata summary: </span><span class="si">%d</span><span class="s2"> table(s), table names=[</span><span class="si">%s</span><span class="s2">]&quot;</span><span class="p">,</span>
+        <span class="nb">len</span><span class="p">((</span><span class="n">metadata</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">,</span> <span class="p">[])),</span>
+        <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;?&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="p">(</span><span class="n">metadata</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">,</span> <span class="p">[])),</span>
+    <span class="p">)</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">AgentResult</span><span class="p">(</span><span class="n">success</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># Narrow metadata to selected tables when a subset was chosen</span>
+    <span class="k">if</span> <span class="n">selected_tables</span> <span class="ow">and</span> <span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">):</span>
+        <span class="n">all_table_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;full_name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">&quot;tables&quot;</span><span class="p">]]</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Agent table filtering: all=</span><span class="si">%s</span><span class="s2">, selected=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">all_table_names</span><span class="p">,</span> <span class="n">selected_tables</span><span class="p">)</span>
+        <span class="n">filtered</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">&quot;tables&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;full_name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">))</span> <span class="ow">in</span> <span class="n">selected_tables</span>
+        <span class="p">]</span>
+        <span class="k">if</span> <span class="n">filtered</span><span class="p">:</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">metadata</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">metadata</span><span class="p">,</span> <span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="n">filtered</span><span class="p">}</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Agent filtered metadata to </span><span class="si">%d</span><span class="s2">/</span><span class="si">%d</span><span class="s2"> selected table(s): [</span><span class="si">%s</span><span class="s2">]&quot;</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">filtered</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">metadata</span><span class="p">[</span><span class="s2">&quot;tables&quot;</span><span class="p">]),</span>
+                <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;?&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">filtered</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Agent table filter matched 0 tables — keeping all </span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">metadata</span><span class="p">[</span><span class="s2">&quot;tables&quot;</span><span class="p">]))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Agent using all </span><span class="si">%d</span><span class="s2"> available table(s) (no filter)&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">((</span><span class="n">metadata</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">,</span> <span class="p">[])))</span>
+
+    <span class="c1"># Build initial conversation</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Agent building user prompt — guidelines=</span><span class="si">%d</span><span class="s2"> chars, options=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">guidelines</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span> <span class="n">options</span><span class="p">)</span>
+    <span class="n">user_prompt</span> <span class="o">=</span> <span class="n">_build_user_prompt</span><span class="p">(</span>
+        <span class="n">guidelines</span><span class="o">=</span><span class="n">guidelines</span><span class="p">,</span>
+        <span class="n">options</span><span class="o">=</span><span class="n">options</span><span class="p">,</span>
+        <span class="n">base_uri</span><span class="o">=</span><span class="n">base_uri</span><span class="p">,</span>
+        <span class="n">selected_tables</span><span class="o">=</span><span class="n">selected_tables</span> <span class="ow">or</span> <span class="p">[],</span>
+        <span class="n">selected_docs</span><span class="o">=</span><span class="n">selected_docs</span> <span class="ow">or</span> <span class="p">[],</span>
+    <span class="p">)</span>
+    <span class="n">system_content</span> <span class="o">=</span> <span class="n">SYSTEM_PROMPT</span>
+    <span class="k">if</span> <span class="n">GENERIC_GUIDELINES</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+        <span class="n">system_content</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">SYSTEM_PROMPT</span><span class="si">}</span><span class="se">\n\n</span><span class="si">{</span><span class="n">GENERIC_GUIDELINES</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="n">messages</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">system_content</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">user_prompt</span><span class="p">},</span>
+    <span class="p">]</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Agent conversation initialized: system_prompt=</span><span class="si">%d</span><span class="s2"> chars, user_prompt=</span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span>
+        <span class="nb">len</span><span class="p">(</span><span class="n">system_content</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">user_prompt</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Agent system prompt:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">system_content</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Agent user prompt:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">user_prompt</span><span class="p">)</span>
+
+    <span class="n">total_usage</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;prompt_tokens&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;completion_tokens&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">notify</span><span class="p">(</span><span class="n">msg</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">on_step</span><span class="p">:</span>
+            <span class="n">on_step</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+
+    <span class="n">notify</span><span class="p">(</span><span class="s2">&quot;Starting agent…&quot;</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Agent entering main loop — endpoint=</span><span class="si">%s</span><span class="s2">, tables=</span><span class="si">%d</span><span class="s2">, docs=</span><span class="si">%s</span><span class="s2">, max_iterations=</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">endpoint_name</span><span class="p">,</span>
+        <span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">,</span> <span class="p">[])),</span>
+        <span class="n">selected_docs</span><span class="p">,</span>
+        <span class="n">MAX_ITERATIONS</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Agent loop</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="n">tools_supported</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">for</span> <span class="n">iteration</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">MAX_ITERATIONS</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;----- Iteration </span><span class="si">%d</span><span class="s2">/</span><span class="si">%d</span><span class="s2"> — </span><span class="si">%d</span><span class="s2"> messages in conversation -----&quot;</span><span class="p">,</span>
+            <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">MAX_ITERATIONS</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">messages</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2"> message roles: [</span><span class="si">%s</span><span class="s2">]&quot;</span><span class="p">,</span>
+            <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;role&quot;</span><span class="p">,</span> <span class="s2">&quot;?&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">messages</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">notify</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Agent thinking… (step </span><span class="si">{</span><span class="n">iteration</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+        <span class="c1"># On the last iteration, withhold tools to force a text answer</span>
+        <span class="n">is_last</span> <span class="o">=</span> <span class="n">iteration</span> <span class="o">&gt;=</span> <span class="n">MAX_ITERATIONS</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">send_tools</span> <span class="o">=</span> <span class="n">TOOL_DEFINITIONS</span> <span class="k">if</span> <span class="p">(</span><span class="n">tools_supported</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_last</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: tools_enabled=</span><span class="si">%s</span><span class="s2"> (supported=</span><span class="si">%s</span><span class="s2">, last_iter=</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span>
+            <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">send_tools</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="n">tools_supported</span><span class="p">,</span> <span class="n">is_last</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">llm_response</span> <span class="o">=</span> <span class="n">call_serving_endpoint</span><span class="p">(</span>
+                <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">endpoint_name</span><span class="p">,</span> <span class="n">messages</span><span class="p">,</span>
+                <span class="n">tools</span><span class="o">=</span><span class="n">send_tools</span><span class="p">,</span> <span class="n">max_tokens</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="n">LLM_TIMEOUT</span><span class="p">,</span> <span class="n">trace_name</span><span class="o">=</span><span class="n">_TRACE_NAME</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">HTTPError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">status</span> <span class="o">=</span> <span class="n">exc</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="k">if</span> <span class="n">exc</span><span class="o">.</span><span class="n">response</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;?&quot;</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: HTTPError status=</span><span class="si">%s</span><span class="s2">, tools_supported=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">status</span><span class="p">,</span> <span class="n">tools_supported</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: HTTPError body: </span><span class="si">%.500s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+                         <span class="n">exc</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">text</span> <span class="k">if</span> <span class="n">exc</span><span class="o">.</span><span class="n">response</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;N/A&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">exc</span><span class="o">.</span><span class="n">response</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">status</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">400</span><span class="p">,</span> <span class="mi">422</span><span class="p">)</span> <span class="ow">and</span> <span class="n">tools_supported</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Agent: endpoint rejected tools param (HTTP </span><span class="si">%s</span><span class="s2">) — falling back to direct mode&quot;</span><span class="p">,</span> <span class="n">status</span><span class="p">)</span>
+                <span class="n">tools_supported</span> <span class="o">=</span> <span class="kc">False</span>
+                <span class="n">notify</span><span class="p">(</span><span class="s2">&quot;Endpoint does not support tools – using direct generation…&quot;</span><span class="p">)</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">llm_response</span> <span class="o">=</span> <span class="n">call_serving_endpoint</span><span class="p">(</span>
+                        <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">endpoint_name</span><span class="p">,</span> <span class="n">messages</span><span class="p">,</span>
+                        <span class="n">tools</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_tokens</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+                        <span class="n">timeout</span><span class="o">=</span><span class="n">LLM_TIMEOUT</span><span class="p">,</span> <span class="n">trace_name</span><span class="o">=</span><span class="n">_TRACE_NAME</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">inner</span><span class="p">:</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">error</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;LLM request failed: </span><span class="si">{</span><span class="n">inner</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Agent: fallback LLM call also failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">inner</span><span class="p">)</span>
+                    <span class="k">return</span> <span class="n">result</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">error</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;LLM request failed: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Agent: LLM request failed at iteration </span><span class="si">%d</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">result</span>
+        <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ReadTimeout</span><span class="p">:</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">error</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;LLM request timed out after </span><span class="si">{</span><span class="n">LLM_TIMEOUT</span><span class="si">}</span><span class="s2">s&quot;</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Agent: timeout at iteration </span><span class="si">%d</span><span class="s2"> (limit=</span><span class="si">%d</span><span class="s2">s)&quot;</span><span class="p">,</span> <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">LLM_TIMEOUT</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">result</span>
+        <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">error</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;LLM request failed: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Agent: request exception at iteration </span><span class="si">%d</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">result</span>
+
+        <span class="n">elapsed_ms</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: LLM responded in </span><span class="si">%d</span><span class="s2">ms&quot;</span><span class="p">,</span> <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">elapsed_ms</span><span class="p">)</span>
+
+        <span class="n">accumulate_usage</span><span class="p">(</span><span class="n">total_usage</span><span class="p">,</span> <span class="n">llm_response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;usage&quot;</span><span class="p">,</span> <span class="p">{}))</span>
+
+        <span class="c1"># Parse assistant message</span>
+        <span class="n">choice</span> <span class="o">=</span> <span class="n">llm_response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;choices&quot;</span><span class="p">,</span> <span class="p">[{}])[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">finish_reason</span> <span class="o">=</span> <span class="n">choice</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;finish_reason&quot;</span><span class="p">,</span> <span class="s2">&quot;?&quot;</span><span class="p">)</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="n">choice</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;message&quot;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="n">tool_calls</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tool_calls&quot;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">has_content</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;content&quot;</span><span class="p">))</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: finish_reason=</span><span class="si">%s</span><span class="s2">, tool_calls=</span><span class="si">%d</span><span class="s2">, has_content=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">finish_reason</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tool_calls</span><span class="p">),</span> <span class="n">has_content</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">has_content</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: content preview (200 chars): </span><span class="si">%.200s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;content&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">tool_calls</span><span class="p">:</span>
+            <span class="c1"># ---- Agent wants to call tools ----</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: processing </span><span class="si">%d</span><span class="s2"> tool call(s): [</span><span class="si">%s</span><span class="s2">]&quot;</span><span class="p">,</span>
+                <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tool_calls</span><span class="p">),</span>
+                <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">tc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;function&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;?&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">tc</span> <span class="ow">in</span> <span class="n">tool_calls</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">tc_idx</span><span class="p">,</span> <span class="n">tc</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">tool_calls</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">func</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;function&quot;</span><span class="p">,</span> <span class="p">{})</span>
+                <span class="n">tool_name</span> <span class="o">=</span> <span class="n">func</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="n">raw_args</span> <span class="o">=</span> <span class="n">func</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;arguments&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">tool_id</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                    <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2"> tool_call </span><span class="si">%d</span><span class="s2">/</span><span class="si">%d</span><span class="s2">: name=</span><span class="si">%s</span><span class="s2">, id=</span><span class="si">%s</span><span class="s2">, raw_args=</span><span class="si">%.300s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tc_idx</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tool_calls</span><span class="p">),</span> <span class="n">tool_name</span><span class="p">,</span> <span class="n">tool_id</span><span class="p">,</span> <span class="n">raw_args</span><span class="p">,</span>
+                <span class="p">)</span>
+
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">arguments</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">raw_args</span><span class="p">)</span>
+                <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span> <span class="k">as</span> <span class="n">je</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: JSON decode error for tool &#39;</span><span class="si">%s</span><span class="s2">&#39; args: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tool_name</span><span class="p">,</span> <span class="n">je</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">arguments</span> <span class="o">=</span> <span class="p">{}</span>
+
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: calling tool &#39;</span><span class="si">%s</span><span class="s2">&#39; (</span><span class="si">%d</span><span class="s2">/</span><span class="si">%d</span><span class="s2">)&quot;</span><span class="p">,</span>
+                    <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tool_name</span><span class="p">,</span> <span class="n">tc_idx</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tool_calls</span><span class="p">),</span>
+                <span class="p">)</span>
+                <span class="n">notify</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Calling </span><span class="si">{</span><span class="n">tool_name</span><span class="si">}</span><span class="s2">…&quot;</span><span class="p">)</span>
+
+                <span class="n">result</span><span class="o">.</span><span class="n">steps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">AgentStep</span><span class="p">(</span>
+                    <span class="n">step_type</span><span class="o">=</span><span class="s2">&quot;tool_call&quot;</span><span class="p">,</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">arguments</span><span class="p">),</span>
+                    <span class="n">tool_name</span><span class="o">=</span><span class="n">tool_name</span><span class="p">,</span>
+                <span class="p">))</span>
+
+                <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                <span class="n">tool_result</span> <span class="o">=</span> <span class="n">dispatch_tool</span><span class="p">(</span><span class="n">TOOL_HANDLERS</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">tool_name</span><span class="p">,</span> <span class="n">arguments</span><span class="p">,</span> <span class="n">trace_name</span><span class="o">=</span><span class="n">_TRACE_NAME</span><span class="p">)</span>
+                <span class="n">tool_ms</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t1</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
+
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: tool &#39;</span><span class="si">%s</span><span class="s2">&#39; returned </span><span class="si">%d</span><span class="s2"> chars in </span><span class="si">%d</span><span class="s2">ms&quot;</span><span class="p">,</span>
+                    <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tool_name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tool_result</span><span class="p">),</span> <span class="n">tool_ms</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                    <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: tool &#39;</span><span class="si">%s</span><span class="s2">&#39; result preview: </span><span class="si">%.500s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tool_name</span><span class="p">,</span> <span class="n">tool_result</span><span class="p">,</span>
+                <span class="p">)</span>
+
+                <span class="n">result</span><span class="o">.</span><span class="n">steps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">AgentStep</span><span class="p">(</span>
+                    <span class="n">step_type</span><span class="o">=</span><span class="s2">&quot;tool_result&quot;</span><span class="p">,</span>
+                    <span class="n">content</span><span class="o">=</span><span class="p">(</span><span class="n">tool_result</span><span class="p">[:</span><span class="mi">500</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;…&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tool_result</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">500</span> <span class="k">else</span> <span class="n">tool_result</span><span class="p">,</span>
+                    <span class="n">tool_name</span><span class="o">=</span><span class="n">tool_name</span><span class="p">,</span>
+                    <span class="n">duration_ms</span><span class="o">=</span><span class="n">tool_ms</span><span class="p">,</span>
+                <span class="p">))</span>
+
+                <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;tool&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;tool_call_id&quot;</span><span class="p">:</span> <span class="n">tool_id</span><span class="p">,</span>
+                    <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">tool_result</span><span class="p">,</span>
+                <span class="p">})</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: all tool calls processed, conversation now has </span><span class="si">%d</span><span class="s2"> messages&quot;</span><span class="p">,</span>
+                <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">messages</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># ---- Agent produced a text response (should be OWL) ----</span>
+            <span class="n">content</span> <span class="o">=</span> <span class="n">extract_message_content</span><span class="p">(</span><span class="n">llm_response</span><span class="p">)</span>
+            <span class="n">starts_with_prefix</span> <span class="o">=</span> <span class="n">content</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;@prefix&quot;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: agent produced final text output — </span><span class="si">%d</span><span class="s2"> chars, starts_with_@prefix=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">content</span><span class="p">),</span> <span class="n">starts_with_prefix</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">starts_with_prefix</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: output does NOT start with @prefix — first 200 chars: </span><span class="si">%.200s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">content</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+                <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;Iteration </span><span class="si">%d</span><span class="s2">: full OWL output (</span><span class="si">%d</span><span class="s2"> chars):</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">content</span><span class="p">),</span> <span class="n">content</span><span class="p">[:</span><span class="mi">2000</span><span class="p">],</span>
+            <span class="p">)</span>
+
+            <span class="n">result</span><span class="o">.</span><span class="n">steps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">AgentStep</span><span class="p">(</span>
+                <span class="n">step_type</span><span class="o">=</span><span class="s2">&quot;output&quot;</span><span class="p">,</span>
+                <span class="n">content</span><span class="o">=</span><span class="p">(</span><span class="n">content</span><span class="p">[:</span><span class="mi">200</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;…&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">content</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">200</span> <span class="k">else</span> <span class="n">content</span><span class="p">,</span>
+                <span class="n">duration_ms</span><span class="o">=</span><span class="n">elapsed_ms</span><span class="p">,</span>
+            <span class="p">))</span>
+
+            <span class="n">result</span><span class="o">.</span><span class="n">success</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">owl_content</span> <span class="o">=</span> <span class="n">content</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">iterations</span> <span class="o">=</span> <span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">usage</span> <span class="o">=</span> <span class="n">total_usage</span>
+
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;===== AGENT COMPLETE ===== iterations=</span><span class="si">%d</span><span class="s2">, prompt_tokens=</span><span class="si">%d</span><span class="s2">, completion_tokens=</span><span class="si">%d</span><span class="s2">, owl_chars=</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">iterations</span><span class="p">,</span>
+                <span class="n">total_usage</span><span class="p">[</span><span class="s2">&quot;prompt_tokens&quot;</span><span class="p">],</span>
+                <span class="n">total_usage</span><span class="p">[</span><span class="s2">&quot;completion_tokens&quot;</span><span class="p">],</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">content</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">notify</span><span class="p">(</span><span class="s2">&quot;Agent completed!&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">result</span>
+
+    <span class="c1"># Exhausted all iterations</span>
+    <span class="n">result</span><span class="o">.</span><span class="n">error</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Agent reached maximum iterations (</span><span class="si">{</span><span class="n">MAX_ITERATIONS</span><span class="si">}</span><span class="s2">) without producing output&quot;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+        <span class="s2">&quot;===== AGENT FAILED ===== </span><span class="si">%s</span><span class="s2"> — total prompt_tokens=</span><span class="si">%d</span><span class="s2">, completion_tokens=</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">error</span><span class="p">,</span> <span class="n">total_usage</span><span class="p">[</span><span class="s2">&quot;prompt_tokens&quot;</span><span class="p">],</span> <span class="n">total_usage</span><span class="p">[</span><span class="s2">&quot;completion_tokens&quot;</span><span class="p">],</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">result</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

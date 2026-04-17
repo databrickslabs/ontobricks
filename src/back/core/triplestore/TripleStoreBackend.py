@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 
 
 class TripleStoreBackend(ABC):
-    """Abstract base class for triple store backends (Delta, LadybugDB, etc.)."""
+    """Abstract base class for triple store backends (e.g. Delta)."""
 
     # ------------------------------------------------------------------
     # Core abstract methods

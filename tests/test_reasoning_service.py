@@ -383,7 +383,7 @@ class TestRunConstraintChecks:
         svc = ReasoningService(_domain_session(ontology=ontology), triplestore_backend=store)
         result = svc.run_constraint_checks()
         assert result.stats.get("skipped") is True
-        assert "LadybugDB" in result.stats.get("reason", "")
+        assert "Cypher-capable" in result.stats.get("reason", "")
 
 
 # ===========================================================================

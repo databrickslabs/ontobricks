@@ -51,9 +51,7 @@ fastapi_session/
 mlflow.db
 mlruns/
 mlartifacts/
-.cursorrules
 src/.coding_rules.md
-.cursorrules
 /src/.databricks/sync-snapshots
 
 # Data folder

@@ -1,0 +1,53 @@
+---
+name: Testing and Deployment
+priority: 65
+scope:
+  globs: ["**/*"]
+---
+
+### Testing and Deployment
+
+- **Test framework**: `pytest` for the backend. Run with `uv run pytest -q`.
+- Ensure proper input validation and error handling.
+- **Deployment**: Deployed as a Databricks App via `databricks bundle deploy` using `app.yaml` (Databricks Asset Bundle format).
+- **Development Server**: Run via `run.py` which imports `create_app` from `shared.fastapi.main`. Uvicorn with auto-reload for local development.
+- **Changelog**: After any code change, update `/changelogs/YYYY-MM-DD.log` with a section including title, context, numbered changes with file paths, modified files list, and test results.
+
+### Documentation Rules
+
+- Review `/docs` and update it when refactoring changes structure or behaviour relevant to users.
+- For each feature, ensure there is at least one concrete example in the docs.
+- Update `README.md` to cover all features and capabilities.
+- **Dependencies**: Maintain the **Dependencies** section in `docs/development.md` describing all external dependencies (Python libs, JS frameworks, CSS libs) with short description, link, and license type.
+- **Product framing** (`docs/product.md`): Use this structure:
+  - Summary/description of OntoBricks
+  - Problem Statement or Opportunity Statement
+  - Proposed Solution
+  - What solutions exist today
+  - What does the final deliverable/impact look like
+  - Additional Information for Support Requested
+
+**Sphinx API Documentation:**
+
+- Source files in `/docs/sphinx` (config in `conf.py`, module `.rst` files in `api/`).
+- After any change that adds, removes, or renames a Python module, class, or public function:
+  1. Update or create the corresponding `.rst` file under `/docs/sphinx/api/`.
+  2. Re-build by running `./build_docs.sh` from the project root.
+  3. Verify no new Sphinx warnings about missing or renamed symbols.
+- When adding a **new subpackage** to `back/core`, `back/objects`, or `agents`, add a new `.rst` file and reference it from the parent `.rst` toctree.
+- All public classes and functions must have **docstrings** (Google or NumPy style) so `autodoc` renders them properly.
+
+### Working Style for Refactoring
+
+When the user asks you to refactor:
+
+1. Briefly summarize what the relevant module or function does.
+2. List the main code smells and map them to specific refactorings you plan to apply.
+3. Propose a short ordered plan (2–5 steps).
+4. Apply refactorings in small, reviewable chunks — prefer touching one route, one service function, or one repository method at a time.
+5. After each batch of changes:
+   - Summarize which refactorings were applied (by name).
+   - Explain how structure, readability, or testability improved.
+   - Mention any remaining smells and potential follow-up refactorings.
+
+Throughout, remember: refactoring means improving design while keeping externally observed behaviour the same, following Martin Fowler's "Refactoring: Improving the Design of Existing Code."

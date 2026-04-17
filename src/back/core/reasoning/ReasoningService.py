@@ -272,18 +272,18 @@ class ReasoningService:
                 "reason": "No triple-store backend available",
             })
 
-        from back.core.triplestore.ladybugdb.LadybugBase import LadybugBase
-        if not isinstance(self._store, LadybugBase):
+        from back.core.graphdb.GraphDBBackend import GraphDBBackend
+        if not GraphDBBackend.is_cypher_backend(self._store):
             return ReasoningResult(stats={
                 "phase": "constraints", "skipped": True,
-                "reason": "Constraint checks require LadybugDB backend",
+                "reason": "Constraint checks require a Cypher-capable graph backend",
             })
 
         t0 = time.time()
         result = ReasoningResult()
         table_name = self._get_graph_name()
-        node = self._store._node_table(table_name)
-        conn = self._store._get_connection()
+        node = self._store.get_node_table(table_name)
+        conn = self._store.get_connection()
         base_uri = ontology.get("base_uri", "")
         data_ns, sep = self._namespace_parts(base_uri)
         checked = 0

@@ -1,0 +1,36 @@
+This repository uses modular Cursor rules with scoped `.mdc` files (YAML frontmatter for name/priority/scope). See `.cursor/`:
+
+1. 01-expertise-and-principles.mdc
+2. 02-project-overview.mdc
+3. 03-system-components-and-requirements.mdc
+4. 04-project-structure.mdc
+5. 05-code-style-and-structure.mdc
+6. 06-performance-optimization.mdc
+7. 07-project-conventions.mdc
+8. 08-testing-and-deployment.mdc
+9. 09-package-management.mdc
+10. 10-entity-panel-matrix.mdc
+
+After ANY code change (feature, fix, refactoring, review, etc.):
+* Update the changelog in /changelogs/:
+    - Use today's date as filename: YYYY-MM-DD.log
+    - If the file already exists, append a new section (one file per day).
+    - If the file does not exist, create it.
+    - Each section must include: a title, context, numbered list of changes
+      with file paths and a short description, the list of modified files,
+      and the test result.
+* Run all tests and report results.
+
+When asking for a code review, do all these tasks (in this order):
+* Review all application code, and check that the rules defined in src/.coding_rules.md are respected
+* Try to detect duplication code, and optimize if necessary
+* Try to find not-used code, and remove the unnecessary code when possible, propose a plan instead
+* Check all the session_data items to see if they are used and/or if they could be calculated as well
+    - If they are useless, remove them.
+    - If they can be calculated, optimize the code or propose a plan.
+* Run all tests (after all changes made)
+* Update the documentation (in /docs, the sphinx documentation and the README.md)
+
+When asking to deploy:
+* Always synchronize the files with the server.
+* Deploy both the UI and the MCP server.

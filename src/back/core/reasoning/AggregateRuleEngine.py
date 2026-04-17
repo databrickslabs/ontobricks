@@ -13,6 +13,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
+from back.core.graphdb.GraphDBBackend import GraphDBBackend
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.reasoning.constants import AGG_FUNCTIONS, AGG_OPERATORS, RDF_TYPE
 from back.core.reasoning.models import InferredTriple, ReasoningResult, RuleViolation
@@ -85,7 +86,7 @@ class AggregateRuleEngine:
         t0 = time.time()
         result = ReasoningResult()
         base_uri = ontology.get("base_uri", "")
-        is_cypher = self._is_cypher_backend(store)
+        is_cypher = GraphDBBackend.is_cypher_backend(store)
 
         for rule in rules:
             if not rule.get("enabled", True):
@@ -124,7 +125,7 @@ class AggregateRuleEngine:
         name = rule.get("name", "unnamed")
 
         if is_cypher:
-            query = self.build_cypher(rule, table_name, base_uri)
+            query = self.build_cypher(rule, table_name, base_uri, store)
         else:
             query = self.build_sql(rule, table_name, base_uri)
 
@@ -133,7 +134,7 @@ class AggregateRuleEngine:
 
         try:
             if is_cypher:
-                conn = store._get_connection()
+                conn = store.get_connection()
                 raw = conn.execute(query)
                 for row in raw:
                     subj = row[0] if row else ""
@@ -232,7 +233,9 @@ class AggregateRuleEngine:
                 f"HAVING COUNT(t0.subject) {sql_op} {threshold}"
             )
 
-    def build_cypher(self, rule: Dict, table_name: str, base_uri: str) -> Optional[str]:
+    def build_cypher(
+        self, rule: Dict, table_name: str, base_uri: str, store: Any,
+    ) -> Optional[str]:
         """Build Cypher aggregate query for the flat triple table."""
         target_uri = rule.get("target_class_uri", "")
         group_prop_uri = rule.get("group_by_property_uri", "")
@@ -245,11 +248,7 @@ class AggregateRuleEngine:
             return None
         cypher_op = AGG_OPERATORS.get(operator, ">")
 
-        try:
-            from back.core.triplestore.ladybugdb.LadybugBase import LadybugBase
-            tbl = LadybugBase.safe_table_id(table_name)
-        except ImportError:
-            tbl = table_name
+        tbl = store.get_node_table(table_name)
 
         if group_prop_uri and agg_prop_uri:
             cypher_agg = agg_func if agg_func != "count" else "count"
@@ -309,11 +308,3 @@ class AggregateRuleEngine:
             if func and func != "count":
                 errors.append("Must specify at least one of group_by_property or aggregate_property (only COUNT works without them)")
         return errors
-
-    @staticmethod
-    def _is_cypher_backend(store) -> bool:
-        try:
-            from back.core.triplestore.ladybugdb.LadybugBase import LadybugBase
-            return isinstance(store, LadybugBase)
-        except ImportError:
-            return False

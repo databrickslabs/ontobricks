@@ -389,7 +389,7 @@ class Domain:
 
         Returns an empty string on success, or a warning message on failure.
         """
-        from back.core.triplestore.ladybugdb import sync_to_volume
+        from back.core.graphdb.ladybugdb import sync_to_volume
 
         uc_path = self._s.uc_version_path
         if not uc_path:
@@ -407,7 +407,7 @@ class Domain:
 
         Returns an empty string on success, or a warning message on failure.
         """
-        from back.core.triplestore.ladybugdb import sync_from_volume
+        from back.core.graphdb.ladybugdb import sync_from_volume
 
         uc_path = self._s.uc_version_path
         if not uc_path:

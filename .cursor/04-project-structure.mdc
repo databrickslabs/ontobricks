@@ -1,0 +1,85 @@
+---
+name: Project Structure
+priority: 85
+scope:
+  globs: ["**/*"]
+---
+
+### Project Structure
+
+The codebase is split into five top-level packages under `src/`:
+
+| Package | Purpose |
+|---------|---------|
+| `src/back/` | Backend: domain classes (`objects/`), core infra (`core/`), GraphQL routes (`fastapi/`), services (`services/`). |
+| `src/front/` | Frontend: HTML-only routes (`routes/`), Jinja2 config (`fastapi/`), menu config (`config/`), templates (`templates/`), static assets (`static/`). |
+| `src/shared/` | Shared infrastructure: app factory & middleware (`fastapi/`), settings & constants (`config/`). |
+| `src/api/` | API layer: external REST API (`routers/v1.py` etc.), internal JSON API (`routers/internal/`). |
+| `src/agents/` | LLM agent engines (OWL generator, auto-assign, icon assign, assistant). |
+
+### Three-Layer FastAPI Split
+
+| Package | Contents | Depends on |
+|---------|----------|------------|
+| `shared/fastapi/` | Application factory (`main.py`), permission middleware, router registration, health routes (`health.py`). | `front`, `back`, `api` |
+| `front/fastapi/` | Jinja2 template config, custom filters, menu globals (`dependencies.py`). | `front/config/` |
+| `back/fastapi/` | GraphQL API (`graphql_routes.py`). | `back/core/`, `back/objects/` |
+
+Entry point: `run.py` imports `create_app` from `shared.fastapi.main`.
+
+### Frontend Structure
+
+```
+src/front/
+├── fastapi/          <- Jinja2 rendering configuration (dependencies.py)
+├── config/           <- Frontend-only configuration (menu_config.json)
+├── routes/           <- One file per page, TemplateResponse only
+├── templates/        <- Consolidated Jinja2 templates
+│   ├── base.html, home.html, ontology.html, mapping.html, ...
+│   └── partials/     <- Grouped by topic (layout/, ontology/, mapping/, dtwin/, domain/)
+└── static/           <- CSS, JS, images (global/, ontology/, mapping/, domain/, …)
+```
+
+### Backend Domain Objects (`src/back/objects/`)
+
+```
+back/objects/
+├── registry/         <- UC domain registry, permissions, scheduled builds
+├── session/          <- HTTP session storage, domain state, instance config
+├── domain/           <- Session-scoped UC/metadata/layout operations
+├── ontology/         <- Ontology domain class
+├── mapping/          <- Mapping domain class
+└── digitaltwin/      <- Digital Twin domain class
+```
+
+### Backend Core Infrastructure (`src/back/core/`)
+
+```
+back/core/
+├── agents/           <- AgentClient (LLM gateway)
+├── errors/           <- OntoBricksError hierarchy
+├── helpers/          <- Cross-cutting utilities (DatabricksHelpers, SQLHelpers, URIHelpers)
+├── logging/          <- LogManager, setup_logging(), get_logger()
+├── task_manager/     <- Async in-memory task tracking
+├── triplestore/      <- Triple store backends (Delta views in UC)
+├── graphdb/          <- Pluggable graph DB engine abstraction (LadybugDB, …)
+├── databricks/       <- Typed facades for Databricks API surfaces
+├── graphql/          <- Strawberry GraphQL schema builder
+├── w3c/              <- W3C standard parsers/generators (OWL, RDFS, R2RML, SPARQL, SHACL)
+├── industry/         <- Standard industry ontology importers (CDISC, FIBO, IOF)
+├── graph_analysis/   <- Community detection (NetworkX backend)
+├── reasoning/        <- OWL 2 RL, SWRL, decision tables, SPARQL rules, aggregates
+└── sqlwizard/        <- LLM-assisted SQL generation
+```
+
+### API Layer (`src/api/`)
+
+```
+api/
+├── routers/
+│   ├── v1.py, domains.py, digitaltwin.py   <- External API (/api/v1/*)
+│   └── internal/                           <- Internal API (session-aware JSON)
+│       ├── home.py, settings.py, ontology.py, mapping.py, dtwin.py, domain.py, tasks.py
+│       └── _helpers.py
+└── external_app.py
+```
