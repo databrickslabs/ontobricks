@@ -254,7 +254,7 @@ OntoBricks separates configuration into several layers:
 | `src/shared/config/constants.py` | **Static constants and defaults** that rarely change and are shared across modules | App name/version, OWL namespaces, LLM defaults, wizard quick-templates |
 | `src/front/config/menu_config.json` | **Sidebar navigation** for the Jinja2 UI | Page labels, menu structure |
 | `src/back/objects/session/global_config.py` | **Instance-level `GlobalConfigService`** — admin-editable settings stored in a `.global_config.json` file on the UC Volume root, shared across all user sessions | SQL Warehouse ID, default base URI, default class icon (emoji) |
-| `src/back/objects/registry/permissions.py` | **`PermissionService`** — stores per-user permission levels in `.permissions.json` on the UC Volume root | `CAN MANAGE` admin flag |
+| `src/back/objects/registry/permissions.py` | **`PermissionService`** — stores per-user permission levels in `.permissions.json` (app-wide) and per-domain overrides in `.domain_permissions.json` (per domain folder). Defines the role hierarchy: `admin > builder > editor > viewer > none`. | `CAN MANAGE` admin flag |
 
 **`src/shared/config/constants.py`** key contents:
 
@@ -286,9 +286,10 @@ The service caches the JSON file in memory with a TTL to minimize UC Volume read
 /Volumes/{catalog}/{schema}/{volume}/
 ├── .registry                  # Marker file (presence = initialized)
 ├── .global_config.json        # Instance-level admin settings (includes build schedules)
-├── .permissions.json          # Per-user permission levels
+├── .permissions.json          # App-wide per-user permission levels (viewer / editor / builder)
 └── domains/                   # Domain version files (legacy registries may use `projects/`)
     └── {domain_name}/
+        ├── .domain_permissions.json  # Optional per-domain role overrides
         ├── V1/
         │   ├── V1.json                                    # Domain version payload
         │   ├── documents/                                 # Version-scoped documents
@@ -428,7 +429,7 @@ src/
 │       │   └── global_config.py        # Instance-level GlobalConfigService
 │       └── registry/                   # Registry, permissions & scheduled builds
 │           ├── service.py              # RegistryService + RegistryCfg
-│           ├── permissions.py          # PermissionService (ADMIN / EDITOR / VIEWER / NONE)
+│           ├── permissions.py          # PermissionService (ADMIN / BUILDER / EDITOR / VIEWER / NONE + domain-level overrides)
 │           └── scheduler.py            # BuildScheduler (APScheduler-based)
 │
 ├── api/                                # REST API layer (mounted into the main app)

@@ -5,7 +5,8 @@ Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 """
 from fastapi import APIRouter, Request, Depends
 from back.core.logging import get_logger
-from back.core.errors import InfrastructureError, NotFoundError, ValidationError
+from back.core.errors import AuthorizationError, InfrastructureError, NotFoundError, ValidationError
+from back.objects.registry import ROLE_ADMIN, ROLE_BUILDER, role_level
 from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import get_settings, Settings
@@ -142,6 +143,10 @@ async def start_triplestore_sync(
     """
     import threading
     from back.core.task_manager import get_task_manager
+
+    effective_role = getattr(request.state, 'user_domain_role', None) or getattr(request.state, 'user_role', '')
+    if role_level(effective_role) < role_level(ROLE_BUILDER):
+        raise AuthorizationError("Only builders and admins can build a digital twin")
 
     data = await request.json()
     build_mode = data.get('build_mode', 'incremental')
@@ -959,12 +964,17 @@ async def dt_existence(
 
 @router.post("/sync/reload-from-registry")
 async def reload_graph_from_registry(
+    request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
     """Download the LadybugDB archive from the registry volume and extract it locally."""
     from back.core.databricks import VolumeFileService
     from back.objects.domain import Domain
+    from back.objects.registry import ROLE_BUILDER, role_level
+    effective_role = getattr(request.state, 'user_domain_role', None) or getattr(request.state, 'user_role', '')
+    if role_level(effective_role) < role_level(ROLE_BUILDER):
+        raise AuthorizationError("Only builders and admins can reload the graph from registry")
 
     domain = get_domain(session_mgr)
     host, token = get_databricks_host_and_token(domain, settings)
@@ -983,10 +993,16 @@ async def reload_graph_from_registry(
 
 @router.post("/sync/drop-snapshot")
 async def drop_snapshot(
+    request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
     """Drop the incremental snapshot table to force a full rebuild on next build."""
+    from back.objects.registry import ROLE_BUILDER, role_level
+    effective_role = getattr(request.state, 'user_domain_role', None) or getattr(request.state, 'user_role', '')
+    if role_level(effective_role) < role_level(ROLE_BUILDER):
+        raise AuthorizationError("Only builders and admins can drop the snapshot")
+
     domain = get_domain(session_mgr)
     snapshot_table = domain.snapshot_table
     if not snapshot_table:

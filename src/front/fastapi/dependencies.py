@@ -95,11 +95,21 @@ def get_user_role(context: dict) -> str:
     return ""
 
 
+@pass_context
+def get_user_domain_role(context: dict) -> str:
+    """Return the effective domain role from request.state (set by PermissionMiddleware)."""
+    request: Request = context.get("request")
+    if request and hasattr(request.state, 'user_domain_role'):
+        return request.state.user_domain_role
+    return ""
+
+
 # Add custom globals to Jinja2 environment
 templates.env.globals['url_for'] = url_for
 templates.env.globals['range'] = range_filter
 templates.env.globals['get_user_email'] = get_user_email
 templates.env.globals['get_user_role'] = get_user_role
+templates.env.globals['get_user_domain_role'] = get_user_domain_role
 
 # Menu configuration available in all templates as {{ menu_config }}
 from front.config import get_menu_config, get_menu_by_id

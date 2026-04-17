@@ -550,7 +550,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let bridgesLoaded = false;
     let bridgesData = null;
-    let bridgesSimulation = null;
 
     function _ensureD3() {
         if (typeof d3 !== 'undefined') return Promise.resolve();
@@ -561,12 +560,6 @@ document.addEventListener('DOMContentLoaded', function () {
             s.onerror = () => reject(new Error('Failed to load D3.js'));
             document.head.appendChild(s);
         });
-    }
-
-    function _domainColor(name) {
-        let h = 0;
-        for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
-        return NODE_PALETTE[Math.abs(h) % NODE_PALETTE.length];
     }
 
     // --- View toggle ---
@@ -622,46 +615,62 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('btnRefreshBridges')?.addEventListener('click', () => {
         bridgesLoaded = false;
         bridgesData = null;
-        if (bridgesSimulation) { bridgesSimulation.stop(); bridgesSimulation = null; }
         loadRegistryBridges();
     });
 
-    // --- Aggregate bridges into graph data model ---
+    // --- Build entity-level graph model grouped by domain ---
 
     function _buildGraphModel(domains) {
-        const nodeMap = {};
-        const linkKey = (s, t) => s + '>>>' + t;
-        const linkMap = {};
+        const domainMap = {};
+        const entityMap = {};
+        const links = [];
 
         domains.forEach(d => {
-            if (!nodeMap[d.name]) {
-                nodeMap[d.name] = { id: d.name, bridgeCount: 0, hasBridges: false };
+            if (!domainMap[d.name]) {
+                domainMap[d.name] = { id: d.name, baseUri: d.base_uri || '', entities: new Set() };
             }
             (d.bridges || []).forEach(b => {
                 const tgt = b.target_domain;
                 if (!tgt) return;
-                nodeMap[d.name].bridgeCount++;
-                nodeMap[d.name].hasBridges = true;
-                if (!nodeMap[tgt]) {
-                    nodeMap[tgt] = { id: tgt, bridgeCount: 0, hasBridges: false };
+                if (!domainMap[tgt]) {
+                    domainMap[tgt] = { id: tgt, baseUri: '', entities: new Set() };
                 }
-                nodeMap[tgt].hasBridges = true;
-                const key = linkKey(d.name, tgt);
-                if (!linkMap[key]) {
-                    linkMap[key] = { source: d.name, target: tgt, count: 0, bridges: [] };
+
+                const srcKey = d.name + '::' + b.source_class;
+                const tgtKey = tgt + '::' + b.target_class_name;
+
+                domainMap[d.name].entities.add(b.source_class);
+                domainMap[tgt].entities.add(b.target_class_name);
+
+                if (!entityMap[srcKey]) {
+                    entityMap[srcKey] = {
+                        id: srcKey, name: b.source_class, domain: d.name,
+                        emoji: b.source_emoji || '📦'
+                    };
                 }
-                linkMap[key].count++;
-                linkMap[key].bridges.push(b);
+                if (!entityMap[tgtKey]) {
+                    entityMap[tgtKey] = {
+                        id: tgtKey, name: b.target_class_name, domain: tgt,
+                        emoji: '📦'
+                    };
+                }
+
+                links.push({
+                    sourceId: srcKey, targetId: tgtKey,
+                    sourceDomain: d.name, targetDomain: tgt,
+                    label: b.label || ''
+                });
             });
         });
 
-        return {
-            nodes: Object.values(nodeMap),
-            links: Object.values(linkMap)
-        };
+        const domainGroups = Object.values(domainMap)
+            .filter(d => d.entities.size > 0)
+            .map(d => ({ ...d, entities: Array.from(d.entities) }));
+
+        return { domainGroups, entities: entityMap, links };
     }
 
-    // --- Render D3 force graph ---
+    // --- Render static diagram with entities inside domain bubbles ---
 
     function _renderBridgesGraph(graphData) {
         const container = document.getElementById('bridgesGraph');
@@ -669,8 +678,10 @@ document.addEventListener('DOMContentLoaded', function () {
         container.innerHTML = '';
 
         const rect = container.getBoundingClientRect();
-        const width = rect.width || container.clientWidth || 800;
-        const height = rect.height || container.clientHeight || 500;
+        const width = rect.width || container.clientWidth || 900;
+        const height = rect.height || container.clientHeight || 600;
+        const cx = width / 2;
+        const cy = height / 2;
 
         const svg = d3.select(container)
             .append('svg')
@@ -680,18 +691,25 @@ document.addEventListener('DOMContentLoaded', function () {
             .attr('preserveAspectRatio', 'xMidYMid meet');
 
         const defs = svg.append('defs');
+
         defs.append('marker')
             .attr('id', 'bridges-arrowhead')
-            .attr('viewBox', '0 -4 8 8')
-            .attr('refX', 8)
-            .attr('refY', 0)
-            .attr('markerWidth', 6)
-            .attr('markerHeight', 6)
+            .attr('viewBox', '0 -5 10 10')
+            .attr('refX', 10).attr('refY', 0)
+            .attr('markerWidth', 7).attr('markerHeight', 7)
             .attr('orient', 'auto')
             .append('path')
-            .attr('d', 'M0,-4L8,0L0,4')
+            .attr('d', 'M0,-5L10,0L0,5')
             .attr('fill', 'var(--bs-primary, #0d6efd)')
-            .attr('fill-opacity', 0.6);
+            .attr('fill-opacity', 0.55);
+
+        NODE_PALETTE.forEach((color, i) => {
+            const grad = defs.append('radialGradient')
+                .attr('id', 'domain-grad-' + i)
+                .attr('cx', '35%').attr('cy', '35%').attr('r', '65%');
+            grad.append('stop').attr('offset', '0%').attr('stop-color', color).attr('stop-opacity', 0.12);
+            grad.append('stop').attr('offset', '100%').attr('stop-color', color).attr('stop-opacity', 0.04);
+        });
 
         const g = svg.append('g');
 
@@ -700,271 +718,212 @@ document.addEventListener('DOMContentLoaded', function () {
             .on('zoom', (event) => g.attr('transform', event.transform));
         svg.call(zoom);
 
-        const maxBridges = Math.max(1, d3.max(graphData.nodes, n => n.bridgeCount) || 1);
-        const rScale = d3.scaleSqrt().domain([0, maxBridges]).range([20, 44]);
-        const strokeScale = d3.scaleLinear().domain([1, Math.max(1, d3.max(graphData.links, l => l.count) || 1)]).range([1.5, 4]);
+        const groups = graphData.domainGroups;
+        const numGroups = groups.length;
+        if (numGroups === 0) return;
 
-        // Check for bidirectional links so we can curve them
-        const linkPairSet = new Set();
-        graphData.links.forEach(l => {
-            const fwd = l.source + '>>>' + l.target;
-            const rev = l.target + '>>>' + l.source;
-            if (linkPairSet.has(rev)) {
-                l._curved = true;
-                graphData.links.forEach(o => {
-                    if (o.source === l.target && o.target === l.source) o._curved = true;
-                });
-            }
-            linkPairSet.add(fwd);
+        const maxEntities = Math.max(...groups.map(g => g.entities.length));
+        const domainRadius = Math.max(60, 28 + maxEntities * 16);
+        const orbitRadius = numGroups === 1 ? 0
+            : Math.max(domainRadius * 2.2, Math.min(width, height) * 0.32);
+
+        const entityRadius = 18;
+        const entityPositions = {};
+
+        groups.forEach((domain, i) => {
+            const angle = numGroups === 1 ? 0 : (2 * Math.PI * i / numGroups) - Math.PI / 2;
+            const dx = cx + Math.cos(angle) * orbitRadius;
+            const dy = cy + Math.sin(angle) * orbitRadius;
+            domain._x = dx;
+            domain._y = dy;
+            domain._r = domainRadius;
+
+            const colorIdx = Math.abs(_hashStr(domain.id)) % NODE_PALETTE.length;
+            domain._color = NODE_PALETTE[colorIdx];
+            domain._colorIdx = colorIdx;
+
+            const entCount = domain.entities.length;
+            const innerRadius = domainRadius * 0.55;
+            domain.entities.forEach((entName, j) => {
+                const eAngle = entCount === 1 ? 0 : (2 * Math.PI * j / entCount) - Math.PI / 2;
+                const ex = dx + Math.cos(eAngle) * innerRadius;
+                const ey = dy + Math.sin(eAngle) * innerRadius;
+                const key = domain.id + '::' + entName;
+                entityPositions[key] = { x: ex, y: ey, domain: domain.id };
+            });
         });
 
-        const simulation = d3.forceSimulation(graphData.nodes)
-            .force('link', d3.forceLink(graphData.links).id(n => n.id).distance(180))
-            .force('charge', d3.forceManyBody().strength(-400))
-            .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collide', d3.forceCollide().radius(n => rScale(n.bridgeCount) + 12));
+        // Domain group circles
+        const domainG = g.append('g').attr('class', 'bridges-domains-layer');
+        groups.forEach(domain => {
+            const dg = domainG.append('g')
+                .attr('class', 'bridges-domain-group')
+                .attr('transform', 'translate(' + domain._x + ',' + domain._y + ')');
 
-        bridgesSimulation = simulation;
+            dg.append('circle')
+                .attr('r', domain._r)
+                .attr('fill', 'url(#domain-grad-' + domain._colorIdx + ')')
+                .attr('stroke', domain._color)
+                .attr('stroke-width', 2)
+                .attr('stroke-opacity', 0.35)
+                .attr('stroke-dasharray', '6 3');
 
-        const linkG = g.append('g');
-        const edgePaths = linkG.selectAll('path')
-            .data(graphData.links)
-            .join('path')
-            .attr('class', 'bridges-graph-edge')
-            .attr('stroke-width', d => strokeScale(d.count))
-            .attr('marker-end', 'url(#bridges-arrowhead)');
+            dg.append('text')
+                .attr('class', 'bridges-domain-label')
+                .attr('y', -domain._r - 10)
+                .text(domain.id);
 
-        const edgeLabels = linkG.selectAll('text')
-            .data(graphData.links)
-            .join('text')
-            .attr('class', 'bridges-graph-edge-count')
-            .text(d => d.count);
-
-        const nodeG = g.append('g');
-        const nodeGroups = nodeG.selectAll('g')
-            .data(graphData.nodes)
-            .join('g')
-            .attr('class', 'bridges-graph-node');
-
-        nodeGroups.append('circle')
-            .attr('r', d => rScale(d.bridgeCount))
-            .attr('fill', d => d.hasBridges ? _domainColor(d.id) : '#ccc')
-            .attr('fill-opacity', d => d.hasBridges ? 0.85 : 0.4)
-            .attr('stroke', d => d.hasBridges ? _domainColor(d.id) : '#aaa')
-            .attr('stroke-width', 2)
-            .attr('stroke-opacity', 0.6);
-
-        // Badge showing bridge count inside the circle
-        nodeGroups.filter(d => d.bridgeCount > 0)
-            .append('text')
-            .attr('class', 'bridges-graph-badge')
-            .attr('dy', '0.35em')
-            .text(d => d.bridgeCount);
-
-        // Label below
-        const labelG = g.append('g');
-        const labels = labelG.selectAll('text')
-            .data(graphData.nodes)
-            .join('text')
-            .attr('class', 'bridges-graph-label')
-            .text(d => d.id);
-
-        // --- Interactions ---
-
-        // Drag
-        const drag = d3.drag()
-            .on('start', (event, d) => {
-                if (!event.active) simulation.alphaTarget(0.3).restart();
-                d.fx = d.x; d.fy = d.y;
-            })
-            .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
-            .on('end', (event, d) => {
-                if (!event.active) simulation.alphaTarget(0);
-                d.fx = null; d.fy = null;
-            });
-        nodeGroups.call(drag);
-
-        // Hover highlight
-        nodeGroups
-            .on('mouseenter', (event, d) => {
-                const connected = new Set();
-                connected.add(d.id);
-                graphData.links.forEach(l => {
-                    const sId = typeof l.source === 'object' ? l.source.id : l.source;
-                    const tId = typeof l.target === 'object' ? l.target.id : l.target;
-                    if (sId === d.id) connected.add(tId);
-                    if (tId === d.id) connected.add(sId);
-                });
-                nodeGroups.classed('dimmed', n => !connected.has(n.id));
-                nodeGroups.classed('highlighted', n => connected.has(n.id));
-                labels.classed('dimmed', n => !connected.has(n.id));
-                edgePaths.classed('dimmed', l => {
-                    const sId = typeof l.source === 'object' ? l.source.id : l.source;
-                    const tId = typeof l.target === 'object' ? l.target.id : l.target;
-                    return sId !== d.id && tId !== d.id;
-                });
-                edgePaths.classed('highlighted', l => {
-                    const sId = typeof l.source === 'object' ? l.source.id : l.source;
-                    const tId = typeof l.target === 'object' ? l.target.id : l.target;
-                    return sId === d.id || tId === d.id;
-                });
-                edgeLabels.style('opacity', l => {
-                    const sId = typeof l.source === 'object' ? l.source.id : l.source;
-                    const tId = typeof l.target === 'object' ? l.target.id : l.target;
-                    return (sId === d.id || tId === d.id) ? 1 : 0.1;
-                });
-            })
-            .on('mouseleave', () => {
-                nodeGroups.classed('dimmed', false).classed('highlighted', false);
-                labels.classed('dimmed', false);
-                edgePaths.classed('dimmed', false).classed('highlighted', false);
-                edgeLabels.style('opacity', 1);
-                _hideGraphTooltip();
-            });
-
-        // Click node -> scroll to domain card in table view
-        nodeGroups.on('click', (event, d) => {
-            _applyBridgesView('table');
-            setTimeout(() => {
-                const cards = document.querySelectorAll('.bridges-domain-header .domain-name');
-                for (const el of cards) {
-                    if (el.textContent.trim() === d.id) {
-                        const card = el.closest('.bridges-domain-card');
-                        if (card) {
-                            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            const collapseEl = card.querySelector('.collapse');
-                            if (collapseEl && !collapseEl.classList.contains('show')) {
-                                new bootstrap.Collapse(collapseEl, { toggle: true });
-                            }
-                        }
-                        break;
-                    }
-                }
-            }, 50);
+            dg.append('text')
+                .attr('class', 'bridges-domain-badge')
+                .attr('y', -domain._r - 10)
+                .attr('dy', '1.1em')
+                .text(domain.entities.length + ' entit' + (domain.entities.length !== 1 ? 'ies' : 'y'));
         });
 
-        // Edge hover -> tooltip
-        const tooltip = document.getElementById('bridgesGraphTooltip');
-        edgePaths
-            .on('mouseenter', (event, d) => { _showGraphTooltip(event, d, tooltip); })
-            .on('mousemove', (event) => { _moveGraphTooltip(event, tooltip); })
-            .on('mouseleave', () => { _hideGraphTooltip(); })
-            .style('cursor', 'pointer');
+        // Edge layer (behind entity nodes)
+        const edgeG = g.append('g').attr('class', 'bridges-edges-layer');
 
-        // Path generator for edges
-        function _linkPath(d) {
-            const sx = d.source.x, sy = d.source.y;
-            const tx = d.target.x, ty = d.target.y;
-            const sr = rScale(d.source.bridgeCount);
-            const tr = rScale(d.target.bridgeCount);
+        const edgeLabelIndexMap = {};
+        graphData.links.forEach(link => {
+            const pairKey = [link.sourceId, link.targetId].sort().join('|||');
+            if (!edgeLabelIndexMap[pairKey]) edgeLabelIndexMap[pairKey] = 0;
+            link._pairIdx = edgeLabelIndexMap[pairKey]++;
+        });
 
-            const dx = tx - sx, dy = ty - sy;
+        graphData.links.forEach(link => {
+            const src = entityPositions[link.sourceId];
+            const tgt = entityPositions[link.targetId];
+            if (!src || !tgt) return;
+
+            const dx = tgt.x - src.x;
+            const dy = tgt.y - src.y;
             const dist = Math.sqrt(dx * dx + dy * dy) || 1;
             const ux = dx / dist, uy = dy / dist;
 
-            const startX = sx + ux * sr;
-            const startY = sy + uy * sr;
-            const endX = tx - ux * (tr + 8);
-            const endY = ty - uy * (tr + 8);
+            const startX = src.x + ux * (entityRadius + 2);
+            const startY = src.y + uy * (entityRadius + 2);
+            const endX = tgt.x - ux * (entityRadius + 10);
+            const endY = tgt.y - uy * (entityRadius + 10);
 
-            if (d._curved) {
-                const mx = (startX + endX) / 2;
-                const my = (startY + endY) / 2;
-                const offset = dist * 0.18;
-                const cx = mx - uy * offset;
-                const cy = my + ux * offset;
-                return 'M' + startX + ',' + startY + 'Q' + cx + ',' + cy + ' ' + endX + ',' + endY;
+            const curvature = 30 + (link._pairIdx || 0) * 20;
+            const midX = (startX + endX) / 2 - uy * curvature;
+            const midY = (startY + endY) / 2 + ux * curvature;
+            const pathD = 'M' + startX + ',' + startY + ' Q' + midX + ',' + midY + ' ' + endX + ',' + endY;
+
+            edgeG.append('path')
+                .attr('class', 'bridges-graph-edge')
+                .attr('d', pathD)
+                .attr('stroke-width', 1.8)
+                .attr('marker-end', 'url(#bridges-arrowhead)');
+
+            const labelX = (startX + 2 * midX + endX) / 4;
+            const labelY = (startY + 2 * midY + endY) / 4;
+            const labelText = link.label || '';
+
+            if (labelText) {
+                const bg = edgeG.append('rect')
+                    .attr('class', 'bridges-edge-label-bg')
+                    .attr('rx', 3).attr('ry', 3);
+
+                const lbl = edgeG.append('text')
+                    .attr('class', 'bridges-edge-label')
+                    .attr('x', labelX).attr('y', labelY)
+                    .text(labelText);
+
+                const bbox = lbl.node().getBBox();
+                bg.attr('x', bbox.x - 4).attr('y', bbox.y - 1)
+                  .attr('width', bbox.width + 8).attr('height', bbox.height + 2);
             }
-            return 'M' + startX + ',' + startY + 'L' + endX + ',' + endY;
-        }
-
-        function _labelPos(d) {
-            const sx = d.source.x, sy = d.source.y;
-            const tx = d.target.x, ty = d.target.y;
-            const sr = rScale(d.source.bridgeCount);
-            const tr = rScale(d.target.bridgeCount);
-
-            const dx = tx - sx, dy = ty - sy;
-            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            const ux = dx / dist, uy = dy / dist;
-
-            const startX = sx + ux * sr;
-            const startY = sy + uy * sr;
-            const endX = tx - ux * (tr + 8);
-            const endY = ty - uy * (tr + 8);
-
-            if (d._curved) {
-                const mx = (startX + endX) / 2;
-                const my = (startY + endY) / 2;
-                const offset = dist * 0.18;
-                return { x: mx - uy * offset * 0.55, y: my + ux * offset * 0.55 };
-            }
-            return { x: (startX + endX) / 2, y: (startY + endY) / 2 - 6 };
-        }
-
-        simulation.on('tick', () => {
-            edgePaths.attr('d', _linkPath);
-            edgeLabels
-                .attr('x', d => _labelPos(d).x)
-                .attr('y', d => _labelPos(d).y);
-            nodeGroups.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
-            labels
-                .attr('x', d => d.x)
-                .attr('y', d => d.y + rScale(d.bridgeCount) + 14);
         });
 
-        // Initial fit after simulation settles
-        simulation.on('end', () => {
+        // Entity nodes layer
+        const entityG = g.append('g').attr('class', 'bridges-entities-layer');
+        Object.keys(entityPositions).forEach(key => {
+            const pos = entityPositions[key];
+            const ent = graphData.entities[key];
+            if (!ent) return;
+
+            const domain = groups.find(g => g.id === ent.domain);
+            const fillColor = domain ? domain._color : '#999';
+
+            const eg = entityG.append('g')
+                .attr('class', 'bridges-entity-node')
+                .attr('transform', 'translate(' + pos.x + ',' + pos.y + ')');
+
+            eg.append('circle')
+                .attr('r', entityRadius)
+                .attr('fill', '#fff')
+                .attr('stroke', fillColor)
+                .attr('stroke-width', 2.5);
+
+            eg.append('text')
+                .attr('class', 'bridges-entity-emoji')
+                .attr('dy', '0.35em')
+                .text(ent.emoji);
+
+            eg.append('text')
+                .attr('class', 'bridges-entity-label')
+                .attr('y', entityRadius + 13)
+                .text(ent.name);
+        });
+
+        // Fit the diagram into the viewport
+        requestAnimationFrame(() => {
             const bounds = g.node().getBBox();
             if (bounds.width > 0 && bounds.height > 0) {
-                const pad = 40;
+                const pad = 50;
                 const scale = Math.min(
                     (width - pad * 2) / bounds.width,
                     (height - pad * 2) / bounds.height,
-                    1.2
+                    1.3
                 );
                 const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
                 const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
-                svg.transition().duration(500).call(
-                    zoom.transform,
-                    d3.zoomIdentity.translate(tx, ty).scale(scale)
-                );
+                svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
             }
         });
+
+        // Hover: highlight connected entities and edges
+        entityG.selectAll('.bridges-entity-node')
+            .on('mouseenter', function (event) {
+                const thisKey = _entityKeyFromPos(this, entityPositions);
+                if (!thisKey) return;
+                const connected = new Set([thisKey]);
+                graphData.links.forEach(l => {
+                    if (l.sourceId === thisKey) connected.add(l.targetId);
+                    if (l.targetId === thisKey) connected.add(l.sourceId);
+                });
+                entityG.selectAll('.bridges-entity-node')
+                    .classed('dimmed', function () {
+                        return !connected.has(_entityKeyFromPos(this, entityPositions));
+                    });
+                edgeG.selectAll('.bridges-graph-edge')
+                    .classed('highlighted', function (d, i) {
+                        const link = graphData.links[i];
+                        return link && (link.sourceId === thisKey || link.targetId === thisKey);
+                    });
+            })
+            .on('mouseleave', function () {
+                entityG.selectAll('.bridges-entity-node').classed('dimmed', false);
+                edgeG.selectAll('.bridges-graph-edge').classed('highlighted', false);
+            });
     }
 
-    // --- Tooltip helpers ---
-
-    function _showGraphTooltip(event, d, tooltip) {
-        if (!tooltip) return;
-        let html = '<div class="tooltip-title">' +
-            escapeHtml(typeof d.source === 'object' ? d.source.id : d.source) +
-            ' <i class="bi bi-arrow-right text-primary"></i> ' +
-            escapeHtml(typeof d.target === 'object' ? d.target.id : d.target) +
-            '</div>';
-        d.bridges.forEach(b => {
-            html += '<div class="tooltip-bridge">' +
-                '<span class="bridge-src">' + (b.source_emoji || '📦') + ' ' + escapeHtml(b.source_class) + '</span>' +
-                '<span class="bridge-arrow"><i class="bi bi-arrow-right-short"></i></span>' +
-                '<span class="bridge-tgt">' + escapeHtml(b.target_class_name) + '</span>' +
-            '</div>';
-        });
-        tooltip.innerHTML = html;
-        tooltip.style.display = 'block';
-        _moveGraphTooltip(event, tooltip);
+    function _hashStr(s) {
+        let h = 0;
+        for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+        return h;
     }
 
-    function _moveGraphTooltip(event, tooltip) {
-        if (!tooltip) return;
-        const x = event.pageX + 14;
-        const y = event.pageY - 10;
-        tooltip.style.left = x + 'px';
-        tooltip.style.top = y + 'px';
-    }
-
-    function _hideGraphTooltip() {
-        const tooltip = document.getElementById('bridgesGraphTooltip');
-        if (tooltip) tooltip.style.display = 'none';
+    function _entityKeyFromPos(el, positions) {
+        const t = d3.select(el).attr('transform');
+        const m = t && t.match(/translate\(([\d.e+-]+),([\d.e+-]+)\)/);
+        if (!m) return null;
+        const px = parseFloat(m[1]), py = parseFloat(m[2]);
+        for (const [key, pos] of Object.entries(positions)) {
+            if (Math.abs(pos.x - px) < 0.5 && Math.abs(pos.y - py) < 0.5) return key;
+        }
+        return null;
     }
 
     // --- Main load function ---

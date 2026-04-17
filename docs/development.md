@@ -750,9 +750,10 @@ OntoBricks uses a **two-layer** access-control model:
 | Layer | Where it lives | What it controls |
 |-------|----------------|------------------|
 | **Databricks App permissions** | Databricks workspace UI → Apps → *ontobricks* → Permissions | Who can reach the app at all, and who is an **Admin** (`CAN_MANAGE`). |
-| **In-app permission list** | `.permissions.json` stored in the Unity Catalog Registry Volume | Fine-grained roles (**Viewer** / **Editor**) for individual users and groups. |
+| **In-app permission list** | `.permissions.json` stored in the Unity Catalog Registry Volume | Fine-grained roles (**Viewer** / **Editor** / **Builder**) for individual users and groups. |
+| **Domain-level overrides** | `.domain_permissions.json` inside each domain folder | Per-domain role overrides that can restrict (but not elevate) the app-level role. |
 
-A user's effective role is determined by combining both layers.
+A user's effective role is determined by combining all three layers.
 
 ---
 
@@ -760,10 +761,13 @@ A user's effective role is determined by combining both layers.
 
 | Role | Source | Capabilities |
 |------|--------|--------------|
-| **Admin** | Databricks App `CAN_MANAGE` permission | Full access. Can view, edit, and manage the Settings page including the permission list. |
-| **Editor** | In-app permission list | Can view all pages, create and modify domains, ontologies, mappings, and run syncs. Cannot access Settings. |
+| **Admin** | Databricks App `CAN_MANAGE` permission | Full access. Can view, edit, build, and manage the Settings page including the permission list. |
+| **Builder** | In-app permission list | Can view, edit, and **build digital twins**. Cannot access Settings. |
+| **Editor** | In-app permission list | Can view all pages, create and modify domains, ontologies, and mappings. **Cannot build digital twins.** Cannot access Settings. |
 | **Viewer** | In-app permission list | Read-only access. Can browse domains, ontologies, and query results. All write operations (POST, PUT, PATCH, DELETE) are blocked. Cannot access Settings. |
 | **None** | Default when not matched | Completely blocked. Redirected to the Access Denied page. |
+
+Role hierarchy: `admin > builder > editor > viewer > none`.
 
 ---
 
@@ -781,22 +785,29 @@ Request arrives
   ├─ Path is a bypass path (/static, /health, /docs, /api, etc.)?
   │    └─ Yes → pass through, no role enforcement
   │
-  └─ Resolve role via get_user_role():
+  └─ Resolve app-level role via get_user_role():
        │
        ├─ 1. is_admin(email)?
        │    Check if the user has CAN_MANAGE on the Databricks App.
-       │    └─ Yes → role = admin
+       │    └─ Yes → app_role = admin
        │
        ├─ 2. User explicitly listed in .permissions.json?
        │    Match email (case-insensitive).
-       │    └─ Yes → role from entry (viewer or editor)
+       │    └─ Yes → app_role from entry (viewer, editor, or builder)
        │
        ├─ 3. User belongs to a group listed in .permissions.json?
        │    Check group membership via Databricks SCIM API.
-       │    └─ Yes → role from group entry (viewer or editor)
+       │    └─ Yes → app_role from group entry (viewer, editor, or builder)
        │
        └─ 4. No match
-            └─ role = none → Access Denied
+            └─ app_role = none → Access Denied
+       │
+       └─ Resolve domain-level role (when a domain is loaded):
+            │
+            ├─ Admin → always admin (domain overrides ignored)
+            ├─ User/group listed in .domain_permissions.json?
+            │    └─ Yes → effective_role = min(app_role, domain_role)
+            └─ Not listed → effective_role = app_role (inherit)
 ```
 
 #### Enforcement Rules
@@ -806,6 +817,7 @@ Request arrives
 | `role = none` | JSON 403 (for fetch/XHR) or redirect to `/access-denied` (for page navigation). |
 | `role = viewer` + write method (POST/PUT/PATCH/DELETE) | JSON 403: "Viewer role does not allow write operations". |
 | `role != admin` + path starts with `/settings` | JSON 403 or redirect to `/`. Only admins can access the Settings page. |
+| Digital twin build + effective domain role < `builder` | JSON 403: "Only builders and admins can build a digital twin". |
 | Otherwise | Request proceeds normally. |
 
 ---
@@ -874,7 +886,7 @@ Unity Catalog Registry Volume:
 | `principal` | Email address (for users) or group name (for groups). |
 | `principal_type` | `"user"` or `"group"`. |
 | `display_name` | Human-readable name shown in the UI. |
-| `role` | `"viewer"` or `"editor"`. Admins are never listed here — they are determined by `CAN_MANAGE`. |
+| `role` | `"viewer"`, `"editor"`, or `"builder"`. Admins are never listed here — they are determined by `CAN_MANAGE`. |
 
 #### Empty Permission List Behaviour
 
@@ -882,6 +894,54 @@ When `.permissions.json` does not exist or has an empty `permissions`
 array, **only users with `CAN_MANAGE` have access**. All other
 authenticated users are blocked. This is by design — it prevents
 accidental open access before the admin configures the permission list.
+
+---
+
+### Domain-Level Permissions
+
+Domain-level permissions allow admins to override a user's app-level role
+on a per-domain basis. These overrides can only **restrict** (never
+elevate) the app-level role.
+
+#### Storage
+
+Each domain has an optional `.domain_permissions.json` file inside its
+domain folder on the registry volume:
+
+```
+/Volumes/{catalog}/{schema}/{volume}/domains/{domain_name}/.domain_permissions.json
+```
+
+#### File Format
+
+```json
+{
+  "version": 1,
+  "permissions": [
+    { "principal": "alice@example.com", "principal_type": "user", "role": "viewer" },
+    { "principal": "data-team", "principal_type": "group", "role": "builder" }
+  ]
+}
+```
+
+#### Resolution Logic
+
+- **Admin** users always keep admin access regardless of domain overrides.
+- If a user has no entry in the domain permission file, they inherit their
+  app-level role unchanged (backward compatible).
+- If a user has a domain-level entry, their effective role is
+  `min(app_role, domain_role)`. For example, an app-level `builder` with
+  domain-level `viewer` is effectively a `viewer` on that domain.
+
+#### API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/settings/domain-permissions/{domain_name}` | List domain entries |
+| POST | `/settings/domain-permissions/{domain_name}` | Add/update entry |
+| DELETE | `/settings/domain-permissions/{domain_name}/{principal}` | Remove entry |
+
+These endpoints are admin-only.
 
 ---
 
@@ -904,7 +964,7 @@ accidental open access before the admin configures the permission list.
    - Select **User** or **Group**.
    - Search and select from the dropdown. The list shows users and groups
      that have permissions on the Databricks App (CAN_USE or CAN_MANAGE).
-   - Choose a role: **Viewer** or **Editor**.
+   - Choose a role: **Viewer**, **Editor**, or **Builder**.
 5. Click **Add**. The entry is immediately saved to the Registry.
 
 #### Changing a Role

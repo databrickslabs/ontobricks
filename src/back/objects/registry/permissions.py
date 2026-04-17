@@ -1,9 +1,9 @@
 """
 Permission Service for OntoBricks.
 
-Manages application-level permissions (Viewer / Editor roles) stored
-in the registry UC Volume.  Admin status is derived from the
-Databricks App CAN_MANAGE permission.
+Manages application-level permissions (Viewer / Editor / Builder roles)
+stored in the registry UC Volume, plus optional per-domain overrides.
+Admin status is derived from the Databricks App CAN_MANAGE permission.
 
 Active only in Databricks App mode (DATABRICKS_APP_PORT is set).
 In local mode every user has unrestricted access.
@@ -19,12 +19,36 @@ from back.core.databricks import VolumeFileService
 logger = get_logger(__name__)
 
 ROLE_ADMIN = "admin"
+ROLE_BUILDER = "builder"
 ROLE_EDITOR = "editor"
 ROLE_VIEWER = "viewer"
 ROLE_NONE = "none"
 
+ROLE_HIERARCHY: Dict[str, int] = {
+    ROLE_NONE: 0,
+    ROLE_VIEWER: 1,
+    ROLE_EDITOR: 2,
+    ROLE_BUILDER: 3,
+    ROLE_ADMIN: 4,
+}
+
+ASSIGNABLE_ROLES = (ROLE_VIEWER, ROLE_EDITOR, ROLE_BUILDER)
+
+
+def role_level(role: str) -> int:
+    """Return the numeric level for *role* (0 for unknown)."""
+    return ROLE_HIERARCHY.get(role, 0)
+
+
+def min_role(a: str, b: str) -> str:
+    """Return the less-privileged of two roles."""
+    return a if role_level(a) <= role_level(b) else b
+
+
 _PERMISSIONS_FILENAME = ".permissions.json"
+_DOMAIN_PERMISSIONS_FILENAME = ".domain_permissions.json"
 _CACHE_TTL_PERMS = 300       # 5 min
+_CACHE_TTL_DOMAIN_PERMS = 120  # 2 min – per-domain permission cache
 _CACHE_TTL_ADMIN = 60        # 1 min – keep short to pick up permission changes quickly
 _CACHE_TTL_PRINCIPALS = 600  # 10 min
 
@@ -43,6 +67,9 @@ class PermissionService:
 
         self._groups_cache: Optional[List[Dict[str, Any]]] = None
         self._groups_cache_ts: float = 0.0
+
+        # Per-domain permission cache: keyed by domain folder name
+        self._domain_perm_cache: Dict[str, Tuple[Dict[str, Any], float]] = {}
 
     # ------------------------------------------------------------------
     # Permission file I/O
@@ -367,6 +394,238 @@ class PermissionService:
         if len(data['permissions']) == before:
             return False, f"Principal '{principal}' not found"
         return self.save_permissions(host, token, registry_cfg, data)
+
+    # ------------------------------------------------------------------
+    # Domain-level permission file I/O
+    # ------------------------------------------------------------------
+
+    def _domain_permissions_path(
+        self, registry_cfg: Dict[str, str], domain_folder: str,
+    ) -> str:
+        """Path to .domain_permissions.json inside a domain folder."""
+        from back.objects.registry.service import RegistryCfg
+        c = RegistryCfg.from_dict(registry_cfg)
+        return f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/domains/{domain_folder}/{_DOMAIN_PERMISSIONS_FILENAME}"
+
+    def load_domain_permissions(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        domain_folder: str,
+        *,
+        force: bool = False,
+    ) -> Dict[str, Any]:
+        """Load and cache per-domain permission file."""
+        now = time.time()
+        if not force:
+            cached = self._domain_perm_cache.get(domain_folder)
+            if cached and (now - cached[1]) < _CACHE_TTL_DOMAIN_PERMS:
+                return cached[0]
+
+        path = self._domain_permissions_path(registry_cfg, domain_folder)
+        try:
+            uc = self._new_uc(host, token)
+            ok, content, msg = uc.read_file(path)
+            if ok and content:
+                data = json.loads(content)
+                self._domain_perm_cache[domain_folder] = (data, now)
+                logger.info(
+                    "Loaded %d domain permission entries for %s",
+                    len(data.get('permissions', [])), domain_folder,
+                )
+                return data
+            logger.debug("Domain permission file not found for %s: %s", domain_folder, msg)
+        except Exception as e:
+            logger.warning("Error loading domain permissions for %s: %s", domain_folder, e)
+
+        empty: Dict[str, Any] = {"version": 1, "permissions": []}
+        self._domain_perm_cache[domain_folder] = (empty, now)
+        return empty
+
+    def save_domain_permissions(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        domain_folder: str,
+        data: Dict[str, Any],
+    ) -> Tuple[bool, str]:
+        """Write the per-domain permission file."""
+        if not registry_cfg.get('catalog') or not registry_cfg.get('schema'):
+            return False, "Registry not configured"
+        path = self._domain_permissions_path(registry_cfg, domain_folder)
+        try:
+            uc = self._new_uc(host, token)
+            ok, msg = uc.write_file(path, json.dumps(data, indent=2), overwrite=True)
+            if not ok:
+                logger.error("Failed to write domain permissions for %s: %s", domain_folder, msg)
+                return False, f"Failed to save domain permissions: {msg}"
+            self._domain_perm_cache[domain_folder] = (data, time.time())
+            logger.info(
+                "Saved %d domain permission entries for %s",
+                len(data.get('permissions', [])), domain_folder,
+            )
+            return True, "Domain permissions saved"
+        except Exception as e:
+            logger.error("Error saving domain permissions for %s: %s", domain_folder, e)
+            return False, str(e)
+
+    # ------------------------------------------------------------------
+    # Domain-level role resolution
+    # ------------------------------------------------------------------
+
+    def _resolve_domain_entry_role(
+        self,
+        email: str,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        domain_folder: str,
+    ) -> Optional[str]:
+        """Resolve the domain-level entry for *email* (None = no entry)."""
+        if not domain_folder:
+            return None
+
+        data = self.load_domain_permissions(host, token, registry_cfg, domain_folder)
+        entries = data.get('permissions', [])
+        if not entries:
+            return None
+
+        for entry in entries:
+            if (
+                entry.get('principal_type') == 'user'
+                and entry.get('principal', '').lower() == email.lower()
+            ):
+                return entry.get('role', ROLE_VIEWER)
+
+        user_groups = self._get_user_groups(email, host, token)
+        for entry in entries:
+            if (
+                entry.get('principal_type') == 'group'
+                and entry.get('principal', '').lower() in (g.lower() for g in user_groups)
+            ):
+                return entry.get('role', ROLE_VIEWER)
+
+        return None
+
+    def get_domain_role(
+        self,
+        email: str,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        app_name: str,
+        domain_folder: str,
+        *,
+        user_token: str = "",
+        app_role: str = "",
+    ) -> str:
+        """Resolve the effective role for *email* on a specific domain.
+
+        Admins always keep admin status.  For other users the effective
+        role is ``min(app_role, domain_role)`` when a domain-level entry
+        exists, otherwise the app-level role is used as-is.
+
+        When *app_role* is provided the caller has already resolved it
+        and the redundant ``get_user_role`` call is skipped.
+        """
+        if not app_role:
+            app_role = self.get_user_role(
+                email, host, token, registry_cfg, app_name, user_token=user_token,
+            )
+        if app_role == ROLE_ADMIN:
+            return ROLE_ADMIN
+
+        if not domain_folder:
+            return app_role
+
+        domain_entry = self._resolve_domain_entry_role(
+            email, host, token, registry_cfg, domain_folder,
+        )
+        if domain_entry is None:
+            return app_role
+
+        return min_role(app_role, domain_entry)
+
+    # ------------------------------------------------------------------
+    # Domain-level CRUD helpers
+    # ------------------------------------------------------------------
+
+    def list_domain_entries(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        domain_folder: str,
+    ) -> List[Dict[str, Any]]:
+        data = self.load_domain_permissions(host, token, registry_cfg, domain_folder)
+        return data.get('permissions', [])
+
+    def add_or_update_domain_entry(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        domain_folder: str,
+        principal: str,
+        principal_type: str,
+        display_name: str,
+        role: str,
+    ) -> Tuple[bool, str]:
+        data = self.load_domain_permissions(
+            host, token, registry_cfg, domain_folder, force=True,
+        )
+        entries = data.get('permissions', [])
+
+        for entry in entries:
+            if entry['principal'].lower() == principal.lower():
+                entry['role'] = role
+                entry['display_name'] = display_name
+                entry['principal_type'] = principal_type
+                return self.save_domain_permissions(
+                    host, token, registry_cfg, domain_folder, data,
+                )
+
+        entries.append({
+            'principal': principal,
+            'principal_type': principal_type,
+            'display_name': display_name,
+            'role': role,
+        })
+        data['permissions'] = entries
+        return self.save_domain_permissions(
+            host, token, registry_cfg, domain_folder, data,
+        )
+
+    def remove_domain_entry(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        domain_folder: str,
+        principal: str,
+    ) -> Tuple[bool, str]:
+        data = self.load_domain_permissions(
+            host, token, registry_cfg, domain_folder, force=True,
+        )
+        before = len(data.get('permissions', []))
+        data['permissions'] = [
+            e for e in data.get('permissions', [])
+            if e['principal'].lower() != principal.lower()
+        ]
+        if len(data['permissions']) == before:
+            return False, f"Principal '{principal}' not found in domain permissions"
+        return self.save_domain_permissions(
+            host, token, registry_cfg, domain_folder, data,
+        )
+
+    def clear_domain_perm_cache(self, domain_folder: str = ""):
+        """Drop cached domain permission data."""
+        if domain_folder:
+            self._domain_perm_cache.pop(domain_folder, None)
+        else:
+            self._domain_perm_cache.clear()
 
     # ------------------------------------------------------------------
     # App principal listing (cached)

@@ -131,14 +131,17 @@ _PERM_BYPASS_PREFIXES = (
 
 _VIEWER_BLOCKED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
-_PERM_ADMIN_ONLY_PREFIXES = ("/settings/permissions",)
+_PERM_ADMIN_ONLY_PREFIXES = ("/settings/permissions", "/settings/domain-permissions")
 
 
 class PermissionMiddleware(BaseHTTPMiddleware):
-    """Enforce Viewer / Editor / Admin access rules.
+    """Enforce Viewer / Editor / Builder / Admin access rules.
 
     Only active when running as a Databricks App (``DATABRICKS_APP_PORT``
     is set).  In local-dev mode every request passes through.
+
+    Sets ``request.state.user_role`` (app-level) and
+    ``request.state.user_domain_role`` (effective role for the loaded domain).
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
@@ -150,27 +153,31 @@ class PermissionMiddleware(BaseHTTPMiddleware):
 
         if not is_databricks_app():
             request.state.user_role = "admin"
+            request.state.user_domain_role = "admin"
             return await call_next(request)
 
         path = request.url.path
 
         if any(path.startswith(p) for p in _PERM_BYPASS_PREFIXES):
             request.state.user_role = ""
+            request.state.user_domain_role = ""
             return await call_next(request)
 
         try:
-            role = self._resolve_role(request, email)
+            role, domain_role = self._resolve_roles(request, email)
         except Exception as exc:
             logger.error(
                 "PermissionMiddleware: error resolving role for %s on %s: %s",
                 email, path, exc, exc_info=True,
             )
             role = ROLE_NONE
+            domain_role = ROLE_NONE
 
         request.state.user_role = role
+        request.state.user_domain_role = domain_role
         logger.info(
-            "PermissionMiddleware: %s %s email=%s → role=%s",
-            request.method, path, email, role,
+            "PermissionMiddleware: %s %s email=%s → role=%s domain_role=%s",
+            request.method, path, email, role, domain_role,
         )
 
         if role == ROLE_NONE:
@@ -215,7 +222,8 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         return False
 
     @staticmethod
-    def _resolve_role(request: Request, email: str) -> str:
+    def _resolve_roles(request: Request, email: str) -> tuple:
+        """Return ``(app_role, domain_role)``."""
         settings = get_settings()
         from back.objects.registry import permission_service
         from back.core.helpers import get_databricks_host_and_token
@@ -229,10 +237,18 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         from back.objects.registry import RegistryCfg
         registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
 
-        return permission_service.get_user_role(
+        app_role = permission_service.get_user_role(
             email, host, token, registry_cfg, settings.ontobricks_app_name,
             user_token=user_token,
         )
+
+        domain_folder = getattr(domain, 'domain_folder', '') or ''
+        domain_role = permission_service.get_domain_role(
+            email, host, token, registry_cfg, settings.ontobricks_app_name,
+            domain_folder, user_token=user_token, app_role=app_role,
+        )
+
+        return app_role, domain_role
 
 
 def create_app() -> FastAPI:

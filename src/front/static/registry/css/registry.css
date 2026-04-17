@@ -149,8 +149,6 @@
 
 /* --- Bridges graph --- */
 
-/* When bridges graph is visible, prevent the sidebar-content from scrolling
-   so the graph fills the full viewport height (same pattern as Knowledge Graph). */
 .sidebar-content:has(#bridges-section.active) {
     overflow: hidden;
     padding: 0.5rem;
@@ -194,9 +192,12 @@
     flex: 1;
     min-height: 0;
     border: 1px solid var(--bs-border-color);
-    border-radius: 0.5rem;
+    border-radius: 0.75rem;
     overflow: hidden;
-    background: linear-gradient(135deg, var(--bs-body-bg, #fff) 0%, var(--bs-tertiary-bg, #f8f9fa) 100%);
+    background:
+        radial-gradient(ellipse at 30% 20%, rgba(var(--bs-primary-rgb), 0.03) 0%, transparent 60%),
+        radial-gradient(ellipse at 70% 80%, rgba(var(--bs-primary-rgb), 0.02) 0%, transparent 50%),
+        linear-gradient(135deg, var(--bs-body-bg, #fff) 0%, var(--bs-tertiary-bg, #f8f9fa) 100%);
 }
 
 #bridgesGraph svg {
@@ -205,102 +206,91 @@
     display: block;
 }
 
+/* Domain group bubbles */
+
+.bridges-domain-group circle {
+    pointer-events: none;
+}
+
+.bridges-domain-label {
+    font-size: 13px;
+    font-weight: 700;
+    text-anchor: middle;
+    fill: var(--bs-body-color, #212529);
+    pointer-events: none;
+    letter-spacing: 0.02em;
+}
+
+.bridges-domain-badge {
+    font-size: 9.5px;
+    font-weight: 500;
+    text-anchor: middle;
+    fill: var(--bs-secondary-color, #6c757d);
+    pointer-events: none;
+}
+
+/* Entity nodes inside domain bubbles */
+
+.bridges-entity-node {
+    cursor: pointer;
+}
+
+.bridges-entity-node circle {
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.08));
+    transition: filter 0.15s, stroke-width 0.15s;
+}
+
+.bridges-entity-node:hover circle {
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,0.18));
+    stroke-width: 3.5;
+}
+
+.bridges-entity-node.dimmed {
+    opacity: 0.2;
+}
+
+.bridges-entity-emoji {
+    font-size: 14px;
+    text-anchor: middle;
+    pointer-events: none;
+}
+
+.bridges-entity-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-anchor: middle;
+    fill: var(--bs-body-color, #212529);
+    pointer-events: none;
+}
+
+/* Edges between entities */
+
 .bridges-graph-edge {
     fill: none;
     stroke: var(--bs-primary, #0d6efd);
-    stroke-opacity: 0.45;
-    transition: stroke-opacity 0.15s;
+    stroke-opacity: 0.35;
+    transition: stroke-opacity 0.15s, stroke-width 0.15s;
 }
 
-.bridges-graph-edge:hover {
-    stroke-opacity: 1;
-}
-
-.bridges-graph-edge.dimmed {
-    stroke-opacity: 0.08;
-}
-
+.bridges-graph-edge:hover,
 .bridges-graph-edge.highlighted {
-    stroke-opacity: 1;
+    stroke-opacity: 0.85;
+    stroke-width: 3 !important;
 }
 
-.bridges-graph-edge-count {
-    font-size: 10px;
-    fill: var(--bs-body-color, #212529);
-    font-weight: 600;
-    pointer-events: none;
-}
+/* Edge labels */
 
-.bridges-graph-node {
-    cursor: pointer;
-    transition: opacity 0.15s;
-}
-
-.bridges-graph-node.dimmed {
-    opacity: 0.15;
-}
-
-.bridges-graph-node.highlighted {
-    opacity: 1;
-}
-
-.bridges-graph-label {
-    font-size: 11px;
-    text-anchor: middle;
-    fill: var(--bs-body-color, #212529);
-    pointer-events: none;
-    font-weight: 500;
-}
-
-.bridges-graph-label.dimmed {
-    opacity: 0.15;
-}
-
-.bridges-graph-badge {
+.bridges-edge-label {
     font-size: 9px;
-    text-anchor: middle;
-    fill: #fff;
-    pointer-events: none;
-    font-weight: 700;
-}
-
-.bridges-graph-tooltip {
-    position: absolute;
-    z-index: 1080;
-    max-width: 340px;
-    padding: 0.5rem 0.75rem;
-    background: var(--bs-body-bg, #fff);
-    border: 1px solid var(--bs-border-color);
-    border-radius: 0.375rem;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-    font-size: 0.8rem;
-    pointer-events: none;
-}
-
-.bridges-graph-tooltip .tooltip-title {
     font-weight: 600;
-    margin-bottom: 0.3rem;
-    font-size: 0.82rem;
+    text-anchor: middle;
+    fill: var(--bs-primary, #0d6efd);
+    pointer-events: none;
 }
 
-.bridges-graph-tooltip .tooltip-bridge {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.15rem 0;
-    color: var(--bs-secondary-color, #6c757d);
+.bridges-edge-label-bg {
+    fill: var(--bs-body-bg, #fff);
+    fill-opacity: 0.85;
+    pointer-events: none;
 }
 
-.bridges-graph-tooltip .tooltip-bridge .bridge-src {
-    font-weight: 500;
-    color: var(--bs-body-color, #212529);
-}
-
-.bridges-graph-tooltip .tooltip-bridge .bridge-arrow {
-    color: var(--bs-primary, #0d6efd);
-}
-
-.bridges-graph-tooltip .tooltip-bridge .bridge-tgt {
-    font-weight: 500;
-    color: var(--bs-body-color, #212529);
-}

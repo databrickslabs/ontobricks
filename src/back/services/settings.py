@@ -30,6 +30,7 @@ from back.core.helpers import (
 )
 from back.core.logging import get_logger
 from back.objects.registry import (
+    ASSIGNABLE_ROLES,
     RegistryCfg,
     RegistryService,
     permission_service,
@@ -683,8 +684,8 @@ def add_permission_result(
 
     if not principal:
         raise ValidationError('Principal (email or group name) is required')
-    if role not in ('viewer', 'editor'):
-        raise ValidationError('Role must be "viewer" or "editor"')
+    if role not in ASSIGNABLE_ROLES:
+        raise ValidationError('Role must be "viewer", "editor", or "builder"')
 
     _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
     if not registry_cfg.get('catalog') or not registry_cfg.get('schema'):
@@ -728,17 +729,95 @@ def list_principals_result(session_mgr: SessionManager, settings: Settings) -> D
 def search_workspace_principals(
     query: str, principal_type: str, session_mgr: SessionManager, settings: Settings,
 ) -> Dict[str, Any]:
-    """Search all workspace users or groups via SCIM, filtered by *query*."""
+    """Search users or groups that have access to the Databricks App.
+
+    Fetches the full app-permission principal list (cached by
+    ``PermissionService``) and applies a case-insensitive *contains*
+    filter on the client side.  This avoids SCIM calls that the app
+    service-principal typically cannot perform and ensures only
+    app-visible principals are returned.
+    """
     _, host, token, _ = _resolve_context(session_mgr, settings)
-    from back.core.databricks import DatabricksClient
-    client = DatabricksClient(host=host, token=token)
+    app_name = settings.ontobricks_app_name
+    all_principals = permission_service.list_app_principals(host, token, app_name)
+
+    q = query.lower()
 
     if principal_type == "group":
-        groups = client.search_groups(query)
+        groups = [
+            g for g in all_principals.get("groups", [])
+            if q in (g.get("display_name") or "").lower()
+        ]
         return {"success": True, "results": groups}
-    else:
-        users = client.search_users(query)
-        return {"success": True, "results": users}
+
+    users = [
+        u for u in all_principals.get("users", [])
+        if q in (u.get("email") or "").lower()
+        or q in (u.get("display_name") or "").lower()
+    ]
+    return {"success": True, "results": users}
+
+
+# --- Domain-level permissions ---
+
+
+def list_domain_permissions_result(
+    domain_name: str,
+    session_mgr: SessionManager,
+    settings: Settings,
+) -> Dict[str, Any]:
+    _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
+    entries = permission_service.list_domain_entries(host, token, registry_cfg, domain_name)
+    return {'success': True, 'domain': domain_name, 'permissions': entries}
+
+
+def add_domain_permission_result(
+    domain_name: str,
+    data: Dict[str, Any],
+    session_mgr: SessionManager,
+    settings: Settings,
+) -> Dict[str, Any]:
+    principal = data.get('principal', '').strip()
+    principal_type = data.get('principal_type', 'user')
+    display_name = data.get('display_name', principal)
+    role = data.get('role', 'viewer')
+
+    if not principal:
+        raise ValidationError('Principal (email or group name) is required')
+    if role not in ASSIGNABLE_ROLES:
+        raise ValidationError('Role must be "viewer", "editor", or "builder"')
+    if not domain_name:
+        raise ValidationError('Domain name is required')
+
+    _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
+    if not registry_cfg.get('catalog') or not registry_cfg.get('schema'):
+        raise ValidationError('Registry not configured')
+
+    ok, msg = permission_service.add_or_update_domain_entry(
+        host, token, registry_cfg, domain_name,
+        principal, principal_type, display_name, role,
+    )
+    if not ok:
+        raise InfrastructureError('Failed to add or update domain permission', detail=msg)
+    return {'success': ok, 'message': msg}
+
+
+def delete_domain_permission_result(
+    domain_name: str,
+    principal: str,
+    session_mgr: SessionManager,
+    settings: Settings,
+) -> Dict[str, Any]:
+    _, host, token, registry_cfg = _resolve_context(session_mgr, settings)
+    if not registry_cfg.get('catalog') or not registry_cfg.get('schema'):
+        raise ValidationError('Registry not configured')
+
+    ok, msg = permission_service.remove_domain_entry(
+        host, token, registry_cfg, domain_name, principal,
+    )
+    if not ok:
+        raise InfrastructureError('Failed to remove domain permission', detail=msg)
+    return {'success': ok, 'message': msg}
 
 
 # --- LadybugDB local files ---

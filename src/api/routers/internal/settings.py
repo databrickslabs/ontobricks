@@ -358,6 +358,44 @@ async def search_principals(
 
 
 # ===========================================
+# Domain-Level Permissions
+# ===========================================
+
+
+@router.get("/domain-permissions/{domain_name}")
+async def list_domain_permissions(
+    domain_name: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List permission entries for a specific domain (admin only)."""
+    return config_service.list_domain_permissions_result(domain_name, session_mgr, settings)
+
+
+@router.post("/domain-permissions/{domain_name}")
+async def add_domain_permission(
+    domain_name: str,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Add or update a permission entry for a specific domain (admin only)."""
+    data = await request.json()
+    return config_service.add_domain_permission_result(domain_name, data, session_mgr, settings)
+
+
+@router.delete("/domain-permissions/{domain_name}/{principal:path}")
+async def delete_domain_permission(
+    domain_name: str,
+    principal: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Remove a permission entry for a specific domain (admin only)."""
+    return config_service.delete_domain_permission_result(domain_name, principal, session_mgr, settings)
+
+
+# ===========================================
 # LadybugDB Local Files
 # ===========================================
 

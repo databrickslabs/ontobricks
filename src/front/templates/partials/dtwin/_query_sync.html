@@ -42,9 +42,17 @@
                     title="Refresh status from the triple store">
                 <i class="bi bi-arrow-clockwise me-1"></i>Refresh
             </button>
+            {% set _dr = get_user_domain_role() %}
+            {% if _dr not in ('viewer', 'editor', 'none') %}
             <button type="button" class="btn btn-sm btn-outline-primary" id="syncStartBtn" data-sync-action="start-triple-store-sync" disabled>
                 <i class="bi bi-arrow-repeat me-1"></i> Build
             </button>
+            {% else %}
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled
+                    title="Only builders and admins can build a digital twin">
+                <i class="bi bi-lock me-1"></i> Build
+            </button>
+            {% endif %}
         </div>
     </div>
 
@@ -63,11 +71,13 @@
     <div class="d-flex align-items-center gap-3 mb-2 small">
         <span class="fw-semibold text-muted"><i class="bi bi-sliders me-1"></i>Build Mode</span>
         <div class="form-check mb-0">
-            <input class="form-check-input" type="radio" name="buildMode" id="buildModeIncremental" value="incremental" checked>
+            <input class="form-check-input" type="radio" name="buildMode" id="buildModeIncremental" value="incremental" checked
+                   {% if _dr not in ('builder', 'admin', '') %}disabled{% endif %}>
             <label class="form-check-label" for="buildModeIncremental">Incremental</label>
         </div>
         <div class="form-check mb-0">
-            <input class="form-check-input" type="radio" name="buildMode" id="buildModeFull" value="full">
+            <input class="form-check-input" type="radio" name="buildMode" id="buildModeFull" value="full"
+                   {% if _dr not in ('builder', 'admin', '') %}disabled{% endif %}>
             <label class="form-check-label" for="buildModeFull">Full rebuild</label>
         </div>
     </div>
@@ -179,11 +189,18 @@
                                             <code id="dtSnapshotName" class="text-break ob-code-tiny"></code>
                                             <span class="d-flex align-items-center gap-1">
                                                 <span id="dtExistSnapshot"></span>
+                                                {% if _dr in ('builder', 'admin', '') %}
                                                 <button type="button" id="dtDropSnapshot" class="btn btn-outline-danger btn-sm py-0 px-1 ob-btn-compact d-none"
                                                         data-sync-action="drop-snapshot-table"
                                                         title="Drop snapshot to force a full rebuild on next build">
                                                     <i class="bi bi-trash me-1"></i>Drop
                                                 </button>
+                                                {% else %}
+                                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 ob-btn-compact d-none" disabled
+                                                        title="Only builders and admins can drop the snapshot">
+                                                    <i class="bi bi-lock me-1"></i>Drop
+                                                </button>
+                                                {% endif %}
                                             </span>
                                         </div>
                                     </div>
@@ -206,9 +223,16 @@
                                             <span class="text-muted">Registry archive</span>
                                             <span class="d-flex align-items-center gap-1">
                                                 <span id="dtExistRegistry"></span>
+                                                {% if _dr in ('builder', 'admin', '') %}
                                                 <button type="button" id="dtReloadFromRegistry" class="btn btn-outline-secondary btn-sm py-0 px-1 ob-btn-compact d-none" data-sync-action="reload-graph-from-registry" title="Download the graph archive from the registry and restore it locally">
                                                     <i class="bi bi-cloud-arrow-down me-1"></i>Reload
                                                 </button>
+                                                {% else %}
+                                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 ob-btn-compact d-none" disabled
+                                                        title="Only builders and admins can reload the graph">
+                                                    <i class="bi bi-lock me-1"></i>Reload
+                                                </button>
+                                                {% endif %}
                                             </span>
                                         </div>
                                     </div>
