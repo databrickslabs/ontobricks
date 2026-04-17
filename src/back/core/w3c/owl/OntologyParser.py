@@ -37,7 +37,7 @@ class OntologyParser:
         try:
             self.graph = parse_rdf_flexible(owl_content, formats=("turtle", "xml"))
         except ValueError as e:
-            raise ValidationError(f"Failed to parse OWL content: {e}") from e
+            raise ValidationError("Failed to parse OWL content", detail=str(e)) from e
     
     @staticmethod
     def _to_camel_case(name: str) -> str:

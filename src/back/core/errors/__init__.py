@@ -10,9 +10,14 @@ from back.core.errors.InfrastructureError import InfrastructureError  # noqa: F4
 from back.core.errors.ConflictError import ConflictError  # noqa: F401
 from back.core.errors.ErrorResponse import ErrorResponse  # noqa: F401
 
-# Backward-compatible wrappers
 _error_code_from_class = OntoBricksError.error_code_from_class
-register_exception_handlers = ErrorResponse.register_exception_handlers
+
+
+def register_exception_handlers(app) -> None:
+    """Backward-compatible wrapper — delegates to ``shared.fastapi.error_handlers``."""
+    from shared.fastapi.error_handlers import register_exception_handlers as _reg
+    _reg(app)
+
 
 __all__ = [
     "OntoBricksError",

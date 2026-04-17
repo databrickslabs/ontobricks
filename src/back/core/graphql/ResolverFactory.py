@@ -5,6 +5,9 @@ import strawberry
 from strawberry.types import Info
 
 from back.core.graphql.SchemaMetadata import SchemaMetadata
+from back.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ResolverFactory:

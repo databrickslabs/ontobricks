@@ -96,13 +96,81 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Node Context Menu (dynamic content) -->
+                    <div id="sgNodeContextMenu" class="graph-context-menu"></div>
+                    <!-- Canvas Context Menu -->
+                    <div id="sgContextMenu" class="graph-context-menu">
+                        <div class="ctx-item" data-sg-ctx="openFindPopup">
+                            <i class="bi bi-search"></i> Find in graph
+                        </div>
+                        <div class="ctx-divider"></div>
+                        <div class="ctx-item" data-sg-ctx="openGroupsPopup">
+                            <i class="bi bi-collection"></i> Groups
+                        </div>
+                        <div class="ctx-item" data-sg-ctx="expandAllGroups">
+                            <i class="bi bi-arrows-expand"></i> Expand all
+                        </div>
+                        <div class="ctx-item" data-sg-ctx="collapseAllGroups">
+                            <i class="bi bi-arrows-collapse"></i> Collapse all
+                        </div>
+                        <div class="ctx-divider"></div>
+                        <div class="ctx-item" data-sg-ctx="fitToView">
+                            <i class="bi bi-arrows-fullscreen"></i> Fit to view
+                        </div>
+                        <div class="ctx-item" data-sg-ctx="reload">
+                            <i class="bi bi-arrow-counterclockwise"></i> Reload
+                        </div>
+                    </div>
+                    <!-- Find Popup (floating) -->
+                    <div id="sgFindPopup" class="sg-canvas-popup d-none">
+                        <div class="sg-find-popup-header">
+                            <span class="small fw-semibold"><i class="bi bi-search"></i> Find in graph</span>
+                            <button type="button" class="btn-close btn-close-sm" data-sg-action="closeFindPopup" aria-label="Close"></button>
+                        </div>
+                        <div class="sg-find-popup-body">
+                            <input type="text" class="form-control form-control-sm mb-2" id="sgSearchValue" placeholder="Search entities..." data-sg-keyenter="applySearch">
+                            <div class="d-flex gap-1">
+                                <button type="button" class="btn btn-sm btn-primary flex-grow-1" data-sg-action="applySearch">
+                                    <i class="bi bi-highlighter"></i> Highlight
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-warning d-none" data-sg-action="clearSearch" title="Clear" id="sgClearSearchBtn">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                            </div>
+                            <div id="sgSearchInfo" class="mt-2 small d-none">
+                                <span class="text-info"><i class="bi bi-info-circle"></i> <span id="sgSearchInfoText"></span></span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Groups Popup (floating) -->
+                    <div id="sgGroupsPopup" class="sg-canvas-popup d-none">
+                        <div class="sg-find-popup-header">
+                            <span class="small fw-semibold text-warning"><i class="bi bi-collection"></i> Groups</span>
+                            <div class="d-flex align-items-center gap-1">
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" data-sg-action="collapseAllGroups" title="Collapse all">
+                                        <i class="bi bi-arrows-collapse"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" data-sg-action="expandAllGroups" title="Expand all">
+                                        <i class="bi bi-arrows-expand"></i>
+                                    </button>
+                                </div>
+                                <button type="button" class="btn-close btn-close-sm ms-2" data-sg-action="closeGroupsPopup" aria-label="Close"></button>
+                            </div>
+                        </div>
+                        <div class="sg-find-popup-body">
+                            <div id="sgGroupsChips" class="filter-chips">
+                                <span class="text-muted small">No groups defined</span>
+                            </div>
+                        </div>
+                    </div>
                     <!-- Graph Stats -->
                     <div id="sgStats" class="px-2 py-1 justify-content-between align-items-center d-none">
                         <span class="text-muted small">
                             <span id="sgNodeCount">0 entities</span> &bull; <span id="sgEdgeCount">0 relationships</span>
                         </span>
                         <span class="text-muted small">
-                            <i class="bi bi-info-circle"></i> Scroll to zoom &bull; Drag to pan &bull; Click to see details
+                            <i class="bi bi-info-circle"></i> Scroll to zoom &bull; Drag to pan &bull; Click to see details &bull; Right-click to find
                         </span>
                     </div>
                 </div>
@@ -133,11 +201,6 @@
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="sgTabFind" data-bs-toggle="tab" data-bs-target="#sgTabFindPane" type="button" role="tab" aria-selected="false">
-                            <i class="bi bi-search"></i> Find
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
                         <button class="nav-link" id="sgTabFilter" data-bs-toggle="tab" data-bs-target="#sgTabFilterPane" type="button" role="tab" aria-selected="false">
                             <i class="bi bi-funnel"></i> Filter
                         </button>
@@ -155,25 +218,9 @@
                             </div>
                         </div>
                     </div>
-                    <!-- View Tab (Groups + Types) -->
+                    <!-- View Tab (Clusters + Types) -->
                     <div class="tab-pane fade sg-tab-pane" id="sgTabViewPane" role="tabpanel">
                         <div class="sg-tab-inner p-3">
-                            <!-- Groups section -->
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="small fw-semibold text-warning"><i class="bi bi-collection"></i> Groups</span>
-                                <div class="btn-group btn-group-sm">
-                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" data-sg-action="collapseAllGroups" title="Collapse all">
-                                        <i class="bi bi-arrows-collapse"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" data-sg-action="expandAllGroups" title="Expand all">
-                                        <i class="bi bi-arrows-expand"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div id="sgGroupsChips" class="filter-chips">
-                                <span class="text-muted small">No groups defined</span>
-                            </div>
-                            <hr class="my-3">
                             <!-- Data Clusters section -->
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="small fw-semibold text-success"><i class="bi bi-bezier2"></i> Data Clusters</span>
@@ -238,25 +285,6 @@
                             </div>
                             <div class="filter-chips mt-1" id="sgRelTypeFilters">
                                 <span class="text-muted small">No relationships loaded</span>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Find Tab (Highlight) -->
-                    <div class="tab-pane fade sg-tab-pane" id="sgTabFindPane" role="tabpanel">
-                        <div class="sg-tab-inner p-3">
-                            <span class="small fw-semibold"><i class="bi bi-highlighter"></i> Highlight</span>
-                            <p class="text-muted small mt-1 mb-2">Type a name to highlight matching entities in the graph.</p>
-                            <input type="text" class="form-control form-control-sm mb-2" id="sgSearchValue" placeholder="Search entities..." data-sg-keyenter="applySearch">
-                            <div class="d-flex gap-1">
-                                <button type="button" class="btn btn-sm btn-primary flex-grow-1" data-sg-action="applySearch">
-                                    <i class="bi bi-highlighter"></i> Highlight
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-warning d-none" data-sg-action="clearSearch" title="Clear" id="sgClearSearchBtn">
-                                    <i class="bi bi-x-circle"></i>
-                                </button>
-                            </div>
-                            <div id="sgSearchInfo" class="mt-2 small d-none">
-                                <span class="text-info"><i class="bi bi-info-circle"></i> <span id="sgSearchInfoText"></span></span>
                             </div>
                         </div>
                     </div>

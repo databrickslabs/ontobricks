@@ -3,6 +3,11 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from back.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+
 def resolve_domain_slice(domain_data: Dict[str, Any]) -> Dict[str, Any]:
     """Return the active ontology, assignment, and related fields for API/query use.
 

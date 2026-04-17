@@ -1,5 +1,10 @@
 import re
 
+from back.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+
 class URIHelpers:
     @staticmethod
     def is_uri(value: str) -> bool:

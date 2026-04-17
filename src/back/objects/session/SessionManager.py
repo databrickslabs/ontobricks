@@ -8,6 +8,10 @@ from typing import Dict, Any
 
 from fastapi import Request
 
+from back.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 class SessionManager:
     """Session manager dependency for modifying session data.

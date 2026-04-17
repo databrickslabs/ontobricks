@@ -3,8 +3,6 @@
 from .middleware import (
     FileSessionMiddleware,
     get_session,
-    save_to_session,
-    get_from_session,
 )
 from .SessionManager import SessionManager, get_session_manager
 from .DomainSession import (
@@ -13,13 +11,11 @@ from .DomainSession import (
     get_empty_domain,
     sanitize_domain_folder,
 )
-from .global_config import GlobalConfigService, global_config_service
+from .GlobalConfigService import GlobalConfigService, global_config_service
 
 __all__ = [
     "FileSessionMiddleware",
     "get_session",
-    "save_to_session",
-    "get_from_session",
     "SessionManager",
     "get_session_manager",
     "DomainSession",

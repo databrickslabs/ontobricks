@@ -64,7 +64,6 @@ async def validate_ontology_endpoint(session_mgr: SessionManager = Depends(get_s
 
 
 @router.get("/validate/detailed")
-@router.get("/validate/detailed-status")
 async def validate_detailed(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
@@ -181,49 +180,6 @@ async def clear_ontology(session_mgr: SessionManager = Depends(get_session_manag
     domain = get_domain(session_mgr)
     domain.reset_ontology()
     return {'success': True, 'message': 'Ontology, mappings, and layout cleared'}
-
-
-@router.post("/parse-ontology")
-async def parse_ontology(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
-    """Parse OWL content and store in session."""
-    data = await request.json()
-    owl_content = data.get('content', '')
-    
-    if not owl_content:
-        raise ValidationError("No OWL content provided")
-
-    from back.objects.ontology import Ontology
-    result = Ontology.parse_owl(owl_content, extract_advanced=True)
-    ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions, groups = result
-
-    domain = get_domain(session_mgr)
-    domain.ontology.update({
-        'name': ontology_info.get('name', ''),
-        'base_uri': ontology_info.get('base_uri', ''),
-        'description': ontology_info.get('description', ''),
-        'classes': classes,
-        'properties': properties,
-    })
-    domain.constraints = constraints
-    domain.swrl_rules = swrl_rules
-    domain.axioms = axioms
-    domain.expressions = expressions
-    domain.groups = groups
-    domain.save()
-
-    return {
-        'success': True,
-        'config': {
-            'ontology': domain.ontology,
-            'classes': classes,
-            'properties': properties,
-        },
-        'stats': {
-            'classes': len(classes),
-            'properties': len(properties),
-            'constraints': len(constraints),
-        },
-    }
 
 
 # ===========================================

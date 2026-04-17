@@ -6,8 +6,11 @@ by both the SQL and Cypher translation paths.
 """
 from typing import Dict, List, Optional
 
+from back.core.logging import get_logger
 from back.core.reasoning.constants import SWRL_ATOM_RE, NEGATED_ATOM_RE
 from back.core.reasoning.models import SWRLAtomPartition
+
+logger = get_logger(__name__)
 
 
 class SWRLParser:

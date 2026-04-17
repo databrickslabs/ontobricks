@@ -431,7 +431,6 @@ def _load_domain_for_build(
     domain.domain_folder = domain_name
     domain.settings["registry"] = reg
     domain.databricks["host"] = host
-    domain.databricks["token"] = token
     domain.ensure_generated_content()
 
     domain_path = svc.domain_path(domain_name)
@@ -674,7 +673,7 @@ def _run_scheduled_build(
         from back.core.triplestore import get_triplestore
         from back.objects.digitaltwin.models import DomainSnapshot
 
-        snap = DomainSnapshot(domain)
+        snap = DomainSnapshot(domain, host=host, token=token)
         store = get_triplestore(snap, settings, backend="graph")
         if not store:
             raise InfrastructureError("Could not initialize LadybugDB backend")

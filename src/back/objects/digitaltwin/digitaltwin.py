@@ -134,7 +134,14 @@ class DigitalTwin:
         if not col_match:
             col_match = re.search(r"Column '([^']+)' does not exist", error_msg, re.IGNORECASE)
         if not col_match:
-            return error_msg
+            logger.warning(
+                "diagnose_view_error: unrecognized database error format: %s",
+                error_msg,
+            )
+            return (
+                "The database reported an error that does not match a known column-resolution pattern. "
+                "Verify your source tables and column mappings."
+            )
 
         bad_column = col_match.group(1)
 
@@ -191,10 +198,15 @@ class DigitalTwin:
                         + f"  Fix: Update the {key} for relationship '{rel_name}' to use a valid column name."
                     )
 
+        logger.warning(
+            "diagnose_view_error: column '%s' not found in mappings; raw DB message: %s",
+            bad_column,
+            error_msg,
+        )
         return (
             f"Column '{bad_column}' not found in any source table.\n"
             + (f"  Available columns: {suggested}\n" if suggested else "")
-            + f"  Original error: {error_msg}"
+            + "  See server logs for the full database error message."
         )
 
     # ------------------------------------------------------------------
@@ -686,7 +698,7 @@ class DigitalTwin:
                 "success": False,
                 "has_data": False,
                 "count": 0,
-                "message": str(e),
+                "message": "Could not load graph triplestore status.",
             }
 
     async def fetch_digital_twin_existence(self, settings) -> Dict[str, Any]:
@@ -812,7 +824,6 @@ class DigitalTwin:
         from shared.config.constants import DEFAULT_BASE_URI
         from back.core.w3c import sparql
         from back.core.helpers import get_databricks_client, run_blocking
-        import traceback
 
         domain = self._domain
         try:
@@ -868,7 +879,11 @@ class DigitalTwin:
                         'message': 'Databricks connection failed. Please verify your configuration.',
                         'generated_sql': spark_sql
                     }
-                return {'success': False, 'message': f'Spark SQL execution error: {error_msg}', 'generated_sql': spark_sql}
+                return {
+                    'success': False,
+                    'message': 'Spark SQL execution failed.',
+                    'generated_sql': spark_sql,
+                }
 
             if results:
                 columns = select_vars if select_vars else list(results[0].keys())
@@ -889,10 +904,10 @@ class DigitalTwin:
 
         except ValueError as e:
             logger.exception("Spark query ValueError: %s", e)
-            return {'success': False, 'message': str(e)}
+            return {'success': False, 'message': 'The query or mapping configuration is invalid.'}
         except Exception as e:
             logger.exception("Spark query error: %s", e)
-            return {'success': False, 'message': f'Spark query error: {str(e)}', 'traceback': traceback.format_exc()}
+            return {'success': False, 'message': 'An unexpected error occurred while running the Spark query.'}
 
     # ------------------------------------------------------------------
     # Triplestore stats (instance method)
@@ -1172,9 +1187,10 @@ class DigitalTwin:
                 if "TABLE_OR_VIEW_NOT_FOUND" in err or "does not exist" in err.lower():
                     tm.fail_task(task.id, f"View {triplestore_table} not found. Build first.")
                     return
+                logger.exception("SQL DQ check '%s' failed: %s", label, exc)
                 results.append({
                     "name": label, "category": cat, "shape_id": shape.get("id"),
-                    "status": "warning", "message": f"Query error: {err}",
+                    "status": "warning", "message": "Query execution failed for this check.",
                     "violations": [], "sql": sql,
                 })
 
@@ -1241,8 +1257,8 @@ class DigitalTwin:
                 logger.info("SWRL rule '%s': %d violations (%.2fs)", label, violation_total, elapsed_rule)
                 results.append(result)
             except Exception as exc:
-                logger.warning("SWRL DQ check '%s' SQL failed: %s", label, exc)
-                results.append({"name": label, "category": "structural", "shape_id": f"swrl:{rule.get('name', idx)}", "status": "warning", "message": f"Query error: {exc}", "violations": [], "sql": ""})
+                logger.exception("SWRL DQ check '%s' SQL failed: %s", label, exc)
+                results.append({"name": label, "category": "structural", "shape_id": f"swrl:{rule.get('name', idx)}", "status": "warning", "message": "Query execution failed for this rule.", "violations": [], "sql": ""})
 
     @staticmethod
     def _run_dt_sql_checks(tm, task, results, decision_tables, ontology, triplestore_table, store, total, shape_count,
@@ -1288,8 +1304,8 @@ class DigitalTwin:
                 logger.info("DT rule '%s': %d violations (%.2fs)", dt_name, violation_total, elapsed_rule)
                 results.append(result)
             except Exception as exc:
-                logger.warning("Decision table DQ check '%s' SQL failed: %s", dt_name, exc)
-                results.append({"name": dt_name, "category": "conformance", "shape_id": f"dt:{dt.get('name', idx)}", "status": "warning", "message": f"Query error: {exc}", "violations": [], "sql": ""})
+                logger.exception("Decision table DQ check '%s' SQL failed: %s", dt_name, exc)
+                results.append({"name": dt_name, "category": "conformance", "shape_id": f"dt:{dt.get('name', idx)}", "status": "warning", "message": "Query execution failed for this decision table.", "violations": [], "sql": ""})
 
     @staticmethod
     def _run_agg_sql_checks(tm, task, results, aggregate_rules, ontology, triplestore_table, store, total, shape_count,
@@ -1334,8 +1350,8 @@ class DigitalTwin:
                 logger.info("Agg rule '%s': %d violations (%.2fs)", agg_name, violation_total, elapsed_rule)
                 results.append(result)
             except Exception as exc:
-                logger.warning("Aggregate rule DQ check '%s' SQL failed: %s", agg_name, exc)
-                results.append({"name": agg_name, "category": "conformance", "shape_id": f"agg:{rule.get('name', idx)}", "status": "warning", "message": f"Query error: {exc}", "violations": [], "sql": ""})
+                logger.exception("Aggregate rule DQ check '%s' SQL failed: %s", agg_name, exc)
+                results.append({"name": agg_name, "category": "conformance", "shape_id": f"agg:{rule.get('name', idx)}", "status": "warning", "message": "Query execution failed for this aggregate rule.", "violations": [], "sql": ""})
 
     # ------------------------------------------------------------------
     # Data quality: Graph checks (static -- runs in background thread)
@@ -1355,7 +1371,8 @@ class DigitalTwin:
             if "does not exist" in err.lower():
                 tm.fail_task(task.id, f"Graph '{graph_name}' does not exist. Run Build first.")
             else:
-                tm.fail_task(task.id, f"Error reading graph: {err}")
+                logger.exception("Error reading graph '%s': %s", graph_name, exc)
+                tm.fail_task(task.id, "Error reading the graph. Run Build again or verify your connection settings.")
             return
         if not triples:
             tm.fail_task(task.id, f"Graph '{graph_name}' is empty. Run Build first.")
@@ -1386,8 +1403,8 @@ class DigitalTwin:
                 DigitalTwin._enrich_with_population(result, pop)
                 results.append(result)
             except Exception as exc:
-                logger.warning("Graph DQ check '%s' failed: %s", label, exc)
-                results.append({"name": label, "category": cat, "shape_id": shape.get("id"), "status": "warning", "message": f"Evaluation error: {exc}", "violations": [], "sql": ""})
+                logger.exception("Graph DQ check '%s' failed: %s", label, exc)
+                results.append({"name": label, "category": cat, "shape_id": shape.get("id"), "status": "warning", "message": "Shape evaluation failed.", "violations": [], "sql": ""})
         DigitalTwin._run_swrl_graph_checks(tm, task, results, swrl_rules, ontology, store, graph_name, total, triples, pop_cache,
                                             violation_limit=violation_limit)
         swrl_count = len(swrl_rules) if swrl_rules else 0
@@ -1454,8 +1471,8 @@ class DigitalTwin:
                 logger.info("SWRL rule '%s': %d violations (%.2fs)", label, violation_total, elapsed_rule)
                 results.append(result)
             except Exception as exc:
-                logger.warning("SWRL DQ check '%s' graph failed: %s", label, exc)
-                results.append({"name": label, "category": "structural", "shape_id": f"swrl:{rule.get('name', idx)}", "status": "warning", "message": f"Query error: {exc}", "violations": [], "sql": ""})
+                logger.exception("SWRL DQ check '%s' graph failed: %s", label, exc)
+                results.append({"name": label, "category": "structural", "shape_id": f"swrl:{rule.get('name', idx)}", "status": "warning", "message": "Graph query execution failed for this rule.", "violations": [], "sql": ""})
 
     @staticmethod
     def _run_dt_graph_checks(tm, task, results, decision_tables, ontology, store, graph_name, total, shape_count, triples=None, pop_cache=None,
@@ -1509,8 +1526,8 @@ class DigitalTwin:
                 logger.info("DT rule '%s': %d violations (%.2fs)", dt_name, violation_total, elapsed_rule)
                 results.append(result)
             except Exception as exc:
-                logger.warning("Decision table DQ check '%s' graph failed: %s", dt_name, exc)
-                results.append({"name": dt_name, "category": "conformance", "shape_id": f"dt:{dt.get('name', idx)}", "status": "warning", "message": f"Query error: {exc}", "violations": [], "sql": ""})
+                logger.exception("Decision table DQ check '%s' graph failed: %s", dt_name, exc)
+                results.append({"name": dt_name, "category": "conformance", "shape_id": f"dt:{dt.get('name', idx)}", "status": "warning", "message": "Graph query execution failed for this decision table.", "violations": [], "sql": ""})
 
     @staticmethod
     def _run_agg_graph_checks(tm, task, results, aggregate_rules, ontology, store, graph_name, total, shape_count, triples=None, pop_cache=None,
@@ -1563,8 +1580,8 @@ class DigitalTwin:
                 logger.info("Agg rule '%s': %d violations (%.2fs)", agg_name, violation_total, elapsed_rule)
                 results.append(result)
             except Exception as exc:
-                logger.warning("Aggregate rule DQ check '%s' graph failed: %s", agg_name, exc)
-                results.append({"name": agg_name, "category": "conformance", "shape_id": f"agg:{rule.get('name', idx)}", "status": "warning", "message": f"Query error: {exc}", "violations": [], "sql": ""})
+                logger.exception("Aggregate rule DQ check '%s' graph failed: %s", agg_name, exc)
+                results.append({"name": agg_name, "category": "conformance", "shape_id": f"agg:{rule.get('name', idx)}", "status": "warning", "message": "Graph query execution failed for this aggregate rule.", "violations": [], "sql": ""})
 
     # ------------------------------------------------------------------
     # Data quality: task completion (static)

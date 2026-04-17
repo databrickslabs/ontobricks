@@ -25,7 +25,7 @@ class R2RMLParser:
         try:
             self.graph = parse_rdf_flexible(content, formats=("turtle", "xml"))
         except ValueError as e:
-            raise ValidationError(f"Failed to parse R2RML: {e}") from e
+            raise ValidationError("Failed to parse R2RML content", detail=str(e)) from e
     
     def extract_mappings(self):
         """Extract entity and relationship mappings from R2RML.

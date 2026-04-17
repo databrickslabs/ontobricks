@@ -32,6 +32,7 @@ This folder contains the license files for all external libraries used by OntoBr
 | ItsDangerous | >=2.1.0 | BSD-3-Clause | [python/itsdangerous-LICENSE.txt](python/itsdangerous-LICENSE.txt) |
 | Jinja2 | >=3.1.0 | BSD-3-Clause | [python/jinja2-LICENSE.txt](python/jinja2-LICENSE.txt) |
 | MLflow | >=2.19.0 | Apache-2.0 | [python/mlflow-LICENSE.txt](python/mlflow-LICENSE.txt) |
+| NetworkX | >=3.0 | BSD-3-Clause | [python/networkx-LICENSE.txt](python/networkx-LICENSE.txt) |
 | OWL-RL | >=7.0.0 | W3C Software License | [python/owlrl-LICENSE.txt](python/owlrl-LICENSE.txt) |
 | PyArrow | >=14.0.0 | Apache-2.0 | [python/pyarrow-LICENSE.txt](python/pyarrow-LICENSE.txt) |
 | Pydantic | >=2.5.0 | MIT | [python/pydantic-LICENSE.txt](python/pydantic-LICENSE.txt) |
@@ -69,7 +70,7 @@ This folder contains the license files for all external libraries used by OntoBr
 |-------------|-----------|
 | **MIT** | Bootstrap, Bootstrap Icons, Chart.js, GraphiQL, Graphology, Graphology Library, Grid.js, Marked, React/ReactDOM, Sigma.js, APScheduler, FastAPI, Pydantic, Pydantic Settings, real_ladybug, Strawberry GraphQL |
 | **ISC** | D3.js |
-| **BSD-3-Clause** | HTTPX, ItsDangerous, Jinja2, python-dotenv, RDFLib, Starlette, Uvicorn |
+| **BSD-3-Clause** | HTTPX, ItsDangerous, Jinja2, NetworkX, python-dotenv, RDFLib, Starlette, Uvicorn |
 | **Apache-2.0** | aiofiles, Databricks SDK, databricks-sql-connector, FastMCP, MLflow, PyArrow, pySHACL, python-multipart, Requests |
 | **W3C Software License** | OWL-RL |
 | **SIL OFL 1.1** | JetBrains Mono, Outfit (Google Fonts) |

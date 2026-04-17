@@ -10,8 +10,6 @@ from starlette.testclient import TestClient
 from back.objects.session.middleware import (
     FileSessionMiddleware,
     get_session,
-    save_to_session,
-    get_from_session,
 )
 
 
@@ -27,34 +25,6 @@ class TestSessionHelpers:
         request = MagicMock()
         request.state = State()
         assert get_session(request) == {}
-
-    def test_save_to_session(self):
-        request = MagicMock()
-        request.state.session = {}
-        request.state.session_modified = False
-        save_to_session(request, "foo", "bar")
-        assert request.state.session["foo"] == "bar"
-        assert request.state.session_modified is True
-
-    def test_save_to_session_no_session(self):
-        """When request.state exists but has no 'session' attribute, it's a no-op."""
-        from starlette.datastructures import State
-        request = MagicMock()
-        request.state = State()
-        save_to_session(request, "foo", "bar")
-
-    def test_get_from_session(self):
-        request = MagicMock()
-        request.state.session = {"key": 42}
-        assert get_from_session(request, "key") == 42
-        assert get_from_session(request, "missing", "default") == "default"
-
-    def test_get_from_session_no_session(self):
-        """When request.state has no 'session', returns default."""
-        from starlette.datastructures import State
-        request = MagicMock()
-        request.state = State()
-        assert get_from_session(request, "key", "fallback") == "fallback"
 
 
 class TestFileSessionMiddleware:

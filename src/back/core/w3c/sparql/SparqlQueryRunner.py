@@ -4,6 +4,10 @@ import re
 from rdflib import Graph, Namespace
 from rdflib.namespace import RDF, RDFS
 
+from back.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 class SparqlQueryRunner:
     """Run SPARQL locally (RDFLib) and extract R2RML mapping structures from content."""

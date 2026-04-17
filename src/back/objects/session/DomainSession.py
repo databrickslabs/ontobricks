@@ -103,7 +103,6 @@ def get_empty_domain() -> Dict[str, Any]:
         "settings": {
             "databricks": {
                 "host": "",
-                "token": ""
             },
             "registry": {
                 "catalog": "",
@@ -454,10 +453,10 @@ class DomainSession:
         # Migrate databricks settings and preferences into settings
         # Note: warehouse_id, default_emoji, default_base_uri are
         # no longer stored per-session (they are instance-global).
+        # Note: token is NOT migrated — resolved at runtime from env/OAuth.
         data['settings'] = {
             'databricks': {
                 'host': self._session_mgr.get('databricks_host', ''),
-                'token': self._session_mgr.get('databricks_token', ''),
             },
             'registry': {
                 'catalog': '',
@@ -558,6 +557,15 @@ class DomainSession:
             assignment_copy = data_to_save['assignment'].copy()
             assignment_copy.pop('r2rml_output', None)
             data_to_save['assignment'] = assignment_copy
+
+        # Strip secrets — token is resolved at runtime from env/OAuth
+        if 'settings' in data_to_save:
+            settings_copy = dict(data_to_save['settings'])
+            if 'databricks' in settings_copy:
+                db_copy = dict(settings_copy['databricks'])
+                db_copy.pop('token', None)
+                settings_copy['databricks'] = db_copy
+            data_to_save['settings'] = settings_copy
 
         # Legacy session keys (computed on demand; do not persist)
         data_to_save.pop('_validation_cache', None)

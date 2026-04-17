@@ -186,17 +186,3 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
 def get_session(request: Request) -> Dict[str, Any]:
     """Dependency that returns the session dict from ``request.state``."""
     return getattr(request.state, 'session', {})
-
-
-def save_to_session(request: Request, key: str, value: Any):
-    """Persist *value* under *key* in the request session and mark it modified."""
-    if hasattr(request.state, 'session'):
-        request.state.session[key] = value
-        request.state.session_modified = True
-
-
-def get_from_session(request: Request, key: str, default: Any = None) -> Any:
-    """Return *key* from the request session, or *default* if missing."""
-    if hasattr(request.state, 'session'):
-        return request.state.session.get(key, default)
-    return default

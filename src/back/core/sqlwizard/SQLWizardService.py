@@ -306,7 +306,7 @@ class SQLWizardService:
                 e.response.status_code if e.response is not None else "?",
                 e.response.text[:300] if e.response is not None else "N/A",
             )
-            raise InfrastructureError(f"LLM endpoint error: {e.response.text if e.response else str(e)}")
+            raise InfrastructureError("LLM endpoint error", detail=str(e)) from e
     
     def extract_sql(self, llm_output: str) -> str:
         """Extract a single SQL statement from the LLM output.
@@ -596,7 +596,8 @@ class SQLWizardService:
             return True, "Query plan validated successfully", plan_info
             
         except Exception as e:
-            return False, f"EXPLAIN failed: {str(e)}", None
+            logger.exception("[SQLWizard] validate_sql_explain failed: %s", e)
+            return False, "EXPLAIN validation failed.", None
     
     def generate_sql(
         self,
@@ -677,7 +678,6 @@ class SQLWizardService:
                 return {
                     'success': False,
                     'error': 'Could not extract SQL from LLM output',
-                    'raw_output': raw_output,
                     'telemetry': telemetry
                 }
             logger.info("[SQLWizard] generate_sql: extracted SQL — %d chars", len(sql))
@@ -725,15 +725,17 @@ class SQLWizardService:
             telemetry['validation_outcomes'].append({'error': 'timeout'})
             return {
                 'success': False,
-                'error': str(e),
+                'error': 'The model request timed out.',
+                'detail': str(e),
                 'telemetry': telemetry
             }
         except Exception as e:
             logger.exception("[SQLWizard] generate_sql: FAILED — %s", e)
-            telemetry['validation_outcomes'].append({'error': str(e)})
+            telemetry['validation_outcomes'].append({'error': 'generation_failed'})
             return {
                 'success': False,
-                'error': str(e),
+                'error': 'SQL generation failed.',
+                'detail': str(e),
                 'telemetry': telemetry
             }
     

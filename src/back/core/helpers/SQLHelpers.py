@@ -2,6 +2,10 @@ import re
 
 from shared.config.constants import DEFAULT_GRAPH_NAME, DEFAULT_GRAPH_VERSION, MSG_TABLE_NAME_REQUIRED
 
+from back.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 class SQLHelpers:
     @staticmethod

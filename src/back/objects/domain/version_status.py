@@ -5,6 +5,10 @@ from __future__ import annotations
 import time
 from typing import Any, Dict
 
+from back.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 _version_status_cache: Dict[str, Any] = {}
 _VERSION_STATUS_TTL = 30
 

@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from back.core.logging import get_logger
 from back.objects.domain.payload import resolve_domain_slice
+
+logger = get_logger(__name__)
 
 
 def get_ontology_info(domain_data: Dict[str, Any]) -> Dict[str, Any]:

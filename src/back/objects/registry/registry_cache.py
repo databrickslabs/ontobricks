@@ -5,6 +5,10 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, List, Optional
 
+from back.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 _registry_details_cache: Dict[str, Any] = {}
 _registry_names_cache: Dict[str, Any] = {}
 _DEFAULT_REGISTRY_DOMAINS_TTL = 300

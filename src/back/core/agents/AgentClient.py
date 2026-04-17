@@ -13,6 +13,10 @@ if TYPE_CHECKING:
     from agents.agent_auto_assignment.engine import AgentResult as AutoAssignAgentResult
     from agents.agent_auto_icon_assign.engine import AgentResult as IconAssignAgentResult
 
+from back.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 class AgentClient:
     """Unified gateway to all LLM-agent capabilities.

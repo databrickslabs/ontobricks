@@ -11,9 +11,15 @@ class DomainSnapshot:
     This is the **single canonical snapshot class** — do not create local
     ``_Snap`` variants elsewhere; import and use this one instead.
     """
-    def __init__(self, domain):
+    def __init__(self, domain, *, host: str = "", token: str = ""):
         self.info = dict(domain.info or {})
-        self.databricks = dict(domain.databricks or {})
+        raw_db = dict(domain.databricks or {})
+        raw_db.pop("token", None)
+        if host:
+            raw_db["host"] = host
+        if token:
+            raw_db["token"] = token
+        self.databricks = raw_db
         self.delta = dict(getattr(domain, 'delta', None) or {})
         self.triplestore = dict(getattr(domain, 'triplestore', None) or {})
         self.settings = dict(getattr(domain, 'settings', None) or {})

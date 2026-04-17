@@ -875,6 +875,16 @@ var SigmaGraph = (function () {
             _renderer.refresh();
         });
 
+        _renderer.on('rightClickStage', function (e) {
+            if (e.event && e.event.original) e.event.original.preventDefault();
+            _showContextMenu(e.event ? e.event.original : null);
+        });
+
+        _renderer.on('rightClickNode', function (e) {
+            if (e.event && e.event.original) e.event.original.preventDefault();
+            _showNodeContextMenu(e.node, e.event ? e.event.original : null);
+        });
+
         _updateStats();
         _populateTypes();
         _populateGroupsPanel();
@@ -1284,19 +1294,28 @@ var SigmaGraph = (function () {
             '<small title="' + esc(entity.id) + '">' + esc(truncUri(entity.id)) + '</small>' +
             '</div></div>';
 
-        html += '<div class="entity-detail-section">' +
-            '<h6><i class="bi bi-card-list"></i> Entity Info</h6>' +
-            '<div class="entity-detail-item"><span class="detail-key"><i class="bi bi-box text-primary"></i> Type</span>' +
+        var _secIdx = 0;
+        function _sec(icon, title, body, startOpen) {
+            var id = 'sgSec' + (_secIdx++);
+            var cls = startOpen ? 'entity-detail-section' : 'entity-detail-section collapsed';
+            return '<div class="' + cls + '" id="' + id + '">' +
+                '<h6 onclick="this.parentElement.classList.toggle(\'collapsed\')">' +
+                '<i class="' + icon + '"></i> ' + title +
+                '<i class="bi bi-chevron-down entity-section-chevron"></i></h6>' +
+                '<div class="entity-detail-body">' + body + '</div></div>';
+        }
+
+        var infoBody = '<div class="entity-detail-item"><span class="detail-key"><i class="bi bi-box text-primary"></i> Type</span>' +
             '<span class="detail-value">' + esc(ontologyTypeName) + '</span></div>' +
             '<div class="entity-detail-item"><span class="detail-key"><i class="bi bi-key-fill text-warning"></i> ID</span>' +
             '<span class="detail-value">' + esc(actualIdValue || 'N/A') + '</span></div>';
         if (_clusterAssignments && _clusterAssignments[nodeId] !== undefined) {
             var _cid = _clusterAssignments[nodeId];
-            html += '<div class="entity-detail-item"><span class="detail-key"><i class="bi bi-bezier2 text-success"></i> Cluster</span>' +
+            infoBody += '<div class="entity-detail-item"><span class="detail-key"><i class="bi bi-bezier2 text-success"></i> Cluster</span>' +
                 '<span class="detail-value"><span class="sg-cluster-dot" style="background:' + _clusterColor(_cid) + ';width:10px;height:10px;display:inline-block;border-radius:50%;vertical-align:middle;margin-right:4px;"></span>' +
                 'Cluster #' + _cid + '</span></div>';
         }
-        html += '</div>';
+        html += _sec('bi bi-card-list', 'Entity Info', infoBody, true);
 
         var customAttrs = {};
         if (entityMapping && entityMapping.attributeMappings) {
@@ -1314,17 +1333,16 @@ var SigmaGraph = (function () {
             });
         }
 
+        var attrBody = '';
         if (Object.keys(customAttrs).length > 0) {
-            html += '<div class="entity-detail-section"><h6><i class="bi bi-tags"></i> Attributes</h6>';
             Object.entries(customAttrs).forEach(function (kv) {
-                html += '<div class="entity-detail-item"><span class="detail-key"><i class="bi bi-card-text text-secondary"></i> ' + esc(kv[0]) + '</span>' +
+                attrBody += '<div class="entity-detail-item"><span class="detail-key"><i class="bi bi-card-text text-secondary"></i> ' + esc(kv[0]) + '</span>' +
                     '<span class="detail-value">' + esc(kv[1]) + '</span></div>';
             });
-            html += '</div>';
         } else {
-            html += '<div class="entity-detail-section"><h6><i class="bi bi-tags"></i> Attributes</h6>' +
-                '<p class="small text-muted mb-0">No custom attributes found for this entity.</p></div>';
+            attrBody = '<p class="small text-muted mb-0">No custom attributes found for this entity.</p>';
         }
+        html += _sec('bi bi-tags', 'Attributes', attrBody, true);
 
         if (dashboardUrl && typeof buildDashboardUrl === 'function') {
             var paramValues = {};
@@ -1337,15 +1355,14 @@ var SigmaGraph = (function () {
                 if (value) paramValues[paramKeyword] = { value: value, pageId: pageId, widgetId: widgetId };
             });
             var dashUrl = buildDashboardUrl(dashboardUrl, actualIdValue, paramValues);
-            html += '<div class="entity-detail-section"><h6><i class="bi bi-speedometer2"></i> Dashboard</h6>' +
-                '<div class="entity-detail-item"><button onclick="openDashboardModal(\'' + esc(dashUrl) + '\', \'' + esc(ontologyTypeName) + '\', \'' + esc(actualIdValue || '') + '\')" ' +
-                'class="btn btn-sm btn-outline-info w-100" title="Open dashboard"><i class="bi bi-speedometer2 me-1"></i>View Dashboard</button></div></div>';
+            var dashBody = '<div class="entity-detail-item"><button onclick="openDashboardModal(\'' + esc(dashUrl) + '\', \'' + esc(ontologyTypeName) + '\', \'' + esc(actualIdValue || '') + '\')" ' +
+                'class="btn btn-sm btn-outline-info w-100" title="Open dashboard"><i class="bi bi-speedometer2 me-1"></i>View Dashboard</button></div>';
+            html += _sec('bi bi-speedometer2', 'Dashboard', dashBody, true);
         }
 
-        // Cross-domain bridges
         var bridges = (entityMapping && entityMapping.bridges) || (classInfo && classInfo.bridges) || [];
         if (bridges.length > 0) {
-            html += '<div class="entity-detail-section"><h6><i class="bi bi-signpost-2"></i> Bridges (' + bridges.length + ')</h6>';
+            var bridgeBody = '';
             bridges.forEach(function (bridge) {
                 var tgtDom = bridge.target_domain || bridge.target_project || '';
                 var targetEntityUri = actualIdValue
@@ -1354,7 +1371,7 @@ var SigmaGraph = (function () {
                 var resolveUrl = '/resolve?uri=' + encodeURIComponent(targetEntityUri) +
                     '&domain=' + encodeURIComponent(tgtDom);
                 var tooltip = bridge.label || ('Navigate to ' + (bridge.target_class_name || '') + ' in ' + tgtDom);
-                html += '<div class="entity-detail-item">' +
+                bridgeBody += '<div class="entity-detail-item">' +
                     '<a href="' + esc(resolveUrl) + '" class="btn btn-sm btn-outline-primary w-100 text-start" title="' + esc(tooltip) + '">' +
                     '<i class="bi bi-signpost-2 me-1"></i>' +
                     '<span class="fw-semibold">' + esc(bridge.target_class_name || '') + '</span>' +
@@ -1362,7 +1379,7 @@ var SigmaGraph = (function () {
                     '<i class="bi bi-box-arrow-up-right ms-auto float-end mt-1"></i>' +
                     '</a></div>';
             });
-            html += '</div>';
+            html += _sec('bi bi-signpost-2', 'Bridges (' + bridges.length + ')', bridgeBody, true);
         }
 
         var outgoingRels = (typeof d3LinksData !== 'undefined' && d3LinksData) ? d3LinksData.filter(function (l) {
@@ -1373,39 +1390,36 @@ var SigmaGraph = (function () {
         }) : [];
 
         if (outgoingRels.length > 0) {
-            html += '<div class="entity-detail-section"><h6><i class="bi bi-arrow-right-circle"></i> Outgoing (' + outgoingRels.length + ')</h6>';
+            var outBody = '';
             outgoingRels.forEach(function (rel) {
                 var targetId = typeof rel.target === 'object' ? rel.target.id : rel.target;
                 var targetNode = d3NodesData.find(function (n) { return n.id === targetId; });
                 var targetLabel = targetNode ? ((typeof getDisplayLabel === 'function') ? getDisplayLabel(targetNode) : (targetNode.label || '')) : _extractLocalName(targetId);
                 var targetIcon = targetNode ? ((typeof getEntityIcon === 'function') ? getEntityIcon(targetNode) : '🔷') : '🔷';
-                html += '<div class="entity-relationship-item">' +
+                outBody += '<div class="entity-relationship-item">' +
                     '<span class="rel-direction">→</span> ' +
                     '<span class="rel-predicate">' + esc(rel.predicate) + '</span> ' +
                     '<span class="rel-direction">→</span> ' +
                     '<span class="rel-target" onclick="SigmaGraph.selectEntity(\'' + esc(targetId) + '\')">' + targetIcon + ' ' + esc(targetLabel) + '</span></div>';
             });
-            html += '</div>';
+            html += _sec('bi bi-arrow-right-circle', 'Outgoing (' + outgoingRels.length + ')', outBody, false);
         }
 
         if (incomingRels.length > 0) {
-            html += '<div class="entity-detail-section"><h6><i class="bi bi-arrow-left-circle"></i> Incoming (' + incomingRels.length + ')</h6>';
+            var inBody = '';
             incomingRels.forEach(function (rel) {
                 var sourceId = typeof rel.source === 'object' ? rel.source.id : rel.source;
                 var sourceNode = d3NodesData.find(function (n) { return n.id === sourceId; });
                 var sourceLabel = sourceNode ? ((typeof getDisplayLabel === 'function') ? getDisplayLabel(sourceNode) : (sourceNode.label || '')) : _extractLocalName(sourceId);
                 var sourceIcon = sourceNode ? ((typeof getEntityIcon === 'function') ? getEntityIcon(sourceNode) : '🔷') : '🔷';
-                html += '<div class="entity-relationship-item">' +
+                inBody += '<div class="entity-relationship-item">' +
                     '<span class="rel-target" onclick="SigmaGraph.selectEntity(\'' + esc(sourceId) + '\')">' + sourceIcon + ' ' + esc(sourceLabel) + '</span> ' +
                     '<span class="rel-direction">→</span> ' +
                     '<span class="rel-predicate">' + esc(rel.predicate) + '</span> ' +
                     '<span class="rel-direction">→</span></div>';
             });
-            html += '</div>';
+            html += _sec('bi bi-arrow-left-circle', 'Incoming (' + incomingRels.length + ')', inBody, false);
         }
-
-        html += '<div class="entity-detail-section"><h6><i class="bi bi-link-45deg"></i> Full URI</h6>' +
-            '<div class="small text-muted" style="word-break: break-all;">' + esc(entity.id) + '</div></div>';
 
         el.innerHTML = html;
     }
@@ -1933,6 +1947,153 @@ var SigmaGraph = (function () {
     }
 
     // -----------------------------------------------------------
+    // Context menu + Find popup
+    // -----------------------------------------------------------
+    function _resolveNodeMeta(nodeId) {
+        if (!_graph) return { bridges: [], dashboardUrl: null, dashboardParams: {}, entity: {}, actualIdValue: '' };
+        var attrs = _graph.getNodeAttributes(nodeId);
+        if (attrs._isGroup || attrs._isClusterNode) return { bridges: [], dashboardUrl: null, dashboardParams: {}, entity: {}, actualIdValue: '' };
+        var entity = attrs._data || {};
+
+        var entityMapping = null;
+        var typeLower = (entity.type || '').toLowerCase();
+        if (typeof entityMappings !== 'undefined') {
+            entityMapping = entityMappings[typeLower] || (typeof findMappingByType === 'function' ? findMappingByType(entity.type) : null);
+        }
+        if (!entityMapping && entity.typeUri && typeof findMappingByType === 'function') entityMapping = findMappingByType(entity.typeUri);
+        if (!entityMapping && entity.id && typeof findMappingByUri === 'function') entityMapping = findMappingByUri(entity.id);
+
+        var classInfo = null;
+        if (entityMapping) {
+            if (entityMapping.className && typeof findOntologyClass === 'function') classInfo = findOntologyClass(entityMapping.className) || findOntologyClass(entityMapping.classUri);
+            else if (entityMapping.classUri && typeof findOntologyClass === 'function') classInfo = findOntologyClass(entityMapping.classUri);
+        } else if (entity.typeUri && typeof findOntologyClass === 'function') {
+            classInfo = findOntologyClass(entity.typeUri);
+        }
+        if (!classInfo && entity.type && typeof findOntologyClass === 'function') classInfo = findOntologyClass(entity.type);
+
+        var actualIdValue = entity.instanceId;
+        if (entityMapping && entityMapping.idColumn) {
+            var allAttributes = {};
+            if (entity.attributes) Object.entries(entity.attributes).forEach(function (kv) { if (kv[1]) allAttributes[kv[0]] = kv[1]; });
+            actualIdValue = _findAttrValue(allAttributes, entityMapping.idColumn) || entity.instanceId;
+        }
+
+        var bridges = (entityMapping && entityMapping.bridges) || (classInfo && classInfo.bridges) || [];
+        var dashboardUrl = (entityMapping && entityMapping.dashboard) || (classInfo && classInfo.dashboard) || null;
+        var dashboardParams = (entityMapping && entityMapping.dashboardParams) || (classInfo && classInfo.dashboardParams) || {};
+
+        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
+    }
+
+    function _showNodeContextMenu(nodeId, mouseEvent) {
+        _hideContextMenu();
+        var nodeMenu = document.getElementById('sgNodeContextMenu');
+        if (!nodeMenu) return;
+        var esc = (typeof escapeHtml === 'function') ? escapeHtml : _esc;
+        var meta = _resolveNodeMeta(nodeId);
+        var items = '';
+
+        if (meta.dashboardUrl) {
+            var allAttributes = {};
+            if (meta.entity.attributes) Object.entries(meta.entity.attributes).forEach(function (kv) { if (kv[1]) allAttributes[kv[0]] = kv[1]; });
+            var paramValues = {};
+            Object.entries(meta.dashboardParams).forEach(function (kv) {
+                var paramKeyword = kv[0], mapping = kv[1];
+                var attrName = (typeof mapping === 'object') ? mapping.attribute : mapping;
+                var pageId = (typeof mapping === 'object') ? (mapping.pageId || '') : '';
+                var widgetId = (typeof mapping === 'object') ? (mapping.widgetId || '') : '';
+                var value = (attrName === '__ID__') ? meta.actualIdValue : _findAttrValue(allAttributes, attrName);
+                if (value) paramValues[paramKeyword] = { value: value, pageId: pageId, widgetId: widgetId };
+            });
+            var dashUrl = (typeof buildDashboardUrl === 'function') ? buildDashboardUrl(meta.dashboardUrl, meta.actualIdValue, paramValues) : meta.dashboardUrl;
+            var className = (meta.classInfo && meta.classInfo.name) || (meta.entityMapping && meta.entityMapping.className) || '';
+            items += '<div class="ctx-header">Dashboard</div>';
+            items += '<div class="ctx-item" data-sg-node-action="dashboard" data-url="' + esc(dashUrl) + '" data-class="' + esc(className) + '" data-id="' + esc(meta.actualIdValue || '') + '">' +
+                '<i class="bi bi-speedometer2"></i> View Dashboard</div>';
+        }
+
+        if (meta.bridges.length > 0) {
+            if (items) items += '<div class="ctx-divider"></div>';
+            items += '<div class="ctx-header">Bridges</div>';
+            meta.bridges.forEach(function (bridge) {
+                var tgtDom = bridge.target_domain || bridge.target_project || '';
+                var targetEntityUri = meta.actualIdValue
+                    ? (bridge.target_class_uri || '') + '#' + meta.actualIdValue
+                    : (bridge.target_class_uri || '');
+                var resolveUrl = '/resolve?uri=' + encodeURIComponent(targetEntityUri) + '&domain=' + encodeURIComponent(tgtDom);
+                var label = bridge.label || ((bridge.target_class_name || '') + ' \u2014 ' + tgtDom);
+                items += '<div class="ctx-item" data-sg-node-action="bridge" data-url="' + esc(resolveUrl) + '">' +
+                    '<i class="bi bi-signpost-2"></i> ' + esc(label) + '</div>';
+            });
+        }
+
+        if (!items) {
+            items = '<div class="ctx-header">No dashboards or bridges</div>';
+        }
+
+        nodeMenu.innerHTML = items;
+        if (mouseEvent) {
+            nodeMenu.style.left = mouseEvent.clientX + 'px';
+            nodeMenu.style.top = mouseEvent.clientY + 'px';
+        }
+        nodeMenu.style.display = 'block';
+    }
+
+    function _hideNodeContextMenu() {
+        var menu = document.getElementById('sgNodeContextMenu');
+        if (menu) menu.style.display = 'none';
+    }
+
+    function _showContextMenu(mouseEvent) {
+        _hideNodeContextMenu();
+        var menu = document.getElementById('sgContextMenu');
+        if (!menu) return;
+        if (mouseEvent) {
+            menu.style.left = mouseEvent.clientX + 'px';
+            menu.style.top = mouseEvent.clientY + 'px';
+        }
+        menu.style.display = 'block';
+    }
+
+    function _hideContextMenu() {
+        var menu = document.getElementById('sgContextMenu');
+        if (menu) menu.style.display = 'none';
+    }
+
+    function _openFindPopup() {
+        _hideContextMenu();
+        _closeGroupsPopup();
+        var popup = document.getElementById('sgFindPopup');
+        if (!popup) return;
+        popup.classList.remove('d-none');
+        var input = document.getElementById('sgSearchValue');
+        if (input) {
+            input.focus();
+            input.select();
+        }
+    }
+
+    function _closeFindPopup() {
+        var popup = document.getElementById('sgFindPopup');
+        if (popup) popup.classList.add('d-none');
+    }
+
+    function _openGroupsPopup() {
+        _hideContextMenu();
+        _closeFindPopup();
+        var popup = document.getElementById('sgGroupsPopup');
+        if (!popup) return;
+        popup.classList.remove('d-none');
+        _loadGroups();
+    }
+
+    function _closeGroupsPopup() {
+        var popup = document.getElementById('sgGroupsPopup');
+        if (popup) popup.classList.add('d-none');
+    }
+
+    // -----------------------------------------------------------
     // Public API
     // -----------------------------------------------------------
     function init(focusUri) {
@@ -2130,13 +2291,18 @@ var SigmaGraph = (function () {
         },
 
         toggleGroupsPanel: function () {
-            _switchToTab('sgTabView');
-            _loadGroups();
+            _openGroupsPopup();
         },
 
+        openGroupsPopup: function () { _openGroupsPopup(); },
+        closeGroupsPopup: function () { _closeGroupsPopup(); },
+
         toggleFilterPane: function () {
-            _switchToTab('sgTabFind');
+            _openFindPopup();
         },
+
+        openFindPopup: function () { _openFindPopup(); },
+        closeFindPopup: function () { _closeFindPopup(); },
 
         toggleType: function (type) {
             if (_visibleTypes.has(type)) _visibleTypes.delete(type);
@@ -2209,6 +2375,8 @@ var SigmaGraph = (function () {
             // Clear click/hover selection so search focus takes over
             _selectedNode = null;
             _hoveredNode = null;
+
+            _closeFindPopup();
 
             if (_renderer) {
                 _renderer.refresh();
@@ -2645,6 +2813,11 @@ document.addEventListener('DOMContentLoaded', function () {
         return (sec && sec.contains(node)) || (seedModal && seedModal.contains(node));
     }
 
+    var sgContainer = document.getElementById('sgContainer');
+    if (sgContainer) {
+        sgContainer.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    }
+
     document.addEventListener('click', function (e) {
         var btn = e.target.closest('[data-sg-action]');
         if (!btn || !_sgUiContains(btn)) return;
@@ -2685,6 +2858,61 @@ document.addEventListener('DOMContentLoaded', function () {
         var m = el.getAttribute('data-sg-keyenter');
         if (m && typeof SigmaGraph !== 'undefined' && typeof SigmaGraph[m] === 'function') {
             SigmaGraph[m]();
+        }
+    });
+
+    document.addEventListener('click', function (e) {
+        var nodeItem = e.target.closest('[data-sg-node-action]');
+        if (nodeItem) {
+            var nodeMenu = document.getElementById('sgNodeContextMenu');
+            if (nodeMenu) nodeMenu.style.display = 'none';
+            var action = nodeItem.getAttribute('data-sg-node-action');
+            if (action === 'dashboard') {
+                var url = nodeItem.getAttribute('data-url');
+                var cls = nodeItem.getAttribute('data-class');
+                var id = nodeItem.getAttribute('data-id');
+                if (url && typeof openDashboardModal === 'function') openDashboardModal(url, cls, id);
+            } else if (action === 'bridge') {
+                var url = nodeItem.getAttribute('data-url');
+                if (url) window.location.href = url;
+            }
+            return;
+        }
+
+        var ctxItem = e.target.closest('[data-sg-ctx]');
+        if (ctxItem) {
+            var menu = document.getElementById('sgContextMenu');
+            if (menu) menu.style.display = 'none';
+            var action = ctxItem.getAttribute('data-sg-ctx');
+            if (typeof SigmaGraph !== 'undefined' && typeof SigmaGraph[action] === 'function') {
+                SigmaGraph[action]();
+            }
+            return;
+        }
+        var menu = document.getElementById('sgContextMenu');
+        if (menu && menu.style.display === 'block' && !menu.contains(e.target)) {
+            menu.style.display = 'none';
+        }
+        var nodeMenu = document.getElementById('sgNodeContextMenu');
+        if (nodeMenu && nodeMenu.style.display === 'block' && !nodeMenu.contains(e.target)) {
+            nodeMenu.style.display = 'none';
+        }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            var menu = document.getElementById('sgContextMenu');
+            if (menu) menu.style.display = 'none';
+            var nodeMenu = document.getElementById('sgNodeContextMenu');
+            if (nodeMenu) nodeMenu.style.display = 'none';
+            var findPopup = document.getElementById('sgFindPopup');
+            if (findPopup && !findPopup.classList.contains('d-none')) {
+                findPopup.classList.add('d-none');
+            }
+            var groupsPopup = document.getElementById('sgGroupsPopup');
+            if (groupsPopup && !groupsPopup.classList.contains('d-none')) {
+                groupsPopup.classList.add('d-none');
+            }
         }
     });
 });

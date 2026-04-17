@@ -23,7 +23,6 @@ from back.core.databricks import (  # noqa: F401  — re-exported for backward c
     get_workspace_host,
     is_databricks_app,
     normalize_host,
-    DatabricksClient,
 )
 
 # Backward-compatible function wrappers
