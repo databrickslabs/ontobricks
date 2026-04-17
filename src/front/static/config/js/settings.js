@@ -228,12 +228,62 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // =====================================================================
-    //  LADYBUGDB TAB
+    //  LADYBUGDB TAB – Graph Engine selector
+    // =====================================================================
+
+    let graphEngineLoaded = false;
+
+    async function loadGraphEngine() {
+        try {
+            const resp = await fetch('/settings/graph-engine', { credentials: 'same-origin' });
+            const data = await resp.json();
+            if (data.success) {
+                const sel = document.getElementById('graphEngineSelect');
+                if (sel && data.graph_engine) sel.value = data.graph_engine;
+            }
+            graphEngineLoaded = true;
+        } catch (e) {
+            console.log('Using default graph engine');
+        }
+    }
+
+    document.getElementById('btnSaveGraphEngine')?.addEventListener('click', async function () {
+        const btn = this;
+        const sel = document.getElementById('graphEngineSelect');
+        if (!sel) return;
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+        try {
+            const resp = await fetch('/settings/graph-engine', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ graph_engine: sel.value })
+            });
+            const result = await resp.json();
+            if (result.success) {
+                showNotification('Graph DB engine saved', 'success', 2000);
+            } else {
+                showNotification('Error: ' + (result.message || 'Unknown error'), 'error');
+            }
+        } catch (e) {
+            showNotification('Error saving graph engine: ' + e.message, 'error');
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save';
+    });
+
+    // =====================================================================
+    //  LADYBUGDB TAB – Local files
     // =====================================================================
 
     let ladybugFilesLoaded = false;
 
     document.getElementById('tab-ladybugdb')?.addEventListener('shown.bs.tab', () => {
+        if (!graphEngineLoaded) loadGraphEngine();
         if (!ladybugFilesLoaded) loadLadybugFiles();
     });
 

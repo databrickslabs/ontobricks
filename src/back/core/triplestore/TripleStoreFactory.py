@@ -46,10 +46,29 @@ class TripleStoreFactory:
 
         if backend == "graph":
             from back.core.graphdb import get_graphdb
-            return get_graphdb(domain, settings)
+            engine = self._resolve_graph_engine(domain, settings)
+            return get_graphdb(domain, settings, engine=engine)
 
         logger.warning("Unknown triplestore backend: %s", backend)
         return None
+
+    @staticmethod
+    def _resolve_graph_engine(domain: Any, settings: Optional[Any]) -> Optional[str]:
+        """Read the configured graph engine from ``GlobalConfigService``."""
+        try:
+            from back.objects.session.GlobalConfigService import global_config_service
+            if settings is not None:
+                host, token = get_databricks_host_and_token(domain, settings)
+            else:
+                db = getattr(domain, 'databricks', None) or {}
+                host = db.get('host', '')
+                token = db.get('token', '')
+            from back.objects.registry import RegistryCfg
+            registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
+            return global_config_service.get_graph_engine(host, token, registry_cfg)
+        except Exception as exc:
+            logger.debug("Could not resolve graph engine from global config: %s", exc)
+            return None
 
     def _create_delta(self, domain: Any, settings: Optional[Any]) -> Optional[Any]:
         """Instantiate a DeltaTripleStore backed by a Databricks SQL warehouse."""

@@ -397,6 +397,32 @@ async def delete_domain_permission(
 
 
 # ===========================================
+# Graph DB Engine
+# ===========================================
+
+
+@router.get("/graph-engine")
+async def get_graph_engine(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the currently configured graph DB engine."""
+    return config_service.get_graph_engine_result(session_mgr, settings)
+
+
+@router.post("/graph-engine")
+async def set_graph_engine(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Set the graph DB engine (admin only, stored globally)."""
+    data = await request.json()
+    engine = data.get('graph_engine', 'ladybug')
+    return config_service.set_graph_engine_result(engine, request, session_mgr, settings)
+
+
+# ===========================================
 # LadybugDB Local Files
 # ===========================================
 

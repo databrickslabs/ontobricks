@@ -185,6 +185,28 @@ class GlobalConfigService:
         """Persist a new default class icon in the global config file."""
         return self._save(host, token, registry_cfg, {"default_emoji": emoji})
 
+    ALLOWED_GRAPH_ENGINES = ("ladybug",)
+
+    def get_graph_engine(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> str:
+        """Return the globally configured graph DB engine name."""
+        val = self.get(host, token, registry_cfg, "graph_engine", "ladybug")
+        return val if val in self.ALLOWED_GRAPH_ENGINES else "ladybug"
+
+    def set_graph_engine(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        engine: str,
+    ) -> Tuple[bool, str]:
+        """Persist a new graph DB engine selection in the global config file."""
+        engine = (engine or "").strip().lower()
+        if engine not in self.ALLOWED_GRAPH_ENGINES:
+            return False, f"Unknown graph engine '{engine}'. Allowed: {', '.join(self.ALLOWED_GRAPH_ENGINES)}"
+        return self._save(host, token, registry_cfg, {"graph_engine": engine})
+
     def get_registry_cache_ttl(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> int:
@@ -219,6 +241,7 @@ class GlobalConfigService:
             "default_base_uri": "",
             "default_emoji": "",
             "registry_cache_ttl": 300,
+            "graph_engine": "ladybug",
         }
 
 

@@ -541,6 +541,35 @@ class SettingsService:
             raise InfrastructureError('Failed to save registry cache TTL', detail=msg)
         return {'success': True, 'registry_cache_ttl': max(10, int(ttl))}
 
+    # ------------------------------------------------------------------
+    #  Graph DB Engine
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def get_graph_engine_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        _, host, token, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
+        engine = global_config_service.get_graph_engine(host, token, registry_cfg)
+        allowed = list(global_config_service.ALLOWED_GRAPH_ENGINES)
+        return {'success': True, 'graph_engine': engine, 'allowed_engines': allowed}
+
+    @staticmethod
+    def set_graph_engine_result(
+        engine: str,
+        request: Request,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        SettingsService.require_admin_error(request, session_mgr, settings)
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
+        ok, msg = global_config_service.set_graph_engine(host, token, registry_cfg, engine)
+        if not ok:
+            raise ValidationError(msg)
+        return {'success': True, 'graph_engine': engine}
+
     @staticmethod
     def build_permissions_me(request: Request, session_mgr: SessionManager, settings: Settings) -> Dict[str, Any]:
         email = getattr(request.state, 'user_email', '') or request.headers.get('x-forwarded-email', '')
