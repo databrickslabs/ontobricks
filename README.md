@@ -37,7 +37,7 @@ cd OntoBricks
 uv sync
 
 # Or use the setup script
-./setup.sh
+scripts/setup.sh
 ```
 
 ### Prerequisites
@@ -57,7 +57,7 @@ cp .env.example .env
 # Edit .env with your Databricks host, token, and warehouse ID
 
 # Start the application
-./start.sh
+scripts/start.sh
 # Open http://localhost:8000
 ```
 
@@ -70,7 +70,7 @@ databricks configure --token
 
 # Deploy
 make deploy
-# Or: ./deploy.sh
+# Or: scripts/deploy.sh
 ```
 
 After deployment, bind the **sql-warehouse** and **volume** resources in the Databricks Apps UI (**Compute > Apps > ontobricks > Resources**). If the registry volume is empty, open the app and click **Settings > Registry > Initialize**.
@@ -125,4 +125,4 @@ OntoBricks exposes the knowledge graph to LLM agents via the [Model Context Prot
 
 ### Documentation
 
-Full documentation is available in [`docs/`](docs/README.md). For a comprehensive feature list and architecture details, see [INFO.md](INFO.md).
+Full documentation is available in [`docs/`](docs/README.md). For a comprehensive feature list and architecture details, see [INFO.md](docs/INFO.md).

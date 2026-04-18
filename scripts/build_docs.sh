@@ -3,19 +3,20 @@
 # build_docs.sh -- Build the OntoBricks Sphinx documentation.
 #
 # Usage:
-#   ./build_docs.sh          # build HTML docs
-#   ./build_docs.sh clean    # remove previous build artifacts
-#   ./build_docs.sh open     # build and open in the default browser
+#   scripts/build_docs.sh          # build HTML docs
+#   scripts/build_docs.sh clean    # remove previous build artifacts
+#   scripts/build_docs.sh open     # build and open in the default browser
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SPHINX_DIR="$SCRIPT_DIR/docs/sphinx"
+PROJECT_ROOT="$SCRIPT_DIR/.."
+SPHINX_DIR="$PROJECT_ROOT/docs/sphinx"
 BUILD_DIR="$SPHINX_DIR/_build"
 
 # Prefer the project venv if it exists
-if [[ -f "$SCRIPT_DIR/.venv/bin/python" ]]; then
-    PYTHON="$SCRIPT_DIR/.venv/bin/python"
+if [[ -f "$PROJECT_ROOT/.venv/bin/python" ]]; then
+    PYTHON="$PROJECT_ROOT/.venv/bin/python"
 else
     PYTHON="python"
 fi

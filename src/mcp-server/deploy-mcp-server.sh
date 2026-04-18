@@ -27,4 +27,4 @@ done
 echo "=== Deploying mcp-ontobricks via DAB ==="
 
 cd "$PROJECT_ROOT"
-exec ./deploy.sh --mcp-only -t "$TARGET" ${NO_RUN:+--no-run}
+exec scripts/deploy.sh --mcp-only -t "$TARGET" ${NO_RUN:+--no-run}

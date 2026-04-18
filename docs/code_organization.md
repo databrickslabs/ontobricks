@@ -487,7 +487,7 @@ All logging goes through `back/core/logging/LogManager`.
 - Source files in `/docs/sphinx` (config in `conf.py`, module `.rst` files in `api/`).
 - After any change that adds, removes, or renames a Python module, class, or public function:
   1. Update or create the corresponding `.rst` file under `/docs/sphinx/api/`.
-  2. Re-build by running `./build_docs.sh` from the project root.
+  2. Re-build by running `scripts/build_docs.sh` from the project root.
   3. Verify no new Sphinx warnings about missing or renamed symbols.
 - When adding a **new subpackage** to `back/core`, `back/objects`, or `agents`, add a new `.rst` file and reference it from the parent `.rst` toctree.
 - All public classes and functions must have **docstrings** (Google or NumPy style) so `autodoc` renders them properly.

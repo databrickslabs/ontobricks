@@ -177,14 +177,14 @@ Explore your knowledge graph — search, filter, and navigate entities and relat
 # Clone and setup
 git clone <repository-url>
 cd OntoBricks
-./setup.sh
+scripts/setup.sh
 
 # Configure credentials
 cp .env.example .env
 # Edit .env with your Databricks credentials
 
 # Run
-./start.sh
+scripts/start.sh
 ```
 
 Open **http://localhost:8000**
@@ -198,7 +198,7 @@ databricks configure --token
 
 # Deploy
 make deploy
-# Or: ./deploy.sh
+# Or: scripts/deploy.sh
 ```
 
 After deployment, bind the **sql-warehouse** and **volume** resources in the Databricks Apps UI (**Compute > Apps > ontobricks > Resources**). If the registry volume is empty, open the app and click **Settings > Registry > Initialize**.

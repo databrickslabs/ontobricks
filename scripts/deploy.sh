@@ -6,12 +6,12 @@ set -euo pipefail
 # the MCP companion server in a single command.
 #
 # Usage:
-#   ./deploy.sh              # deploy + run main app (dev target)
-#   ./deploy.sh --all        # deploy + run both apps
-#   ./deploy.sh --mcp-only   # deploy + run MCP server only
-#   ./deploy.sh -t prod      # deploy to production target
-#   ./deploy.sh --no-run     # deploy without starting apps
-#   ./deploy.sh --bind       # also bind resources post-deploy
+#   scripts/deploy.sh              # deploy + run main app (dev target)
+#   scripts/deploy.sh --all        # deploy + run both apps
+#   scripts/deploy.sh --mcp-only   # deploy + run MCP server only
+#   scripts/deploy.sh -t prod      # deploy to production target
+#   scripts/deploy.sh --no-run     # deploy without starting apps
+#   scripts/deploy.sh --bind       # also bind resources post-deploy
 #
 # Prerequisites:
 #   - Databricks CLI >= 0.250.0
@@ -19,6 +19,7 @@ set -euo pipefail
 #   - databricks.yml at the project root
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
 TARGET="dev"
 RUN_MAIN=true
 RUN_MCP=false

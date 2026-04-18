@@ -1,14 +1,14 @@
 #!/bin/bash
 # Start script for OntoBricks (Local Development)
-# Usage: ./start.sh [--background]
+# Usage: scripts/start.sh [--background]
 #
 # NOTE: This script is for LOCAL development only.
-# For Databricks Apps deployment, use: ./deploy.sh
+# For Databricks Apps deployment, use: scripts/deploy.sh
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/.."
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -36,13 +36,13 @@ fi
 # Check if virtual environment exists
 if [ ! -d ".venv" ]; then
     echo -e "${YELLOW}Virtual environment not found. Running setup...${NC}"
-    ./setup.sh
+    scripts/setup.sh
 fi
 
 # Check if Python exists in venv
 if [ ! -f ".venv/bin/python" ]; then
     echo -e "${RED}Error: Python not found in virtual environment.${NC}"
-    echo "Please run ./setup.sh to set up the environment."
+    echo "Please run scripts/setup.sh to set up the environment."
     exit 1
 fi
 
@@ -72,7 +72,7 @@ for arg in "$@"; do
             RESTART=true
             ;;
         --help|-h)
-            echo "Usage: ./start.sh [options]"
+            echo "Usage: scripts/start.sh [options]"
             echo ""
             echo "Options:"
             echo "  --background, -b    Run in background"
@@ -86,7 +86,7 @@ done
 # Handle restart (must run before blocking on PID file)
 if [ "$RESTART" = true ]; then
     echo "Restarting OntoBricks..."
-    ./stop.sh 2>/dev/null || true
+    scripts/stop.sh 2>/dev/null || true
     sleep 1
 fi
 
@@ -95,7 +95,7 @@ if [ -f "$PID_FILE" ]; then
     OLD_PID=$(cat "$PID_FILE")
     if ps -p "$OLD_PID" > /dev/null 2>&1; then
         echo -e "${RED}OntoBricks is already running (PID: $OLD_PID)${NC}"
-        echo "Use ./stop.sh to stop it first, or ./start.sh --restart to restart."
+        echo "Use scripts/stop.sh to stop it first, or scripts/start.sh --restart to restart."
         exit 1
     else
         # Remove stale PID file
@@ -125,7 +125,7 @@ if [ "$BACKGROUND" = true ]; then
         echo ""
         echo -e "Open your browser to: ${GREEN}http://localhost:$PORT${NC}"
         echo ""
-        echo "To stop: ./stop.sh"
+        echo "To stop: scripts/stop.sh"
         echo "To view logs: tail -f .ontobricks.log"
     else
         echo -e "${RED}Failed to start OntoBricks${NC}"

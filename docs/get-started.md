@@ -21,8 +21,8 @@ git clone <repository-url>
 cd OntoBricks
 
 # Make the setup script executable and run it
-chmod +x setup.sh
-./setup.sh
+chmod +x scripts/setup.sh
+scripts/setup.sh
 ```
 
 The setup script will:
@@ -100,10 +100,10 @@ DATABRICKS_APP_PORT=8000
 
 ```bash
 # Using the start script (recommended)
-./start.sh
+scripts/start.sh
 
 # Run in background
-./start.sh --background
+scripts/start.sh --background
 
 # Or using make
 make run
@@ -117,7 +117,7 @@ python run.py
 
 ```bash
 # Using the stop script
-./stop.sh
+scripts/stop.sh
 
 # Or press Ctrl+C if running in foreground
 ```
@@ -262,13 +262,13 @@ Alternatively, use the traditional form interface:
 
 ```bash
 # Start application
-./start.sh
+scripts/start.sh
 
 # Start in background
-./start.sh --background
+scripts/start.sh --background
 
 # Stop application
-./stop.sh
+scripts/stop.sh
 
 # Run tests
 make test
@@ -346,7 +346,7 @@ If you have issues with the virtual environment:
 rm -rf .venv
 
 # Run setup again
-./setup.sh
+scripts/setup.sh
 ```
 
 ### Sync or Knowledge Graph Fails

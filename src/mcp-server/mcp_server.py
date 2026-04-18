@@ -10,15 +10,16 @@ Configure the OntoBricks base URL via the ONTOBRICKS_URL environment
 variable (defaults to http://localhost:8000).
 
 Usage (from the project root):
-    python mcp_server.py              # stdio
-    python mcp_server.py --http       # streamable-http on port 9100
+    python src/mcp-server/mcp_server.py              # stdio
+    python src/mcp-server/mcp_server.py --http       # streamable-http on port 9100
 """
 import os
 import sys
 
-_ROOT = os.path.dirname(os.path.abspath(__file__))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.normpath(os.path.join(_HERE, "..", ".."))
 sys.path.insert(0, os.path.join(_ROOT, "src"))
-sys.path.insert(0, os.path.join(_ROOT, "src", "mcp-server"))
+sys.path.insert(0, _HERE)
 
 from server.app import create_mcp_server  # noqa: E402
 

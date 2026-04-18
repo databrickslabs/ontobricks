@@ -363,8 +363,8 @@ databricks apps deploy mcp-ontobricks \
 Run the standalone entry point from the repository root:
 
 ```bash
-python mcp_server.py              # stdio transport
-python mcp_server.py --http       # streamable-http on port 9100
+python src/mcp-server/mcp_server.py              # stdio transport
+python src/mcp-server/mcp_server.py --http       # streamable-http on port 9100
 ```
 
 Or from the `mcp-server` directory:
@@ -377,14 +377,14 @@ uv run python -c "from server.app import create_mcp_server; create_mcp_server('s
 By default the server connects to `http://localhost:8000`. Override with:
 
 ```bash
-ONTOBRICKS_URL=http://your-host:8000 python mcp_server.py
+ONTOBRICKS_URL=http://your-host:8000 python src/mcp-server/mcp_server.py
 ```
 
 If the main app's registry is configured only in the browser session
 (not via env vars), pass the registry explicitly:
 
 ```bash
-REGISTRY_CATALOG=my_catalog REGISTRY_SCHEMA=my_schema python mcp_server.py
+REGISTRY_CATALOG=my_catalog REGISTRY_SCHEMA=my_schema python src/mcp-server/mcp_server.py
 ```
 
 ## Client Configuration
@@ -398,7 +398,7 @@ Add to your `.cursor/mcp.json`:
   "mcpServers": {
     "ontobricks": {
       "command": "python",
-      "args": ["mcp_server.py"],
+      "args": ["src/mcp-server/mcp_server.py"],
       "cwd": "/path/to/OntoBricks"
     }
   }
@@ -414,7 +414,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "ontobricks": {
       "command": "python",
-      "args": ["mcp_server.py"],
+      "args": ["src/mcp-server/mcp_server.py"],
       "cwd": "/path/to/OntoBricks",
       "env": {
         "ONTOBRICKS_URL": "http://localhost:8000",

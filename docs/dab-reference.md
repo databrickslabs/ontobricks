@@ -1,4 +1,4 @@
-# OntoBricks — Databricks Asset Bundle
+# OntoBricks — Databricks Automation Bundle
 
 The bundle configuration lives at the project root (`databricks.yml`) as required by the Databricks CLI. This directory contains supplementary documentation.
 
@@ -29,18 +29,18 @@ databricks bundle run ontobricks_app
 databricks bundle run mcp_ontobricks_app
 
 # Or use the convenience script:
-./deploy.sh --all
+scripts/deploy.sh --all
 ```
 
-## Convenience Script (`deploy.sh`)
+## Convenience Script (`scripts/deploy.sh`)
 
 ```bash
-./deploy.sh                  # validate + deploy + run main app (dev)
-./deploy.sh --all            # validate + deploy + run both apps
-./deploy.sh --mcp-only       # validate + deploy + run MCP only
-./deploy.sh -t prod          # deploy to production target
-./deploy.sh --no-run         # deploy without starting apps
-./deploy.sh --bind           # also bind existing apps post-deploy
+scripts/deploy.sh                  # validate + deploy + run main app (dev)
+scripts/deploy.sh --all            # validate + deploy + run both apps
+scripts/deploy.sh --mcp-only       # validate + deploy + run MCP only
+scripts/deploy.sh -t prod          # deploy to production target
+scripts/deploy.sh --no-run         # deploy without starting apps
+scripts/deploy.sh --bind           # also bind existing apps post-deploy
 ```
 
 ## Targets
@@ -95,4 +95,4 @@ The `.databricksignore` at the project root excludes non-runtime files (tests, d
 | `app.yaml` | Main app runtime config (command, env vars, resources) |
 | `src/mcp-server/app.yaml` | MCP server runtime config |
 | `.databricksignore` | Excludes non-runtime files from the bundle sync |
-| `deploy.sh` | Convenience wrapper around DAB commands |
+| `scripts/deploy.sh` | Convenience wrapper around DAB commands |

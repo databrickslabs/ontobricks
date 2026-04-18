@@ -1,10 +1,21 @@
 """Pytest configuration and shared fixtures for OntoBricks."""
 import importlib.util
 import os
+import warnings
 
 import pytest
 from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
+
+
+def pytest_configure(config):
+    """Runs before collection; filters noisy third-party warnings."""
+    try:
+        from urllib3.exceptions import NotOpenSSLWarning
+        warnings.filterwarnings("ignore", category=NotOpenSSLWarning)
+    except ImportError:
+        pass
+    warnings.filterwarnings("ignore", category=FutureWarning, module=r"google\..*")
 
 
 @pytest.fixture(autouse=True)

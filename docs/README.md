@@ -33,7 +33,7 @@ OntoBricks is a **Knowledge Graph Builder** for the Databricks platform. It lets
 
 ## Generated API Docs (Sphinx)
 
-- **Build:** `./build_docs.sh` from the repo root (requires **Sphinx** and **myst-parser** — see `pyproject.toml` dev dependencies).
+- **Build:** `scripts/build_docs.sh` from the repo root (requires **Sphinx** and **myst-parser** — see `pyproject.toml` dev dependencies).
 - **Output:** `docs/sphinx/_build/html/index.html` — the topic guides above are pulled into the same site via MyST `{include}`, keeping Markdown as the single source of truth.
 - **Quick open:** root [`documentation.html`](../documentation.html) redirects to the Sphinx build.
 

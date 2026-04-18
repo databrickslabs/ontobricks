@@ -1,12 +1,12 @@
 #!/bin/bash
 # Stop script for OntoBricks (Local Development)
-# Usage: ./stop.sh
+# Usage: scripts/stop.sh
 #
 # NOTE: This script is for LOCAL development only.
 # For Databricks Apps, use the Databricks Apps console to stop the app.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/.."
 
 # Colors for output
 GREEN='\033[0;32m'

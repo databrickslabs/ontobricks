@@ -64,14 +64,7 @@ src/mcp-server/
 # ── Dev / deployment scripts & tooling ───────────────────────
 Makefile
 pytest.ini
-setup.sh
-start.sh
-stop.sh
-deploy.sh
-test_UI.sh
-run_tests.sh
-build_docs.sh
-mcp_server.py
+scripts/
 .cursorrules
 .gitignore
 features.md

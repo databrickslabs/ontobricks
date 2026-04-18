@@ -2,7 +2,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/.."
 
 REPORTS_DIR="tests/reports"
 TIMESTAMP="$(date '+%Y-%m-%d_%H-%M-%S')"

@@ -39,8 +39,8 @@ install:
 
 setup:
 	@echo "Running setup..."
-	chmod +x setup.sh
-	./setup.sh
+	chmod +x scripts/setup.sh
+	scripts/setup.sh
 
 run:
 	@echo "Starting OntoBricks (FastAPI)..."
@@ -82,28 +82,28 @@ prod:
 # ── Deployment (DAB — Databricks Asset Bundles) ──────────────
 deploy:
 	@echo "Deploying + starting main app (dev)..."
-	chmod +x deploy.sh
-	./deploy.sh
+	chmod +x scripts/deploy.sh
+	scripts/deploy.sh
 
 deploy-all:
 	@echo "Deploying + starting both apps (dev)..."
-	chmod +x deploy.sh
-	./deploy.sh --all
+	chmod +x scripts/deploy.sh
+	scripts/deploy.sh --all
 
 deploy-mcp:
 	@echo "Deploying + starting MCP server only..."
-	chmod +x deploy.sh
-	./deploy.sh --mcp-only
+	chmod +x scripts/deploy.sh
+	scripts/deploy.sh --mcp-only
 
 deploy-prod:
 	@echo "Deploying both apps (prod)..."
-	chmod +x deploy.sh
-	./deploy.sh --all -t prod
+	chmod +x scripts/deploy.sh
+	scripts/deploy.sh --all -t prod
 
 deploy-no-run:
 	@echo "Deploying without starting apps..."
-	chmod +x deploy.sh
-	./deploy.sh --no-run
+	chmod +x scripts/deploy.sh
+	scripts/deploy.sh --no-run
 
 bundle-validate:
 	@echo "Validating Databricks Asset Bundle..."

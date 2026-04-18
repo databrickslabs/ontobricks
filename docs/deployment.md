@@ -41,7 +41,7 @@ Deployment uses **Databricks Asset Bundles (DAB)** — a declarative, repeatable
 | `app.yaml` | Main app runtime config — command, env vars, resource declarations |
 | `src/mcp-server/app.yaml` | MCP server runtime config |
 | `.databricksignore` | Excludes non-runtime files from the bundle sync |
-| `deploy.sh` | Convenience wrapper around DAB commands |
+| `scripts/deploy.sh` | Convenience wrapper around DAB commands |
 
 ---
 
@@ -98,7 +98,7 @@ MLFLOW_TRACKING_URI=databricks
 ### Run Locally
 
 ```bash
-./start.sh
+scripts/start.sh
 # Or directly: uv run python run.py
 # Open http://localhost:8000
 ```
@@ -190,7 +190,7 @@ This checks the bundle configuration without deploying. Fix any errors before pr
 databricks bundle deploy
 
 # Or use the convenience script
-./deploy.sh
+scripts/deploy.sh
 ```
 
 If the apps already exist in the workspace (e.g., from a previous manual deploy), bind them first:
@@ -214,9 +214,9 @@ databricks bundle run mcp_ontobricks_app
 Or use the convenience script:
 
 ```bash
-./deploy.sh              # deploy + start main app
-./deploy.sh --all        # deploy + start both apps
-./deploy.sh --mcp-only   # deploy + start MCP only
+scripts/deploy.sh              # deploy + start main app
+scripts/deploy.sh --all        # deploy + start both apps
+scripts/deploy.sh --mcp-only   # deploy + start MCP only
 ```
 
 ### Step 7 — Bind resources (first deploy only)
@@ -251,17 +251,17 @@ databricks apps get mcp-ontobricks
 databricks bundle summary
 ```
 
-### `deploy.sh` Reference
+### `scripts/deploy.sh` Reference
 
 The convenience script wraps all DAB commands:
 
 ```bash
-./deploy.sh                  # validate + deploy + run main app (dev)
-./deploy.sh --all            # validate + deploy + run both apps
-./deploy.sh --mcp-only       # validate + deploy + run MCP only
-./deploy.sh -t prod          # deploy to production target
-./deploy.sh --no-run         # deploy without starting apps
-./deploy.sh --bind           # also bind existing apps post-deploy
+scripts/deploy.sh                  # validate + deploy + run main app (dev)
+scripts/deploy.sh --all            # validate + deploy + run both apps
+scripts/deploy.sh --mcp-only       # validate + deploy + run MCP only
+scripts/deploy.sh -t prod          # deploy to production target
+scripts/deploy.sh --no-run         # deploy without starting apps
+scripts/deploy.sh --bind           # also bind existing apps post-deploy
 ```
 
 ### `app.yaml` Configuration — Full Reference
@@ -475,7 +475,7 @@ Update the `permissions` section with the deploying user's email.
 databricks bundle validate
 
 # Deploy and start
-./deploy.sh --all
+scripts/deploy.sh --all
 ```
 
 ### 4.5 — Bind resources
@@ -503,7 +503,7 @@ databricks apps get ontobricks -o json | python3 -c "import sys,json; print(json
 Update `ONTOBRICKS_URL` in `src/mcp-server/app.yaml` with this URL, then redeploy:
 
 ```bash
-./deploy.sh --mcp-only
+scripts/deploy.sh --mcp-only
 ```
 
 ### New Workspace Checklist
@@ -516,12 +516,12 @@ Update `ONTOBRICKS_URL` in `src/mcp-server/app.yaml` with this URL, then redeplo
 [ ] 5.  Update databricks.yml permissions (your email)
 [ ] 6.  Update app.yaml (DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT, DATABRICKS_TRIPLESTORE_TABLE)
 [ ] 7.  databricks bundle validate
-[ ] 8.  ./deploy.sh --all
+[ ] 8.  scripts/deploy.sh --all
 [ ] 9.  Bind sql-warehouse and volume resources in the Apps UI (both apps)
 [ ] 10. Initialize registry (Settings > Registry > Initialize)
 [ ] 11. Verify both apps are RUNNING
 [ ] 12. Update ONTOBRICKS_URL in src/mcp-server/app.yaml with the main app URL
-[ ] 13. ./deploy.sh --mcp-only (redeploy MCP with correct URL)
+[ ] 13. scripts/deploy.sh --mcp-only (redeploy MCP with correct URL)
 [ ] 14. Verify MCP appears in Databricks Playground
 ```
 
@@ -559,10 +559,10 @@ The MCP server is deployed alongside the main app by the same `databricks.yml` b
 
 ```bash
 # Deploy both apps
-./deploy.sh --all
+scripts/deploy.sh --all
 
 # Or deploy MCP only (main app already running)
-./deploy.sh --mcp-only
+scripts/deploy.sh --mcp-only
 ```
 
 ### MCP `app.yaml` Configuration
@@ -647,14 +647,14 @@ uv run python -c \
 Or via the convenience wrapper at the project root:
 
 ```bash
-python mcp_server.py              # stdio (default)
-python mcp_server.py --http       # streamable-http on port 9100
+python src/mcp-server/mcp_server.py              # stdio (default)
+python src/mcp-server/mcp_server.py --http       # streamable-http on port 9100
 ```
 
 Override the target URL:
 
 ```bash
-ONTOBRICKS_URL=http://your-host:8000 python mcp_server.py
+ONTOBRICKS_URL=http://your-host:8000 python src/mcp-server/mcp_server.py
 ```
 
 ### Client Configuration Examples
@@ -741,7 +741,7 @@ OntoBricks/
 ├── app.yaml                # Main app runtime config
 ├── src/mcp-server/
 │   └── app.yaml            # MCP server runtime config
-└── dab/
+└── docs/dab-reference.md
     └── README.md           # DAB-specific documentation
 ```
 
@@ -824,7 +824,7 @@ Use this checklist when deploying OntoBricks from scratch on any workspace:
         [ ] (local dev only) REGISTRY_CATALOG / REGISTRY_SCHEMA / REGISTRY_VOLUME
 [ ] 6.  Validate: databricks bundle validate
 [ ] 7.  Deploy main app:
-          ./deploy.sh
+          scripts/deploy.sh
 [ ] 8.  Bind sql-warehouse resource in the Apps UI
 [ ] 9.  Bind volume resource to the registry UC Volume
 [ ] 10. Verify main app is RUNNING:
@@ -834,7 +834,7 @@ Use this checklist when deploying OntoBricks from scratch on any workspace:
 [ ] 12. (If using MCP) Update ONTOBRICKS_URL in src/mcp-server/app.yaml:
           databricks apps get ontobricks -o json | python3 -c "import sys,json; print(json.load(sys.stdin)['url'])"
 [ ] 13. (If using MCP) Deploy MCP server:
-          ./deploy.sh --mcp-only
+          scripts/deploy.sh --mcp-only
 [ ] 14. (If using MCP) Bind MCP resources (same warehouse + volume)
 [ ] 15. (If using MCP) Verify in Databricks Playground
 ```
@@ -924,5 +924,5 @@ The MCP app's SP needs `CAN_USE` permission on the main app. The `users` group s
 ```bash
 # Pull latest code and redeploy
 git pull origin main
-./deploy.sh --all
+scripts/deploy.sh --all
 ```

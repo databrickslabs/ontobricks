@@ -32,12 +32,9 @@ sync:
     - "*.pid"
     - "*.log"
     - ".env"
-    - deploy.sh
-    - setup.sh
-    - start.sh
-    - build_docs.sh
+    - scripts/
     - Makefile
-    - INFO.md
+    - docs/INFO.md
     - CHANGELOG.md
 
 variables:
