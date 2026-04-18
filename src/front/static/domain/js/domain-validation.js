@@ -352,7 +352,7 @@ function _dtBadge(flag, okText, failText, unknownText) {
     if (flag === true)
         return '<span class="badge bg-success bg-opacity-10 text-success border border-success"><i class="bi bi-check-circle-fill me-1"></i>' + okText + '</span>';
     if (flag === false)
-        return '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger"><i class="bi bi-x-circle-fill me-1"></i>' + failText + '</span>';
+        return '<span class="badge bg-danger text-white border border-danger"><i class="bi bi-x-circle-fill me-1"></i>' + failText + '</span>';
     return '<span class="badge bg-secondary bg-opacity-10 text-secondary border"><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
 }
 

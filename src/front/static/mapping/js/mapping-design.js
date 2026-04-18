@@ -1037,23 +1037,27 @@ function loadEntityPanelContent(classUri, className, targetPanelBody = null) {
                     <input class="form-check-input" type="checkbox" id="epExcludeCheck" ${classInfo?.excluded ? '' : 'checked'}>
                     <label class="form-check-label small" for="epExcludeCheck">Include in mapping <span class="text-muted" style="font-size:0.72rem;">(uncheck to exclude this entity and its relationships from mapping, validation & R2RML generation)</span></label>
                 </div>
-                <div class="border rounded mb-2">
-                    <table class="table table-sm mb-0" style="font-size:0.8rem;">
-                        <tbody>
-                            <tr><td>${epStatusIcon(epHasSql)}</td><td>SQL Query</td><td class="text-muted small">${epHasSql ? 'Defined' : 'Not defined'}</td></tr>
-                            <tr><td>${epStatusIcon(epHasId)}</td><td>ID column</td><td class="text-muted small">${epHasId ? existingMapping.id_column : 'Not assigned'}</td></tr>
-                            <tr><td>${epStatusIcon(epHasLabel)}</td><td>Label column</td><td class="text-muted small">${epHasLabel ? existingMapping.label_column : 'Not assigned'}</td></tr>
-                            ${attributes.length > 0 ? '<tr><td>' + epStatusIcon(epMappedAttrCount === attributes.length) + '</td><td>Attributes</td><td class="text-muted small">' + epMappedAttrCount + ' / ' + attributes.length + ' assigned</td></tr>' : ''}
-                        </tbody>
-                    </table>
-                </div>
-                ${attributes.length > 0
-                    ? '<div class="border rounded" style="max-height: 200px; overflow-y: auto;"><table class="table table-sm table-striped mb-0" style="font-size:0.78rem;"><thead class="table-light sticky-top"><tr><th style="width:28px;">#</th><th>Attribute</th><th class="text-center" style="width:70px;">Mapped</th></tr></thead><tbody>' + epOntologyRows + '</tbody></table></div>'
-                    : ''}
-                <div class="text-muted small mt-2">
-                    ${existingMapping
-                        ? '<i class="bi bi-check-circle text-success"></i> This entity has a mapping'
-                        : '<i class="bi bi-info-circle"></i> No mapping yet — use Auto-Map or the SQL tab'}
+                <div class="row g-2">
+                    <div class="${attributes.length > 0 ? 'col-6' : 'col-12'}">
+                        <div class="border rounded mb-2">
+                            <table class="table table-sm mb-0" style="font-size:0.8rem;">
+                                <tbody>
+                                    <tr><td>${epStatusIcon(epHasSql)}</td><td>SQL Query</td><td class="text-muted small">${epHasSql ? 'Defined' : 'Not defined'}</td></tr>
+                                    <tr><td>${epStatusIcon(epHasId)}</td><td>ID column</td><td class="text-muted small">${epHasId ? existingMapping.id_column : 'Not assigned'}</td></tr>
+                                    <tr><td>${epStatusIcon(epHasLabel)}</td><td>Label column</td><td class="text-muted small">${epHasLabel ? existingMapping.label_column : 'Not assigned'}</td></tr>
+                                    ${attributes.length > 0 ? '<tr><td>' + epStatusIcon(epMappedAttrCount === attributes.length) + '</td><td>Attributes</td><td class="text-muted small">' + epMappedAttrCount + ' / ' + attributes.length + ' assigned</td></tr>' : ''}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-muted small">
+                            ${existingMapping
+                                ? '<i class="bi bi-check-circle text-success"></i> This entity has a mapping'
+                                : '<i class="bi bi-info-circle"></i> No mapping yet — use Auto-Map or the SQL tab'}
+                        </div>
+                    </div>
+                    ${attributes.length > 0
+                        ? '<div class="col-6"><div class="border rounded" style="max-height: 200px; overflow-y: auto;"><table class="table table-sm table-striped mb-0" style="font-size:0.78rem;"><thead class="table-light sticky-top"><tr><th style="width:28px;">#</th><th>Attribute</th><th class="text-center" style="width:70px;">Mapped</th></tr></thead><tbody>' + epOntologyRows + '</tbody></table></div></div>'
+                        : ''}
                 </div>
             </div>
 
@@ -1172,6 +1176,12 @@ function loadRelationshipPanelContent(ontologyProperty, targetPanelBody = null) 
         ${relAttributes.length > 0 ? `<tr><td>${statusIcon(mappedAttrCount === relAttributes.length)}</td><td>Attributes</td><td class="text-muted small">${mappedAttrCount} / ${relAttributes.length} assigned</td></tr>` : ''}
     `;
 
+    const rpOntologyRows = relAttributes.map((a, i) => {
+        const name = a.name || a.localName || '';
+        const assigned = !!(name && relAttrMap[name]);
+        return `<tr><td class="text-muted" style="width:28px;">${i + 1}</td><td>${name}</td><td class="text-center">${statusIcon(assigned)}</td></tr>`;
+    }).join('');
+
     panelBody.innerHTML = `
         <input type="hidden" id="panelPropertyUri" value="${ontologyProperty.uri}" />
         
@@ -1211,15 +1221,22 @@ function loadRelationshipPanelContent(ontologyProperty, targetPanelBody = null) 
                     <input class="form-check-input" type="checkbox" id="rpExcludeCheck" ${isRelExcluded ? '' : 'checked'} ${rpExcludeDisabled} title="${rpExcludeTitle}">
                     <label class="form-check-label small" for="rpExcludeCheck">Include in mapping <span class="text-muted" style="font-size:0.72rem;">(${isParentExcluded ? 'inherited from excluded connected entity' : 'uncheck to exclude this relationship from mapping, validation & R2RML generation'})</span></label>
                 </div>
-                <div class="border rounded">
-                    <table class="table table-sm mb-0" style="font-size:0.8rem;">
-                        <tbody>${rpStatusRows}</tbody>
-                    </table>
-                </div>
-                <div class="text-muted small mt-2">
-                    ${existingMapping
-                        ? '<i class="bi bi-check-circle text-success"></i> This relationship has a mapping'
-                        : '<i class="bi bi-info-circle"></i> No mapping yet — use Auto-Map or the SQL tab'}
+                <div class="row g-2">
+                    <div class="${relAttributes.length > 0 ? 'col-6' : 'col-12'}">
+                        <div class="border rounded mb-2">
+                            <table class="table table-sm mb-0" style="font-size:0.8rem;">
+                                <tbody>${rpStatusRows}</tbody>
+                            </table>
+                        </div>
+                        <div class="text-muted small">
+                            ${existingMapping
+                                ? '<i class="bi bi-check-circle text-success"></i> This relationship has a mapping'
+                                : '<i class="bi bi-info-circle"></i> No mapping yet — use Auto-Map or the SQL tab'}
+                        </div>
+                    </div>
+                    ${relAttributes.length > 0
+                        ? '<div class="col-6"><div class="border rounded" style="max-height: 200px; overflow-y: auto;"><table class="table table-sm table-striped mb-0" style="font-size:0.78rem;"><thead class="table-light sticky-top"><tr><th style="width:28px;">#</th><th>Attribute</th><th class="text-center" style="width:70px;">Mapped</th></tr></thead><tbody>' + rpOntologyRows + '</tbody></table></div></div>'
+                        : ''}
                 </div>
             </div>
 
