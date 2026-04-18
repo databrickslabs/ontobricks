@@ -4,6 +4,7 @@ Custom File-Based Session Middleware for FastAPI
 This middleware provides file-based session storage for FastAPI.
 It stores session data as JSON files in a configurable directory.
 """
+
 import json
 import uuid
 from pathlib import Path
@@ -38,7 +39,7 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
     Register with ``app.add_middleware(FileSessionMiddleware, secret_key=...,
     session_dir=..., max_age=...)``.
     """
-    
+
     def __init__(
         self,
         app,
@@ -47,7 +48,7 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
         session_cookie: str = "session",
         max_age: int = 86400,
         same_site: str = "lax",
-        https_only: bool = False
+        https_only: bool = False,
     ):
         super().__init__(app)
         self.secret_key = secret_key
@@ -57,17 +58,17 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
         self.same_site = same_site
         self.https_only = https_only
         self._session_cache: Dict[str, Dict[str, Any]] = {}
-        
+
         # Ensure session directory exists
         self.session_dir.mkdir(parents=True, exist_ok=True)
-    
+
     def _get_session_id_from_cookie(self, request: Request) -> Optional[str]:
         """Extract and validate session ID from cookie."""
         cookie_value = request.cookies.get(self.session_cookie)
         if not cookie_value:
             return None
         return cookie_value
-    
+
     def _load_session(self, session_id: str) -> Dict[str, Any]:
         """Load session data, preferring the in-memory cache over disk."""
         cached = self._session_cache.get(session_id)
@@ -78,7 +79,7 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
         if session_file.exists():
             try:
                 content = session_file.read_text()
-                if content.startswith('{'):
+                if content.startswith("{"):
                     data = json.loads(content)
                     self._session_cache[session_id] = data
                     return data
@@ -87,7 +88,7 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
                 logger.exception("Error loading session %s: %s", session_id, e)
                 return {}
         return {}
-    
+
     def _save_session(self, session_id: str, data: Dict[str, Any]):
         """Save session data to file and update in-memory cache."""
         self._session_cache[session_id] = data
@@ -96,11 +97,11 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
             session_file.write_text(json.dumps(data, default=str))
         except Exception as e:
             logger.exception("Error saving session %s: %s", session_id, e)
-    
+
     def _generate_session_id(self) -> str:
         """Generate a new session ID."""
-        return str(uuid.uuid4()).replace('-', '')
-    
+        return str(uuid.uuid4()).replace("-", "")
+
     async def dispatch(self, request: Request, call_next) -> Response:
         """Process request with session handling."""
         path = request.url.path
@@ -114,7 +115,7 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
         # Get or create session ID
         session_id = self._get_session_id_from_cookie(request)
         is_new_session = False
-        
+
         if not session_id:
             session_id = self._generate_session_id()
             is_new_session = True
@@ -132,40 +133,56 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
                 session_data = {}
                 # Create empty session file immediately
                 self._save_session(session_id, session_data)
-                logger.info("Old session file not found, created NEW session: %s...", session_id[:8])
+                logger.info(
+                    "Old session file not found, created NEW session: %s...",
+                    session_id[:8],
+                )
             else:
                 # Load existing session (served from in-memory cache after first hit)
                 session_data = self._load_session(session_id)
-                pd = session_data.get('domain_data') or session_data.get('project_data', {})
-                ontology_classes = len(pd.get('ontology', {}).get('classes', []))
-                mapping_entities = len(pd.get('assignment', {}).get('entities', []))
-                mapping_rels = len(pd.get('assignment', {}).get('relationships', []))
+                pd = session_data.get("domain_data") or session_data.get(
+                    "project_data", {}
+                )
+                ontology_classes = len(pd.get("ontology", {}).get("classes", []))
+                mapping_entities = len(pd.get("assignment", {}).get("entities", []))
+                mapping_rels = len(pd.get("assignment", {}).get("relationships", []))
                 logger.debug(
                     "Session %s...: %d classes, %d entity mappings, %d rel mappings",
-                    session_id[:8], ontology_classes, mapping_entities, mapping_rels
+                    session_id[:8],
+                    ontology_classes,
+                    mapping_entities,
+                    mapping_rels,
                 )
-        
+
         # Attach session to request state
         request.state.session = session_data
         request.state.session_id = session_id
         request.state.session_modified = False
-        
+
         # Process request
         response = await call_next(request)
-        
+
         # ONLY save session if it was explicitly modified
         # This prevents race conditions where concurrent requests overwrite each other
-        if hasattr(request.state, 'session_modified') and request.state.session_modified:
-            pd = request.state.session.get('domain_data') or request.state.session.get('project_data', {})
-            ontology_classes = len(pd.get('ontology', {}).get('classes', []))
-            mapping_entities = len(pd.get('assignment', {}).get('entities', []))
-            mapping_rels = len(pd.get('assignment', {}).get('relationships', []))
+        if (
+            hasattr(request.state, "session_modified")
+            and request.state.session_modified
+        ):
+            pd = request.state.session.get("domain_data") or request.state.session.get(
+                "project_data", {}
+            )
+            ontology_classes = len(pd.get("ontology", {}).get("classes", []))
+            mapping_entities = len(pd.get("assignment", {}).get("entities", []))
+            mapping_rels = len(pd.get("assignment", {}).get("relationships", []))
             logger.info(
                 "SAVING session %s... with %d ontology classes, %d entity mappings, %d rel mappings (modified=True)",
-                session_id[:8], ontology_classes, mapping_entities, mapping_rels
+                session_id[:8],
+                ontology_classes,
+                mapping_entities,
+                mapping_rels,
             )
             self._save_session(session_id, request.state.session)
-        
+
         # ALWAYS set session cookie to ensure browser has it
         # Note: httponly=False allows JavaScript to access the cookie if needed
         # samesite="lax" allows cookies to be sent with top-level navigations
@@ -177,12 +194,12 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
             httponly=False,  # Allow JS to see the cookie for debugging
             samesite="lax",  # Allow GET requests from external sites
             secure=False,  # Allow HTTP (not just HTTPS)
-            domain=None  # Let browser determine domain
+            domain=None,  # Let browser determine domain
         )
-        
+
         return response
 
 
 def get_session(request: Request) -> Dict[str, Any]:
     """Dependency that returns the session dict from ``request.state``."""
-    return getattr(request.state, 'session', {})
+    return getattr(request.state, "session", {})

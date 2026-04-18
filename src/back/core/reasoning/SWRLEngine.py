@@ -7,6 +7,7 @@ Violation detection for SWRL rules is handled separately by the
 Data Quality runner (see ``run_sql_checks`` / ``run_graph_checks``
 in ``back.objects.digitaltwin``).
 """
+
 import time
 from typing import Any, Dict, List, Optional
 
@@ -76,13 +77,24 @@ class SWRLEngine:
 
             try:
                 self._infer_rule(
-                    translator, store, table_name, params, name,
-                    uses_cypher, result, inference_limit=inference_limit,
+                    translator,
+                    store,
+                    table_name,
+                    params,
+                    name,
+                    uses_cypher,
+                    result,
+                    inference_limit=inference_limit,
                 )
                 if materialize:
                     self._materialize_rule(
-                        translator, store, table_name, params, name,
-                        uses_cypher, result,
+                        translator,
+                        store,
+                        table_name,
+                        params,
+                        name,
+                        uses_cypher,
+                        result,
                     )
             except Exception as e:
                 logger.error("SWRL rule '%s' failed: %s", name, e)
@@ -99,13 +111,24 @@ class SWRLEngine:
         }
         logger.info(
             "SWRL engine: %d/%d rules enabled, %d inferred, %d errors (%.2fs)",
-            total, len(rules), len(result.inferred_triples), errors, duration,
+            total,
+            len(rules),
+            len(result.inferred_triples),
+            errors,
+            duration,
         )
         return result
 
     def _infer_rule(
-        self, translator, store, table_name, params, rule_name,
-        uses_cypher, result, inference_limit: Optional[int] = None,
+        self,
+        translator,
+        store,
+        table_name,
+        params,
+        rule_name,
+        uses_cypher,
+        result,
+        inference_limit: Optional[int] = None,
     ):
         """Execute inference SELECT for a single rule."""
         if uses_cypher:
@@ -114,7 +137,9 @@ class SWRLEngine:
             query = translator.build_inference_sql(table_name, params)
 
         if not query:
-            logger.warning("Could not build inference query for SWRL rule: %s", rule_name)
+            logger.warning(
+                "Could not build inference query for SWRL rule: %s", rule_name
+            )
             return
 
         if inference_limit is not None and inference_limit > 0:
@@ -126,26 +151,35 @@ class SWRLEngine:
             conn = store.get_connection()
             r = conn.execute(query)
             for row in r:
-                result.inferred_triples.append(InferredTriple(
-                    subject=str(row[0]) if row[0] else "",
-                    predicate=str(row[1]) if row[1] else "",
-                    object=str(row[2]) if row[2] else "",
-                    provenance=f"swrl:{rule_name}",
-                    rule_name=rule_name,
-                ))
+                result.inferred_triples.append(
+                    InferredTriple(
+                        subject=str(row[0]) if row[0] else "",
+                        predicate=str(row[1]) if row[1] else "",
+                        object=str(row[2]) if row[2] else "",
+                        provenance=f"swrl:{rule_name}",
+                        rule_name=rule_name,
+                    )
+                )
                 count += 1
         else:
             rows = store.execute_query(query) or []
             for row in rows:
-                result.inferred_triples.append(InferredTriple(
-                    subject=row.get("subject", ""),
-                    predicate=row.get("predicate", ""),
-                    object=row.get("object", ""),
-                    provenance=f"swrl:{rule_name}",
-                    rule_name=rule_name,
-                ))
+                result.inferred_triples.append(
+                    InferredTriple(
+                        subject=row.get("subject", ""),
+                        predicate=row.get("predicate", ""),
+                        object=row.get("object", ""),
+                        provenance=f"swrl:{rule_name}",
+                        rule_name=rule_name,
+                    )
+                )
                 count += 1
-        logger.info("SWRL inference '%s': %d triples (%.2fs)", rule_name, count, time.time() - t_rule)
+        logger.info(
+            "SWRL inference '%s': %d triples (%.2fs)",
+            rule_name,
+            count,
+            time.time() - t_rule,
+        )
 
     def _materialize_rule(
         self, translator, store, table_name, params, rule_name, uses_cypher, result
@@ -158,13 +192,15 @@ class SWRLEngine:
                 if query:
                     conn = store.get_connection()
                     conn.execute(query)
-                    result.inferred_triples.append(InferredTriple(
-                        subject="(batch)",
-                        predicate="swrl:materialized",
-                        object=rule_name,
-                        provenance=f"swrl:{rule_name}",
-                        rule_name=rule_name,
-                    ))
+                    result.inferred_triples.append(
+                        InferredTriple(
+                            subject="(batch)",
+                            predicate="swrl:materialized",
+                            object=rule_name,
+                            provenance=f"swrl:{rule_name}",
+                            rule_name=rule_name,
+                        )
+                    )
             else:
                 sql = translator.build_materialization_sql(table_name, params)
                 if sql:
@@ -172,13 +208,15 @@ class SWRLEngine:
                         stmt = stmt.strip()
                         if stmt:
                             store.execute_query(stmt)
-                    result.inferred_triples.append(InferredTriple(
-                        subject="(batch)",
-                        predicate="swrl:materialized",
-                        object=rule_name,
-                        provenance=f"swrl:{rule_name}",
-                        rule_name=rule_name,
-                    ))
+                    result.inferred_triples.append(
+                        InferredTriple(
+                            subject="(batch)",
+                            predicate="swrl:materialized",
+                            object=rule_name,
+                            provenance=f"swrl:{rule_name}",
+                            rule_name=rule_name,
+                        )
+                    )
             logger.info("SWRL materialise '%s': %.2fs", rule_name, time.time() - t_rule)
         except Exception as e:
             logger.error("Materialisation for rule '%s' failed: %s", rule_name, e)
@@ -217,9 +255,12 @@ class SWRLEngine:
             if name:
                 uri_map[name.lower()] = uri
 
-        logger.debug("SWRL uri_map (%d entries, data_ns=%s): %s",
-                     len(uri_map), data_ns,
-                     {k: v for k, v in list(uri_map.items())[:10]})
+        logger.debug(
+            "SWRL uri_map (%d entries, data_ns=%s): %s",
+            len(uri_map),
+            data_ns,
+            {k: v for k, v in list(uri_map.items())[:10]},
+        )
         return uri_map
 
     @staticmethod
@@ -238,4 +279,5 @@ class SWRLEngine:
         if isinstance(store, GraphDBBackend):
             return store.get_query_translator(table_name)
         from back.core.reasoning.SWRLSQLTranslator import SWRLSQLTranslator
+
         return SWRLSQLTranslator()

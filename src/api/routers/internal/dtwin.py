@@ -3,6 +3,7 @@ Internal API -- Digital Twin / query JSON endpoints.
 
 Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 """
+
 from fastapi import APIRouter, Request, Depends
 from back.core.logging import get_logger
 from back.core.errors import (
@@ -38,16 +39,17 @@ router = APIRouter(prefix="/dtwin", tags=["Query"])
 # Query Execution
 # ===========================================
 
+
 @router.post("/execute")
 async def execute_sparql(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Execute a SPARQL query via Spark SQL."""
     data = await request.json()
-    query = data.get('query', '')
-    limit = data.get('limit')
+    query = data.get("query", "")
+    limit = data.get("limit")
 
     if not query:
         raise ValidationError("No query provided")
@@ -57,17 +59,23 @@ async def execute_sparql(
     r2rml_content = domain.get_r2rml()
 
     if not r2rml_content:
-        raise ValidationError("No R2RML mapping available. Please configure ontology and mappings first.")
+        raise ValidationError(
+            "No R2RML mapping available. Please configure ontology and mappings first."
+        )
 
-    return await DigitalTwin(domain).execute_spark_query(query, r2rml_content, limit, settings)
+    return await DigitalTwin(domain).execute_spark_query(
+        query, r2rml_content, limit, settings
+    )
 
 
 @router.post("/translate")
-async def translate_sparql(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def translate_sparql(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Translate a SPARQL query to SQL without executing."""
     data = await request.json()
-    sparql_query = data.get('query', '')
-    limit = data.get('limit')
+    sparql_query = data.get("query", "")
+    limit = data.get("limit")
 
     if not sparql_query:
         raise ValidationError("No SPARQL query provided")
@@ -77,10 +85,14 @@ async def translate_sparql(request: Request, session_mgr: SessionManager = Depen
     r2rml_content = domain.get_r2rml()
 
     if not r2rml_content:
-        raise ValidationError("No R2RML mapping available. Please configure mappings first.")
+        raise ValidationError(
+            "No R2RML mapping available. Please configure mappings first."
+        )
 
-    entity_mappings, relationship_mappings = sparql.extract_r2rml_mappings(r2rml_content)
-    base_uri = domain.ontology.get('base_uri', DEFAULT_BASE_URI)
+    entity_mappings, relationship_mappings = sparql.extract_r2rml_mappings(
+        r2rml_content
+    )
+    base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
 
     entity_mappings = DigitalTwin.augment_mappings_from_config(
         entity_mappings, domain.assignment, base_uri, domain.ontology
@@ -89,12 +101,15 @@ async def translate_sparql(request: Request, session_mgr: SessionManager = Depen
         relationship_mappings, domain.assignment, base_uri, domain.ontology
     )
 
-    return sparql.translate_sparql_to_spark(sparql_query, entity_mappings, limit, relationship_mappings)
+    return sparql.translate_sparql_to_spark(
+        sparql_query, entity_mappings, limit, relationship_mappings
+    )
 
 
 # ===========================================
 # Groups (for graph expand/collapse)
 # ===========================================
+
 
 @router.get("/groups")
 async def get_groups(session_mgr: SessionManager = Depends(get_session_manager)):
@@ -104,36 +119,38 @@ async def get_groups(session_mgr: SessionManager = Depends(get_session_manager))
     super-nodes for collapsed groups and restore member nodes on expand.
     """
     domain = get_domain(session_mgr)
-    base_uri = domain.ontology.get('base_uri', DEFAULT_BASE_URI).rstrip('#') + '#'
+    base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI).rstrip("#") + "#"
 
     groups = []
     for g in domain.groups:
-        members = g.get('members', [])
+        members = g.get("members", [])
         member_uris = [
-            m if m.startswith('http') else (base_uri + m)
-            for m in members if m
+            m if m.startswith("http") else (base_uri + m) for m in members if m
         ]
-        groups.append({
-            'name': g.get('name', ''),
-            'label': g.get('label', g.get('name', '')),
-            'color': g.get('color', ''),
-            'icon': g.get('icon', ''),
-            'members': members,
-            'memberUris': member_uris,
-        })
+        groups.append(
+            {
+                "name": g.get("name", ""),
+                "label": g.get("label", g.get("name", "")),
+                "color": g.get("color", ""),
+                "icon": g.get("icon", ""),
+                "members": members,
+                "memberUris": member_uris,
+            }
+        )
 
-    return {'success': True, 'groups': groups}
+    return {"success": True, "groups": groups}
 
 
 # ===========================================
 # Triple Store Sync
 # ===========================================
 
+
 @router.post("/sync/start")
 async def start_triplestore_sync(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Start async dual digital twin build: CREATE VIEW (Triple-Store) then populate LadybugDB graph.
 
@@ -147,28 +164,34 @@ async def start_triplestore_sync(
     import threading
     from back.core.task_manager import get_task_manager
 
-    effective_role = getattr(request.state, 'user_domain_role', None) or getattr(request.state, 'user_role', '')
+    effective_role = getattr(request.state, "user_domain_role", None) or getattr(
+        request.state, "user_role", ""
+    )
     if role_level(effective_role) < role_level(ROLE_BUILDER):
         raise AuthorizationError("Only builders and admins can build a digital twin")
 
     data = await request.json()
-    build_mode = data.get('build_mode', 'incremental')
-    force_full = build_mode == 'full' or data.get('drop_existing', False)
+    build_mode = data.get("build_mode", "incremental")
+    force_full = build_mode == "full" or data.get("drop_existing", False)
 
     domain = get_domain(session_mgr)
 
     view_table = effective_view_table(domain)
     graph_name = effective_graph_name(domain)
 
-    parts = view_table.split('.')
+    parts = view_table.split(".")
     if len(parts) != 3:
-        raise ValidationError("View location must be fully qualified: catalog.schema.view_name (configure in Domain / Triple Store tab)")
+        raise ValidationError(
+            "View location must be fully qualified: catalog.schema.view_name (configure in Domain / Triple Store tab)"
+        )
 
     domain.ensure_generated_content()
     r2rml_content = domain.get_r2rml()
 
     if not r2rml_content:
-        raise ValidationError("No R2RML mapping available. Please ensure ontology and assignments are configured.")
+        raise ValidationError(
+            "No R2RML mapping available. Please ensure ontology and assignments are configured."
+        )
 
     host, token, warehouse_id = get_databricks_credentials(domain, settings)
     if not host and not is_databricks_app():
@@ -178,18 +201,23 @@ async def start_triplestore_sync(
     if not warehouse_id:
         raise ValidationError("No SQL warehouse configured")
 
-    config_changed = (domain.last_update or '') > (domain.last_build or '') if domain.last_update else False
+    config_changed = (
+        (domain.last_update or "") > (domain.last_build or "")
+        if domain.last_update
+        else False
+    )
 
-    domain.triplestore.pop('stats', None)
-    domain.triplestore.pop('_ts_cache_timestamp', None)
+    domain.triplestore.pop("stats", None)
+    domain.triplestore.pop("_ts_cache_timestamp", None)
     if domain.last_update:
-        domain.triplestore['build_last_update'] = domain.last_update
+        domain.triplestore["build_last_update"] = domain.last_update
 
     from datetime import datetime, timezone as tz
+
     domain.last_build = datetime.now(tz.utc).isoformat()
     domain.save()
 
-    base_uri = domain.ontology.get('base_uri', DEFAULT_BASE_URI)
+    base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
     mapping_config = domain.assignment
     ontology_config = domain.ontology
     stored_source_versions = dict(domain.source_versions or {})
@@ -201,14 +229,17 @@ async def start_triplestore_sync(
         name="Digital Twin Build",
         task_type="triplestore_sync",
         steps=[
-            {'name': 'prepare', 'description': 'Preparing mappings and generating SQL'},
-            {'name': 'gate', 'description': 'Checking source tables for changes'},
-            {'name': 'view', 'description': 'Creating Triple-Store VIEW in Unity Catalog'},
-            {'name': 'diff', 'description': 'Computing incremental diff'},
-            {'name': 'graph', 'description': 'Applying changes to LadybugDB graph'},
-            {'name': 'snapshot', 'description': 'Refreshing snapshot table'},
-            {'name': 'archive', 'description': 'Archiving graph to registry'},
-        ]
+            {"name": "prepare", "description": "Preparing mappings and generating SQL"},
+            {"name": "gate", "description": "Checking source tables for changes"},
+            {
+                "name": "view",
+                "description": "Creating Triple-Store VIEW in Unity Catalog",
+            },
+            {"name": "diff", "description": "Computing incremental diff"},
+            {"name": "graph", "description": "Applying changes to LadybugDB graph"},
+            {"name": "snapshot", "description": "Refreshing snapshot table"},
+            {"name": "archive", "description": "Archiving graph to registry"},
+        ],
     )
 
     def run_sync():
@@ -238,18 +269,14 @@ async def start_triplestore_sync(
     thread = threading.Thread(target=run_sync, daemon=True)
     thread.start()
 
-    return {
-        'success': True,
-        'task_id': task.id,
-        'message': 'Sync started'
-    }
+    return {"success": True, "task_id": task.id, "message": "Sync started"}
 
 
 @router.post("/sync/load")
 async def load_triplestore(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Load triples from the graph database and return them as query results."""
     try:
@@ -267,30 +294,35 @@ async def load_triplestore(
         except Exception as e:
             logger.exception("Load graph query failed: %s", e)
             error_msg = str(e)
-            if 'does not exist' in error_msg.lower():
+            if "does not exist" in error_msg.lower():
                 raise NotFoundError(
                     f"Graph {graph_name} does not exist. Run Build first.",
                     detail=error_msg,
                 )
-            raise InfrastructureError("Error reading graph from the graph backend", detail=error_msg)
+            raise InfrastructureError(
+                "Error reading graph from the graph backend", detail=error_msg
+            )
 
         return {
-            'success': True,
-            'results': results,
-            'columns': ['subject', 'predicate', 'object'],
-            'count': len(results),
+            "success": True,
+            "results": results,
+            "columns": ["subject", "predicate", "object"],
+            "count": len(results),
         }
 
     except (ValidationError, InfrastructureError, NotFoundError):
         raise
     except Exception as e:
         logger.exception("Load graph failed: %s", e)
-        raise InfrastructureError("Error loading graph from the triple store", detail=str(e))
+        raise InfrastructureError(
+            "Error loading graph from the triple store", detail=str(e)
+        )
 
 
 # ===========================================
 # Cluster Detection
 # ===========================================
+
 
 @router.post("/clusters/detect")
 async def detect_clusters(
@@ -319,7 +351,8 @@ async def detect_clusters(
         dt = DigitalTwin(domain)
         result = await run_blocking(
             dt.detect_clusters,
-            store, graph_name,
+            store,
+            graph_name,
             algorithm=algorithm,
             resolution=resolution,
             predicate_filter=predicate_filter,
@@ -343,7 +376,7 @@ async def detect_clusters(
 async def filter_triplestore(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Query the triple store with filter criteria and return only matching triples.
 
@@ -357,7 +390,7 @@ async def filter_triplestore(
     """
     try:
         data = await request.json()
-        phase = data.get('phase', 'preview')
+        phase = data.get("phase", "preview")
 
         domain = get_domain(session_mgr)
         graph_name = effective_graph_name(domain)
@@ -370,17 +403,20 @@ async def filter_triplestore(
 
         # ── Phase 1: preview (seed search → flat list) ──────────────
         if phase == "preview":
-            entity_type = (data.get('entity_type') or '').strip()
-            field = data.get('field', 'any')
-            match_type = data.get('match_type', 'contains')
-            value = (data.get('value') or '').strip()
+            entity_type = (data.get("entity_type") or "").strip()
+            field = data.get("field", "any")
+            match_type = data.get("match_type", "contains")
+            value = (data.get("value") or "").strip()
 
             if not entity_type and not value:
                 raise ValidationError("Please specify an entity type or search value.")
 
             logger.info(
                 "Filter preview – type=%s, field=%s, match=%s, value=%s",
-                entity_type, field, match_type, value,
+                entity_type,
+                field,
+                match_type,
+                value,
             )
 
             try:
@@ -396,7 +432,7 @@ async def filter_triplestore(
             except Exception as e:
                 logger.exception("Filter seed query failed: %s", e)
                 msg = str(e)
-                if 'does not exist' in msg.lower():
+                if "does not exist" in msg.lower():
                     raise NotFoundError(
                         f"Graph {graph_name} does not exist. Run Build first.",
                         detail=msg,
@@ -405,12 +441,12 @@ async def filter_triplestore(
 
             if not entity_set:
                 return {
-                    'success': True,
-                    'phase': 'preview',
-                    'seeds': [],
-                    'total': 0,
-                    'capped': False,
-                    'message': 'No entities found matching the filter criteria.',
+                    "success": True,
+                    "phase": "preview",
+                    "seeds": [],
+                    "total": 0,
+                    "capped": False,
+                    "message": "No entities found matching the filter criteria.",
                 }
 
             max_preview = 500
@@ -423,7 +459,9 @@ async def filter_triplestore(
                 raise
             except Exception as e:
                 logger.exception("Entity metadata query failed: %s", e)
-                raise InfrastructureError("Error fetching entity metadata", detail=str(e))
+                raise InfrastructureError(
+                    "Error fetching entity metadata", detail=str(e)
+                )
 
             seeds = [
                 {
@@ -436,40 +474,52 @@ async def filter_triplestore(
             ]
             seeds.sort(key=lambda s: (s["type"], s["label"]))
 
-            logger.info("Filter preview – %d seeds returned (total=%d, capped=%s)",
-                        len(seeds), len(entity_set), capped)
+            logger.info(
+                "Filter preview – %d seeds returned (total=%d, capped=%s)",
+                len(seeds),
+                len(entity_set),
+                capped,
+            )
 
             return {
-                'success': True,
-                'phase': 'preview',
-                'seeds': seeds,
-                'total': len(entity_set),
-                'capped': capped,
+                "success": True,
+                "phase": "preview",
+                "seeds": seeds,
+                "total": len(entity_set),
+                "capped": capped,
             }
 
         # ── Phase 2: expand (selected URIs → full graph) ────────────
-        selected_uris = data.get('selected_uris', [])
+        selected_uris = data.get("selected_uris", [])
         if not selected_uris:
             raise ValidationError("No entities selected for expansion.")
 
-        include_rels = data.get('include_rels', True)
-        depth = min(int(data.get('depth', 3)), 5)
-        client_max = int(data.get('max_entities', 5000))
+        include_rels = data.get("include_rels", True)
+        depth = min(int(data.get("depth", 3)), 5)
+        client_max = int(data.get("max_entities", 5000))
         max_entities = max(100, min(client_max, 50_000))
 
         entity_set: set = set(selected_uris)
         initial_count = len(entity_set)
         capped = False
 
-        logger.info("Filter expand – %d selected URIs, depth=%d, max=%d",
-                     initial_count, depth, max_entities)
+        logger.info(
+            "Filter expand – %d selected URIs, depth=%d, max=%d",
+            initial_count,
+            depth,
+            max_entities,
+        )
 
         if include_rels and depth > 0:
             current_level = set(entity_set)
             for d in range(depth):
                 if not current_level or len(entity_set) >= max_entities:
                     break
-                logger.debug("Filter expand – level %d (%d entities so far)", d + 1, len(entity_set))
+                logger.debug(
+                    "Filter expand – level %d (%d entities so far)",
+                    d + 1,
+                    len(entity_set),
+                )
                 try:
                     neighbors = store.expand_entity_neighbors(graph_name, current_level)
                 except Exception as e:
@@ -489,7 +539,10 @@ async def filter_triplestore(
 
         logger.info(
             "Filter expand – fetching triples for %d entities (%d seed + %d expanded, capped=%s)",
-            len(entity_set), initial_count, len(entity_set) - initial_count, capped,
+            len(entity_set),
+            initial_count,
+            len(entity_set) - initial_count,
+            capped,
         )
         try:
             results = store.get_triples_for_subjects(graph_name, list(entity_set))
@@ -497,7 +550,9 @@ async def filter_triplestore(
             raise
         except Exception as e:
             logger.exception("Filter final query failed: %s", e)
-            raise InfrastructureError("Error fetching triples for the filter", detail=str(e))
+            raise InfrastructureError(
+                "Error fetching triples for the filter", detail=str(e)
+            )
 
         max_triples = 100_000
         if len(results) > max_triples:
@@ -505,14 +560,14 @@ async def filter_triplestore(
             capped = True
 
         return {
-            'success': True,
-            'phase': 'expand',
-            'results': results,
-            'columns': ['subject', 'predicate', 'object'],
-            'count': len(results),
-            'initial_count': initial_count,
-            'expanded_count': len(entity_set),
-            'capped': capped,
+            "success": True,
+            "phase": "expand",
+            "results": results,
+            "columns": ["subject", "predicate", "object"],
+            "count": len(results),
+            "initial_count": initial_count,
+            "expanded_count": len(entity_set),
+            "capped": capped,
         }
 
     except (ValidationError, InfrastructureError, NotFoundError):
@@ -534,7 +589,7 @@ async def triplestore_changes(
     last_update = domain.last_update
     last_build = domain.last_build
     needs_rebuild = bool(last_update and last_build and last_update > last_build)
-    return {'needs_rebuild': needs_rebuild}
+    return {"needs_rebuild": needs_rebuild}
 
 
 @router.get("/sync/status")
@@ -559,12 +614,15 @@ async def triplestore_status(
         raise
     except Exception as e:
         logger.exception("Triplestore status failed: %s", e)
-        raise InfrastructureError("Could not retrieve triple store status", detail=str(e))
+        raise InfrastructureError(
+            "Could not retrieve triple store status", detail=str(e)
+        )
 
 
 # ===========================================
 # Consolidated Information Endpoint
 # ===========================================
+
 
 @router.get("/sync/info")
 async def sync_info(
@@ -601,18 +659,24 @@ async def sync_info(
     async def _schedule_sync():
         t_s = _t.monotonic()
         await run_blocking(dt.sync_last_build_from_schedule, settings)
-        logger.debug("sync_info: _schedule_sync took %.0fms", (_t.monotonic() - t_s) * 1000)
+        logger.debug(
+            "sync_info: _schedule_sync took %.0fms", (_t.monotonic() - t_s) * 1000
+        )
 
     async def _graph_status():
         t_s = _t.monotonic()
         out = await dt.get_or_fetch_graph_status(settings)
-        logger.debug("sync_info: graph status took %.0fms", (_t.monotonic() - t_s) * 1000)
+        logger.debug(
+            "sync_info: graph status took %.0fms", (_t.monotonic() - t_s) * 1000
+        )
         return out
 
     async def _dt_exist():
         t_s = _t.monotonic()
         out = await dt.get_or_fetch_dt_existence(settings)
-        logger.debug("sync_info: dt existence took %.0fms", (_t.monotonic() - t_s) * 1000)
+        logger.debug(
+            "sync_info: dt existence took %.0fms", (_t.monotonic() - t_s) * 1000
+        )
         return out
 
     _, ts_status, dt_exist = await asyncio.gather(
@@ -623,8 +687,10 @@ async def sync_info(
 
     if domain.last_build and domain.last_build != last_build:
         last_build = domain.last_build
-        needs_rebuild = last_update > last_build if last_update and last_build else needs_rebuild
-        dt_exist['last_built'] = last_build
+        needs_rebuild = (
+            last_update > last_build if last_update and last_build else needs_rebuild
+        )
+        dt_exist["last_built"] = last_build
 
     logger.info(
         "sync_info: total=%.0fms (prep=%.0fms, parallel I/O=%.0fms)",
@@ -634,17 +700,18 @@ async def sync_info(
     )
 
     return {
-        'readiness': readiness,
-        'triplestore_status': ts_status,
-        'domain_info': domain_info_data,
-        'dt_existence': dt_exist,
-        'changes': {'needs_rebuild': needs_rebuild},
+        "readiness": readiness,
+        "triplestore_status": ts_status,
+        "domain_info": domain_info_data,
+        "dt_existence": dt_exist,
+        "changes": {"needs_rebuild": needs_rebuild},
     }
 
 
 # ===========================================
 # Digital Twin Existence Checks
 # ===========================================
+
 
 @router.get("/sync/dt-existence")
 async def dt_existence(
@@ -671,9 +738,14 @@ async def reload_graph_from_registry(
     """Download the LadybugDB archive from the registry volume and extract it locally."""
     from back.objects.domain import Domain
     from back.objects.registry import ROLE_BUILDER, role_level
-    effective_role = getattr(request.state, 'user_domain_role', None) or getattr(request.state, 'user_role', '')
+
+    effective_role = getattr(request.state, "user_domain_role", None) or getattr(
+        request.state, "user_role", ""
+    )
     if role_level(effective_role) < role_level(ROLE_BUILDER):
-        raise AuthorizationError("Only builders and admins can reload the graph from registry")
+        raise AuthorizationError(
+            "Only builders and admins can reload the graph from registry"
+        )
 
     domain = get_domain(session_mgr)
     uc = make_volume_file_service(domain, settings)
@@ -682,10 +754,12 @@ async def reload_graph_from_registry(
     warning = Domain(domain).sync_ladybug_from_volume(uc)
     if warning:
         logger.warning("reload-from-registry failed: %s", warning)
-        raise InfrastructureError("Failed to reload graph from registry", detail=warning)
+        raise InfrastructureError(
+            "Failed to reload graph from registry", detail=warning
+        )
 
     logger.info("reload-from-registry succeeded for domain '%s'", domain.domain_folder)
-    return {'success': True, 'message': 'Graph reloaded from registry'}
+    return {"success": True, "message": "Graph reloaded from registry"}
 
 
 @router.post("/sync/drop-snapshot")
@@ -696,7 +770,10 @@ async def drop_snapshot(
 ):
     """Drop the incremental snapshot table to force a full rebuild on next build."""
     from back.objects.registry import ROLE_BUILDER, role_level
-    effective_role = getattr(request.state, 'user_domain_role', None) or getattr(request.state, 'user_role', '')
+
+    effective_role = getattr(request.state, "user_domain_role", None) or getattr(
+        request.state, "user_role", ""
+    )
     if role_level(effective_role) < role_level(ROLE_BUILDER):
         raise AuthorizationError("Only builders and admins can drop the snapshot")
 
@@ -710,6 +787,7 @@ async def drop_snapshot(
         raise ValidationError("Databricks is not configured")
 
     from back.core.triplestore import IncrementalBuildService
+
     client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
     incr_svc = IncrementalBuildService(client)
     incr_svc.drop_snapshot(snapshot_table)
@@ -717,12 +795,13 @@ async def drop_snapshot(
     domain.source_versions = {}
     domain.save()
 
-    return {'success': True, 'message': f'Snapshot {snapshot_table} dropped'}
+    return {"success": True, "message": f"Snapshot {snapshot_table} dropped"}
 
 
 # ===========================================
 # Triple Store Insights
 # ===========================================
+
 
 @router.get("/sync/stats")
 async def triplestore_stats(
@@ -739,10 +818,10 @@ async def triplestore_stats(
             raise ValidationError("Graph name is not configured")
 
         if not refresh:
-            cached = DigitalTwin(domain).get_ts_cache('stats')
+            cached = DigitalTwin(domain).get_ts_cache("stats")
             if cached:
-                preds = cached.get('top_predicates') or []
-                has_kind = preds and 'kind' in preds[0]
+                preds = cached.get("top_predicates") or []
+                has_kind = preds and "kind" in preds[0]
                 if has_kind:
                     logger.debug("Returning cached graph stats")
                     return cached
@@ -761,34 +840,39 @@ async def triplestore_stats(
         entity_types = store.get_type_distribution(graph_name)
         top_predicates = store.get_predicate_distribution(graph_name)
 
-        type_count = sum(int(r.get('cnt', 0)) for r in entity_types)
+        type_count = sum(int(r.get("cnt", 0)) for r in entity_types)
         relationship_count = total_count - type_count - label_count
 
         classified = DigitalTwin(domain).classify_predicates(top_predicates)
 
         result = {
-            'success': True,
-            'total_triples': total_count,
-            'distinct_subjects': subject_count,
-            'distinct_predicates': predicate_count,
-            'entity_types': [{'uri': r['type_uri'], 'count': int(r['cnt'])} for r in entity_types],
-            'top_predicates': classified,
-            'label_count': label_count,
-            'type_assertion_count': type_count,
-            'relationship_count': max(relationship_count, 0),
+            "success": True,
+            "total_triples": total_count,
+            "distinct_subjects": subject_count,
+            "distinct_predicates": predicate_count,
+            "entity_types": [
+                {"uri": r["type_uri"], "count": int(r["cnt"])} for r in entity_types
+            ],
+            "top_predicates": classified,
+            "label_count": label_count,
+            "type_assertion_count": type_count,
+            "relationship_count": max(relationship_count, 0),
         }
-        DigitalTwin(domain).set_ts_cache('stats', result)
+        DigitalTwin(domain).set_ts_cache("stats", result)
         return result
     except (ValidationError, InfrastructureError, NotFoundError):
         raise
     except Exception as e:
         logger.exception("Triplestore stats failed: %s", e)
-        raise InfrastructureError("Error retrieving triple store statistics", detail=str(e))
+        raise InfrastructureError(
+            "Error retrieving triple store statistics", detail=str(e)
+        )
 
 
 # ===========================================
 # Data Quality — SHACL-driven
 # ===========================================
+
 
 @router.post("/dataquality/execute")
 async def execute_dataquality_check(
@@ -834,7 +918,9 @@ async def execute_dataquality_check(
 
         sql = SHACLService.shape_to_sql(shape, triplestore_table)
         if not sql:
-            raise ValidationError(f"Cannot translate shape {shape.get('id', '?')} to SQL")
+            raise ValidationError(
+                f"Cannot translate shape {shape.get('id', '?')} to SQL"
+            )
         results = await run_blocking(store.execute_query, sql)
         return {
             "success": True,
@@ -880,11 +966,17 @@ async def start_dataquality_checks(
     shapes = [s for s in shapes if s.get("enabled", True)]
 
     swrl_rules = domain.swrl_rules or []
-    ontology_dict = getattr(domain, 'ontology', None)
+    ontology_dict = getattr(domain, "ontology", None)
     if not isinstance(ontology_dict, dict):
-        ontology_dict = domain._data.get('ontology', {}) if hasattr(domain, '_data') else {}
-    decision_tables = [dt for dt in ontology_dict.get("decision_tables", []) if dt.get("enabled", True)]
-    aggregate_rules = [r for r in ontology_dict.get("aggregate_rules", []) if r.get("enabled", True)]
+        ontology_dict = (
+            domain._data.get("ontology", {}) if hasattr(domain, "_data") else {}
+        )
+    decision_tables = [
+        dt for dt in ontology_dict.get("decision_tables", []) if dt.get("enabled", True)
+    ]
+    aggregate_rules = [
+        r for r in ontology_dict.get("aggregate_rules", []) if r.get("enabled", True)
+    ]
 
     if not shapes and not swrl_rules and not decision_tables and not aggregate_rules:
         raise ValidationError(
@@ -919,30 +1011,37 @@ async def start_dataquality_checks(
 
     thread = threading.Thread(target=run_checks, daemon=True)
     thread.start()
-    return {"success": True, "task_id": task.id, "message": f"Data quality checks started ({total} checks)"}
+    return {
+        "success": True,
+        "task_id": task.id,
+        "message": f"Data quality checks started ({total} checks)",
+    }
 
 
 # ===========================================
 # Legacy Quality Routes (kept for backward-compat)
 # ===========================================
 
+
 @router.post("/quality/execute", deprecated=True)
 async def execute_quality_check(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Execute a quality check against the triple store table.
 
     .. deprecated::
         Use ``/dataquality/*`` endpoints instead (SHACL-driven data quality).
     """
-    logger.warning("Deprecated endpoint %s — use /dataquality/* instead", request.url.path)
+    logger.warning(
+        "Deprecated endpoint %s — use /dataquality/* instead", request.url.path
+    )
     try:
         data = await request.json()
-        check_type = data.get('check_type', '')
-        triplestore_table = data.get('triplestore_table', '').strip()
-        params = data.get('params', {})
+        check_type = data.get("check_type", "")
+        triplestore_table = data.get("triplestore_table", "").strip()
+        params = data.get("params", {})
 
         if not triplestore_table:
             raise ValidationError(
@@ -969,18 +1068,23 @@ async def execute_quality_check(
         except Exception as e:
             logger.exception("Quality check query execution failed: %s", e)
             error_msg = str(e)
-            if 'TABLE_OR_VIEW_NOT_FOUND' in error_msg or 'does not exist' in error_msg.lower():
+            if (
+                "TABLE_OR_VIEW_NOT_FOUND" in error_msg
+                or "does not exist" in error_msg.lower()
+            ):
                 raise NotFoundError(
                     f"View {triplestore_table} does not exist. Please build first.",
                     detail=error_msg,
                 )
-            raise InfrastructureError("Quality check query execution failed", detail=error_msg)
+            raise InfrastructureError(
+                "Quality check query execution failed", detail=error_msg
+            )
 
         return {
-            'success': True,
-            'violations': results or [],
-            'count': len(results) if results else 0,
-            'sql': sql
+            "success": True,
+            "violations": results or [],
+            "count": len(results) if results else 0,
+            "sql": sql,
         }
 
     except (ValidationError, InfrastructureError, NotFoundError):
@@ -994,20 +1098,22 @@ async def execute_quality_check(
 async def start_quality_checks(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Start all quality checks as an asynchronous task.
 
     .. deprecated::
         Use ``/dataquality/*`` endpoints instead (SHACL-driven data quality).
     """
-    logger.warning("Deprecated endpoint %s — use /dataquality/* instead", request.url.path)
+    logger.warning(
+        "Deprecated endpoint %s — use /dataquality/* instead", request.url.path
+    )
     import threading
     from back.core.task_manager import get_task_manager
 
     data = await request.json()
-    triplestore_table = data.get('triplestore_table', '').strip()
-    checks = data.get('checks', [])
+    triplestore_table = data.get("triplestore_table", "").strip()
+    checks = data.get("checks", [])
 
     if not triplestore_table:
         raise ValidationError("Triple store table is not specified.")
@@ -1022,57 +1128,84 @@ async def start_quality_checks(
     task = tm.create_task(
         name="Quality Checks",
         task_type="quality_checks",
-        steps=[{'name': 'running', 'description': f'Running {total_checks} quality checks'}],
+        steps=[
+            {"name": "running", "description": f"Running {total_checks} quality checks"}
+        ],
     )
 
     def run_checks():
         import time
+
         start_time = time.time()
 
         try:
             tm.start_task(task.id, f"Running {total_checks} quality checks...")
 
             from back.core.triplestore import get_triplestore as _get_ts
+
             store = _get_ts(domain_snap, settings, backend="view")
             if not store:
-                tm.fail_task(task.id, 'Could not initialize view backend (check Databricks connection)')
+                tm.fail_task(
+                    task.id,
+                    "Could not initialize view backend (check Databricks connection)",
+                )
                 return
 
             pop_cache = {}
             results = []
             for idx, check in enumerate(checks):
-                check_type = check.get('check_type', '')
-                params = check.get('params', {})
-                name = check.get('name', f'Check {idx + 1}')
-                category = check.get('category', 'unknown')
+                check_type = check.get("check_type", "")
+                params = check.get("params", {})
+                name = check.get("name", f"Check {idx + 1}")
+                category = check.get("category", "unknown")
 
                 progress = int(((idx) / total_checks) * 100)
-                tm.update_progress(task.id, progress, f"Running check {idx + 1}/{total_checks}: {name}")
+                tm.update_progress(
+                    task.id, progress, f"Running check {idx + 1}/{total_checks}: {name}"
+                )
 
-                sql = DigitalTwin.build_quality_sql(check_type, triplestore_table, params)
+                sql = DigitalTwin.build_quality_sql(
+                    check_type, triplestore_table, params
+                )
                 if not sql:
-                    results.append({
-                        'name': name, 'category': category, 'status': 'info',
-                        'message': f'Unsupported check type: {check_type}',
-                        'violations': [], 'sql': ''
-                    })
+                    results.append(
+                        {
+                            "name": name,
+                            "category": category,
+                            "status": "info",
+                            "message": f"Unsupported check type: {check_type}",
+                            "violations": [],
+                            "sql": "",
+                        }
+                    )
                     continue
 
-                class_uri = params.get('class_uri', '')
+                class_uri = params.get("class_uri", "")
 
                 try:
                     violations = store.execute_query(sql) or []
                     if len(violations) > 0:
                         result = {
-                            'name': name, 'category': category, 'status': 'error',
-                            'message': check.get('error_message', '').replace('{count}', str(len(violations))) or f'{len(violations)} violations found',
-                            'violations': violations, 'sql': sql
+                            "name": name,
+                            "category": category,
+                            "status": "error",
+                            "message": check.get("error_message", "").replace(
+                                "{count}", str(len(violations))
+                            )
+                            or f"{len(violations)} violations found",
+                            "violations": violations,
+                            "sql": sql,
                         }
                     else:
                         result = {
-                            'name': name, 'category': category, 'status': 'success',
-                            'message': check.get('success_message', 'No violations found'),
-                            'violations': [], 'sql': sql
+                            "name": name,
+                            "category": category,
+                            "status": "success",
+                            "message": check.get(
+                                "success_message", "No violations found"
+                            ),
+                            "violations": [],
+                            "sql": sql,
                         }
                     pop = DigitalTwin._count_class_population_sql(
                         store, triplestore_table, class_uri, pop_cache
@@ -1081,14 +1214,25 @@ async def start_quality_checks(
                     results.append(result)
                 except Exception as e:
                     error_msg = str(e)
-                    if 'TABLE_OR_VIEW_NOT_FOUND' in error_msg or 'does not exist' in error_msg.lower():
-                        tm.fail_task(task.id, f'View {triplestore_table} does not exist. Please build first.')
+                    if (
+                        "TABLE_OR_VIEW_NOT_FOUND" in error_msg
+                        or "does not exist" in error_msg.lower()
+                    ):
+                        tm.fail_task(
+                            task.id,
+                            f"View {triplestore_table} does not exist. Please build first.",
+                        )
                         return
-                    results.append({
-                        'name': name, 'category': category, 'status': 'warning',
-                        'message': 'Could not validate: the data source returned an error.',
-                        'violations': [], 'sql': sql
-                    })
+                    results.append(
+                        {
+                            "name": name,
+                            "category": category,
+                            "status": "warning",
+                            "message": "Could not validate: the data source returned an error.",
+                            "violations": [],
+                            "sql": sql,
+                        }
+                    )
 
             DigitalTwin.complete_dq_task(tm, task, results, time.time() - start_time)
 
@@ -1100,15 +1244,16 @@ async def start_quality_checks(
     thread.start()
 
     return {
-        'success': True,
-        'task_id': task.id,
-        'message': f'Quality checks started ({total_checks} checks)'
+        "success": True,
+        "task_id": task.id,
+        "message": f"Quality checks started ({total_checks} checks)",
     }
 
 
 # ===========================================
 # Inference
 # ===========================================
+
 
 @router.post("/reasoning/start")
 async def start_reasoning(
@@ -1188,8 +1333,11 @@ async def materialize_inferred(
         raise ValidationError("There are no inferred triples to materialise")
 
     uri_triples = [
-        t for t in raw_triples
-        if is_uri(t.get("subject", "")) and is_uri(t.get("predicate", "")) and is_uri(t.get("object", ""))
+        t
+        for t in raw_triples
+        if is_uri(t.get("subject", ""))
+        and is_uri(t.get("predicate", ""))
+        and is_uri(t.get("object", ""))
     ]
 
     domain = get_domain(session_mgr)
@@ -1204,7 +1352,9 @@ async def materialize_inferred(
             if client is None:
                 result["materialize_error"] = "Databricks credentials not configured"
             else:
-                count = ReasoningService.materialize_to_delta(client, mat_table, uri_triples)
+                count = ReasoningService.materialize_to_delta(
+                    client, mat_table, uri_triples
+                )
                 result["materialize_count"] = count
                 result["materialize_table"] = mat_table
         except Exception as e:

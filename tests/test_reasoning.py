@@ -1,4 +1,5 @@
 """Tests for the OWL 2 RL reasoner and reasoning models."""
+
 import importlib
 
 import pytest
@@ -10,6 +11,7 @@ requires_owlrl = pytest.mark.skipif(not _has_owlrl, reason="owlrl not installed"
 
 
 # -- Model tests ----------------------------------------------------------
+
 
 class TestReasoningModels:
     def test_inferred_triple_creation(self):

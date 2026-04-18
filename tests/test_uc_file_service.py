@@ -1,4 +1,5 @@
 """Tests for back.core.databricks.uc_file_service — UC volume file operations."""
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -125,10 +126,12 @@ class TestListFiles:
         svc._session = MagicMock()
         svc._session.get.return_value = MagicMock(
             status_code=200,
-            json=lambda: {"contents": [
-                {"name": "file.json", "file_size": 100},
-                {"name": "subdir/", "is_directory": True},
-            ]},
+            json=lambda: {
+                "contents": [
+                    {"name": "file.json", "file_size": 100},
+                    {"name": "subdir/", "is_directory": True},
+                ]
+            },
         )
         ok, files, msg = svc.list_files("cat", "sch", "vol")
         assert ok is True
@@ -142,10 +145,12 @@ class TestListFiles:
         svc._session = MagicMock()
         svc._session.get.return_value = MagicMock(
             status_code=200,
-            json=lambda: {"contents": [
-                {"name": "data.json", "file_size": 100},
-                {"name": "readme.txt", "file_size": 50},
-            ]},
+            json=lambda: {
+                "contents": [
+                    {"name": "data.json", "file_size": 100},
+                    {"name": "readme.txt", "file_size": 50},
+                ]
+            },
         )
         ok, files, msg = svc.list_files("cat", "sch", "vol", extensions=[".json"])
         assert ok is True
@@ -162,11 +167,13 @@ class TestListDirectory:
         svc._session = MagicMock()
         svc._session.get.return_value = MagicMock(
             status_code=200,
-            json=lambda: {"contents": [
-                {"name": "proj1/", "is_directory": True},
-                {"name": "proj2/", "is_directory": True},
-                {"name": "readme.md", "file_size": 50},
-            ]},
+            json=lambda: {
+                "contents": [
+                    {"name": "proj1/", "is_directory": True},
+                    {"name": "proj2/", "is_directory": True},
+                    {"name": "readme.md", "file_size": 50},
+                ]
+            },
         )
         ok, items, msg = svc.list_directory("/Volumes/c/s/v/domains", dirs_only=True)
         assert ok is True

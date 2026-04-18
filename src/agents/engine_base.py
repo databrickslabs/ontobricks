@@ -23,10 +23,12 @@ logger = get_logger(__name__)
 # Shared data class
 # =====================================================
 
+
 @dataclass
 class AgentStep:
     """One observable step of the agent's execution."""
-    step_type: str          # tool_call | tool_result | output
+
+    step_type: str  # tool_call | tool_result | output
     content: str
     tool_name: str = ""
     duration_ms: int = 0
@@ -35,6 +37,7 @@ class AgentStep:
 # =====================================================
 # LLM call helper
 # =====================================================
+
 
 def call_serving_endpoint(
     host: str,
@@ -71,8 +74,11 @@ def call_serving_endpoint(
 
     logger.info(
         "%s: POST %s — %d messages, %d tool defs, max_tokens=%d",
-        trace_name, endpoint_name, len(messages),
-        len(tools) if tools else 0, max_tokens,
+        trace_name,
+        endpoint_name,
+        len(messages),
+        len(tools) if tools else 0,
+        max_tokens,
     )
 
     resp = call_llm_with_retry(url, headers, payload, timeout=timeout)
@@ -82,6 +88,7 @@ def call_serving_endpoint(
 # =====================================================
 # Tool dispatch helper
 # =====================================================
+
 
 def dispatch_tool(
     handlers: Dict[str, Callable],
@@ -97,13 +104,24 @@ def dispatch_tool(
     """
     handler = handlers.get(tool_name)
     if not handler:
-        logger.warning("%s: unknown tool '%s' — available: %s", trace_name, tool_name, list(handlers.keys()))
+        logger.warning(
+            "%s: unknown tool '%s' — available: %s",
+            trace_name,
+            tool_name,
+            list(handlers.keys()),
+        )
         return json.dumps({"error": f"Unknown tool: {tool_name}"})
     try:
         t0 = time.time()
         result = handler(ctx, **arguments)
         elapsed = int((time.time() - t0) * 1000)
-        logger.info("%s: '%s' completed in %dms, returned %d chars", trace_name, tool_name, elapsed, len(result))
+        logger.info(
+            "%s: '%s' completed in %dms, returned %d chars",
+            trace_name,
+            tool_name,
+            elapsed,
+            len(result),
+        )
         return result
     except Exception as exc:
         logger.exception("%s: '%s' raised exception: %s", trace_name, tool_name, exc)
@@ -114,6 +132,7 @@ def dispatch_tool(
 # Response content extraction
 # =====================================================
 
+
 def extract_message_content(llm_response: dict) -> str:
     """Extract text content from an OpenAI-style or predictions-style LLM response."""
     choices = llm_response.get("choices", [])
@@ -122,7 +141,10 @@ def extract_message_content(llm_response: dict) -> str:
     preds = llm_response.get("predictions", [])
     if preds:
         return preds[0] if isinstance(preds[0], str) else str(preds[0])
-    logger.warning("extract_message_content: no choices or predictions, keys=%s", list(llm_response.keys()))
+    logger.warning(
+        "extract_message_content: no choices or predictions, keys=%s",
+        list(llm_response.keys()),
+    )
     return ""
 
 
@@ -130,7 +152,12 @@ def extract_message_content(llm_response: dict) -> str:
 # Token usage accumulation
 # =====================================================
 
+
 def accumulate_usage(total: Dict[str, int], usage_block: dict) -> None:
     """Add prompt/completion token counts from *usage_block* into *total* in-place."""
-    total["prompt_tokens"] = total.get("prompt_tokens", 0) + usage_block.get("prompt_tokens", 0)
-    total["completion_tokens"] = total.get("completion_tokens", 0) + usage_block.get("completion_tokens", 0)
+    total["prompt_tokens"] = total.get("prompt_tokens", 0) + usage_block.get(
+        "prompt_tokens", 0
+    )
+    total["completion_tokens"] = total.get("completion_tokens", 0) + usage_block.get(
+        "completion_tokens", 0
+    )

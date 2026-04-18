@@ -1,4 +1,5 @@
 """Tests for the LadybugDB graph schema generation module."""
+
 import pytest
 
 from back.core.graphdb.ladybugdb import (
@@ -195,10 +196,26 @@ class TestClassifyTriples:
     def test_classify_basic(self):
         schema = generate_graph_schema(CLASSES, PROPERTIES)
         triples = [
-            {"subject": "http://test.org/c1", "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "object": "http://test.org/ont#Customer"},
-            {"subject": "http://test.org/c1", "predicate": "http://www.w3.org/2000/01/rdf-schema#label", "object": "Alice"},
-            {"subject": "http://test.org/o1", "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "object": "http://test.org/ont#Order"},
-            {"subject": "http://test.org/c1", "predicate": "http://test.org/ont#hasOrder", "object": "http://test.org/o1"},
+            {
+                "subject": "http://test.org/c1",
+                "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                "object": "http://test.org/ont#Customer",
+            },
+            {
+                "subject": "http://test.org/c1",
+                "predicate": "http://www.w3.org/2000/01/rdf-schema#label",
+                "object": "Alice",
+            },
+            {
+                "subject": "http://test.org/o1",
+                "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                "object": "http://test.org/ont#Order",
+            },
+            {
+                "subject": "http://test.org/c1",
+                "predicate": "http://test.org/ont#hasOrder",
+                "object": "http://test.org/o1",
+            },
         ]
 
         node_inserts, rel_inserts, attr_updates = classify_triples(triples, schema)
@@ -219,18 +236,36 @@ class TestClassifyTriples:
     def test_label_without_type_goes_to_fallback(self):
         schema = generate_graph_schema(CLASSES, PROPERTIES)
         triples = [
-            {"subject": "http://test.org/unknown", "predicate": "http://www.w3.org/2000/01/rdf-schema#label", "object": "Unknown Entity"},
+            {
+                "subject": "http://test.org/unknown",
+                "predicate": "http://www.w3.org/2000/01/rdf-schema#label",
+                "object": "Unknown Entity",
+            },
         ]
         node_inserts, _, _ = classify_triples(triples, schema)
         assert schema.fallback_node_table in node_inserts
-        assert node_inserts[schema.fallback_node_table][0]["uri"] == "http://test.org/unknown"
+        assert (
+            node_inserts[schema.fallback_node_table][0]["uri"]
+            == "http://test.org/unknown"
+        )
 
     def test_unknown_predicate_becomes_attr(self):
         schema = generate_graph_schema(CLASSES, PROPERTIES)
         triples = [
-            {"subject": "http://test.org/c1", "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "object": "http://test.org/ont#Customer"},
-            {"subject": "http://test.org/c1", "predicate": "http://test.org/ont#firstName", "object": "Alice"},
+            {
+                "subject": "http://test.org/c1",
+                "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                "object": "http://test.org/ont#Customer",
+            },
+            {
+                "subject": "http://test.org/c1",
+                "predicate": "http://test.org/ont#firstName",
+                "object": "Alice",
+            },
         ]
         _, _, attr_updates = classify_triples(triples, schema)
         assert "http://test.org/c1" in attr_updates
-        assert attr_updates["http://test.org/c1"][0]["predicate"] == "http://test.org/ont#firstName"
+        assert (
+            attr_updates["http://test.org/c1"][0]["predicate"]
+            == "http://test.org/ont#firstName"
+        )

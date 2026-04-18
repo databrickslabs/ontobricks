@@ -1,4 +1,5 @@
 """Tests for back.core.databricks.VolumeFileService."""
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -44,17 +45,12 @@ class TestIsConfigured:
 
 class TestGetVolumePath:
     def test_static_path(self):
-        assert (
-            VolumeFileService.get_volume_path("c", "s", "v")
-            == "/Volumes/c/s/v"
-        )
+        assert VolumeFileService.get_volume_path("c", "s", "v") == "/Volumes/c/s/v"
 
 
 class TestListFiles:
     def test_not_configured(self, clean_databricks_env):
-        svc = VolumeFileService(
-            auth=DatabricksAuth(host="https://h.com", token="")
-        )
+        svc = VolumeFileService(auth=DatabricksAuth(host="https://h.com", token=""))
         ok, files, msg = svc.list_files("c", "s", "v")
         assert ok is False
         assert files == []
@@ -124,9 +120,7 @@ class TestListDirectory:
                 ]
             },
         )
-        ok, items, _ = svc.list_directory(
-            "/Volumes/c/s/v", dirs_only=True
-        )
+        ok, items, _ = svc.list_directory("/Volumes/c/s/v", dirs_only=True)
         assert ok is True
         assert len(items) == 1
         assert items[0]["is_directory"] is True
@@ -134,9 +128,7 @@ class TestListDirectory:
 
 class TestReadFile:
     def test_not_configured(self, clean_databricks_env):
-        svc = VolumeFileService(
-            auth=DatabricksAuth(host="https://h.com", token="")
-        )
+        svc = VolumeFileService(auth=DatabricksAuth(host="https://h.com", token=""))
         ok, content, msg = svc.read_file("/Volumes/c/s/v/f.txt")
         assert ok is False
         assert content == ""
@@ -146,9 +138,7 @@ class TestReadFile:
         auth = DatabricksAuth(host="https://h.com", token="tok")
         svc = VolumeFileService(auth=auth)
         svc._session = MagicMock()
-        svc._session.get.return_value = MagicMock(
-            status_code=200, text="hello"
-        )
+        svc._session.get.return_value = MagicMock(status_code=200, text="hello")
         ok, content, msg = svc.read_file("/Volumes/c/s/v/f.txt")
         assert ok is True
         assert content == "hello"
@@ -178,9 +168,7 @@ class TestReadBinaryFile:
         auth = DatabricksAuth(host="https://h.com", token="tok")
         svc = VolumeFileService(auth=auth)
         svc._session = MagicMock()
-        svc._session.get.return_value = MagicMock(
-            status_code=200, content=b"\x00\xff"
-        )
+        svc._session.get.return_value = MagicMock(status_code=200, content=b"\x00\xff")
         ok, data, msg = svc.read_binary_file("/Volumes/c/s/v/bin")
         assert ok is True
         assert data == b"\x00\xff"
@@ -209,9 +197,7 @@ class TestWriteFile:
         auth = DatabricksAuth(host="https://h.com", token="tok")
         svc = VolumeFileService(auth=auth)
         svc._session = MagicMock()
-        svc._session.put.return_value = MagicMock(
-            status_code=400, text="bad"
-        )
+        svc._session.put.return_value = MagicMock(status_code=400, text="bad")
         ok, msg = svc.write_file("/Volumes/c/s/v/out.txt", "text")
         assert ok is False
         assert "400" in msg

@@ -1,4 +1,5 @@
 """Core helper functions used across the application."""
+
 from back.core.helpers.DatabricksHelpers import (  # noqa: F401
     DatabricksHelpers,
     effective_uc_version_path,

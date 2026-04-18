@@ -18,6 +18,7 @@ logger = get_logger(__name__)
 # Tool implementation
 # =====================================================
 
+
 def tool_assign_icons(ctx: ToolContext, *, icons: dict, **_kwargs) -> str:
     """Persist a {entity_name: emoji} mapping into the context for the caller."""
     if not isinstance(icons, dict):
@@ -29,10 +30,12 @@ def tool_assign_icons(ctx: ToolContext, *, icons: dict, **_kwargs) -> str:
 
     ctx.icon_results.update(icons)
 
-    return json.dumps({
-        "saved": len(icons),
-        "total_assigned": len(ctx.icon_results),
-    })
+    return json.dumps(
+        {
+            "saved": len(icons),
+            "total_assigned": len(ctx.icon_results),
+        }
+    )
 
 
 # =====================================================
@@ -47,7 +50,7 @@ ICON_TOOL_DEFINITIONS: List[dict] = [
             "description": (
                 "Save the chosen emoji icons for ontology entities. "
                 "Pass a JSON object mapping each entity name to a single Unicode emoji. "
-                "Example: {\"Customer\": \"🧑\", \"Order\": \"📋\"}"
+                'Example: {"Customer": "🧑", "Order": "📋"}'
             ),
             "parameters": {
                 "type": "object",

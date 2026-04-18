@@ -1,4 +1,5 @@
 """Pure functions over on-disk / API domain JSON (versioned or legacy)."""
+
 from __future__ import annotations
 
 from typing import Any, Dict

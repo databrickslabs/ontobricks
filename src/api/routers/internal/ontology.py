@@ -3,6 +3,7 @@ Internal API -- Ontology JSON endpoints.
 
 Moved from app/frontend/ontology/routes.py during the front/back split.
 """
+
 from fastapi import APIRouter, Request, Depends
 
 from api.routers.internal._helpers import map_route_errors
@@ -12,7 +13,11 @@ from shared.config.settings import get_settings, Settings
 from back.objects.ontology import Ontology
 from back.objects.session import get_domain
 from back.core.task_manager import get_task_manager
-from back.core.helpers import get_databricks_host_and_token, make_volume_file_service, require_serving_llm
+from back.core.helpers import (
+    get_databricks_host_and_token,
+    make_volume_file_service,
+    require_serving_llm,
+)
 from agents.serialization import serialize_agent_steps
 from back.core.industry import (
     get_fibo_catalog,
@@ -31,36 +36,50 @@ logger = get_logger(__name__)
 # Ontology CRUD API Routes
 # ===========================================
 
+
 @router.get("/load")
 async def load_ontology(session_mgr: SessionManager = Depends(get_session_manager)):
     """Load ontology from session."""
     domain = get_domain(session_mgr)
     classes = domain.get_classes()
     properties = domain.get_properties()
-    logger.debug("/ontology/load: ontology name=%s, classes=%s, properties=%s", domain.ontology.get('name', ''), len(classes), len(properties))
+    logger.debug(
+        "/ontology/load: ontology name=%s, classes=%s, properties=%s",
+        domain.ontology.get("name", ""),
+        len(classes),
+        len(properties),
+    )
     if classes:
-        logger.debug("/ontology/load: first class=%s", classes[0].get('name', 'unknown'))
+        logger.debug(
+            "/ontology/load: first class=%s", classes[0].get("name", "unknown")
+        )
 
-    if Ontology.normalize_property_domain_range({"classes": classes, "properties": properties}):
+    if Ontology.normalize_property_domain_range(
+        {"classes": classes, "properties": properties}
+    ):
         logger.info("/ontology/load: fixed domain/range case mismatches in properties")
         domain.ontology["properties"] = properties
         domain.save()
 
-    ontology_name = domain.info.get('name', '').lower() or domain.ontology.get('name', '')
+    ontology_name = domain.info.get("name", "").lower() or domain.ontology.get(
+        "name", ""
+    )
     return {
-        'success': True,
-        'config': {
-            'name': ontology_name,
-            'base_uri': domain.ontology.get('base_uri', ''),
-            'description': domain.ontology.get('description', ''),
-            'classes': classes,
-            'properties': properties
-        }
+        "success": True,
+        "config": {
+            "name": ontology_name,
+            "base_uri": domain.ontology.get("base_uri", ""),
+            "description": domain.ontology.get("description", ""),
+            "classes": classes,
+            "properties": properties,
+        },
     }
 
 
 @router.post("/save")
-async def save_ontology(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def save_ontology(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Save ontology to session and clean up orphaned mappings."""
     data = await request.json()
     domain = get_domain(session_mgr)
@@ -73,29 +92,36 @@ async def reset_ontology(session_mgr: SessionManager = Depends(get_session_manag
     domain = get_domain(session_mgr)
     domain.reset_ontology()
     logger.info("Ontology, mappings, and design layout reset")
-    return {'success': True, 'message': 'Ontology, mappings, and layout reset'}
+    return {"success": True, "message": "Ontology, mappings, and layout reset"}
 
 
 # ===========================================
 # Class (Entity) Management
 # ===========================================
 
+
 @router.post("/class/add")
-async def add_class(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def add_class(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Add a class to the ontology."""
     data = await request.json()
     return Ontology(get_domain(session_mgr)).add_class(data)
 
 
 @router.post("/class/update")
-async def update_class(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def update_class(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Update a class in the ontology."""
     data = await request.json()
     return Ontology(get_domain(session_mgr)).update_class(data)
 
 
 @router.post("/class/delete")
-async def delete_class(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def delete_class(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Delete a class from the ontology and its associated mappings."""
     data = await request.json()
     domain = get_domain(session_mgr)
@@ -106,22 +132,29 @@ async def delete_class(request: Request, session_mgr: SessionManager = Depends(g
 # Property (Relationship) Management
 # ===========================================
 
+
 @router.post("/property/add")
-async def add_property(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def add_property(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Add a property (relationship) to the ontology."""
     data = await request.json()
     return Ontology(get_domain(session_mgr)).add_property(data)
 
 
 @router.post("/property/update")
-async def update_property(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def update_property(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Update a property in the ontology."""
     data = await request.json()
     return Ontology(get_domain(session_mgr)).update_property(data)
 
 
 @router.post("/property/delete")
-async def delete_property(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def delete_property(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Delete a property from the ontology and its associated mappings."""
     data = await request.json()
     domain = get_domain(session_mgr)
@@ -132,8 +165,11 @@ async def delete_property(request: Request, session_mgr: SessionManager = Depend
 # OWL Generation & Import/Export
 # ===========================================
 
+
 @router.post("/generate-owl")
-async def generate_owl_endpoint(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def generate_owl_endpoint(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Generate OWL from ontology configuration."""
     data = await request.json()
     if not data:
@@ -141,29 +177,35 @@ async def generate_owl_endpoint(request: Request, session_mgr: SessionManager = 
 
     with map_route_errors("OWL generation failed", logger):
         domain = get_domain(session_mgr)
-        constraints = data.get('constraints') or domain.constraints
-        swrl_rules = data.get('swrl_rules') or domain.swrl_rules
-        axioms = data.get('axioms') or domain.axioms
-        expressions = data.get('expressions') or domain.expressions
-        groups = data.get('groups') or domain.groups
+        constraints = data.get("constraints") or domain.constraints
+        swrl_rules = data.get("swrl_rules") or domain.swrl_rules
+        axioms = data.get("axioms") or domain.axioms
+        expressions = data.get("expressions") or domain.expressions
+        groups = data.get("groups") or domain.groups
 
-        owl_content = Ontology.generate_owl(data, constraints, swrl_rules, axioms, expressions, groups)
-        domain.generated['owl'] = owl_content
+        owl_content = Ontology.generate_owl(
+            data, constraints, swrl_rules, axioms, expressions, groups
+        )
+        domain.generated["owl"] = owl_content
         domain.save()
 
-        return {'success': True, 'owl': owl_content, 'format': 'turtle'}
+        return {"success": True, "owl": owl_content, "format": "turtle"}
 
 
 @router.post("/import-owl")
-async def import_owl(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def import_owl(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Import ontology from OWL/TTL content."""
     data = await request.json()
-    owl_content = data.get('content', '')
+    owl_content = data.get("content", "")
     if not owl_content:
         raise ValidationError("No OWL content provided")
     with map_route_errors("OWL import failed", logger):
         return Ontology(get_domain(session_mgr)).ingest_owl(
-            owl_content, name_fallback_to_domain=True, outcome="import",
+            owl_content,
+            name_fallback_to_domain=True,
+            outcome="import",
         )
 
 
@@ -171,7 +213,7 @@ async def import_owl(request: Request, session_mgr: SessionManager = Depends(get
 async def export_owl(session_mgr: SessionManager = Depends(get_session_manager)):
     """Export ontology to OWL/TTL format."""
     domain = get_domain(session_mgr)
-    
+
     if not domain.get_classes():
         raise NotFoundError("No ontology to export")
 
@@ -184,40 +226,50 @@ async def export_owl(session_mgr: SessionManager = Depends(get_session_manager))
             domain.expressions,
             domain.groups,
         )
-        return {'success': True, 'owl_content': owl_content, 'format': 'turtle'}
+        return {"success": True, "owl_content": owl_content, "format": "turtle"}
 
 
 @router.get("/get-loaded-ontology")
-async def get_loaded_ontology(session_mgr: SessionManager = Depends(get_session_manager)):
+async def get_loaded_ontology(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
     """Get currently loaded ontology from session."""
     domain = get_domain(session_mgr)
     if domain.get_classes():
-        return {'success': True, 'ontology': domain.ontology}
+        return {"success": True, "ontology": domain.ontology}
     raise NotFoundError("No ontology loaded")
 
 
 @router.post("/parse-owl")
-async def parse_owl_content(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def parse_owl_content(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Parse OWL content and store in session."""
     data = await request.json()
-    owl_content = data.get('content', '')
+    owl_content = data.get("content", "")
     if not owl_content:
         raise ValidationError("No OWL content provided")
     with map_route_errors("OWL parse failed", logger):
         return Ontology(get_domain(session_mgr)).ingest_owl(
-            owl_content, name_fallback_to_domain=True, outcome="parse",
+            owl_content,
+            name_fallback_to_domain=True,
+            outcome="parse",
         )
 
 
 @router.post("/parse-rdfs")
-async def parse_rdfs_content(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def parse_rdfs_content(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Parse RDFS content and store in session."""
     data = await request.json()
-    rdfs_content = data.get('content', '')
+    rdfs_content = data.get("content", "")
     if not rdfs_content:
         raise ValidationError("No RDFS content provided")
     with map_route_errors("RDFS parse failed", logger):
-        return Ontology(get_domain(session_mgr)).apply_parsed_rdfs_to_domain(rdfs_content)
+        return Ontology(get_domain(session_mgr)).apply_parsed_rdfs_to_domain(
+            rdfs_content
+        )
 
 
 # ===========================================
@@ -241,7 +293,11 @@ async def industry_catalog(kind: str):
 
 
 @router.post("/import-{kind}")
-async def import_industry(kind: str, request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def import_industry(
+    kind: str,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
     """Fetch industry domain modules, merge, parse, and store in session.
 
     Expects JSON body: ``{ "domains": ["FND", "BE", ...] }``
@@ -258,16 +314,18 @@ async def import_industry(kind: str, request: Request, session_mgr: SessionManag
 # Legacy Constraints (kept for backward-compat)
 # ===========================================
 
+
 @router.get("/constraints/list")
 async def list_constraints(session_mgr: SessionManager = Depends(get_session_manager)):
     """Get list of legacy constraints from session."""
     domain = get_domain(session_mgr)
-    return {'success': True, 'constraints': domain.constraints}
+    return {"success": True, "constraints": domain.constraints}
 
 
 # ===========================================
 # Data Quality (SHACL Shapes)
 # ===========================================
+
 
 @router.get("/dataquality/list")
 async def list_shapes(
@@ -284,7 +342,9 @@ async def list_shapes(
 
 
 @router.post("/dataquality/save")
-async def save_shape(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def save_shape(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Add or update a SHACL data-quality shape."""
     with map_route_errors("Saving SHACL shape failed", logger):
         data = await request.json()
@@ -322,7 +382,9 @@ async def save_shape(request: Request, session_mgr: SessionManager = Depends(get
 
 
 @router.post("/dataquality/delete")
-async def delete_shape(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def delete_shape(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Delete a SHACL data-quality shape by id."""
     with map_route_errors("Deleting SHACL shape failed", logger):
         data = await request.json()
@@ -350,7 +412,9 @@ async def get_shacl_turtle(session_mgr: SessionManager = Depends(get_session_man
 
 
 @router.post("/dataquality/import")
-async def import_shacl(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def import_shacl(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Import SHACL shapes from Turtle content."""
     with map_route_errors("SHACL import failed", logger):
         data = await request.json()
@@ -386,7 +450,11 @@ async def export_shacl(session_mgr: SessionManager = Depends(get_session_manager
         domain.shacl_shapes,
         domain.ontology.get("base_uri", ""),
     )
-    export_name = domain._data.get("domain", domain._data.get("project", {})).get("info", {}).get("name", DEFAULT_GRAPH_NAME)
+    export_name = (
+        domain._data.get("domain", domain._data.get("project", {}))
+        .get("info", {})
+        .get("name", DEFAULT_GRAPH_NAME)
+    )
     filename = f"{export_name}_shacl_shapes.ttl"
     return Response(
         content=turtle,
@@ -396,16 +464,24 @@ async def export_shacl(session_mgr: SessionManager = Depends(get_session_manager
 
 
 @router.post("/dataquality/migrate")
-async def migrate_constraints(session_mgr: SessionManager = Depends(get_session_manager)):
+async def migrate_constraints(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
     """One-time migration: convert legacy constraints to SHACL shapes."""
     with map_route_errors("SHACL migration failed", logger):
         domain = get_domain(session_mgr)
         legacy = domain.constraints
         if not legacy:
-            return {"success": True, "message": "No legacy constraints to migrate", "shapes": domain.shacl_shapes}
+            return {
+                "success": True,
+                "message": "No legacy constraints to migrate",
+                "shapes": domain.shacl_shapes,
+            }
 
         svc = SHACLService(base_uri=domain.ontology.get("base_uri", ""))
-        migrated = svc.migrate_legacy_constraints(legacy, base_uri=domain.ontology.get("base_uri", ""))
+        migrated = svc.migrate_legacy_constraints(
+            legacy, base_uri=domain.ontology.get("base_uri", "")
+        )
         migrated_ids = {s["id"] for s in migrated}
         existing = domain.shacl_shapes or []
         manual = [s for s in existing if s.get("id", "") not in migrated_ids]
@@ -423,24 +499,27 @@ async def migrate_constraints(session_mgr: SessionManager = Depends(get_session_
 # SWRL Rules Management
 # ===========================================
 
+
 @router.get("/swrl/list")
 async def list_swrl_rules(session_mgr: SessionManager = Depends(get_session_manager)):
     """Get list of SWRL rules from session."""
     domain = get_domain(session_mgr)
-    return {'success': True, 'rules': domain.swrl_rules}
+    return {"success": True, "rules": domain.swrl_rules}
 
 
 @router.post("/swrl/save")
-async def save_swrl_rule(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def save_swrl_rule(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Save a SWRL rule (add or update)."""
     with map_route_errors("Saving SWRL rule failed", logger):
         data = await request.json()
-        rule = data.get('rule', {})
-        index = data.get('index', -1)
+        rule = data.get("rule", {})
+        index = data.get("index", -1)
 
-        if not rule.get('name'):
+        if not rule.get("name"):
             raise ValidationError("Rule name is required")
-        if not rule.get('antecedent') or not rule.get('consequent'):
+        if not rule.get("antecedent") or not rule.get("consequent"):
             raise ValidationError("Rule antecedent and consequent are required")
 
         domain = get_domain(session_mgr)
@@ -453,15 +532,21 @@ async def save_swrl_rule(request: Request, session_mgr: SessionManager = Depends
 
         domain.swrl_rules = rules
         domain.save()
-        return {'success': True, 'message': 'SWRL rule saved successfully', 'rules': rules}
+        return {
+            "success": True,
+            "message": "SWRL rule saved successfully",
+            "rules": rules,
+        }
 
 
 @router.post("/swrl/delete")
-async def delete_swrl_rule(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def delete_swrl_rule(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Delete a SWRL rule by index."""
     with map_route_errors("Deleting SWRL rule failed", logger):
         data = await request.json()
-        index = data.get('index', -1)
+        index = data.get("index", -1)
         domain = get_domain(session_mgr)
         rules = domain.swrl_rules
 
@@ -471,17 +556,17 @@ async def delete_swrl_rule(request: Request, session_mgr: SessionManager = Depen
         rules.pop(index)
         domain.swrl_rules = rules
         domain.save()
-        return {'success': True, 'message': 'SWRL rule deleted', 'rules': rules}
+        return {"success": True, "message": "SWRL rule deleted", "rules": rules}
 
 
 @router.post("/swrl/validate")
 async def validate_swrl_rule(request: Request):
     """Validate a SWRL rule syntax."""
     data = await request.json()
-    errors = Ontology.validate_swrl_rule(data.get('rule', {}))
+    errors = Ontology.validate_swrl_rule(data.get("rule", {}))
     if errors:
-        return {'success': False, 'valid': False, 'errors': errors}
-    return {'success': True, 'valid': True, 'message': 'Rule syntax is valid'}
+        return {"success": False, "valid": False, "errors": errors}
+    return {"success": True, "valid": True, "message": "Rule syntax is valid"}
 
 
 # ===========================================
@@ -601,30 +686,33 @@ async def validate_rule(rule_type: str, request: Request):
 # Axioms Management
 # ===========================================
 
+
 @router.get("/axioms/list")
 async def list_axioms(session_mgr: SessionManager = Depends(get_session_manager)):
     """Get list of axioms and expressions from session."""
     domain = get_domain(session_mgr)
-    return {'success': True, 'axioms': domain.axioms, 'expressions': domain.expressions}
+    return {"success": True, "axioms": domain.axioms, "expressions": domain.expressions}
 
 
 @router.post("/axioms/save")
-async def save_axiom(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def save_axiom(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Save an axiom or expression (add or update).
 
     Accepts ``collection``: ``"expressions"`` or ``"axioms"`` (default).
     """
     with map_route_errors("Saving axiom failed", logger):
         data = await request.json()
-        axiom = data.get('axiom', {})
-        index = data.get('index', -1)
-        collection = data.get('collection', 'axioms')
+        axiom = data.get("axiom", {})
+        index = data.get("index", -1)
+        collection = data.get("collection", "axioms")
 
-        if not axiom.get('type'):
+        if not axiom.get("type"):
             raise ValidationError("Axiom type is required")
 
         domain = get_domain(session_mgr)
-        if collection == 'expressions':
+        if collection == "expressions":
             items = domain.expressions
         else:
             items = domain.axioms
@@ -634,32 +722,34 @@ async def save_axiom(request: Request, session_mgr: SessionManager = Depends(get
         else:
             items.append(axiom)
 
-        if collection == 'expressions':
+        if collection == "expressions":
             domain.expressions = items
         else:
             domain.axioms = items
         domain.save()
         return {
-            'success': True,
-            'message': 'Axiom saved successfully',
-            'axioms': domain.axioms,
-            'expressions': domain.expressions,
+            "success": True,
+            "message": "Axiom saved successfully",
+            "axioms": domain.axioms,
+            "expressions": domain.expressions,
         }
 
 
 @router.post("/axioms/delete")
-async def delete_axiom(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def delete_axiom(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Delete an axiom or expression by index.
 
     Accepts ``collection``: ``"expressions"`` or ``"axioms"`` (default).
     """
     with map_route_errors("Deleting axiom failed", logger):
         data = await request.json()
-        index = data.get('index', -1)
-        collection = data.get('collection', 'axioms')
+        index = data.get("index", -1)
+        collection = data.get("collection", "axioms")
         domain = get_domain(session_mgr)
 
-        if collection == 'expressions':
+        if collection == "expressions":
             items = domain.expressions
         else:
             items = domain.axioms
@@ -668,55 +758,67 @@ async def delete_axiom(request: Request, session_mgr: SessionManager = Depends(g
             raise ValidationError("Invalid axiom index")
 
         items.pop(index)
-        if collection == 'expressions':
+        if collection == "expressions":
             domain.expressions = items
         else:
             domain.axioms = items
         domain.save()
         return {
-            'success': True,
-            'message': 'Axiom deleted',
-            'axioms': domain.axioms,
-            'expressions': domain.expressions,
+            "success": True,
+            "message": "Axiom deleted",
+            "axioms": domain.axioms,
+            "expressions": domain.expressions,
         }
 
 
 @router.get("/axioms/get-by-class/{class_uri:path}")
-async def get_axioms_by_class(class_uri: str, session_mgr: SessionManager = Depends(get_session_manager)):
+async def get_axioms_by_class(
+    class_uri: str, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Get all axioms and expressions for a specific class."""
     domain = get_domain(session_mgr)
 
     def _matches(a):
-        return class_uri in (a.get('class1'), a.get('class2'), a.get('className'), a.get('subject'))
+        return class_uri in (
+            a.get("class1"),
+            a.get("class2"),
+            a.get("className"),
+            a.get("subject"),
+        )
 
     return {
-        'success': True,
-        'axioms': [a for a in domain.axioms if _matches(a)],
-        'expressions': [a for a in domain.expressions if _matches(a)],
+        "success": True,
+        "axioms": [a for a in domain.axioms if _matches(a)],
+        "expressions": [a for a in domain.expressions if _matches(a)],
     }
 
 
 @router.get("/axioms/get-by-type/{axiom_type}")
-async def get_axioms_by_type(axiom_type: str, session_mgr: SessionManager = Depends(get_session_manager)):
+async def get_axioms_by_type(
+    axiom_type: str, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Get all axioms or expressions of a specific type."""
     domain = get_domain(session_mgr)
     both = list(domain.axioms) + list(domain.expressions)
-    return {'success': True, 'axioms': [a for a in both if a.get('type') == axiom_type]}
+    return {"success": True, "axioms": [a for a in both if a.get("type") == axiom_type]}
 
 
 # ===========================================
 # Group Management (entity groups via owl:unionOf)
 # ===========================================
 
+
 @router.get("/groups/list")
 async def list_groups(session_mgr: SessionManager = Depends(get_session_manager)):
     """Get list of entity groups from session."""
     domain = get_domain(session_mgr)
-    return {'success': True, 'groups': domain.groups}
+    return {"success": True, "groups": domain.groups}
 
 
 @router.post("/groups/save")
-async def save_group(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def save_group(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Create or update an entity group.
 
     Body: ``{ "group": { "name", "label", "description", "color", "icon", "members": [...] }, "index": -1 }``
@@ -725,21 +827,27 @@ async def save_group(request: Request, session_mgr: SessionManager = Depends(get
     """
     data = await request.json()
     domain = get_domain(session_mgr)
-    groups = Ontology(domain).save_group(data.get('group', {}), data.get('index', -1))
-    return {'success': True, 'message': 'Group saved', 'groups': groups}
+    groups = Ontology(domain).save_group(data.get("group", {}), data.get("index", -1))
+    return {"success": True, "message": "Group saved", "groups": groups}
 
 
 @router.post("/groups/delete")
-async def delete_group(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def delete_group(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Delete an entity group by index or name."""
     data = await request.json()
     domain = get_domain(session_mgr)
-    groups = Ontology(domain).delete_group(index=data.get('index', -1), name=data.get('name', ''))
-    return {'success': True, 'message': 'Group deleted', 'groups': groups}
+    groups = Ontology(domain).delete_group(
+        index=data.get("index", -1), name=data.get("name", "")
+    )
+    return {"success": True, "message": "Group deleted", "groups": groups}
 
 
 @router.post("/groups/members")
-async def update_group_members(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def update_group_members(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Add or remove members from a group.
 
     Body: ``{ "name": "G1", "add": ["D"], "remove": ["A"] }``
@@ -747,21 +855,22 @@ async def update_group_members(request: Request, session_mgr: SessionManager = D
     data = await request.json()
     domain = get_domain(session_mgr)
     groups = Ontology(domain).update_group_members(
-        data.get('name', ''),
-        add=data.get('add', []),
-        remove=data.get('remove', []),
+        data.get("name", ""),
+        add=data.get("add", []),
+        remove=data.get("remove", []),
     )
-    return {'success': True, 'message': 'Members updated', 'groups': groups}
+    return {"success": True, "message": "Members updated", "groups": groups}
 
 
 # ===========================================
 # Dashboard Management
 # ===========================================
 
+
 @router.get("/dashboards/list")
 async def list_dashboards(
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Get list of available Databricks dashboards."""
     with map_route_errors("Listing Databricks dashboards failed", logger):
@@ -774,17 +883,18 @@ async def list_dashboards(
             raise ValidationError("Databricks host not configured")
 
         from back.core.helpers import run_blocking
+
         client = DatabricksClient(host=host, token=token)
         dashboards = await run_blocking(client.get_dashboards)
 
-        return {'success': True, 'dashboards': dashboards}
+        return {"success": True, "dashboards": dashboards}
 
 
 @router.get("/dashboards/{dashboard_id}/parameters")
 async def get_dashboard_parameters(
     dashboard_id: str,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Get dashboard parameters for mapping to ontology attributes."""
     with map_route_errors("Getting dashboard parameters failed", logger):
@@ -797,21 +907,23 @@ async def get_dashboard_parameters(
             raise ValidationError("Databricks host not configured")
 
         from back.core.helpers import run_blocking
+
         client = DatabricksClient(host=host, token=token)
         result = await run_blocking(client.get_dashboard_parameters, dashboard_id)
 
-        if 'error' in result and result['error']:
+        if "error" in result and result["error"]:
             raise InfrastructureError(
                 "Failed to load dashboard parameters",
                 detail=str(result["error"]),
             )
 
-        return {'success': True, **result}
+        return {"success": True, **result}
 
 
 # ===========================================
 # Cross-Domain Bridges
 # ===========================================
+
 
 @router.get("/bridges/domains")
 async def list_bridge_domains(
@@ -833,10 +945,11 @@ async def list_bridge_domains(
         current_folder = (domain.domain_folder or "").strip().lower()
 
         domains = [
-            p for p in details
+            p
+            for p in details
             if p["name"].strip().lower() not in (current_name, current_folder)
         ]
-        return {'success': True, 'domains': domains, 'projects': domains}
+        return {"success": True, "domains": domains, "projects": domains}
 
 
 @router.get("/bridges/domains/{domain_name}/classes")
@@ -853,10 +966,13 @@ async def list_bridge_domain_classes(
         domain = get_domain(session_mgr)
         svc = RegistryService.from_context(domain, settings)
         ok, data, _version, msg = await run_blocking(
-            svc.load_latest_domain_data, domain_name,
+            svc.load_latest_domain_data,
+            domain_name,
         )
         if not ok:
-            raise InfrastructureError("Loading bridge domain ontology failed", detail=msg)
+            raise InfrastructureError(
+                "Loading bridge domain ontology failed", detail=msg
+            )
 
         ontology = svc._extract_latest_ontology(data)
         raw_classes = ontology.get("classes", [])
@@ -873,11 +989,11 @@ async def list_bridge_domain_classes(
             if c.get("name")
         ]
         return {
-            'success': True,
-            'domain': domain_name,
-            'project': domain_name,
-            'base_uri': ontology.get("base_uri", ""),
-            'classes': classes,
+            "success": True,
+            "domain": domain_name,
+            "project": domain_name,
+            "base_uri": ontology.get("base_uri", ""),
+            "classes": classes,
         }
 
 
@@ -885,11 +1001,14 @@ async def list_bridge_domain_classes(
 # OWL File Operations (Unity Catalog)
 # ===========================================
 
+
 @router.get("/list-owl-files")
 async def list_owl_files(
-    catalog: str = None, schema: str = None, volume: str = None,
+    catalog: str = None,
+    schema: str = None,
+    volume: str = None,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """List OWL files from Unity Catalog Volume."""
     if not all([catalog, schema, volume]):
@@ -898,22 +1017,29 @@ async def list_owl_files(
     with map_route_errors("Listing OWL files failed", logger):
         domain = get_domain(session_mgr)
         uc_service = make_volume_file_service(domain, settings)
-        success, files, message = uc_service.list_files(catalog, schema, volume, extensions=['.ttl', '.owl', '.rdf'])
+        success, files, message = uc_service.list_files(
+            catalog, schema, volume, extensions=[".ttl", ".owl", ".rdf"]
+        )
         if not success:
             raise InfrastructureError("Listing OWL files failed", detail=message)
-        return {'success': True, 'files': files}
+        return {"success": True, "files": files}
 
 
 @router.post("/load-owl-file")
 async def load_owl_file(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Load and parse an OWL file from Unity Catalog."""
     data = await request.json()
-    catalog, schema, volume, filename = data.get('catalog'), data.get('schema'), data.get('volume'), data.get('filename')
-    
+    catalog, schema, volume, filename = (
+        data.get("catalog"),
+        data.get("schema"),
+        data.get("volume"),
+        data.get("filename"),
+    )
+
     if not all([catalog, schema, volume, filename]):
         raise ValidationError("Missing required fields")
 
@@ -924,10 +1050,14 @@ async def load_owl_file(
 
         success, owl_content, message = uc_service.read_file(file_path)
         if not success:
-            raise InfrastructureError("Reading OWL file from volume failed", detail=message)
+            raise InfrastructureError(
+                "Reading OWL file from volume failed", detail=message
+            )
 
         return Ontology(domain).ingest_owl(
-            owl_content, name_fallback_to_domain=False, outcome="load_file",
+            owl_content,
+            name_fallback_to_domain=False,
+            outcome="load_file",
         )
 
 
@@ -935,33 +1065,46 @@ async def load_owl_file(
 async def save_ontology_to_uc(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Save OWL ontology to Unity Catalog volume."""
     from api.routers.internal._helpers import save_content_to_uc
-    return await save_content_to_uc(request, session_mgr, settings, log_context="ontology")
+
+    return await save_content_to_uc(
+        request, session_mgr, settings, log_context="ontology"
+    )
 
 
 @router.post("/update-relationship-references")
-async def update_relationship_references(request: Request, session_mgr: SessionManager = Depends(get_session_manager)):
+async def update_relationship_references(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
     """Update references when a relationship is renamed."""
     data = await request.json()
-    old_name, new_name = data.get('old_name'), data.get('new_name')
+    old_name, new_name = data.get("old_name"), data.get("new_name")
     if not old_name or not new_name:
         raise ValidationError("Both old_name and new_name are required")
-    updates = Ontology(get_domain(session_mgr)).rename_relationship_references(old_name, new_name)
+    updates = Ontology(get_domain(session_mgr)).rename_relationship_references(
+        old_name, new_name
+    )
     total = sum(updates.values())
-    return {'success': True, 'message': f'Updated {total} references', 'updates': updates}
+    return {
+        "success": True,
+        "message": f"Updated {total} references",
+        "updates": updates,
+    }
 
 
 # ===========================================
 # Wizard — ontology generation (agent_owl_generator, async task)
 # ===========================================
 
+
 @router.get("/wizard/templates")
 async def get_wizard_templates():
     """Return the predefined wizard quick-templates."""
     from shared.config.constants import WIZARD_TEMPLATES
+
     return {"success": True, "templates": WIZARD_TEMPLATES}
 
 
@@ -969,7 +1112,7 @@ async def get_wizard_templates():
 async def generate_ontology_async(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Start ontology generation via ``agent_owl_generator`` (background task).
 
@@ -979,27 +1122,34 @@ async def generate_ontology_async(
     import threading
 
     data = await request.json()
-    metadata = data.get('metadata', {})
-    guidelines = data.get('guidelines', '')
-    options = data.get('options', {})
-    documents = data.get('documents', [])
+    metadata = data.get("metadata", {})
+    guidelines = data.get("guidelines", "")
+    options = data.get("options", {})
+    documents = data.get("documents", [])
 
-    tables_count = len(metadata.get('tables', []))
+    tables_count = len(metadata.get("tables", []))
 
     domain = get_domain(session_mgr)
     host, token, llm_endpoint = require_serving_llm(domain, settings)
 
     tm = get_task_manager()
     task = tm.create_task(
-        name=f"Generate Ontology ({tables_count} tables)" if tables_count else "Generate Ontology (guidelines only)",
+        name=(
+            f"Generate Ontology ({tables_count} tables)"
+            if tables_count
+            else "Generate Ontology (guidelines only)"
+        ),
         task_type="ontology_generation",
         steps=[
-            {'name': 'init', 'description': 'Initializing agent'},
-            {'name': 'gather', 'description': 'Gathering context (metadata & documents)'},
-            {'name': 'generate', 'description': 'Generating ontology with AI'},
-            {'name': 'process', 'description': 'Processing results'},
-            {'name': 'finalize', 'description': 'Finalizing'},
-        ]
+            {"name": "init", "description": "Initializing agent"},
+            {
+                "name": "gather",
+                "description": "Gathering context (metadata & documents)",
+            },
+            {"name": "generate", "description": "Generating ontology with AI"},
+            {"name": "process", "description": "Processing results"},
+            {"name": "finalize", "description": "Finalizing"},
+        ],
     )
 
     def run_generation():
@@ -1021,21 +1171,25 @@ async def generate_ontology_async(
             )
 
             if not agent_result.success:
-                tm.fail_task(task.id, agent_result.error or "Agent did not produce output")
+                tm.fail_task(
+                    task.id, agent_result.error or "Agent did not produce output"
+                )
                 return
 
             tm.advance_step(task.id, "Processing results…")
-            owl_content, stats = Ontology.postprocess_generated_owl(agent_result.owl_content)
+            owl_content, stats = Ontology.postprocess_generated_owl(
+                agent_result.owl_content
+            )
 
             tm.advance_step(task.id, "Finalizing…")
             tm.complete_task(
                 task.id,
                 result={
-                    'owl_content': owl_content,
-                    'stats': stats,
-                    'agent_steps': serialize_agent_steps(agent_result.steps),
-                    'agent_iterations': agent_result.iterations,
-                    'agent_usage': agent_result.usage,
+                    "owl_content": owl_content,
+                    "stats": stats,
+                    "agent_steps": serialize_agent_steps(agent_result.steps),
+                    "agent_iterations": agent_result.iterations,
+                    "agent_usage": agent_result.usage,
                 },
                 message=(
                     f"Generated {stats.get('classes', 0)} classes, "
@@ -1051,27 +1205,24 @@ async def generate_ontology_async(
     thread = threading.Thread(target=run_generation, daemon=True)
     thread.start()
 
-    return {
-        'success': True,
-        'task_id': task.id,
-        'message': 'Agent task started'
-    }
+    return {"success": True, "task_id": task.id, "message": "Agent task started"}
 
 
 # ===========================================
 # Auto-map Icons via Agent
 # ===========================================
 
+
 @router.post("/auto-assign-icons")
 async def auto_assign_icons(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Use the auto-icon-assign agent to suggest emoji icons for entity names."""
     with map_route_errors("Auto-assign icons failed", logger):
         data = await request.json()
-        entity_names = data.get('entity_names', [])
+        entity_names = data.get("entity_names", [])
 
         if not entity_names:
             raise ValidationError("No entity names provided")
@@ -1102,13 +1253,15 @@ async def auto_assign_icons(
 
         logger.info(
             "AutoIcons: agent completed — %d/%d icons assigned in %d iterations",
-            len(final_map), len(entity_names), agent_result.iterations,
+            len(final_map),
+            len(entity_names),
+            agent_result.iterations,
         )
 
         return {
-            'success': True,
-            'icons': final_map,
-            'agent_iterations': agent_result.iterations,
+            "success": True,
+            "icons": final_map,
+            "agent_iterations": agent_result.iterations,
         }
 
 
@@ -1116,11 +1269,12 @@ async def auto_assign_icons(
 # Ontology Assistant (AI Chat)
 # ===========================================
 
+
 @router.post("/assistant/chat")
 async def ontology_assistant_chat(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Process a single chat turn with the ontology assistant agent.
 
@@ -1154,8 +1308,12 @@ async def ontology_assistant_chat(
     properties = list(domain.get_properties())
     base_uri = domain.ontology.get("base_uri") or DEFAULT_BASE_URI
 
-    logger.info("OntologyAssistant: user_message=%s, classes=%d, properties=%d",
-                user_message[:80], len(classes), len(properties))
+    logger.info(
+        "OntologyAssistant: user_message=%s, classes=%d, properties=%d",
+        user_message[:80],
+        len(classes),
+        len(properties),
+    )
 
     with map_route_errors("Ontology assistant request failed", logger):
         agent_result = run_assistant(
@@ -1183,11 +1341,16 @@ async def ontology_assistant_chat(
 
     if agent_result.ontology_changed:
         config = Ontology(domain).apply_agent_ontology_changes(
-            agent_result.classes, agent_result.properties, prune_orphan_mappings=True,
+            agent_result.classes,
+            agent_result.properties,
+            prune_orphan_mappings=True,
         )
         response["config"] = config
-        logger.info("OntologyAssistant: ontology saved — classes=%d, properties=%d",
-                     len(config["classes"]), len(config["properties"]))
+        logger.info(
+            "OntologyAssistant: ontology saved — classes=%d, properties=%d",
+            len(config["classes"]),
+            len(config["properties"]),
+        )
 
     return response
 
@@ -1195,6 +1358,7 @@ async def ontology_assistant_chat(
 # ===========================================
 # Ontology Assistant — ResponsesAgent API
 # ===========================================
+
 
 @router.post("/assistant/invoke")
 async def ontology_assistant_invoke(
@@ -1256,10 +1420,9 @@ async def ontology_assistant_invoke(
         co = response.custom_outputs or {}
         if co.get("ontology_changed"):
             Ontology(domain).apply_agent_ontology_changes(
-                co.get("classes", []), co.get("properties", []),
+                co.get("classes", []),
+                co.get("properties", []),
                 prune_orphan_mappings=False,
             )
 
         return response.model_dump()
-
-

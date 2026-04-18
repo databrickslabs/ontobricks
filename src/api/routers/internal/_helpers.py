@@ -3,6 +3,7 @@
 Reusable request-handling utilities that are used by multiple
 frontend route modules (ontology, mapping, domain, etc.).
 """
+
 import logging
 from contextlib import contextmanager
 
@@ -48,7 +49,7 @@ async def save_content_to_uc(
     ``{success, message}`` dict.
     """
     data = await request.json()
-    path, content = data.get('path'), data.get('content')
+    path, content = data.get("path"), data.get("content")
 
     if not path or not content:
         raise ValidationError("Path and content are required")
@@ -58,8 +59,10 @@ async def save_content_to_uc(
         uc_service = make_volume_file_service(domain, settings)
         success, message = uc_service.write_file(path, content)
         if not success:
-            raise InfrastructureError(f"Failed to save {log_context} to UC", detail=message)
-        return {'success': True, 'message': message}
+            raise InfrastructureError(
+                f"Failed to save {log_context} to UC", detail=message
+            )
+        return {"success": True, "message": message}
     except (ValidationError, InfrastructureError):
         raise
     except Exception as e:

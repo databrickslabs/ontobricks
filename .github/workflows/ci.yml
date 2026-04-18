@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   lint:
     name: Lint & Format
@@ -34,16 +37,16 @@ jobs:
         run: uv run black --check src/ tests/
 
       - name: Lint with flake8
-        run: uv run flake8 src/ tests/ --max-line-length=100
+        run: uv run flake8 src/ tests/ --max-line-length=100 --extend-ignore=E203,W503
 
   test:
     name: Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.11", "3.12"]
 
     steps:
       - name: Checkout code
@@ -94,7 +97,7 @@ jobs:
   build:
     name: Build Check
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -122,7 +125,7 @@ jobs:
   docs:
     name: Documentation Build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code

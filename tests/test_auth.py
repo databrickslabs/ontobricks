@@ -1,4 +1,5 @@
 """Tests for Databricks auth utilities and DatabricksAuth."""
+
 import time
 import pytest
 from unittest.mock import MagicMock, patch
@@ -44,7 +45,10 @@ class TestNormalizeHost:
         assert normalize_host("test.databricks.com") == "https://test.databricks.com"
 
     def test_strips_trailing_slash(self):
-        assert normalize_host("https://test.databricks.com/") == "https://test.databricks.com"
+        assert (
+            normalize_host("https://test.databricks.com/")
+            == "https://test.databricks.com"
+        )
 
     def test_preserves_https(self):
         assert normalize_host("https://already.good.com") == "https://already.good.com"

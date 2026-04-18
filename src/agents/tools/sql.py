@@ -20,6 +20,7 @@ _SAMPLE_ROWS = 3
 # Tool implementation
 # =====================================================
 
+
 def tool_execute_sql(ctx: ToolContext, *, sql: str = "", **_kwargs) -> str:
     """Execute a SQL query on Databricks and return columns + sample rows."""
     logger.info("tool_execute_sql: executing query (%d chars)", len(sql))
@@ -29,7 +30,9 @@ def tool_execute_sql(ctx: ToolContext, *, sql: str = "", **_kwargs) -> str:
 
     logger.debug("tool_execute_sql: SQL=%s", sql)
 
-    test_sql = re.sub(r'\bLIMIT\s+\d+\b', '', sql, flags=re.IGNORECASE).strip().rstrip(';')
+    test_sql = (
+        re.sub(r"\bLIMIT\s+\d+\b", "", sql, flags=re.IGNORECASE).strip().rstrip(";")
+    )
     test_sql_limited = f"{test_sql} LIMIT {_SAMPLE_ROWS}"
     logger.debug("tool_execute_sql: test_sql=%s", test_sql_limited)
 
@@ -47,15 +50,19 @@ def tool_execute_sql(ctx: ToolContext, *, sql: str = "", **_kwargs) -> str:
 
         logger.info(
             "tool_execute_sql: success — %d column(s): %s, %d sample row(s)",
-            len(columns), columns, len(safe_sample),
+            len(columns),
+            columns,
+            len(safe_sample),
         )
-        return json.dumps({
-            "success": True,
-            "columns": columns,
-            "column_count": len(columns),
-            "sample_rows": safe_sample,
-            "row_count": len(safe_sample),
-        })
+        return json.dumps(
+            {
+                "success": True,
+                "columns": columns,
+                "column_count": len(columns),
+                "sample_rows": safe_sample,
+                "row_count": len(safe_sample),
+            }
+        )
     except Exception as exc:
         logger.error("tool_execute_sql: query failed: %s", exc)
         return json.dumps({"success": False, "error": str(exc)})

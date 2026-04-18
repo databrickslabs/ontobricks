@@ -3,6 +3,7 @@
 Block B of the API layer. Block A (external /api/v1/*) lives in
 api/routers/v1.py, domains.py, digitaltwin.py and is unchanged.
 """
+
 from api.routers.internal.home import router as home_router
 from api.routers.internal.settings import router as settings_router
 from api.routers.internal.ontology import router as ontology_router

@@ -4,6 +4,7 @@ Supports:
 - ``"view"``  -- DeltaTripleStore (SQL against a Unity Catalog VIEW via warehouse)
 - ``"graph"`` -- delegates to :class:`GraphDBFactory` (embedded graph database)
 """
+
 from typing import Any, Optional
 
 from back.core.databricks import is_databricks_app
@@ -46,9 +47,12 @@ class TripleStoreFactory:
 
         if backend == "graph":
             from back.core.graphdb import get_graphdb
+
             engine = self._resolve_graph_engine(domain, settings)
             engine_config = self._resolve_graph_engine_config(domain, settings)
-            return get_graphdb(domain, settings, engine=engine, engine_config=engine_config)
+            return get_graphdb(
+                domain, settings, engine=engine, engine_config=engine_config
+            )
 
         logger.warning("Unknown triplestore backend: %s", backend)
         return None
@@ -61,13 +65,15 @@ class TripleStoreFactory:
         """
         try:
             from back.objects.session.GlobalConfigService import global_config_service
+
             if settings is not None:
                 host, token = get_databricks_host_and_token(domain, settings)
             else:
-                db = getattr(domain, 'databricks', None) or {}
-                host = db.get('host', '')
-                token = db.get('token', '')
+                db = getattr(domain, "databricks", None) or {}
+                host = db.get("host", "")
+                token = db.get("token", "")
             from back.objects.registry import RegistryCfg
+
             registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
             return accessor(global_config_service, host, token, registry_cfg)
         except Exception as exc:
@@ -78,15 +84,19 @@ class TripleStoreFactory:
     def _resolve_graph_engine(domain: Any, settings: Optional[Any]) -> Optional[str]:
         """Read the configured graph engine from ``GlobalConfigService``."""
         return TripleStoreFactory._read_global_config(
-            domain, settings,
+            domain,
+            settings,
             lambda gcs, h, t, r: gcs.get_graph_engine(h, t, r),
         )
 
     @staticmethod
-    def _resolve_graph_engine_config(domain: Any, settings: Optional[Any]) -> Optional[dict]:
+    def _resolve_graph_engine_config(
+        domain: Any, settings: Optional[Any]
+    ) -> Optional[dict]:
         """Read the engine-specific JSON config from ``GlobalConfigService``."""
         return TripleStoreFactory._read_global_config(
-            domain, settings,
+            domain,
+            settings,
             lambda gcs, h, t, r: gcs.get_graph_engine_config(h, t, r),
         )
 
@@ -132,7 +142,9 @@ class TripleStoreFactory:
     ) -> Optional[Any]:
         """Convenience wrapper using the package singleton factory instance."""
         return _get_factory_singleton().create(
-            domain, settings=settings, backend=backend,
+            domain,
+            settings=settings,
+            backend=backend,
         )
 
 
@@ -148,6 +160,7 @@ def _get_factory_singleton() -> TripleStoreFactory:
 
 try:
     from back.core.graphdb import GRAPHDB_AVAILABLE
+
     TripleStoreFactory.LADYBUG_AVAILABLE = GRAPHDB_AVAILABLE
 except ImportError:
     logger.debug("Graph DB backends not available (optional dependency)")

@@ -4,6 +4,7 @@ Manages the version-gate and server-side diff workflow so that only
 changed triples are inserted/deleted instead of rebuilding the entire
 graph on every sync.
 """
+
 from __future__ import annotations
 
 import re
@@ -47,12 +48,16 @@ class IncrementalBuildService:
             r"(?:FROM|JOIN)\s+(`?[\w]+`?\.`?[\w]+`?\.`?[\w]+`?)",
             re.IGNORECASE,
         )
-        for dsm in assignment.get("entities", assignment.get("data_source_mappings", [])):
+        for dsm in assignment.get(
+            "entities", assignment.get("data_source_mappings", [])
+        ):
             sql = dsm.get("sql_query", "")
             if sql:
                 for m in pattern.finditer(sql):
                     tables.add(m.group(1).replace("`", ""))
-        for rel in assignment.get("relationships", assignment.get("relationship_mappings", [])):
+        for rel in assignment.get(
+            "relationships", assignment.get("relationship_mappings", [])
+        ):
             sql = rel.get("sql_query", "")
             if sql:
                 for m in pattern.finditer(sql):
@@ -60,7 +65,9 @@ class IncrementalBuildService:
         return sorted(tables)
 
     def check_source_versions(
-        self, source_tables: List[str], stored_versions: Dict[str, int],
+        self,
+        source_tables: List[str],
+        stored_versions: Dict[str, int],
     ) -> Tuple[bool, Dict[str, int]]:
         """Compare current source table versions with stored versions.
 
@@ -72,14 +79,13 @@ class IncrementalBuildService:
 
         for table in source_tables:
             try:
-                rows = self._client.execute_query(
-                    f"DESCRIBE HISTORY {table} LIMIT 1"
-                )
+                rows = self._client.execute_query(f"DESCRIBE HISTORY {table} LIMIT 1")
                 version = int(rows[0].get("version", -1)) if rows else -1
             except Exception as e:
                 logger.warning(
                     "Could not get history for %s (table may not be Delta): %s",
-                    table, e,
+                    table,
+                    e,
                 )
                 version = -1
 
@@ -97,7 +103,9 @@ class IncrementalBuildService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def snapshot_table_name(domain_name: str, delta_cfg: Dict[str, str], version: str = "1") -> str:
+    def snapshot_table_name(
+        domain_name: str, delta_cfg: Dict[str, str], version: str = "1"
+    ) -> str:
         """Derive the fully-qualified snapshot table name (versioned)."""
         catalog = delta_cfg.get("catalog", "")
         schema = delta_cfg.get("schema", "")
@@ -109,9 +117,7 @@ class IncrementalBuildService:
     def snapshot_exists(self, snapshot_table: str) -> bool:
         """Check whether the snapshot Delta table exists."""
         try:
-            rows = self._client.execute_query(
-                f"SELECT 1 FROM {snapshot_table} LIMIT 0"
-            )
+            rows = self._client.execute_query(f"SELECT 1 FROM {snapshot_table} LIMIT 0")
             return True
         except Exception:
             return False
@@ -120,10 +126,14 @@ class IncrementalBuildService:
         """Create the snapshot table from the current VIEW contents."""
         parts = snapshot_table.split(".")
         if len(parts) != 3:
-            raise ValidationError(f"Snapshot table must be fully qualified: {snapshot_table}")
+            raise ValidationError(
+                f"Snapshot table must be fully qualified: {snapshot_table}"
+            )
         cat, sch, tbl = parts
         ok, msg = self._client.create_or_replace_table_from_query(
-            cat, sch, tbl,
+            cat,
+            sch,
+            tbl,
             f"SELECT subject, predicate, object FROM {view_table}",
         )
         if not ok:
@@ -147,7 +157,9 @@ class IncrementalBuildService:
     # ------------------------------------------------------------------
 
     def compute_diff(
-        self, view_table: str, snapshot_table: str,
+        self,
+        view_table: str,
+        snapshot_table: str,
     ) -> Tuple[List[Dict[str, str]], List[Dict[str, str]]]:
         """Compute triple-level diff between the VIEW and snapshot.
 
@@ -166,12 +178,16 @@ class IncrementalBuildService:
         )
         logger.info(
             "Incremental diff: %d additions, %d removals",
-            len(to_add), len(to_remove),
+            len(to_add),
+            len(to_remove),
         )
         return to_add or [], to_remove or []
 
     def should_fallback_to_full(
-        self, to_add: int, to_remove: int, current_total: int,
+        self,
+        to_add: int,
+        to_remove: int,
+        current_total: int,
     ) -> bool:
         """Return True if the diff is large enough to justify a full rebuild."""
         if current_total <= 0:
@@ -182,7 +198,9 @@ class IncrementalBuildService:
             logger.info(
                 "Diff is %.1f%% of total (%d changes on %d triples) "
                 "— falling back to full rebuild",
-                change_pct, to_add + to_remove, current_total,
+                change_pct,
+                to_add + to_remove,
+                current_total,
             )
             return True
         return False

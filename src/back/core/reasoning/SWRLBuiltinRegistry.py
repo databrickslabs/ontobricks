@@ -5,6 +5,7 @@ both SQL and Cypher translation.  Templates use positional placeholders
 ``{0}``, ``{1}``, ... that the translator fills with bound variable
 references or literal values.
 """
+
 from dataclasses import dataclass
 from typing import Dict, Optional
 
@@ -44,89 +45,203 @@ class SWRLBuiltinRegistry:
         r = cls._register
 
         # -- Comparison ------------------------------------------------
-        r(SWRLBuiltin("greaterThan", 2, "comparison",
-                       "CAST({0} AS DOUBLE) > CAST({1} AS DOUBLE)",
-                       "CAST({0} AS DOUBLE) > CAST({1} AS DOUBLE)", cast_numeric=True))
-        r(SWRLBuiltin("lessThan", 2, "comparison",
-                       "CAST({0} AS DOUBLE) < CAST({1} AS DOUBLE)",
-                       "CAST({0} AS DOUBLE) < CAST({1} AS DOUBLE)", cast_numeric=True))
-        r(SWRLBuiltin("greaterThanOrEqual", 2, "comparison",
-                       "CAST({0} AS DOUBLE) >= CAST({1} AS DOUBLE)",
-                       "CAST({0} AS DOUBLE) >= CAST({1} AS DOUBLE)", cast_numeric=True))
-        r(SWRLBuiltin("lessThanOrEqual", 2, "comparison",
-                       "CAST({0} AS DOUBLE) <= CAST({1} AS DOUBLE)",
-                       "CAST({0} AS DOUBLE) <= CAST({1} AS DOUBLE)", cast_numeric=True))
-        r(SWRLBuiltin("equal", 2, "comparison",
-                       "{0} = {1}", "{0} = {1}"))
-        r(SWRLBuiltin("notEqual", 2, "comparison",
-                       "{0} <> {1}", "{0} <> {1}"))
+        r(
+            SWRLBuiltin(
+                "greaterThan",
+                2,
+                "comparison",
+                "CAST({0} AS DOUBLE) > CAST({1} AS DOUBLE)",
+                "CAST({0} AS DOUBLE) > CAST({1} AS DOUBLE)",
+                cast_numeric=True,
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "lessThan",
+                2,
+                "comparison",
+                "CAST({0} AS DOUBLE) < CAST({1} AS DOUBLE)",
+                "CAST({0} AS DOUBLE) < CAST({1} AS DOUBLE)",
+                cast_numeric=True,
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "greaterThanOrEqual",
+                2,
+                "comparison",
+                "CAST({0} AS DOUBLE) >= CAST({1} AS DOUBLE)",
+                "CAST({0} AS DOUBLE) >= CAST({1} AS DOUBLE)",
+                cast_numeric=True,
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "lessThanOrEqual",
+                2,
+                "comparison",
+                "CAST({0} AS DOUBLE) <= CAST({1} AS DOUBLE)",
+                "CAST({0} AS DOUBLE) <= CAST({1} AS DOUBLE)",
+                cast_numeric=True,
+            )
+        )
+        r(SWRLBuiltin("equal", 2, "comparison", "{0} = {1}", "{0} = {1}"))
+        r(SWRLBuiltin("notEqual", 2, "comparison", "{0} <> {1}", "{0} <> {1}"))
 
         # -- Math ------------------------------------------------------
-        r(SWRLBuiltin("add", 3, "math",
-                       "CAST({0} AS DOUBLE) + CAST({1} AS DOUBLE)",
-                       "CAST({0} AS DOUBLE) + CAST({1} AS DOUBLE)", cast_numeric=True))
-        r(SWRLBuiltin("subtract", 3, "math",
-                       "CAST({0} AS DOUBLE) - CAST({1} AS DOUBLE)",
-                       "CAST({0} AS DOUBLE) - CAST({1} AS DOUBLE)", cast_numeric=True))
-        r(SWRLBuiltin("multiply", 3, "math",
-                       "CAST({0} AS DOUBLE) * CAST({1} AS DOUBLE)",
-                       "CAST({0} AS DOUBLE) * CAST({1} AS DOUBLE)", cast_numeric=True))
-        r(SWRLBuiltin("divide", 3, "math",
-                       "CAST({0} AS DOUBLE) / NULLIF(CAST({1} AS DOUBLE), 0)",
-                       "CASE WHEN CAST({1} AS DOUBLE) = 0 THEN null ELSE CAST({0} AS DOUBLE) / CAST({1} AS DOUBLE) END",
-                       cast_numeric=True))
-        r(SWRLBuiltin("mod", 3, "math",
-                       "MOD(CAST({0} AS BIGINT), CAST({1} AS BIGINT))",
-                       "CAST({0} AS INT64) % CAST({1} AS INT64)", cast_numeric=True))
-        r(SWRLBuiltin("abs", 2, "math",
-                       "ABS(CAST({0} AS DOUBLE))",
-                       "abs(CAST({0} AS DOUBLE))", cast_numeric=True))
-        r(SWRLBuiltin("round", 2, "math",
-                       "ROUND(CAST({0} AS DOUBLE))",
-                       "round(CAST({0} AS DOUBLE), 0)", cast_numeric=True))
-        r(SWRLBuiltin("ceiling", 2, "math",
-                       "CEIL(CAST({0} AS DOUBLE))",
-                       "ceil(CAST({0} AS DOUBLE))", cast_numeric=True))
-        r(SWRLBuiltin("floor", 2, "math",
-                       "FLOOR(CAST({0} AS DOUBLE))",
-                       "floor(CAST({0} AS DOUBLE))", cast_numeric=True))
+        r(
+            SWRLBuiltin(
+                "add",
+                3,
+                "math",
+                "CAST({0} AS DOUBLE) + CAST({1} AS DOUBLE)",
+                "CAST({0} AS DOUBLE) + CAST({1} AS DOUBLE)",
+                cast_numeric=True,
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "subtract",
+                3,
+                "math",
+                "CAST({0} AS DOUBLE) - CAST({1} AS DOUBLE)",
+                "CAST({0} AS DOUBLE) - CAST({1} AS DOUBLE)",
+                cast_numeric=True,
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "multiply",
+                3,
+                "math",
+                "CAST({0} AS DOUBLE) * CAST({1} AS DOUBLE)",
+                "CAST({0} AS DOUBLE) * CAST({1} AS DOUBLE)",
+                cast_numeric=True,
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "divide",
+                3,
+                "math",
+                "CAST({0} AS DOUBLE) / NULLIF(CAST({1} AS DOUBLE), 0)",
+                "CASE WHEN CAST({1} AS DOUBLE) = 0 THEN null ELSE CAST({0} AS DOUBLE) / CAST({1} AS DOUBLE) END",
+                cast_numeric=True,
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "mod",
+                3,
+                "math",
+                "MOD(CAST({0} AS BIGINT), CAST({1} AS BIGINT))",
+                "CAST({0} AS INT64) % CAST({1} AS INT64)",
+                cast_numeric=True,
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "abs",
+                2,
+                "math",
+                "ABS(CAST({0} AS DOUBLE))",
+                "abs(CAST({0} AS DOUBLE))",
+                cast_numeric=True,
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "round",
+                2,
+                "math",
+                "ROUND(CAST({0} AS DOUBLE))",
+                "round(CAST({0} AS DOUBLE), 0)",
+                cast_numeric=True,
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "ceiling",
+                2,
+                "math",
+                "CEIL(CAST({0} AS DOUBLE))",
+                "ceil(CAST({0} AS DOUBLE))",
+                cast_numeric=True,
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "floor",
+                2,
+                "math",
+                "FLOOR(CAST({0} AS DOUBLE))",
+                "floor(CAST({0} AS DOUBLE))",
+                cast_numeric=True,
+            )
+        )
 
         # -- String ----------------------------------------------------
-        r(SWRLBuiltin("startsWith", 2, "string",
-                       "{0} LIKE CONCAT({1}, '%%')",
-                       "starts with({0}, {1})"))
-        r(SWRLBuiltin("endsWith", 2, "string",
-                       "{0} LIKE CONCAT('%%', {1})",
-                       "ends with({0}, {1})"))
-        r(SWRLBuiltin("contains", 2, "string",
-                       "{0} LIKE CONCAT('%%', {1}, '%%')",
-                       "contains({0}, {1})"))
-        r(SWRLBuiltin("stringLength", 2, "string",
-                       "LENGTH({0})",
-                       "size({0})"))
-        r(SWRLBuiltin("upperCase", 2, "string",
-                       "UPPER({0})",
-                       "toUpper({0})"))
-        r(SWRLBuiltin("lowerCase", 2, "string",
-                       "LOWER({0})",
-                       "toLower({0})"))
-        r(SWRLBuiltin("matches", 2, "string",
-                       "{0} RLIKE {1}",
-                       "{0} =~ {1}"))
+        r(
+            SWRLBuiltin(
+                "startsWith",
+                2,
+                "string",
+                "{0} LIKE CONCAT({1}, '%%')",
+                "starts with({0}, {1})",
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "endsWith",
+                2,
+                "string",
+                "{0} LIKE CONCAT('%%', {1})",
+                "ends with({0}, {1})",
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "contains",
+                2,
+                "string",
+                "{0} LIKE CONCAT('%%', {1}, '%%')",
+                "contains({0}, {1})",
+            )
+        )
+        r(SWRLBuiltin("stringLength", 2, "string", "LENGTH({0})", "size({0})"))
+        r(SWRLBuiltin("upperCase", 2, "string", "UPPER({0})", "toUpper({0})"))
+        r(SWRLBuiltin("lowerCase", 2, "string", "LOWER({0})", "toLower({0})"))
+        r(SWRLBuiltin("matches", 2, "string", "{0} RLIKE {1}", "{0} =~ {1}"))
 
         # -- Date/Time -------------------------------------------------
-        r(SWRLBuiltin("before", 2, "date",
-                       "CAST({0} AS TIMESTAMP) < CAST({1} AS TIMESTAMP)",
-                       "datetime({0}) < datetime({1})"))
-        r(SWRLBuiltin("after", 2, "date",
-                       "CAST({0} AS TIMESTAMP) > CAST({1} AS TIMESTAMP)",
-                       "datetime({0}) > datetime({1})"))
-        r(SWRLBuiltin("dateDiff", 3, "date",
-                       "DATEDIFF(CAST({0} AS DATE), CAST({1} AS DATE))",
-                       "duration.between(datetime({1}), datetime({0})).days"))
-        r(SWRLBuiltin("now", 1, "date",
-                       "CURRENT_TIMESTAMP()",
-                       "datetime()"))
+        r(
+            SWRLBuiltin(
+                "before",
+                2,
+                "date",
+                "CAST({0} AS TIMESTAMP) < CAST({1} AS TIMESTAMP)",
+                "datetime({0}) < datetime({1})",
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "after",
+                2,
+                "date",
+                "CAST({0} AS TIMESTAMP) > CAST({1} AS TIMESTAMP)",
+                "datetime({0}) > datetime({1})",
+            )
+        )
+        r(
+            SWRLBuiltin(
+                "dateDiff",
+                3,
+                "date",
+                "DATEDIFF(CAST({0} AS DATE), CAST({1} AS DATE))",
+                "duration.between(datetime({1}), datetime({0})).days",
+            )
+        )
+        r(SWRLBuiltin("now", 1, "date", "CURRENT_TIMESTAMP()", "datetime()"))
 
     # ------------------------------------------------------------------
     # Public API
@@ -152,11 +267,13 @@ class SWRLBuiltinRegistry:
         """Return built-ins grouped by category for UI consumption."""
         groups: Dict[str, list] = {}
         for b in cls._BUILTINS.values():
-            groups.setdefault(b.category, []).append({
-                "name": b.name,
-                "arity": b.arity,
-                "category": b.category,
-            })
+            groups.setdefault(b.category, []).append(
+                {
+                    "name": b.name,
+                    "arity": b.arity,
+                    "category": b.category,
+                }
+            )
         return groups
 
     # ------------------------------------------------------------------

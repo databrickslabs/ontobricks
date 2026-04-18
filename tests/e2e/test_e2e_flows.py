@@ -3,12 +3,14 @@ Layer 2 UI Tests -- End-to-End Browser Tests (Playwright)
 
 Critical user flows exercised against a live Uvicorn server.
 """
+
 import pytest
 
 
 # =====================================================
 # NAVIGATION
 # =====================================================
+
 
 class TestNavigation:
     """Verify top-level page navigation works."""
@@ -18,14 +20,17 @@ class TestNavigation:
         page.wait_for_load_state("domcontentloaded")
         assert "OntoBricks" in page.title()
 
-    @pytest.mark.parametrize("path,title_fragment", [
-        ("/settings", "Settings"),
-        ("/ontology", "Ontology"),
-        ("/mapping", "Mapping"),
-        ("/domain", "Domain"),
-        ("/dtwin/", "Digital Twin"),
-        ("/about", "About"),
-    ])
+    @pytest.mark.parametrize(
+        "path,title_fragment",
+        [
+            ("/settings", "Settings"),
+            ("/ontology", "Ontology"),
+            ("/mapping", "Mapping"),
+            ("/domain", "Domain"),
+            ("/dtwin/", "Digital Twin"),
+            ("/about", "About"),
+        ],
+    )
     def test_page_loads(self, page, live_server, path, title_fragment):
         page.goto(f"{live_server}{path}")
         page.wait_for_load_state("domcontentloaded")
@@ -36,7 +41,10 @@ class TestNavigation:
         page.wait_for_load_state("domcontentloaded")
         page.click("a.navbar-brand")
         page.wait_for_load_state("domcontentloaded")
-        assert page.url.rstrip("/") == live_server.rstrip("/") or page.url == f"{live_server}/"
+        assert (
+            page.url.rstrip("/") == live_server.rstrip("/")
+            or page.url == f"{live_server}/"
+        )
 
     def test_settings_link_in_navbar(self, page, live_server):
         page.goto(live_server)
@@ -49,6 +57,7 @@ class TestNavigation:
 # =====================================================
 # HOME PAGE
 # =====================================================
+
 
 class TestHomePage:
     def test_hero_visible(self, page, live_server):
@@ -80,6 +89,7 @@ class TestHomePage:
 # =====================================================
 # SETTINGS PAGE
 # =====================================================
+
 
 class TestSettingsPage:
     def test_databricks_tab_visible(self, page, live_server):
@@ -113,20 +123,35 @@ class TestSettingsPage:
 # ONTOLOGY PAGE -- SIDEBAR NAVIGATION
 # =====================================================
 
+
 class TestOntologySidebar:
     """Click each sidebar item and verify the correct section becomes visible."""
 
-    @pytest.mark.parametrize("section", [
-        "information", "import", "wizard", "map", "design",
-        "entities", "relationships", "dataquality", "swrl", "axioms", "owl"
-    ])
+    @pytest.mark.parametrize(
+        "section",
+        [
+            "information",
+            "import",
+            "wizard",
+            "map",
+            "design",
+            "entities",
+            "relationships",
+            "dataquality",
+            "swrl",
+            "axioms",
+            "owl",
+        ],
+    )
     def test_sidebar_switches_section(self, page, live_server, section):
         page.goto(f"{live_server}/ontology")
         page.wait_for_load_state("domcontentloaded")
         page.click(f'a[data-section="{section}"]')
         page.wait_for_timeout(400)
         section_div = page.locator(f"#{section}-section")
-        assert section_div.is_visible(), f"Section #{section}-section not visible after click"
+        assert (
+            section_div.is_visible()
+        ), f"Section #{section}-section not visible after click"
 
     def test_wizard_select_all_checkbox_exists(self, page, live_server):
         page.goto(f"{live_server}/ontology")
@@ -141,10 +166,12 @@ class TestOntologySidebar:
 # MAPPING PAGE -- SIDEBAR NAVIGATION
 # =====================================================
 
+
 class TestMappingSidebar:
-    @pytest.mark.parametrize("section", [
-        "information", "design", "manual", "autoassign", "r2rml", "sparksql"
-    ])
+    @pytest.mark.parametrize(
+        "section",
+        ["information", "design", "manual", "autoassign", "r2rml", "sparksql"],
+    )
     def test_sidebar_switches_section(self, page, live_server, section):
         page.goto(f"{live_server}/mapping")
         page.wait_for_load_state("domcontentloaded")
@@ -152,18 +179,21 @@ class TestMappingSidebar:
         page.evaluate(f'SidebarNav.switchTo("{section}")')
         page.wait_for_timeout(400)
         section_div = page.locator(f"#{section}-section")
-        assert section_div.is_visible(), f"Section #{section}-section not visible after click"
+        assert (
+            section_div.is_visible()
+        ), f"Section #{section}-section not visible after click"
 
 
 # =====================================================
 # DOMAIN PAGE -- SIDEBAR NAVIGATION
 # =====================================================
 
+
 class TestDomainSidebar:
-    @pytest.mark.parametrize("section", [
-        "information", "metadata", "documents", "validation",
-        "owl-content", "r2rml"
-    ])
+    @pytest.mark.parametrize(
+        "section",
+        ["information", "metadata", "documents", "validation", "owl-content", "r2rml"],
+    )
     def test_sidebar_switches_section(self, page, live_server, section):
         page.goto(f"{live_server}/domain")
         page.wait_for_load_state("domcontentloaded")
@@ -173,12 +203,15 @@ class TestDomainSidebar:
         page.evaluate(f'SidebarNav.switchTo("{section}")')
         page.wait_for_timeout(400)
         section_div = page.locator(f"#{section}-section")
-        assert section_div.is_visible(), f"Section #{section}-section not visible after click"
+        assert (
+            section_div.is_visible()
+        ), f"Section #{section}-section not visible after click"
 
 
 # =====================================================
 # DIGITAL TWIN PAGE
 # =====================================================
+
 
 class TestDigitalTwinSidebar:
     def test_sigmagraph_section_visible_by_default(self, page, live_server):
@@ -191,12 +224,16 @@ class TestDigitalTwinSidebar:
         page.wait_for_load_state("domcontentloaded")
         link = page.locator('a[data-section="sigmagraph"]')
         assert link.is_visible()
-        assert "knowledge" in (link.text_content() or "").lower() or "graph" in (link.text_content() or "").lower()
+        assert (
+            "knowledge" in (link.text_content() or "").lower()
+            or "graph" in (link.text_content() or "").lower()
+        )
 
 
 # =====================================================
 # ABOUT PAGE
 # =====================================================
+
 
 class TestAboutPage:
     def test_page_content(self, page, live_server):

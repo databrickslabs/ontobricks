@@ -32,6 +32,7 @@ Three operating modes controlled by the ``mode`` argument:
   - ``"mounted"``      : Embedded inside the main OntoBricks FastAPI process.
                          Calls back via ``http://localhost:<DATABRICKS_APP_PORT>``.
 """
+
 from __future__ import annotations
 
 import json
@@ -61,9 +62,10 @@ API_V1_DT_TRIPLES_FIND = "/api/v1/digitaltwin/triples/find"
 
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
-MAX_DEPTH = 1 # Maximum depth of the BFS traversal
+MAX_DEPTH = 1  # Maximum depth of the BFS traversal
 
 # ── URI helpers ───────────────────────────────────────────────────────────
+
 
 def _local_name(uri: str) -> str:
     """Extract the human-readable local name from a URI.
@@ -74,7 +76,7 @@ def _local_name(uri: str) -> str:
     for sep in ("#", "/"):
         idx = uri.rfind(sep)
         if idx >= 0 and idx < len(uri) - 1:
-            return uri[idx + 1:]
+            return uri[idx + 1 :]
     return uri
 
 
@@ -103,6 +105,7 @@ def _is_label_predicate(pred: str) -> bool:
 
 
 # ── Triple formatting ────────────────────────────────────────────────────
+
 
 def _format_entity_block(entity_uri: str, triples: list[dict]) -> str:
     """Build a human-readable text block for one entity."""
@@ -213,8 +216,10 @@ def _format_find_response(data: dict) -> str:
 
     unique_entities = len(by_subject)
     parts: list[str] = []
-    parts.append(f"Found {seed_count} matching entit{'y' if seed_count == 1 else 'ies'} "
-                 f"({total} triples across {unique_entities} entities, depth={depth})\n")
+    parts.append(
+        f"Found {seed_count} matching entit{'y' if seed_count == 1 else 'ies'} "
+        f"({total} triples across {unique_entities} entities, depth={depth})\n"
+    )
 
     parts.append("── Matching Entities ──")
     for uri in seed_uris:
@@ -228,8 +233,10 @@ def _format_find_response(data: dict) -> str:
             parts.append("")
 
     if total > len(triples):
-        parts.append(f"(Showing {len(triples)} of {total} triples — "
-                     f"increase limit or use pagination for more)")
+        parts.append(
+            f"(Showing {len(triples)} of {total} triples — "
+            f"increase limit or use pagination for more)"
+        )
 
     return "\n".join(parts)
 
@@ -305,6 +312,7 @@ def _format_graphql_entity(lines: list[str], entity: dict, indent: int = 0) -> N
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────
 
+
 def _base_url(mode: str) -> str:
     """Resolve the OntoBricks REST API base URL for the given mode."""
     if mode == "mounted":
@@ -361,12 +369,15 @@ def _get_auth_headers(mode: str) -> dict:
     else:
         logger.info(
             "M2M OAuth env vars not all set (client_id=%s, client_secret=%s, host=%s)",
-            bool(client_id), bool(client_secret), bool(host),
+            bool(client_id),
+            bool(client_secret),
+            bool(host),
         )
 
     # --- Strategy 2: Databricks SDK header factory ---
     try:
         from databricks.sdk import WorkspaceClient
+
         w = WorkspaceClient()
         result = w.config.authenticate()
 
@@ -385,8 +396,7 @@ def _get_auth_headers(mode: str) -> dict:
                     headers = buf
 
         if headers:
-            logger.info("Auth headers obtained via SDK (%s)",
-                        ", ".join(headers.keys()))
+            logger.info("Auth headers obtained via SDK (%s)", ", ".join(headers.keys()))
             auth_val = headers.get("Authorization", "")
             if auth_val.startswith("Bearer "):
                 _oauth_cache["token"] = auth_val[7:]
@@ -399,14 +409,16 @@ def _get_auth_headers(mode: str) -> dict:
     return {}
 
 
-async def _get(client: httpx.AsyncClient, path: str,
-               params: dict | None = None) -> dict:
+async def _get(
+    client: httpx.AsyncClient, path: str, params: dict | None = None
+) -> dict:
     resp = await client.get(path, params=params, timeout=120)
     resp.raise_for_status()
     return resp.json()
 
 
 # ── Factory ───────────────────────────────────────────────────────────────
+
 
 def create_mcp_server(mode: str = "standalone") -> FastMCP:
     """Build a configured :class:`FastMCP` instance.
@@ -418,7 +430,12 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
     logger.info("Creating MCP server — mode=%s, base_url=%s", mode, base)
 
     _selected_domain: dict = {"name": None}
-    _registry: dict = {"catalog": "", "schema": "", "volume": "OntoBricksRegistry", "_loaded": False}
+    _registry: dict = {
+        "catalog": "",
+        "schema": "",
+        "volume": "OntoBricksRegistry",
+        "_loaded": False,
+    }
 
     def _client() -> httpx.AsyncClient:
         """Create an httpx client with base URL and auth headers."""
@@ -438,8 +455,12 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
                 _registry["schema"] = parts[2]
                 _registry["volume"] = parts[3]
                 _registry["_loaded"] = True
-                logger.info("Registry from volume resource: %s.%s.%s",
-                            _registry["catalog"], _registry["schema"], _registry["volume"])
+                logger.info(
+                    "Registry from volume resource: %s.%s.%s",
+                    _registry["catalog"],
+                    _registry["schema"],
+                    _registry["volume"],
+                )
                 return _registry
             logger.warning("Cannot parse REGISTRY_VOLUME_PATH '%s'", vol_path)
 
@@ -452,8 +473,12 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             _registry["schema"] = env_sch
             _registry["volume"] = env_vol or "OntoBricksRegistry"
             _registry["_loaded"] = True
-            logger.info("Registry from env vars: %s.%s.%s",
-                        _registry["catalog"], _registry["schema"], _registry["volume"])
+            logger.info(
+                "Registry from env vars: %s.%s.%s",
+                _registry["catalog"],
+                _registry["schema"],
+                _registry["volume"],
+            )
             return _registry
 
         try:
@@ -463,8 +488,12 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             _registry["schema"] = data.get("schema", "")
             _registry["volume"] = data.get("volume", "OntoBricksRegistry")
             _registry["_loaded"] = True
-            logger.info("Registry from main app: %s.%s.%s",
-                        _registry["catalog"], _registry["schema"], _registry["volume"])
+            logger.info(
+                "Registry from main app: %s.%s.%s",
+                _registry["catalog"],
+                _registry["schema"],
+                _registry["volume"],
+            )
         except Exception as exc:
             logger.warning("Could not fetch registry config: %s", exc)
         return _registry
@@ -523,8 +552,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         await _ensure_registry()
 
         async with _client() as client:
-            data = await _get(client, API_V1_DOMAINS,
-                              params=_registry_params())
+            data = await _get(client, API_V1_DOMAINS, params=_registry_params())
 
         if not data.get("success"):
             return data.get("message", "Could not retrieve domains.")
@@ -665,8 +693,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         params["domain_name"] = domain_name
 
         async with _client() as client:
-            data = await _get(client, API_V1_DT_STATUS,
-                              params=params)
+            data = await _get(client, API_V1_DT_STATUS, params=params)
 
         if not data.get("success") and data.get("message"):
             return f"Error selecting domain: {data['message']}"
@@ -699,12 +726,13 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         A domain must be selected first via ``select_domain``.
         """
         if not _selected_domain["name"]:
-            return ("No domain selected. Call list_domains first, "
-                    "then select_domain to choose one.")
+            return (
+                "No domain selected. Call list_domains first, "
+                "then select_domain to choose one."
+            )
 
         async with _client() as client:
-            data = await _get(client, API_V1_DT_STATS,
-                              params=_domain_params())
+            data = await _get(client, API_V1_DT_STATS, params=_domain_params())
 
         if not data.get("success"):
             return data.get("message", "Could not retrieve statistics.")
@@ -777,24 +805,27 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             attributes, and their relationships, organized hop by hop.
         """
         if not _selected_domain["name"]:
-            return ("No domain selected. Call list_domains first, "
-                    "then select_domain to choose one.")
+            return (
+                "No domain selected. Call list_domains first, "
+                "then select_domain to choose one."
+            )
         if not search and not entity_type:
             return "Please provide at least a search term or an entity type."
 
-        params = _domain_params({
-            "depth": min(max(depth, 1), 10),
-            "limit": 500,
-            "offset": 0,
-        })
+        params = _domain_params(
+            {
+                "depth": min(max(depth, 1), 10),
+                "limit": 500,
+                "offset": 0,
+            }
+        )
         if search:
             params["search"] = search
         if entity_type:
             params["entity_type"] = entity_type
 
         async with _client() as client:
-            data = await _get(client, API_V1_DT_TRIPLES_FIND,
-                              params=params)
+            data = await _get(client, API_V1_DT_TRIPLES_FIND, params=params)
 
         return _format_find_response(data)
 
@@ -808,12 +839,13 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         A domain must be selected first via ``select_domain``.
         """
         if not _selected_domain["name"]:
-            return ("No domain selected. Call list_domains first, "
-                    "then select_domain to choose one.")
+            return (
+                "No domain selected. Call list_domains first, "
+                "then select_domain to choose one."
+            )
 
         async with _client() as client:
-            data = await _get(client, API_V1_DT_STATUS,
-                              params=_domain_params())
+            data = await _get(client, API_V1_DT_STATUS, params=_domain_params())
         status = data.get("reason") or "OK"
         has_data = data.get("has_data", False)
         count = data.get("count", 0)
@@ -841,8 +873,10 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         A domain must be selected first via ``select_domain``.
         """
         if not _selected_domain["name"]:
-            return ("No domain selected. Call list_domains first, "
-                    "then select_domain to choose one.")
+            return (
+                "No domain selected. Call list_domains first, "
+                "then select_domain to choose one."
+            )
 
         domain_name = _selected_domain["name"]
         try:
@@ -855,7 +889,9 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
                 resp.raise_for_status()
                 data = resp.json()
         except httpx.HTTPStatusError as exc:
-            logger.warning("GraphQL schema request failed: %s %s", exc.response.status_code, exc)
+            logger.warning(
+                "GraphQL schema request failed: %s %s", exc.response.status_code, exc
+            )
             body_text = exc.response.text[:500]
             return f"Could not retrieve GraphQL schema ({exc.response.status_code}): {body_text}"
         except Exception as exc:
@@ -903,8 +939,10 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             The query result as formatted text, or an error message.
         """
         if not _selected_domain["name"]:
-            return ("No domain selected. Call list_domains first, "
-                    "then select_domain to choose one.")
+            return (
+                "No domain selected. Call list_domains first, "
+                "then select_domain to choose one."
+            )
 
         domain_name = _selected_domain["name"]
 
@@ -941,24 +979,21 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
     async def resource_domains() -> str:
         """List of domains in the registry (raw JSON from GET /api/v1/domains)."""
         async with _client() as client:
-            data = await _get(client, API_V1_DOMAINS,
-                              params=_registry_params())
+            data = await _get(client, API_V1_DOMAINS, params=_registry_params())
         return json.dumps(data, indent=2)
 
     @mcp.resource("ontobricks://status")
     async def resource_status() -> str:
         """Current triple store configuration and status."""
         async with _client() as client:
-            data = await _get(client, API_V1_DT_STATUS,
-                              params=_domain_params())
+            data = await _get(client, API_V1_DT_STATUS, params=_domain_params())
         return json.dumps(data, indent=2)
 
     @mcp.resource("ontobricks://stats")
     async def resource_stats() -> str:
         """Triple store content statistics."""
         async with _client() as client:
-            data = await _get(client, API_V1_DT_STATS,
-                              params=_domain_params())
+            data = await _get(client, API_V1_DT_STATS, params=_domain_params())
         return json.dumps(data, indent=2)
 
     @mcp.resource("ontobricks://graphql-schema")
@@ -985,6 +1020,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
 
 # ── Databricks App (combined FastAPI + MCP) ───────────────────────────────
 
+
 def create_databricks_app():
     """Build the combined FastAPI application for Databricks deployment."""
     from fastapi import FastAPI
@@ -996,7 +1032,7 @@ def create_databricks_app():
     app = FastAPI(
         title="mcp-ontobricks",
         description="OntoBricks MCP Server — Knowledge graph tools for "
-                    "Databricks Playground",
+        "Databricks Playground",
         version="1.0.0",
         lifespan=mcp_app.lifespan,
     )
@@ -1010,7 +1046,11 @@ def create_databricks_app():
             reg_cat = os.getenv("REGISTRY_CATALOG", "")
             reg_sch = os.getenv("REGISTRY_SCHEMA", "")
             reg_vol = os.getenv("REGISTRY_VOLUME", "OntoBricksRegistry")
-            registry_display = f"{reg_cat}.{reg_sch}.{reg_vol}" if reg_cat and reg_sch else "auto-discover"
+            registry_display = (
+                f"{reg_cat}.{reg_sch}.{reg_vol}"
+                if reg_cat and reg_sch
+                else "auto-discover"
+            )
         return {
             "status": "healthy",
             "service": "mcp-ontobricks",

@@ -5,6 +5,7 @@ parameter is the extension point for future graph DB engines (Neo4j,
 KuzuDB, etc.).  The *engine_config* parameter carries engine-specific
 JSON configuration set by the admin in Settings > Graph DB.
 """
+
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from back.core.databricks import is_databricks_app
@@ -73,9 +74,9 @@ class GraphDBFactory:
         if settings is not None:
             host, token = get_databricks_host_and_token(domain, settings)
         else:
-            db_cfg = getattr(domain, 'databricks', None) or {}
-            host = db_cfg.get('host', '')
-            token = db_cfg.get('token', '')
+            db_cfg = getattr(domain, "databricks", None) or {}
+            host = db_cfg.get("host", "")
+            token = db_cfg.get("token", "")
 
         if not host and not is_databricks_app():
             return None
@@ -103,26 +104,38 @@ class GraphDBFactory:
         try:
             db_path = DEFAULT_LADYBUG_PATH
             base_name = (domain.info or {}).get("name", DEFAULT_GRAPH_NAME)
-            version = getattr(domain, 'current_version', '1') or '1'
+            version = getattr(domain, "current_version", "1") or "1"
             db_name = f"{base_name}_V{version}"
-            ontology = getattr(domain, 'ontology', None)
+            ontology = getattr(domain, "ontology", None)
             if callable(ontology):
                 ontology = None
 
             auto_restore = self._build_auto_restore(
-                domain, settings, db_name, db_path,
+                domain,
+                settings,
+                db_name,
+                db_path,
             )
 
             if ontology:
-                from back.core.graphdb.ladybugdb.LadybugGraphStore import LadybugGraphStore
+                from back.core.graphdb.ladybugdb.LadybugGraphStore import (
+                    LadybugGraphStore,
+                )
+
                 return LadybugGraphStore(
-                    db_path=db_path, db_name=db_name,
-                    ontology=ontology, auto_restore=auto_restore,
+                    db_path=db_path,
+                    db_name=db_name,
+                    ontology=ontology,
+                    auto_restore=auto_restore,
                 )
             else:
-                from back.core.graphdb.ladybugdb.LadybugFlatStore import LadybugFlatStore
+                from back.core.graphdb.ladybugdb.LadybugFlatStore import (
+                    LadybugFlatStore,
+                )
+
                 return LadybugFlatStore(
-                    db_path=db_path, db_name=db_name,
+                    db_path=db_path,
+                    db_name=db_name,
                     auto_restore=auto_restore,
                 )
         except ImportError as e:
@@ -142,7 +155,9 @@ class GraphDBFactory:
     ) -> Optional[Any]:
         """Convenience wrapper using the package singleton factory instance."""
         return _get_factory_singleton().create(
-            domain, settings=settings, engine=engine,
+            domain,
+            settings=settings,
+            engine=engine,
             engine_config=engine_config,
         )
 
@@ -158,8 +173,12 @@ def _get_factory_singleton() -> GraphDBFactory:
 
 
 try:
-    from back.core.graphdb.ladybugdb.LadybugFlatStore import LadybugFlatStore  # noqa: F401
-    from back.core.graphdb.ladybugdb.LadybugGraphStore import LadybugGraphStore  # noqa: F401
+    from back.core.graphdb.ladybugdb.LadybugFlatStore import (
+        LadybugFlatStore,
+    )  # noqa: F401
+    from back.core.graphdb.ladybugdb.LadybugGraphStore import (
+        LadybugGraphStore,
+    )  # noqa: F401
 
     GraphDBFactory.LADYBUG_AVAILABLE = True
 except ImportError:

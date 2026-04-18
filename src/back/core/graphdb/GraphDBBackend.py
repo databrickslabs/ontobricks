@@ -11,6 +11,7 @@ query interface.  The extension adds graph-specific concerns: connection
 management, schema introspection, sync to/from UC Volumes, capability flags,
 and query-translator selection for reasoning engines.
 """
+
 from abc import abstractmethod
 from typing import Any, Optional, Tuple
 
@@ -86,13 +87,17 @@ class GraphDBBackend(TripleStoreBackend):
     # ------------------------------------------------------------------
 
     def sync_to_remote(
-        self, uc_path: str, volume_service: Any,
+        self,
+        uc_path: str,
+        volume_service: Any,
     ) -> Tuple[bool, str]:
         """Upload local DB to remote storage.  No-op by default."""
         return False, "Not supported by this backend"
 
     def sync_from_remote(
-        self, uc_path: str, volume_service: Any,
+        self,
+        uc_path: str,
+        volume_service: Any,
     ) -> Tuple[bool, str]:
         """Download DB from remote storage.  No-op by default."""
         return False, "Not supported by this backend"
@@ -116,4 +121,5 @@ class GraphDBBackend(TripleStoreBackend):
         Cypher-based backends should return the matching Cypher translator.
         """
         from back.core.reasoning.SWRLSQLTranslator import SWRLSQLTranslator
+
         return SWRLSQLTranslator()

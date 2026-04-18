@@ -3,11 +3,17 @@
 Wraps the SCIM v2 and Permissions REST APIs so that workspace-level
 operations are isolated from SQL / UC / file concerns.
 """
+
 from typing import Any, Dict, List
 
 from back.core.logging import get_logger
 from .DatabricksAuth import DatabricksAuth
-from .constants import SCIM_ME_PATH, SCIM_USERS_PATH, SCIM_GROUPS_PATH, PERMISSIONS_APPS_PATH
+from .constants import (
+    SCIM_ME_PATH,
+    SCIM_USERS_PATH,
+    SCIM_GROUPS_PATH,
+    PERMISSIONS_APPS_PATH,
+)
 
 logger = get_logger(__name__)
 
@@ -64,11 +70,13 @@ class WorkspaceService:
                 for u in data.get("Resources", []):
                     email = u.get("userName", "")
                     if email:
-                        users.append({
-                            "email": email,
-                            "display_name": u.get("displayName", email),
-                            "active": u.get("active", True),
-                        })
+                        users.append(
+                            {
+                                "email": email,
+                                "display_name": u.get("displayName", email),
+                                "active": u.get("active", True),
+                            }
+                        )
                 total = data.get("totalResults", 0)
                 start_index += data.get("itemsPerPage", 100)
                 if start_index > total or start_index > max_results:
@@ -144,11 +152,13 @@ class WorkspaceService:
                 for u in data.get("Resources", []):
                     email = u.get("userName", "")
                     if email:
-                        users.append({
-                            "email": email,
-                            "display_name": u.get("displayName", email),
-                            "active": u.get("active", True),
-                        })
+                        users.append(
+                            {
+                                "email": email,
+                                "display_name": u.get("displayName", email),
+                                "active": u.get("active", True),
+                            }
+                        )
                 total = data.get("totalResults", 0)
                 start_index += data.get("itemsPerPage", page_size)
                 if start_index > total or len(users) >= max_results:
@@ -228,11 +238,13 @@ class WorkspaceService:
                     or acl.get("service_principal_name", "")
                 )
                 for perm in acl.get("all_permissions", []):
-                    results.append({
-                        "principal": principal,
-                        "permission_level": perm.get("permission_level", ""),
-                        "inherited": perm.get("inherited", False),
-                    })
+                    results.append(
+                        {
+                            "principal": principal,
+                            "permission_level": perm.get("permission_level", ""),
+                            "inherited": perm.get("inherited", False),
+                        }
+                    )
             logger.debug("App '%s' has %d permission entries", app_name, len(results))
             return results
         except Exception as exc:
@@ -272,22 +284,28 @@ class WorkspaceService:
 
                 if acl.get("user_name"):
                     email = acl["user_name"]
-                    users.append({
-                        "email": email,
-                        "display_name": email,
-                        "active": True,
-                        "permission_level": level,
-                    })
+                    users.append(
+                        {
+                            "email": email,
+                            "display_name": email,
+                            "active": True,
+                            "permission_level": level,
+                        }
+                    )
                 elif acl.get("group_name"):
-                    groups.append({
-                        "display_name": acl["group_name"],
-                        "id": acl.get("group_name", ""),
-                        "permission_level": level,
-                    })
+                    groups.append(
+                        {
+                            "display_name": acl["group_name"],
+                            "id": acl.get("group_name", ""),
+                            "permission_level": level,
+                        }
+                    )
 
             logger.info(
                 "App '%s' principals: %d users, %d groups",
-                app_name, len(users), len(groups),
+                app_name,
+                len(users),
+                len(groups),
             )
             return {"users": users, "groups": groups}
         except Exception as exc:

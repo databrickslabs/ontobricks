@@ -16,6 +16,7 @@ into OntoBricks-compatible classes and properties:
 Source repository: https://github.com/phuse-org/rdf.cdisc.org
 CDISC Standard:   https://www.cdisc.org/standards/foundational/rdf/cdisc-standards-rdf
 """
+
 import time
 from typing import Dict, List, Any, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -209,15 +210,17 @@ class CdiscImportService:
         """Return the CDISC domain catalog for the frontend."""
         catalog = []
         for key, domain in CdiscImportService.CDISC_DOMAINS.items():
-            catalog.append({
-                "key": key,
-                "name": domain["name"],
-                "description": domain["description"],
-                "icon": domain["icon"],
-                "color": domain["color"],
-                "required": domain.get("required", False),
-                "module_count": len(domain["modules"]),
-            })
+            catalog.append(
+                {
+                    "key": key,
+                    "name": domain["name"],
+                    "description": domain["description"],
+                    "icon": domain["icon"],
+                    "color": domain["color"],
+                    "required": domain.get("required", False),
+                    "module_count": len(domain["modules"]),
+                }
+            )
         return catalog
 
     @staticmethod
@@ -256,7 +259,10 @@ class CdiscImportService:
         seen_urls: set[str] = set()
 
         keys_to_fetch = list(domain_keys)
-        if any(k != "SCHEMAS" for k in keys_to_fetch) and "SCHEMAS" not in keys_to_fetch:
+        if (
+            any(k != "SCHEMAS" for k in keys_to_fetch)
+            and "SCHEMAS" not in keys_to_fetch
+        ):
             keys_to_fetch.insert(0, "SCHEMAS")
 
         for key in keys_to_fetch:
@@ -314,8 +320,9 @@ class CdiscImportService:
         context_classes: Dict[str, Dict] = {}
         _seen_context_names: set = set()
 
-        def _make_class(class_name: str, human_label: str, comment: str,
-                        parent: str = "") -> Dict:
+        def _make_class(
+            class_name: str, human_label: str, comment: str, parent: str = ""
+        ) -> Dict:
             return {
                 "uri": f"{base_uri}{class_name}",
                 "name": class_name,
@@ -396,7 +403,8 @@ class CdiscImportService:
                         desc = str(dd)
 
                 domain_classes[str(d_uri)] = _make_class(
-                    d_name, human_label,
+                    d_name,
+                    human_label,
                     desc or f"CDISC domain {d_name} – {human_label}",
                     parent=parent_name,
                 )
@@ -423,7 +431,9 @@ class CdiscImportService:
                 if vg_name in _seen_context_names:
                     continue
                 _seen_context_names.add(vg_name)
-                human_label = CdiscImportService._DOMAIN_CONTEXT_LABELS.get(vg_name, vg_name)
+                human_label = CdiscImportService._DOMAIN_CONTEXT_LABELS.get(
+                    vg_name, vg_name
+                )
                 cls = _make_class(vg_name, human_label, f"CDISC {human_label}")
                 vg_as_toplevel[str(vg_uri)] = cls
                 context_classes[str(vg_uri)] = cls
@@ -473,21 +483,25 @@ class CdiscImportService:
                 return
             seen_props.add(prop_key)
 
-            target_cls["dataProperties"].append({
-                "name": clean_name,
-                "localName": clean_name,
-                "label": de["label"],
-                "uri": f"{base_uri}{domain_name}/{clean_name}",
-            })
-            properties_list.append({
-                "uri": f"{base_uri}{domain_name}/{clean_name}",
-                "name": clean_name,
-                "label": de["label"],
-                "comment": de["desc"],
-                "type": "DatatypeProperty",
-                "domain": domain_name,
-                "range": de["type"],
-            })
+            target_cls["dataProperties"].append(
+                {
+                    "name": clean_name,
+                    "localName": clean_name,
+                    "label": de["label"],
+                    "uri": f"{base_uri}{domain_name}/{clean_name}",
+                }
+            )
+            properties_list.append(
+                {
+                    "uri": f"{base_uri}{domain_name}/{clean_name}",
+                    "name": clean_name,
+                    "label": de["label"],
+                    "comment": de["desc"],
+                    "type": "DatatypeProperty",
+                    "domain": domain_name,
+                    "range": de["type"],
+                }
+            )
 
         # 5a: Direct DataElement → Domain (CDASH pattern)
         for de_uri_str, de in de_info.items():
@@ -541,7 +555,8 @@ class CdiscImportService:
 
             col_de = {
                 "name": col_name,
-                "label": col_label or (de_ref_info["label"] if de_ref_info else col_name),
+                "label": col_label
+                or (de_ref_info["label"] if de_ref_info else col_name),
                 "desc": col_desc or (de_ref_info["desc"] if de_ref_info else ""),
                 "type": col_type,
             }
@@ -578,9 +593,7 @@ class CdiscImportService:
             if name in name_to_cls:
                 # Merge dataProperties from the domain into the existing class
                 existing = name_to_cls[name]
-                existing_dp_names = {
-                    dp["name"] for dp in existing["dataProperties"]
-                }
+                existing_dp_names = {dp["name"] for dp in existing["dataProperties"]}
                 for dp in cls["dataProperties"]:
                     if dp["name"] not in existing_dp_names:
                         existing["dataProperties"].append(dp)
@@ -652,7 +665,9 @@ class CdiscImportService:
                     logger.warning("FAIL %s: %s", label, error)
 
         elapsed = time.time() - start
-        logger.info("Fetched %d/%d modules in %.1fs", fetched_count, len(modules), elapsed)
+        logger.info(
+            "Fetched %d/%d modules in %.1fs", fetched_count, len(modules), elapsed
+        )
 
         if fetched_count == 0:
             hint = (
@@ -686,6 +701,7 @@ class CdiscImportService:
             }
             # Try to get a better name from the graph
             from rdflib import OWL as OWL_NS
+
             for onto_uri in merged_graph.subjects(RDF.type, OWL_NS.Ontology):
                 for lbl in merged_graph.objects(onto_uri, SKOS.prefLabel):
                     ontology_info["label"] = str(lbl)
@@ -695,8 +711,18 @@ class CdiscImportService:
             # Schemas-only: use the generic OWL parser
             turtle_content = merged_graph.serialize(format="turtle")
             from back.objects.ontology import Ontology
+
             result = Ontology.parse_owl(turtle_content, extract_advanced=True)
-            ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions, _groups = result
+            (
+                ontology_info,
+                classes,
+                properties,
+                constraints,
+                swrl_rules,
+                axioms,
+                expressions,
+                _groups,
+            ) = result
 
         # Count relationships (ObjectProperty) vs attributes (DatatypeProperty)
         relationships = [p for p in properties if p.get("type") == "ObjectProperty"]
@@ -713,7 +739,9 @@ class CdiscImportService:
         }
 
         domain_names = ", ".join(
-            CdiscImportService.CDISC_DOMAINS[k]["name"] for k in domain_keys if k in CdiscImportService.CDISC_DOMAINS
+            CdiscImportService.CDISC_DOMAINS[k]["name"]
+            for k in domain_keys
+            if k in CdiscImportService.CDISC_DOMAINS
         )
         # Build a readable summary, omitting zero counts
         parts = [f"{stats['classes']} classes"]

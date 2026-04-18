@@ -70,14 +70,19 @@ def get_registry_cache_snapshot() -> Dict[str, Any]:
     now = time.time()
     snapshot: Dict[str, Any] = {"ttl_seconds": _registry_domains_ttl}
 
-    for label, store in (("details", _registry_details_cache), ("names", _registry_names_cache)):
+    for label, store in (
+        ("details", _registry_details_cache),
+        ("names", _registry_names_cache),
+    ):
         entries = {}
         for key, value in store.items():
             age = now - value["_ts"]
             entries[key] = {
                 "age_seconds": round(age, 1),
                 "ttl_remaining": round(max(0, _registry_domains_ttl - age), 1),
-                "item_count": len(value["data"]) if isinstance(value["data"], list) else "?",
+                "item_count": (
+                    len(value["data"]) if isinstance(value["data"], list) else "?"
+                ),
                 "data": value["data"],
             }
         snapshot[label] = entries

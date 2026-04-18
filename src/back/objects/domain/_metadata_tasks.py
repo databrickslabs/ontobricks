@@ -84,12 +84,18 @@ def run_metadata_update_task(
                 old_table = existing_tables[table_name]
                 new_columns = client.get_table_columns(catalog, schema, table_name)
                 table_comment = client.get_table_comment(catalog, schema, table_name)
-                merge_table_metadata(old_table, new_columns, table_comment, catalog, schema, table_name)
+                merge_table_metadata(
+                    old_table, new_columns, table_comment, catalog, schema, table_name
+                )
                 updated_count += 1
             except Exception as e:
                 errors.append(f"{table_name}: {str(e)}")
             progress = int(((i + 1) / len(tables_to_update)) * 100)
-            tm.update_progress(task_id, progress, f"Updated {updated_count}/{len(tables_to_update)} tables...")
+            tm.update_progress(
+                task_id,
+                progress,
+                f"Updated {updated_count}/{len(tables_to_update)} tables...",
+            )
         tm.advance_step(task_id, "Finalizing...")
         message = f"Updated {updated_count} of {len(tables_to_update)} tables"
         if errors:

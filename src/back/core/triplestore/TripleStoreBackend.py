@@ -1,4 +1,5 @@
 """Abstract base class for triple store backends."""
+
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, Set
 
@@ -238,9 +239,7 @@ class TripleStoreBackend(ABC):
         )
         return self.execute_query(sql)
 
-    def get_predicates_for_type(
-        self, table_name: str, type_uri: str
-    ) -> List[str]:
+    def get_predicates_for_type(self, table_name: str, type_uri: str) -> List[str]:
         """Return distinct predicates used by instances of *type_uri*."""
         esc_type = self._sql_escape(type_uri)
         sql = (
@@ -269,9 +268,7 @@ class TripleStoreBackend(ABC):
         )
         return self.execute_query(sql)
 
-    def paginated_count(
-        self, table_name: str, conditions: List[str]
-    ) -> int:
+    def paginated_count(self, table_name: str, conditions: List[str]) -> int:
         """Return count of triples matching *conditions*."""
         where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
         sql = f"SELECT COUNT(*) AS cnt FROM {table_name}{where}"
@@ -279,8 +276,12 @@ class TripleStoreBackend(ABC):
         return int(rows[0]["cnt"]) if rows else 0
 
     def bfs_traversal(
-        self, table_name: str, seed_where: str, depth: int,
-        search: str = "", entity_type: str = "",
+        self,
+        table_name: str,
+        seed_where: str,
+        depth: int,
+        search: str = "",
+        entity_type: str = "",
     ) -> List[Dict[str, Any]]:
         """BFS traversal from seed entities.
 
@@ -496,9 +497,7 @@ class TripleStoreBackend(ABC):
         """
         if not entity_uris:
             return set()
-        in_clause = ", ".join(
-            f"'{self._sql_escape(e)}'" for e in entity_uris
-        )
+        in_clause = ", ".join(f"'{self._sql_escape(e)}'" for e in entity_uris)
         sql = (
             f"SELECT DISTINCT e.entity FROM ("
             f"  SELECT object AS entity FROM {table_name} "

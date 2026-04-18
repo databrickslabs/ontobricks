@@ -12,6 +12,7 @@ Cross-domain bridges are handled server-side: the target domain is
 loaded into the session *before* the redirect, so the browser only
 needs a single page load to display the graph.
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -32,7 +33,9 @@ router = APIRouter(tags=["Resolve"])
 async def resolve_entity_query(
     request: Request,
     uri: str = Query(None, description="Full ontology entity URI"),
-    domain: Optional[str] = Query(None, description="Target domain name for cross-domain bridges"),
+    domain: Optional[str] = Query(
+        None, description="Target domain name for cross-domain bridges"
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -50,7 +53,9 @@ async def resolve_entity_query(
 async def resolve_entity_path(
     request: Request,
     uri: str,
-    domain: Optional[str] = Query(None, description="Target domain name for cross-domain bridges"),
+    domain: Optional[str] = Query(
+        None, description="Target domain name for cross-domain bridges"
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):

@@ -85,12 +85,14 @@ class GraphQLSchemaBuilder:
     def safe_name(raw: str) -> str:
         """Sanitise *raw* into a valid Python / GraphQL identifier."""
         from back.core.helpers import safe_identifier
+
         return safe_identifier(raw, prefix="_")
 
     @staticmethod
     def extract_local(uri: str) -> str:
         """Return the fragment / last path segment of *uri*."""
         from back.core.helpers import extract_local_name
+
         return extract_local_name(uri)
 
     @staticmethod
@@ -111,7 +113,9 @@ class GraphQLSchemaBuilder:
     @staticmethod
     def ontology_hash(classes: List[Dict], properties: List[Dict]) -> str:
         """MD5 fingerprint of the ontology definition lists."""
-        raw = json.dumps(classes, sort_keys=True) + json.dumps(properties, sort_keys=True)
+        raw = json.dumps(classes, sort_keys=True) + json.dumps(
+            properties, sort_keys=True
+        )
         return hashlib.md5(raw.encode()).hexdigest()
 
     @staticmethod
@@ -139,12 +143,12 @@ class GraphQLSchemaBuilder:
     # Private — kept as instance aliases for brevity in _build
     # ------------------------------------------------------------------
 
-    _ontology_hash = staticmethod(ontology_hash.__func__)      # type: ignore[attr-defined]
-    _safe_name = staticmethod(safe_name.__func__)               # type: ignore[attr-defined]
-    _extract_local = staticmethod(extract_local.__func__)       # type: ignore[attr-defined]
-    _pluralize = staticmethod(pluralize.__func__)               # type: ignore[attr-defined]
-    _normalize_base = staticmethod(normalize_base.__func__)     # type: ignore[attr-defined]
-    _topo_sort = staticmethod(topo_sort.__func__)               # type: ignore[attr-defined]
+    _ontology_hash = staticmethod(ontology_hash.__func__)  # type: ignore[attr-defined]
+    _safe_name = staticmethod(safe_name.__func__)  # type: ignore[attr-defined]
+    _extract_local = staticmethod(extract_local.__func__)  # type: ignore[attr-defined]
+    _pluralize = staticmethod(pluralize.__func__)  # type: ignore[attr-defined]
+    _normalize_base = staticmethod(normalize_base.__func__)  # type: ignore[attr-defined]
+    _topo_sort = staticmethod(topo_sort.__func__)  # type: ignore[attr-defined]
 
     @staticmethod
     def _ensure_uri(name: str, base_uri: str) -> str:
@@ -191,7 +195,10 @@ class GraphQLSchemaBuilder:
 
         class_names, class_by_name, uri_to_name = self._index_classes(classes)
         rel_by_domain, dep_graph = self._index_relationships(
-            properties, base_uri, class_names, uri_to_name,
+            properties,
+            base_uri,
+            class_names,
+            uri_to_name,
         )
         order = self.topo_sort(class_names, dep_graph)
 
@@ -204,7 +211,11 @@ class GraphQLSchemaBuilder:
             return None
 
         metadata = self._build_metadata(
-            order, gql_types, class_by_name, rel_by_domain, base_uri,
+            order,
+            gql_types,
+            class_by_name,
+            rel_by_domain,
+            base_uri,
         )
         schema = self._build_query(order, gql_types, metadata)
         if not schema:
@@ -212,7 +223,8 @@ class GraphQLSchemaBuilder:
 
         logger.info(
             "GraphQL schema built: %d types, %d query fields",
-            len(gql_types), len(gql_types) * 2,
+            len(gql_types),
+            len(gql_types) * 2,
         )
         return schema, metadata
 
@@ -221,7 +233,9 @@ class GraphQLSchemaBuilder:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _index_classes(classes: List[Dict]) -> Tuple[Set[str], Dict[str, Dict], Dict[str, str]]:
+    def _index_classes(
+        classes: List[Dict],
+    ) -> Tuple[Set[str], Dict[str, Dict], Dict[str, str]]:
         class_names: Set[str] = set()
         class_by_name: Dict[str, Dict] = {}
         uri_to_name: Dict[str, str] = {}
@@ -384,7 +398,9 @@ class GraphQLSchemaBuilder:
             query_fields.append(
                 strawberry.field(
                     name=plural,
-                    resolver=ResolverFactory.make_list_resolver(metadata, name, gql_type),
+                    resolver=ResolverFactory.make_list_resolver(
+                        metadata, name, gql_type
+                    ),
                     description=f"List {name} entities from the knowledge graph.",
                 )
             )
@@ -392,7 +408,9 @@ class GraphQLSchemaBuilder:
             query_fields.append(
                 strawberry.field(
                     name=singular,
-                    resolver=ResolverFactory.make_single_resolver(metadata, name, gql_type),
+                    resolver=ResolverFactory.make_single_resolver(
+                        metadata, name, gql_type
+                    ),
                     description=f"Get a single {name} by ID.",
                 )
             )
@@ -419,7 +437,10 @@ def build_schema_for_domain(
 ) -> Optional[Tuple[strawberry.Schema, SchemaMetadata]]:
     """Module-level delegate — uses the default ``GraphQLSchemaBuilder``."""
     return _default_builder.build_for_domain(
-        ontology_classes, ontology_properties, base_uri, domain_name,
+        ontology_classes,
+        ontology_properties,
+        base_uri,
+        domain_name,
     )
 
 

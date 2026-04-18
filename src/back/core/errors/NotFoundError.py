@@ -1,4 +1,5 @@
 """Resource does not exist (404)."""
+
 from __future__ import annotations
 
 from back.core.errors.OntoBricksError import OntoBricksError

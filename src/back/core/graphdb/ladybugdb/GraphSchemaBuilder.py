@@ -1,4 +1,5 @@
 """Static helpers for building and using graph schemas (backward-compat API surface)."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -17,7 +18,10 @@ class GraphSchemaBuilder:
         base_uri: str = "",
     ) -> GraphSchema:
         return GraphSchema.from_ontology(
-            classes, properties, relationships=relationships, base_uri=base_uri,
+            classes,
+            properties,
+            relationships=relationships,
+            base_uri=base_uri,
         )
 
     @staticmethod

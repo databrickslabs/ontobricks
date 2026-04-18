@@ -1,4 +1,5 @@
 """Community detection service using NetworkX algorithms."""
+
 from __future__ import annotations
 
 import time
@@ -61,7 +62,9 @@ class CommunityDetector:
         if nxg.number_of_nodes() == 0:
             logger.warning("CommunityDetector: graph has 0 nodes after filtering")
             return DetectionResult(
-                stats=DetectionStats(algorithm=algorithm, elapsed_ms=self._elapsed_ms(t0)),
+                stats=DetectionStats(
+                    algorithm=algorithm, elapsed_ms=self._elapsed_ms(t0)
+                ),
             )
 
         logger.info(
@@ -132,8 +135,7 @@ class CommunityDetector:
             allowed_subjects = {
                 t["subject"]
                 for t in triples
-                if t.get("predicate") == RDF_TYPE
-                and t.get("object") in class_filter
+                if t.get("predicate") == RDF_TYPE and t.get("object") in class_filter
             }
 
         g = nx.Graph()

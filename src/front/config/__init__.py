@@ -2,6 +2,7 @@
 
 Loads menu_config.json and exposes it for Jinja2 templates.
 """
+
 import json
 import os
 from functools import lru_cache
@@ -24,10 +25,18 @@ def get_menu_config() -> dict:
         return config
     except FileNotFoundError:
         logger.error("Menu config not found at %s", _CONFIG_PATH)
-        return {"brand": {"label": "OntoBricks", "route": "/"}, "menus": [], "utility_links": []}
+        return {
+            "brand": {"label": "OntoBricks", "route": "/"},
+            "menus": [],
+            "utility_links": [],
+        }
     except json.JSONDecodeError as exc:
         logger.error("Invalid JSON in menu config: %s", exc)
-        return {"brand": {"label": "OntoBricks", "route": "/"}, "menus": [], "utility_links": []}
+        return {
+            "brand": {"label": "OntoBricks", "route": "/"},
+            "menus": [],
+            "utility_links": [],
+        }
 
 
 def get_menu_by_id(menu_id: str) -> Optional[dict]:

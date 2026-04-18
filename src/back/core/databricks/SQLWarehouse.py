@@ -3,6 +3,7 @@
 Provides query execution, DDL operations, and warehouse management
 through a SQL Warehouse endpoint.
 """
+
 from databricks import sql
 from typing import Any, Dict, List, Tuple
 
@@ -52,7 +53,11 @@ class SQLWarehouse:
                 with conn.cursor() as cur:
                     cur.execute("SELECT 1")
                     cur.fetchone()
-            auth_mode = "OAuth (Databricks App)" if self._auth.is_app_mode else "Personal Access Token"
+            auth_mode = (
+                "OAuth (Databricks App)"
+                if self._auth.is_app_mode
+                else "Personal Access Token"
+            )
             return True, f"Connection successful ({auth_mode})"
         except Exception as exc:
             return False, f"Connection failed: {exc}"
@@ -85,7 +90,12 @@ class SQLWarehouse:
             raise
 
     def _create_or_replace(
-        self, kind: str, catalog: str, schema: str, name: str, select_sql: str,
+        self,
+        kind: str,
+        catalog: str,
+        schema: str,
+        name: str,
+        select_sql: str,
     ) -> Tuple[bool, str]:
         """Shared DDL wrapper for VIEW and TABLE creation."""
         fqn = f"`{catalog}`.`{schema}`.`{name}`"
@@ -129,11 +139,13 @@ class SQLWarehouse:
                     raise ValidationError("WorkspaceClient not properly initialized")
                 warehouses = []
                 for wh in w.warehouses.list():
-                    warehouses.append({
-                        "id": wh.id,
-                        "name": wh.name,
-                        "state": str(wh.state) if wh.state else "UNKNOWN",
-                    })
+                    warehouses.append(
+                        {
+                            "id": wh.id,
+                            "name": wh.name,
+                            "state": str(wh.state) if wh.state else "UNKNOWN",
+                        }
+                    )
                 logger.info("Found %d warehouses via SDK", len(warehouses))
                 return warehouses
             except AttributeError as exc:
@@ -158,11 +170,13 @@ class SQLWarehouse:
             data = response.json()
             warehouses = []
             for wh in data.get("warehouses", []):
-                warehouses.append({
-                    "id": wh["id"],
-                    "name": wh["name"],
-                    "state": wh.get("state", "UNKNOWN"),
-                })
+                warehouses.append(
+                    {
+                        "id": wh["id"],
+                        "name": wh["name"],
+                        "state": wh.get("state", "UNKNOWN"),
+                    }
+                )
             logger.info("Found %d warehouses via REST", len(warehouses))
             return warehouses
         except Exception as exc:

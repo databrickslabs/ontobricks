@@ -1,4 +1,5 @@
 """Workflow tests: OWL import -> parse -> generate -> parse -> verify."""
+
 import pytest
 from back.core.w3c.owl.OntologyParser import OntologyParser
 from back.core.w3c.owl.OntologyGenerator import OntologyGenerator
@@ -63,18 +64,18 @@ class TestOWLRoundtrip:
         constraints = parser1.get_constraints()
         swrl_rules = parser1.get_swrl_rules()
         split = parser1.get_axioms_and_expressions()
-        axioms = split['axioms']
-        expressions = split['expressions']
+        axioms = split["axioms"]
+        expressions = split["expressions"]
 
-        assert info['label'] == 'FullTest'
+        assert info["label"] == "FullTest"
         assert len(classes) >= 3
-        class_names = {c['name'] for c in classes}
-        assert 'Customer' in class_names
-        assert 'Order' in class_names
+        class_names = {c["name"] for c in classes}
+        assert "Customer" in class_names
+        assert "Order" in class_names
 
         gen = OntologyGenerator(
-            base_uri=info['namespace'],
-            ontology_name=info['label'],
+            base_uri=info["namespace"],
+            ontology_name=info["label"],
             classes=classes,
             properties=properties,
             constraints=constraints,
@@ -83,24 +84,24 @@ class TestOWLRoundtrip:
             expressions=expressions,
         )
         regenerated_owl = gen.generate()
-        assert '@prefix' in regenerated_owl
+        assert "@prefix" in regenerated_owl
 
         parser2 = OntologyParser(regenerated_owl)
         classes2 = parser2.get_classes()
-        class_names2 = {c['name'] for c in classes2}
-        assert 'Customer' in class_names2
-        assert 'Order' in class_names2
+        class_names2 = {c["name"] for c in classes2}
+        assert "Customer" in class_names2
+        assert "Order" in class_names2
 
     def test_constraints_preserved(self):
         parser = OntologyParser(FULL_OWL)
         constraints = parser.get_constraints()
-        functional = [c for c in constraints if c['type'] == 'functional']
+        functional = [c for c in constraints if c["type"] == "functional"]
         assert len(functional) >= 1
 
         info = parser.get_ontology_info()
         gen = OntologyGenerator(
-            base_uri=info['namespace'],
-            ontology_name=info['label'],
+            base_uri=info["namespace"],
+            ontology_name=info["label"],
             classes=parser.get_classes(),
             properties=parser.get_properties(),
             constraints=constraints,
@@ -108,7 +109,7 @@ class TestOWLRoundtrip:
         owl2 = gen.generate()
         parser2 = OntologyParser(owl2)
         constraints2 = parser2.get_constraints()
-        functional2 = [c for c in constraints2 if c['type'] == 'functional']
+        functional2 = [c for c in constraints2 if c["type"] == "functional"]
         assert len(functional2) >= 1
 
     def test_swrl_rules_preserved(self):
@@ -118,8 +119,8 @@ class TestOWLRoundtrip:
 
         info = parser.get_ontology_info()
         gen = OntologyGenerator(
-            base_uri=info['namespace'],
-            ontology_name=info['label'],
+            base_uri=info["namespace"],
+            ontology_name=info["label"],
             classes=parser.get_classes(),
             properties=parser.get_properties(),
             swrl_rules=rules,
@@ -128,20 +129,20 @@ class TestOWLRoundtrip:
         parser2 = OntologyParser(owl2)
         rules2 = parser2.get_swrl_rules()
         assert len(rules2) >= 1
-        assert rules2[0]['name'] == 'ValidateAge'
+        assert rules2[0]["name"] == "ValidateAge"
 
     def test_axioms_preserved(self):
         parser = OntologyParser(FULL_OWL)
         split = parser.get_axioms_and_expressions()
-        axioms = split['axioms']
-        expressions = split['expressions']
-        equiv = [a for a in axioms if a['type'] == 'equivalentClass']
+        axioms = split["axioms"]
+        expressions = split["expressions"]
+        equiv = [a for a in axioms if a["type"] == "equivalentClass"]
         assert len(equiv) >= 1
 
         info = parser.get_ontology_info()
         gen = OntologyGenerator(
-            base_uri=info['namespace'],
-            ontology_name=info['label'],
+            base_uri=info["namespace"],
+            ontology_name=info["label"],
             classes=parser.get_classes(),
             properties=parser.get_properties(),
             axioms=axioms,
@@ -150,5 +151,5 @@ class TestOWLRoundtrip:
         owl2 = gen.generate()
         parser2 = OntologyParser(owl2)
         split2 = parser2.get_axioms_and_expressions()
-        equiv2 = [a for a in split2['axioms'] if a['type'] == 'equivalentClass']
+        equiv2 = [a for a in split2["axioms"] if a["type"] == "equivalentClass"]
         assert len(equiv2) >= 1

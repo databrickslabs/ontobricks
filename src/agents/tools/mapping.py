@@ -18,6 +18,7 @@ logger = get_logger(__name__)
 # Tool implementations
 # =====================================================
 
+
 def tool_submit_entity_mapping(
     ctx: ToolContext,
     *,
@@ -35,7 +36,11 @@ def tool_submit_entity_mapping(
         logger.warning("tool_submit_entity_mapping: missing required fields")
         return json.dumps({"error": "class_uri and sql_query are required"})
 
-    clean_sql = re.sub(r'\s+LIMIT\s+\d+\s*$', '', sql_query, flags=re.IGNORECASE).strip().rstrip(';')
+    clean_sql = (
+        re.sub(r"\s+LIMIT\s+\d+\s*$", "", sql_query, flags=re.IGNORECASE)
+        .strip()
+        .rstrip(";")
+    )
 
     mapping = {
         "ontology_class": class_uri,
@@ -48,16 +53,26 @@ def tool_submit_entity_mapping(
 
     logger.debug(
         "tool_submit_entity_mapping: '%s' — ID=%s, Label=%s, attrs=%d",
-        class_name, id_column, label_column, len(mapping["attribute_mappings"]),
+        class_name,
+        id_column,
+        label_column,
+        len(mapping["attribute_mappings"]),
     )
 
     existing_idx = next(
-        (i for i, m in enumerate(ctx.entity_mappings) if m.get("ontology_class") == class_uri),
+        (
+            i
+            for i, m in enumerate(ctx.entity_mappings)
+            if m.get("ontology_class") == class_uri
+        ),
         -1,
     )
     if existing_idx >= 0:
         ctx.entity_mappings[existing_idx] = mapping
-        logger.debug("tool_submit_entity_mapping: updated existing mapping at index %d", existing_idx)
+        logger.debug(
+            "tool_submit_entity_mapping: updated existing mapping at index %d",
+            existing_idx,
+        )
     else:
         ctx.entity_mappings.append(mapping)
         logger.debug("tool_submit_entity_mapping: appended new mapping")
@@ -65,16 +80,21 @@ def tool_submit_entity_mapping(
     mapped_attrs = len(mapping["attribute_mappings"])
     logger.info(
         "tool_submit_entity_mapping: '%s' recorded — ID=%s, Label=%s, %d attr(s) mapped",
-        class_name, id_column, label_column, mapped_attrs,
+        class_name,
+        id_column,
+        label_column,
+        mapped_attrs,
     )
-    return json.dumps({
-        "success": True,
-        "entity": class_name,
-        "id_column": id_column,
-        "label_column": label_column,
-        "attributes_mapped": mapped_attrs,
-        "total_entity_mappings": len(ctx.entity_mappings),
-    })
+    return json.dumps(
+        {
+            "success": True,
+            "entity": class_name,
+            "id_column": id_column,
+            "label_column": label_column,
+            "attributes_mapped": mapped_attrs,
+            "total_entity_mappings": len(ctx.entity_mappings),
+        }
+    )
 
 
 def tool_submit_relationship_mapping(
@@ -91,18 +111,28 @@ def tool_submit_relationship_mapping(
     **_kwargs,
 ) -> str:
     """Record a completed relationship mapping."""
-    logger.info("tool_submit_relationship_mapping: '%s' (uri=%s)", property_name, property_uri)
+    logger.info(
+        "tool_submit_relationship_mapping: '%s' (uri=%s)", property_name, property_uri
+    )
     if not property_uri or not sql_query:
         logger.warning("tool_submit_relationship_mapping: missing required fields")
         return json.dumps({"error": "property_uri and sql_query are required"})
 
-    clean_sql = re.sub(r'\s+LIMIT\s+\d+\s*$', '', sql_query, flags=re.IGNORECASE).strip().rstrip(';')
+    clean_sql = (
+        re.sub(r"\s+LIMIT\s+\d+\s*$", "", sql_query, flags=re.IGNORECASE)
+        .strip()
+        .rstrip(";")
+    )
 
     def _extract_label(value: str) -> str:
         if not value:
             return ""
         if value.startswith("http://") or value.startswith("https://"):
-            return value.split("#")[-1] if "#" in value else value.rstrip("/").split("/")[-1]
+            return (
+                value.split("#")[-1]
+                if "#" in value
+                else value.rstrip("/").split("/")[-1]
+            )
         return value
 
     if direction == "reverse":
@@ -128,31 +158,45 @@ def tool_submit_relationship_mapping(
 
     logger.debug(
         "tool_submit_relationship_mapping: '%s' — src_col=%s, tgt_col=%s, direction=%s",
-        property_name, source_id_column, target_id_column, direction,
+        property_name,
+        source_id_column,
+        target_id_column,
+        direction,
     )
 
     existing_idx = next(
-        (i for i, m in enumerate(ctx.relationships) if m.get("property") == property_uri),
+        (
+            i
+            for i, m in enumerate(ctx.relationships)
+            if m.get("property") == property_uri
+        ),
         -1,
     )
     if existing_idx >= 0:
         ctx.relationships[existing_idx] = mapping
-        logger.debug("tool_submit_relationship_mapping: updated existing at index %d", existing_idx)
+        logger.debug(
+            "tool_submit_relationship_mapping: updated existing at index %d",
+            existing_idx,
+        )
     else:
         ctx.relationships.append(mapping)
         logger.debug("tool_submit_relationship_mapping: appended new mapping")
 
     logger.info(
         "tool_submit_relationship_mapping: '%s' recorded — source=%s, target=%s",
-        property_name, source_id_column, target_id_column,
+        property_name,
+        source_id_column,
+        target_id_column,
     )
-    return json.dumps({
-        "success": True,
-        "relationship": property_name,
-        "source_id_column": source_id_column,
-        "target_id_column": target_id_column,
-        "total_relationship_mappings": len(ctx.relationships),
-    })
+    return json.dumps(
+        {
+            "success": True,
+            "relationship": property_name,
+            "source_id_column": source_id_column,
+            "target_id_column": target_id_column,
+            "total_relationship_mappings": len(ctx.relationships),
+        }
+    )
 
 
 # =====================================================
@@ -195,12 +239,18 @@ MAPPING_TOOL_DEFINITIONS: List[dict] = [
                         "type": "object",
                         "description": (
                             "Map of ontology attribute names to SQL column names. "
-                            "Example: {\"firstName\": \"first_name\", \"age\": \"customer_age\"}"
+                            'Example: {"firstName": "first_name", "age": "customer_age"}'
                         ),
                         "additionalProperties": {"type": "string"},
                     },
                 },
-                "required": ["class_uri", "class_name", "sql_query", "id_column", "label_column"],
+                "required": [
+                    "class_uri",
+                    "class_name",
+                    "sql_query",
+                    "id_column",
+                    "label_column",
+                ],
             },
         },
     },
@@ -250,8 +300,13 @@ MAPPING_TOOL_DEFINITIONS: List[dict] = [
                     },
                 },
                 "required": [
-                    "property_uri", "property_name", "sql_query",
-                    "source_id_column", "target_id_column", "domain", "range_class",
+                    "property_uri",
+                    "property_name",
+                    "sql_query",
+                    "source_id_column",
+                    "target_id_column",
+                    "domain",
+                    "range_class",
                 ],
             },
         },

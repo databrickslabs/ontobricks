@@ -4,6 +4,7 @@ Covers: bypass paths, local-dev admin bypass, role enforcement (none→403,
 viewer write→403), admin-only paths, request.state role propagation, and
 the digital-twin build endpoint authorization guard.
 """
+
 import asyncio
 import pytest
 from unittest.mock import patch, MagicMock
@@ -24,6 +25,7 @@ from back.core.errors import AuthorizationError
 # Helpers
 # ------------------------------------------------------------------
 
+
 def _run(coro):
     """Run a coroutine synchronously for test assertions."""
     try:
@@ -33,6 +35,7 @@ def _run(coro):
 
     if loop and loop.is_running():
         import concurrent.futures
+
         with concurrent.futures.ThreadPoolExecutor() as pool:
             return pool.submit(asyncio.run, coro).result()
     return asyncio.run(coro)
@@ -70,9 +73,12 @@ def _dispatch_with_roles(app_role, domain_role, method="GET", path="/ontology/")
 
     middleware = PermissionMiddleware(MagicMock())
 
-    with patch("back.core.databricks.is_databricks_app", return_value=True), \
-         patch.object(PermissionMiddleware, "_resolve_roles",
-                      return_value=(app_role, domain_role)):
+    with (
+        patch("back.core.databricks.is_databricks_app", return_value=True),
+        patch.object(
+            PermissionMiddleware, "_resolve_roles", return_value=(app_role, domain_role)
+        ),
+    ):
         resp = _run(middleware.dispatch(req, call_next))
 
     return req, resp, result
@@ -86,16 +92,19 @@ def _dispatch_with_roles(app_role, domain_role, method="GET", path="/ontology/")
 class TestBypassPaths:
     """Requests to static / health / docs / api paths skip enforcement."""
 
-    @pytest.mark.parametrize("path", [
-        "/static/css/main.css",
-        "/health",
-        "/docs",
-        "/redoc",
-        "/openapi.json",
-        "/access-denied",
-        "/api/v1/domains",
-        "/graphql/",
-    ])
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/static/css/main.css",
+            "/health",
+            "/docs",
+            "/redoc",
+            "/openapi.json",
+            "/access-denied",
+            "/api/v1/domains",
+            "/graphql/",
+        ],
+    )
     def test_bypass_sets_empty_role(self, path):
         from shared.fastapi.main import PermissionMiddleware
 
@@ -200,29 +209,37 @@ class TestAdminOnlyPaths:
     """Non-admin users are blocked from /settings/permissions and /settings/domain-permissions."""
 
     def test_admin_can_access_permissions(self):
-        _, _, result = _dispatch_with_roles(ROLE_ADMIN, ROLE_ADMIN, path="/settings/permissions")
+        _, _, result = _dispatch_with_roles(
+            ROLE_ADMIN, ROLE_ADMIN, path="/settings/permissions"
+        )
         assert result.get("passed")
 
     def test_editor_blocked_from_permissions(self):
-        _, resp, result = _dispatch_with_roles(ROLE_EDITOR, ROLE_EDITOR, path="/settings/permissions")
+        _, resp, result = _dispatch_with_roles(
+            ROLE_EDITOR, ROLE_EDITOR, path="/settings/permissions"
+        )
         assert resp.status_code == 403
         assert not result.get("passed")
 
     def test_builder_blocked_from_permissions(self):
-        _, resp, result = _dispatch_with_roles(ROLE_BUILDER, ROLE_BUILDER, path="/settings/permissions")
+        _, resp, result = _dispatch_with_roles(
+            ROLE_BUILDER, ROLE_BUILDER, path="/settings/permissions"
+        )
         assert resp.status_code == 403
         assert not result.get("passed")
 
     def test_admin_can_access_domain_permissions(self):
         _, _, result = _dispatch_with_roles(
-            ROLE_ADMIN, ROLE_ADMIN,
+            ROLE_ADMIN,
+            ROLE_ADMIN,
             path="/settings/domain-permissions/my_domain",
         )
         assert result.get("passed")
 
     def test_editor_blocked_from_domain_permissions(self):
         _, resp, result = _dispatch_with_roles(
-            ROLE_EDITOR, ROLE_EDITOR,
+            ROLE_EDITOR,
+            ROLE_EDITOR,
             path="/settings/domain-permissions/my_domain",
         )
         assert resp.status_code == 403
@@ -250,9 +267,14 @@ class TestRequestState:
 
         middleware = PermissionMiddleware(MagicMock())
 
-        with patch("back.core.databricks.is_databricks_app", return_value=True), \
-             patch.object(PermissionMiddleware, "_resolve_roles",
-                          return_value=(ROLE_BUILDER, ROLE_EDITOR)):
+        with (
+            patch("back.core.databricks.is_databricks_app", return_value=True),
+            patch.object(
+                PermissionMiddleware,
+                "_resolve_roles",
+                return_value=(ROLE_BUILDER, ROLE_EDITOR),
+            ),
+        ):
             _run(middleware.dispatch(req, call_next))
 
         assert captured["app"] == ROLE_BUILDER
@@ -294,9 +316,12 @@ class TestResolveRolesFailure:
 
         middleware = PermissionMiddleware(MagicMock())
 
-        with patch("back.core.databricks.is_databricks_app", return_value=True), \
-             patch.object(PermissionMiddleware, "_resolve_roles",
-                          side_effect=RuntimeError("boom")):
+        with (
+            patch("back.core.databricks.is_databricks_app", return_value=True),
+            patch.object(
+                PermissionMiddleware, "_resolve_roles", side_effect=RuntimeError("boom")
+            ),
+        ):
             resp = _run(middleware.dispatch(req, call_next))
 
         assert resp.status_code == 403
@@ -316,13 +341,16 @@ class TestBuildEndpointGuard:
     (role_level comparison), not the full endpoint stack.
     """
 
-    @pytest.mark.parametrize("role,allowed", [
-        (ROLE_ADMIN, True),
-        (ROLE_BUILDER, True),
-        (ROLE_EDITOR, False),
-        (ROLE_VIEWER, False),
-        (ROLE_NONE, False),
-    ])
+    @pytest.mark.parametrize(
+        "role,allowed",
+        [
+            (ROLE_ADMIN, True),
+            (ROLE_BUILDER, True),
+            (ROLE_EDITOR, False),
+            (ROLE_VIEWER, False),
+            (ROLE_NONE, False),
+        ],
+    )
     def test_role_gate(self, role, allowed):
         assert (role_level(role) >= role_level(ROLE_BUILDER)) == allowed
 

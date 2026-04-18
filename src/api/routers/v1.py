@@ -4,6 +4,7 @@ External REST API Routes (v1)
 Stateless API endpoints for external integrations.
 All endpoints accept authentication via headers or request body.
 """
+
 from fastapi import APIRouter, Header
 from pydantic import AliasChoices, BaseModel, Field
 from typing import Optional, Any
@@ -20,24 +21,25 @@ router = APIRouter()
 # Pydantic Models for Request/Response
 # ===========================================
 
+
 class CredentialsModel(BaseModel):
     """Base model with optional Databricks credentials."""
+
     databricks_host: Optional[str] = Field(
-        None, 
+        None,
         description="Databricks workspace URL (e.g., https://my-workspace.cloud.databricks.com)",
-        examples=["https://my-workspace.cloud.databricks.com"]
+        examples=["https://my-workspace.cloud.databricks.com"],
     )
     databricks_token: Optional[str] = Field(
-        None, 
-        description="Personal Access Token or OAuth token for authentication"
+        None, description="Personal Access Token or OAuth token for authentication"
     )
-    
+
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {
                     "databricks_host": "https://my-workspace.cloud.databricks.com",
-                    "databricks_token": "dapi..."
+                    "databricks_token": "dapi...",
                 }
             ]
         }
@@ -46,31 +48,31 @@ class CredentialsModel(BaseModel):
 
 class UCLocationModel(CredentialsModel):
     """Unity Catalog location model for accessing domain JSON files."""
+
     catalog: str = Field(..., description="Unity Catalog name", examples=["main"])
     schema_name: str = Field(
-        ..., 
-        alias="schema", 
+        ...,
+        alias="schema",
         description="Schema name within the catalog",
-        examples=["ontobricks"]
+        examples=["ontobricks"],
     )
-    volume: str = Field(..., description="Volume name for file storage", examples=["projects"])
-    
+    volume: str = Field(
+        ..., description="Volume name for file storage", examples=["projects"]
+    )
+
     model_config = {
         "populate_by_name": True,
         "json_schema_extra": {
             "examples": [
-                {
-                    "catalog": "main",
-                    "schema": "ontobricks",
-                    "volume": "projects"
-                }
+                {"catalog": "main", "schema": "ontobricks", "volume": "projects"}
             ]
-        }
+        },
     }
 
 
 class DomainPathModel(CredentialsModel):
     """Model with Unity Catalog domain JSON file path."""
+
     model_config = {"populate_by_name": True}
 
     domain_path: str = Field(
@@ -83,35 +85,35 @@ class DomainPathModel(CredentialsModel):
 
 class QueryModel(DomainPathModel):
     """SPARQL query execution request model."""
+
     query: str = Field(
-        ..., 
+        ...,
         description="SPARQL query to execute",
-        examples=["SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10"]
+        examples=["SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10"],
     )
     limit: int = Field(
-        100, 
-        description="Maximum number of results to return",
-        ge=1,
-        le=10000
+        100, description="Maximum number of results to return", ge=1, le=10000
     )
     engine: str = Field(
-        "local", 
+        "local",
         description="Query execution engine: 'local' (RDFLib) or 'spark' (Databricks SQL)",
-        examples=["local", "spark"]
+        examples=["local", "spark"],
     )
 
 
 class ValidateQueryModel(BaseModel):
     """SPARQL query validation request model."""
+
     query: str = Field(
-        ..., 
+        ...,
         description="SPARQL query to validate",
-        examples=["SELECT ?s ?p ?o WHERE { ?s ?p ?o }"]
+        examples=["SELECT ?s ?p ?o WHERE { ?s ?p ?o }"],
     )
 
 
 class SuccessResponse(BaseModel):
     """Standard API success response."""
+
     success: bool = Field(True, description="Indicates if the request was successful")
     data: Any = Field(..., description="Response payload")
     message: Optional[str] = Field(None, description="Optional message")
@@ -121,20 +123,21 @@ class SuccessResponse(BaseModel):
 # Helper Functions
 # ===========================================
 
+
 def get_credentials(
     request_data: Optional[CredentialsModel],
     x_databricks_host: Optional[str] = None,
-    x_databricks_token: Optional[str] = None
+    x_databricks_token: Optional[str] = None,
 ) -> tuple[Optional[str], Optional[str]]:
     """Extract Databricks credentials from headers or request body."""
     host = x_databricks_host
     token = x_databricks_token
-    
+
     if not host and request_data:
         host = request_data.databricks_host
     if not token and request_data:
         token = request_data.databricks_token
-    
+
     return host, token
 
 
@@ -142,11 +145,12 @@ def get_credentials(
 # Health Check
 # ===========================================
 
+
 @router.get("/health", summary="API Health Check", tags=["Health"])
 async def api_health():
     """
     Check the health status of the API v1 endpoints.
-    
+
     Returns:
         - **status**: Health status (healthy/unhealthy)
         - **version**: API version
@@ -157,7 +161,7 @@ async def api_health():
         "status": "healthy",
         "version": APP_VERSION,
         "service": "OntoBricks API",
-        "framework": "FastAPI"
+        "framework": "FastAPI",
     }
 
 
@@ -165,11 +169,16 @@ async def api_health():
 # Domain Endpoints
 # ===========================================
 
+
 @router.post("/domains/list", response_model=SuccessResponse, summary="List Domains")
 async def list_domains(
     data: UCLocationModel,
-    x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host", description="Databricks workspace URL"),
-    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token", description="Authentication token")
+    x_databricks_host: Optional[str] = Header(
+        None, alias="X-Databricks-Host", description="Databricks workspace URL"
+    ),
+    x_databricks_token: Optional[str] = Header(
+        None, alias="X-Databricks-Token", description="Authentication token"
+    ),
 ):
     """
     List all OntoBricks domain JSON files in a Unity Catalog volume.
@@ -187,7 +196,11 @@ async def list_domains(
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
 
     domains = service.list_domains_from_uc(
-        data.catalog, data.schema_name, data.volume, host, token,
+        data.catalog,
+        data.schema_name,
+        data.volume,
+        host,
+        token,
     )
 
     return SuccessResponse(
@@ -200,7 +213,7 @@ async def list_domains(
 async def get_domain_info(
     data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
-    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
+    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token"),
 ):
     """Get domain information and statistics."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
@@ -214,7 +227,7 @@ async def get_domain_info(
 async def get_ontology(
     data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
-    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
+    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token"),
 ):
     """Get ontology details (classes and properties)."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
@@ -228,7 +241,7 @@ async def get_ontology(
 async def get_ontology_classes(
     data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
-    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
+    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token"),
 ):
     """Get list of ontology classes with their URIs."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
@@ -242,7 +255,7 @@ async def get_ontology_classes(
 async def get_ontology_properties(
     data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
-    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
+    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token"),
 ):
     """Get list of ontology properties (relationships) with their URIs."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
@@ -256,7 +269,7 @@ async def get_ontology_properties(
 async def get_mappings(
     data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
-    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
+    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token"),
 ):
     """Get mapping details (entity and relationship mappings)."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
@@ -270,7 +283,7 @@ async def get_mappings(
 async def get_r2rml(
     data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
-    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
+    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token"),
 ):
     """Get the R2RML mapping content from a domain."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
@@ -289,11 +302,16 @@ async def get_r2rml(
 # Query Endpoints
 # ===========================================
 
+
 @router.post("/query", response_model=SuccessResponse, summary="Execute SPARQL Query")
 async def execute_query(
     data: QueryModel,
-    x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host", description="Databricks workspace URL"),
-    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token", description="Authentication token")
+    x_databricks_host: Optional[str] = Header(
+        None, alias="X-Databricks-Host", description="Databricks workspace URL"
+    ),
+    x_databricks_token: Optional[str] = Header(
+        None, alias="X-Databricks-Token", description="Authentication token"
+    ),
 ):
     """
     Execute a SPARQL query against a domain's mapped data.
@@ -327,32 +345,35 @@ async def execute_query(
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)
 
     domain_data = service.load_domain_from_uc(data.domain_path, host, token)
-    result = service.execute_sparql_query(domain_data, data.query, data.limit, data.engine)
+    result = service.execute_sparql_query(
+        domain_data, data.query, data.limit, data.engine
+    )
 
-    return SuccessResponse(data={
-        "results": result.get('results', []),
-        "columns": result.get('columns', []),
-        "count": result.get('count', 0),
-        "engine": result.get('engine', data.engine),
-    })
+    return SuccessResponse(
+        data={
+            "results": result.get("results", []),
+            "columns": result.get("columns", []),
+            "count": result.get("count", 0),
+            "engine": result.get("engine", data.engine),
+        }
+    )
 
 
 @router.post("/query/validate", response_model=SuccessResponse)
 async def validate_query(data: ValidateQueryModel):
     """Validate a SPARQL query syntax."""
     is_valid, error_msg = service.validate_sparql_query(data.query)
-    
-    return SuccessResponse(data={
-        "valid": is_valid,
-        "error": error_msg if not is_valid else None
-    })
+
+    return SuccessResponse(
+        data={"valid": is_valid, "error": error_msg if not is_valid else None}
+    )
 
 
 @router.post("/query/samples", response_model=SuccessResponse)
 async def get_sample_queries(
     data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),
-    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token")
+    x_databricks_token: Optional[str] = Header(None, alias="X-Databricks-Token"),
 ):
     """Get sample SPARQL queries for a domain."""
     host, token = get_credentials(data, x_databricks_host, x_databricks_token)

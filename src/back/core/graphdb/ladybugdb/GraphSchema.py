@@ -1,4 +1,5 @@
 """LadybugDB graph schema instance: node/rel tables and triple classification."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -82,7 +83,11 @@ class GraphSchema:
             ptype = prop.get("type", "")
             if ptype in ("DatatypeProperty", "owl:DatatypeProperty"):
                 p_uri = prop.get("uri", "")
-                p_name = prop.get("name") or prop.get("localName") or cls.extract_local_name(p_uri)
+                p_name = (
+                    prop.get("name")
+                    or prop.get("localName")
+                    or cls.extract_local_name(p_uri)
+                )
                 if p_name and p_uri:
                     dp_uri_lookup[p_name.lower()] = p_uri
 
@@ -111,7 +116,9 @@ class GraphSchema:
                     prop_uris[col] = dp_uri
 
             node_def = NodeTableDef(
-                name=safe, class_uri=uri, properties=prop_names,
+                name=safe,
+                class_uri=uri,
+                properties=prop_names,
                 property_uris=prop_uris,
             )
             schema.node_tables[safe] = node_def
@@ -131,14 +138,22 @@ class GraphSchema:
             prop_uri = prop.get("uri", "")
             if not prop_uri:
                 continue
-            prop_name = prop.get("name") or prop.get("localName") or cls.extract_local_name(prop_uri)
+            prop_name = (
+                prop.get("name")
+                or prop.get("localName")
+                or cls.extract_local_name(prop_uri)
+            )
             safe_name = cls.safe_identifier(prop_name)
 
             domain_name = (prop.get("domain") or "").strip()
             range_name = (prop.get("range") or "").strip()
 
-            from_table = cls._resolve_table_name(domain_name, name_to_uri, schema, base_uri)
-            to_table = cls._resolve_table_name(range_name, name_to_uri, schema, base_uri)
+            from_table = cls._resolve_table_name(
+                domain_name, name_to_uri, schema, base_uri
+            )
+            to_table = cls._resolve_table_name(
+                range_name, name_to_uri, schema, base_uri
+            )
 
             rel_def = RelTableDef(
                 name=safe_name,
@@ -229,10 +244,12 @@ class GraphSchema:
         for t in rel_triples:
             rel_table = self.get_rel_table(t["predicate"])
             if rel_table:
-                rel_inserts.append({
-                    "rel_table": rel_table,
-                    "from_uri": t["subject"],
-                    "to_uri": t["object"],
-                })
+                rel_inserts.append(
+                    {
+                        "rel_table": rel_table,
+                        "from_uri": t["subject"],
+                        "to_uri": t["object"],
+                    }
+                )
 
         return node_inserts, rel_inserts, subject_attrs

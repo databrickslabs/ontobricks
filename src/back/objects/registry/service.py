@@ -17,6 +17,7 @@ Usage in a route handler::
     svc  = RegistryService.from_context(domain, settings)
     ok, names, msg = svc.list_domains()
 """
+
 from __future__ import annotations
 
 import json
@@ -48,6 +49,7 @@ _LEGACY_DOMAINS_FOLDER = "projects"
 # RegistryCfg — lightweight value object
 # ------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class RegistryCfg:
     """Immutable registry location triplet (catalog, schema, volume)."""
@@ -64,7 +66,9 @@ class RegistryCfg:
         parts = path.strip("/").split("/")
         if len(parts) >= 4 and parts[0].lower() == "volumes":
             return cls(catalog=parts[1], schema=parts[2], volume=parts[3])
-        logger.warning("Cannot parse volume path '%s'; expected /Volumes/<c>/<s>/<v>", path)
+        logger.warning(
+            "Cannot parse volume path '%s'; expected /Volumes/<c>/<s>/<v>", path
+        )
         return cls(catalog="", schema="", volume="")
 
     @classmethod
@@ -90,6 +94,7 @@ class RegistryCfg:
     def from_session(cls, session_mgr, settings) -> RegistryCfg:
         """Build from *SessionManager* and *Settings*."""
         from back.objects.session.DomainSession import get_domain
+
         return cls.from_domain(get_domain(session_mgr), settings)
 
     @classmethod
@@ -115,6 +120,7 @@ class RegistryCfg:
 # ------------------------------------------------------------------
 # RegistryService — all I/O operations
 # ------------------------------------------------------------------
+
 
 class RegistryService:
     """Encapsulates every UC-Volume registry operation."""
@@ -179,7 +185,9 @@ class RegistryService:
         legacy_path = f"{root}/{_LEGACY_DOMAINS_FOLDER}"
         ok_legacy, _, _ = self._uc.list_directory(legacy_path, dirs_only=True)
         if ok_legacy:
-            logger.info("Using legacy '%s/' folder in registry volume", _LEGACY_DOMAINS_FOLDER)
+            logger.info(
+                "Using legacy '%s/' folder in registry volume", _LEGACY_DOMAINS_FOLDER
+            )
             self._resolved_domains_folder = _LEGACY_DOMAINS_FOLDER
             return _LEGACY_DOMAINS_FOLDER
 
@@ -232,7 +240,9 @@ class RegistryService:
                 return False, f"Failed to create volume {c.volume}"
 
         self._uc.write_file(
-            self.marker_path(), "OntoBricks Domain Registry", overwrite=True,
+            self.marker_path(),
+            "OntoBricks Domain Registry",
+            overwrite=True,
         )
         logger.info("Registry initialized at %s.%s.%s", c.catalog, c.schema, c.volume)
         return True, f"Registry initialized: {c.catalog}.{c.schema}.{c.volume}"
@@ -308,21 +318,25 @@ class RegistryService:
                             description = info.get("description", "")
                             ontology = self._extract_latest_ontology(doc)
                             base_uri = ontology.get("base_uri", "")
-                    version_objects.append({
-                        "version": ver,
-                        "active": active,
-                        "last_update": last_update,
-                        "last_build": last_build,
-                    })
+                    version_objects.append(
+                        {
+                            "version": ver,
+                            "active": active,
+                            "last_update": last_update,
+                            "last_build": last_build,
+                        }
+                    )
             except Exception:
                 logger.debug("Could not read details for domain %s", name)
 
-            result.append({
-                "name": name,
-                "base_uri": base_uri,
-                "description": description,
-                "versions": version_objects,
-            })
+            result.append(
+                {
+                    "name": name,
+                    "base_uri": base_uri,
+                    "description": description,
+                    "versions": version_objects,
+                }
+            )
 
         return True, result, ""
 
@@ -367,7 +381,8 @@ class RegistryService:
             ok, details, msg = await run_blocking(self.list_domain_details)
             if not ok:
                 logger.warning(
-                    "Could not list registry domains for URI resolution: %s", msg,
+                    "Could not list registry domains for URI resolution: %s",
+                    msg,
                 )
                 return None
 
@@ -417,7 +432,9 @@ class RegistryService:
                 return versions[latest_key[0]].get("ontology", {})
         return doc.get("ontology", {})
 
-    def list_mcp_domains(self, require_ontology: bool = False) -> Tuple[bool, List[Dict[str, str]], str]:
+    def list_mcp_domains(
+        self, require_ontology: bool = False
+    ) -> Tuple[bool, List[Dict[str, str]], str]:
         """List domains that have an MCP-enabled version.
 
         Returns ``(ok, domains, message)`` where each domain is
@@ -444,7 +461,9 @@ class RegistryService:
                     ont = ver_data.get("ontology", mcp_data.get("ontology", {}))
                     if not ont.get("classes"):
                         continue
-                result.append({"name": name, "description": info.get("description", "")})
+                result.append(
+                    {"name": name, "description": info.get("description", "")}
+                )
             except Exception:
                 logger.debug("Could not inspect domain %s", name)
         return True, result, ""
@@ -487,8 +506,9 @@ class RegistryService:
             logger.info("recursive_delete: removed directory %s", dir_path)
         else:
             errors.append(d_msg)
-            logger.warning("recursive_delete: could not remove directory %s: %s",
-                           dir_path, d_msg)
+            logger.warning(
+                "recursive_delete: could not remove directory %s: %s", dir_path, d_msg
+            )
 
         return errors
 
@@ -500,7 +520,8 @@ class RegistryService:
         Scans ``V{N}/`` subdirectories inside the domain folder.
         """
         ok, items, msg = self._uc.list_directory(
-            self.domain_path(folder), dirs_only=True,
+            self.domain_path(folder),
+            dirs_only=True,
         )
         if not ok:
             return False, [], msg
@@ -574,7 +595,7 @@ class RegistryService:
             ok, data, _ = self.read_version(folder, ver)
             if not ok:
                 continue
-            if data.get('info', {}).get('mcp_enabled'):
+            if data.get("info", {}).get("mcp_enabled"):
                 return ver, data
         return None, {}
 
@@ -594,7 +615,10 @@ class RegistryService:
     # -- document operations -------------------------------------------
 
     def copy_version_documents(
-        self, folder: str, src_version: str, dst_version: str,
+        self,
+        folder: str,
+        src_version: str,
+        dst_version: str,
     ) -> Tuple[int, List[str]]:
         """Copy all documents from one version directory to another.
 
@@ -665,21 +689,26 @@ class RegistryService:
                     if not cls_bridges:
                         continue
                     for b in cls_bridges:
-                        bridges.append({
-                            "source_class": cls.get("name", ""),
-                            "source_class_uri": cls.get("uri", ""),
-                            "source_emoji": cls.get("emoji", "📦"),
-                            "target_domain": b.get("target_domain") or b.get("target_project", ""),
-                            "target_class_name": b.get("target_class_name", ""),
-                            "target_class_uri": b.get("target_class_uri", ""),
-                            "label": b.get("label", ""),
-                        })
+                        bridges.append(
+                            {
+                                "source_class": cls.get("name", ""),
+                                "source_class_uri": cls.get("uri", ""),
+                                "source_emoji": cls.get("emoji", "📦"),
+                                "target_domain": b.get("target_domain")
+                                or b.get("target_project", ""),
+                                "target_class_name": b.get("target_class_name", ""),
+                                "target_class_uri": b.get("target_class_uri", ""),
+                                "label": b.get("label", ""),
+                            }
+                        )
 
-                result.append({
-                    "name": name,
-                    "base_uri": base_uri,
-                    "bridges": bridges,
-                })
+                result.append(
+                    {
+                        "name": name,
+                        "base_uri": base_uri,
+                        "bridges": bridges,
+                    }
+                )
             except Exception:
                 logger.debug("Could not read bridges for domain %s", name)
 
@@ -731,7 +760,8 @@ class RegistryService:
             return True, "No flat version files found — nothing to migrate"
 
         flat_versions.sort(
-            key=lambda v: [int(x) for x in v.split(".")], reverse=True,
+            key=lambda v: [int(x) for x in v.split(".")],
+            reverse=True,
         )
         latest_version = flat_versions[0]
         errors: List[str] = []
@@ -782,11 +812,15 @@ class RegistryService:
                     if item.get("is_directory"):
                         continue
                     name = item["name"]
-                    r_ok, content, r_msg = self._uc.read_binary_file(f"{src_docs}/{name}")
+                    r_ok, content, r_msg = self._uc.read_binary_file(
+                        f"{src_docs}/{name}"
+                    )
                     if not r_ok:
                         errors.append(f"Read doc {name}: {r_msg}")
                         continue
-                    w_ok, w_msg = self._uc.write_binary_file(f"{dst_docs}/{name}", content)
+                    w_ok, w_msg = self._uc.write_binary_file(
+                        f"{dst_docs}/{name}", content
+                    )
                     if not w_ok:
                         errors.append(f"Write doc {name}: {w_msg}")
                         continue

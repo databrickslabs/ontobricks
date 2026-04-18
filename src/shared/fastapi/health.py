@@ -1,4 +1,5 @@
 """Health check endpoints."""
+
 import sys
 
 from fastapi import APIRouter
@@ -15,7 +16,7 @@ async def health_check():
         "status": "healthy",
         "version": APP_VERSION,
         "service": "OntoBricks",
-        "framework": "FastAPI"
+        "framework": "FastAPI",
     }
 
 
@@ -26,9 +27,5 @@ async def detailed_health():
         "status": "healthy",
         "version": APP_VERSION,
         "python_version": sys.version,
-        "components": {
-            "api": "ok",
-            "session": "ok",
-            "static_files": "ok"
-        }
+        "components": {"api": "ok", "session": "ok", "static_files": "ok"},
     }

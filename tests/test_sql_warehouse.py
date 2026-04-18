@@ -1,4 +1,5 @@
 """Tests for SQLWarehouse (Databricks SQL Warehouse helper)."""
+
 import importlib
 import pytest
 from unittest.mock import Mock, MagicMock, patch

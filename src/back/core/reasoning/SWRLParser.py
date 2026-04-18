@@ -4,6 +4,7 @@ Extracts atoms from SWRL rule strings and provides URI resolution,
 violation-subject detection, and variable connectivity analysis used
 by both the SQL and Cypher translation paths.
 """
+
 from typing import Dict, List, Optional
 
 from back.core.logging import get_logger
@@ -34,11 +35,13 @@ class SWRLParser:
             return None
 
         class_atoms = [
-            a for a in ante_atoms
+            a
+            for a in ante_atoms
             if a["arity"] == 1 and not a.get("builtin") and not a.get("negated")
         ]
         prop_atoms = [
-            a for a in ante_atoms
+            a
+            for a in ante_atoms
             if a["arity"] == 2 and not a.get("builtin") and not a.get("negated")
         ]
         builtin_atoms = [
@@ -78,10 +81,15 @@ class SWRLParser:
         for m in NEGATED_ATOM_RE.finditer(remaining):
             name = m.group(1)
             raw_args = [a.strip() for a in m.group(2).split(",")]
-            atoms.append({
-                "name": name, "args": raw_args, "arity": len(raw_args),
-                "negated": True, "builtin": SWRLBuiltinRegistry.is_builtin(name),
-            })
+            atoms.append(
+                {
+                    "name": name,
+                    "args": raw_args,
+                    "arity": len(raw_args),
+                    "negated": True,
+                    "builtin": SWRLBuiltinRegistry.is_builtin(name),
+                }
+            )
 
         cleaned = NEGATED_ATOM_RE.sub("", remaining)
 
@@ -90,10 +98,15 @@ class SWRLParser:
             if name.lower() == "not":
                 continue
             raw_args = [a.strip() for a in m.group(2).split(",")]
-            atoms.append({
-                "name": name, "args": raw_args, "arity": len(raw_args),
-                "negated": False, "builtin": SWRLBuiltinRegistry.is_builtin(name),
-            })
+            atoms.append(
+                {
+                    "name": name,
+                    "args": raw_args,
+                    "arity": len(raw_args),
+                    "negated": False,
+                    "builtin": SWRLBuiltinRegistry.is_builtin(name),
+                }
+            )
         return atoms
 
     @staticmethod
@@ -120,7 +133,8 @@ class SWRLParser:
 
     @staticmethod
     def determine_violation_subject(
-        cons_atoms: List[Dict], ante_class_atoms: List[Dict],
+        cons_atoms: List[Dict],
+        ante_class_atoms: List[Dict],
     ) -> Optional[str]:
         """Return the SWRL variable whose instances are reported as violations.
 
@@ -157,7 +171,8 @@ class SWRLParser:
 
     @staticmethod
     def order_connected_props(
-        violation_var: str, connected_props: List[Dict],
+        violation_var: str,
+        connected_props: List[Dict],
     ) -> List[Dict]:
         """Order property atoms so each has at least one previously-bound variable."""
         ordered: List[Dict] = []

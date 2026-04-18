@@ -17,7 +17,11 @@ from typing import Callable, Dict, List, Optional
 import requests
 
 from back.core.logging import get_logger
-from agents.agent_owl_generator.tools import ToolContext, TOOL_DEFINITIONS, TOOL_HANDLERS
+from agents.agent_owl_generator.tools import (
+    ToolContext,
+    TOOL_DEFINITIONS,
+    TOOL_HANDLERS,
+)
 from agents.engine_base import (
     AgentStep,
     call_serving_endpoint,
@@ -39,9 +43,11 @@ _TRACE_NAME = "owl_generator"
 # Data classes
 # =====================================================
 
+
 @dataclass
 class AgentResult:
     """Outcome of a full agent run."""
+
     success: bool
     owl_content: str = ""
     steps: List[AgentStep] = field(default_factory=list)
@@ -189,6 +195,7 @@ If you detect a likely inconsistency or anti-pattern, correct it before output a
 # Internal helpers
 # =====================================================
 
+
 def _build_user_prompt(
     guidelines: str,
     options: dict,
@@ -199,7 +206,8 @@ def _build_user_prompt(
     logger.debug("_build_user_prompt: base_uri=%s, options=%s", base_uri, options)
     logger.debug(
         "_build_user_prompt: selected_tables=%s, selected_docs=%s",
-        selected_tables, selected_docs,
+        selected_tables,
+        selected_docs,
     )
 
     include_attrs = options.get("includeDataProperties", True)
@@ -229,13 +237,16 @@ def _build_user_prompt(
         "relevant documents, then generate the ontology."
     )
     prompt = "\n".join(parts)
-    logger.debug("_build_user_prompt: final prompt (%d chars):\n%s", len(prompt), prompt)
+    logger.debug(
+        "_build_user_prompt: final prompt (%d chars):\n%s", len(prompt), prompt
+    )
     return prompt
 
 
 # =====================================================
 # Public entry point
 # =====================================================
+
 
 @trace_agent(name="owl_generator")
 def run_agent(
@@ -262,12 +273,17 @@ def run_agent(
     """
     logger.info(
         "===== AGENT START ===== endpoint=%s, base_uri=%s",
-        endpoint_name, base_uri,
+        endpoint_name,
+        base_uri,
     )
     logger.debug(
         "run_agent params: registry=%s, guidelines=%d chars, options=%s, "
         "selected_tables=%s, selected_docs=%s",
-        registry, len(guidelines or ""), options, selected_tables, selected_docs,
+        registry,
+        len(guidelines or ""),
+        options,
+        selected_tables,
+        selected_docs,
     )
 
     ctx = ToolContext(
@@ -279,8 +295,7 @@ def run_agent(
         domain_version=domain_version or "1",
         metadata=metadata or {},
     )
-    logger.info("Agent context created — host=%s, registry=%s",
-                ctx.host, ctx.registry)
+    logger.info("Agent context created — host=%s, registry=%s", ctx.host, ctx.registry)
     logger.debug(
         "Agent metadata summary: %d table(s), table names=[%s]",
         len((metadata or {}).get("tables", [])),
@@ -291,26 +306,44 @@ def run_agent(
 
     # Narrow metadata to selected tables when a subset was chosen
     if selected_tables and metadata.get("tables"):
-        all_table_names = [t.get("full_name") or t.get("name") for t in metadata["tables"]]
-        logger.debug("Agent table filtering: all=%s, selected=%s", all_table_names, selected_tables)
+        all_table_names = [
+            t.get("full_name") or t.get("name") for t in metadata["tables"]
+        ]
+        logger.debug(
+            "Agent table filtering: all=%s, selected=%s",
+            all_table_names,
+            selected_tables,
+        )
         filtered = [
-            t for t in metadata["tables"]
+            t
+            for t in metadata["tables"]
             if (t.get("full_name") or t.get("name")) in selected_tables
         ]
         if filtered:
             ctx.metadata = {**metadata, "tables": filtered}
             logger.info(
                 "Agent filtered metadata to %d/%d selected table(s): [%s]",
-                len(filtered), len(metadata["tables"]),
+                len(filtered),
+                len(metadata["tables"]),
                 ", ".join(t.get("name", "?") for t in filtered),
             )
         else:
-            logger.warning("Agent table filter matched 0 tables — keeping all %d", len(metadata["tables"]))
+            logger.warning(
+                "Agent table filter matched 0 tables — keeping all %d",
+                len(metadata["tables"]),
+            )
     else:
-        logger.info("Agent using all %d available table(s) (no filter)", len((metadata or {}).get("tables", [])))
+        logger.info(
+            "Agent using all %d available table(s) (no filter)",
+            len((metadata or {}).get("tables", [])),
+        )
 
     # Build initial conversation
-    logger.info("Agent building user prompt — guidelines=%d chars, options=%s", len(guidelines or ""), options)
+    logger.info(
+        "Agent building user prompt — guidelines=%d chars, options=%s",
+        len(guidelines or ""),
+        options,
+    )
     user_prompt = _build_user_prompt(
         guidelines=guidelines,
         options=options,
@@ -328,7 +361,8 @@ def run_agent(
     ]
     logger.info(
         "Agent conversation initialized: system_prompt=%d chars, user_prompt=%d chars",
-        len(system_content), len(user_prompt),
+        len(system_content),
+        len(user_prompt),
     )
     logger.debug("Agent system prompt:\n%s", system_content)
     logger.debug("Agent user prompt:\n%s", user_prompt)
@@ -356,7 +390,9 @@ def run_agent(
     for iteration in range(MAX_ITERATIONS):
         logger.info(
             "----- Iteration %d/%d — %d messages in conversation -----",
-            iteration + 1, MAX_ITERATIONS, len(messages),
+            iteration + 1,
+            MAX_ITERATIONS,
+            len(messages),
         )
         logger.debug(
             "Iteration %d message roles: [%s]",
@@ -370,33 +406,56 @@ def run_agent(
         send_tools = TOOL_DEFINITIONS if (tools_supported and not is_last) else None
         logger.info(
             "Iteration %d: tools_enabled=%s (supported=%s, last_iter=%s)",
-            iteration + 1, send_tools is not None, tools_supported, is_last,
+            iteration + 1,
+            send_tools is not None,
+            tools_supported,
+            is_last,
         )
 
         t0 = time.time()
         try:
             llm_response = call_serving_endpoint(
-                host, token, endpoint_name, messages,
-                tools=send_tools, max_tokens=4096, temperature=0.1,
-                timeout=LLM_TIMEOUT, trace_name=_TRACE_NAME,
+                host,
+                token,
+                endpoint_name,
+                messages,
+                tools=send_tools,
+                max_tokens=4096,
+                temperature=0.1,
+                timeout=LLM_TIMEOUT,
+                trace_name=_TRACE_NAME,
             )
         except requests.exceptions.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else "?"
             logger.warning(
                 "Iteration %d: HTTPError status=%s, tools_supported=%s",
-                iteration + 1, status, tools_supported,
+                iteration + 1,
+                status,
+                tools_supported,
             )
-            logger.debug("Iteration %d: HTTPError body: %.500s", iteration + 1,
-                         exc.response.text if exc.response is not None else "N/A")
+            logger.debug(
+                "Iteration %d: HTTPError body: %.500s",
+                iteration + 1,
+                exc.response.text if exc.response is not None else "N/A",
+            )
             if exc.response is not None and status in (400, 422) and tools_supported:
-                logger.warning("Agent: endpoint rejected tools param (HTTP %s) — falling back to direct mode", status)
+                logger.warning(
+                    "Agent: endpoint rejected tools param (HTTP %s) — falling back to direct mode",
+                    status,
+                )
                 tools_supported = False
                 notify("Endpoint does not support tools – using direct generation…")
                 try:
                     llm_response = call_serving_endpoint(
-                        host, token, endpoint_name, messages,
-                        tools=None, max_tokens=4096, temperature=0.1,
-                        timeout=LLM_TIMEOUT, trace_name=_TRACE_NAME,
+                        host,
+                        token,
+                        endpoint_name,
+                        messages,
+                        tools=None,
+                        max_tokens=4096,
+                        temperature=0.1,
+                        timeout=LLM_TIMEOUT,
+                        trace_name=_TRACE_NAME,
                     )
                 except Exception as inner:
                     result.error = f"LLM request failed: {inner}"
@@ -404,15 +463,21 @@ def run_agent(
                     return result
             else:
                 result.error = f"LLM request failed: {exc}"
-                logger.error("Agent: LLM request failed at iteration %d: %s", iteration + 1, exc)
+                logger.error(
+                    "Agent: LLM request failed at iteration %d: %s", iteration + 1, exc
+                )
                 return result
         except requests.exceptions.ReadTimeout:
             result.error = f"LLM request timed out after {LLM_TIMEOUT}s"
-            logger.error("Agent: timeout at iteration %d (limit=%ds)", iteration + 1, LLM_TIMEOUT)
+            logger.error(
+                "Agent: timeout at iteration %d (limit=%ds)", iteration + 1, LLM_TIMEOUT
+            )
             return result
         except requests.exceptions.RequestException as exc:
             result.error = f"LLM request failed: {exc}"
-            logger.error("Agent: request exception at iteration %d: %s", iteration + 1, exc)
+            logger.error(
+                "Agent: request exception at iteration %d: %s", iteration + 1, exc
+            )
             return result
 
         elapsed_ms = int((time.time() - t0) * 1000)
@@ -428,19 +493,24 @@ def run_agent(
         has_content = bool(message.get("content"))
         logger.info(
             "Iteration %d: finish_reason=%s, tool_calls=%d, has_content=%s",
-            iteration + 1, finish_reason, len(tool_calls), has_content,
+            iteration + 1,
+            finish_reason,
+            len(tool_calls),
+            has_content,
         )
         if has_content:
             logger.debug(
                 "Iteration %d: content preview (200 chars): %.200s",
-                iteration + 1, message.get("content", ""),
+                iteration + 1,
+                message.get("content", ""),
             )
 
         if tool_calls:
             # ---- Agent wants to call tools ----
             logger.info(
                 "Iteration %d: processing %d tool call(s): [%s]",
-                iteration + 1, len(tool_calls),
+                iteration + 1,
+                len(tool_calls),
                 ", ".join(tc.get("function", {}).get("name", "?") for tc in tool_calls),
             )
             messages.append(message)
@@ -453,7 +523,12 @@ def run_agent(
 
                 logger.debug(
                     "Iteration %d tool_call %d/%d: name=%s, id=%s, raw_args=%.300s",
-                    iteration + 1, tc_idx, len(tool_calls), tool_name, tool_id, raw_args,
+                    iteration + 1,
+                    tc_idx,
+                    len(tool_calls),
+                    tool_name,
+                    tool_id,
+                    raw_args,
                 )
 
                 try:
@@ -461,50 +536,73 @@ def run_agent(
                 except json.JSONDecodeError as je:
                     logger.warning(
                         "Iteration %d: JSON decode error for tool '%s' args: %s",
-                        iteration + 1, tool_name, je,
+                        iteration + 1,
+                        tool_name,
+                        je,
                     )
                     arguments = {}
 
                 logger.info(
                     "Iteration %d: calling tool '%s' (%d/%d)",
-                    iteration + 1, tool_name, tc_idx, len(tool_calls),
+                    iteration + 1,
+                    tool_name,
+                    tc_idx,
+                    len(tool_calls),
                 )
                 notify(f"Calling {tool_name}…")
 
-                result.steps.append(AgentStep(
-                    step_type="tool_call",
-                    content=json.dumps(arguments),
-                    tool_name=tool_name,
-                ))
+                result.steps.append(
+                    AgentStep(
+                        step_type="tool_call",
+                        content=json.dumps(arguments),
+                        tool_name=tool_name,
+                    )
+                )
 
                 t1 = time.time()
-                tool_result = dispatch_tool(TOOL_HANDLERS, ctx, tool_name, arguments, trace_name=_TRACE_NAME)
+                tool_result = dispatch_tool(
+                    TOOL_HANDLERS, ctx, tool_name, arguments, trace_name=_TRACE_NAME
+                )
                 tool_ms = int((time.time() - t1) * 1000)
 
                 logger.info(
                     "Iteration %d: tool '%s' returned %d chars in %dms",
-                    iteration + 1, tool_name, len(tool_result), tool_ms,
+                    iteration + 1,
+                    tool_name,
+                    len(tool_result),
+                    tool_ms,
                 )
                 logger.debug(
                     "Iteration %d: tool '%s' result preview: %.500s",
-                    iteration + 1, tool_name, tool_result,
+                    iteration + 1,
+                    tool_name,
+                    tool_result,
                 )
 
-                result.steps.append(AgentStep(
-                    step_type="tool_result",
-                    content=(tool_result[:500] + "…") if len(tool_result) > 500 else tool_result,
-                    tool_name=tool_name,
-                    duration_ms=tool_ms,
-                ))
+                result.steps.append(
+                    AgentStep(
+                        step_type="tool_result",
+                        content=(
+                            (tool_result[:500] + "…")
+                            if len(tool_result) > 500
+                            else tool_result
+                        ),
+                        tool_name=tool_name,
+                        duration_ms=tool_ms,
+                    )
+                )
 
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_id,
-                    "content": tool_result,
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_id,
+                        "content": tool_result,
+                    }
+                )
             logger.info(
                 "Iteration %d: all tool calls processed, conversation now has %d messages",
-                iteration + 1, len(messages),
+                iteration + 1,
+                len(messages),
             )
         else:
             # ---- Agent produced a text response (should be OWL) ----
@@ -512,23 +610,30 @@ def run_agent(
             starts_with_prefix = content.strip().startswith("@prefix")
             logger.info(
                 "Iteration %d: agent produced final text output — %d chars, starts_with_@prefix=%s",
-                iteration + 1, len(content), starts_with_prefix,
+                iteration + 1,
+                len(content),
+                starts_with_prefix,
             )
             if not starts_with_prefix:
                 logger.warning(
                     "Iteration %d: output does NOT start with @prefix — first 200 chars: %.200s",
-                    iteration + 1, content.strip(),
+                    iteration + 1,
+                    content.strip(),
                 )
             logger.debug(
                 "Iteration %d: full OWL output (%d chars):\n%s",
-                iteration + 1, len(content), content[:2000],
+                iteration + 1,
+                len(content),
+                content[:2000],
             )
 
-            result.steps.append(AgentStep(
-                step_type="output",
-                content=(content[:200] + "…") if len(content) > 200 else content,
-                duration_ms=elapsed_ms,
-            ))
+            result.steps.append(
+                AgentStep(
+                    step_type="output",
+                    content=(content[:200] + "…") if len(content) > 200 else content,
+                    duration_ms=elapsed_ms,
+                )
+            )
 
             result.success = True
             result.owl_content = content
@@ -546,9 +651,13 @@ def run_agent(
             return result
 
     # Exhausted all iterations
-    result.error = f"Agent reached maximum iterations ({MAX_ITERATIONS}) without producing output"
+    result.error = (
+        f"Agent reached maximum iterations ({MAX_ITERATIONS}) without producing output"
+    )
     logger.error(
         "===== AGENT FAILED ===== %s — total prompt_tokens=%d, completion_tokens=%d",
-        result.error, total_usage["prompt_tokens"], total_usage["completion_tokens"],
+        result.error,
+        total_usage["prompt_tokens"],
+        total_usage["completion_tokens"],
     )
     return result

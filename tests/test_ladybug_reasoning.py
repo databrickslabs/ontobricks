@@ -4,6 +4,7 @@ These tests verify transitive_closure, symmetric_expand, and
 shortest_path on the LadybugGraphStore using a small in-memory
 ontology and sample instance data.
 """
+
 import importlib
 
 import pytest
@@ -49,17 +50,35 @@ class TestTransitiveClosureSQL:
         from back.core.triplestore import TripleStoreBackend
 
         class FakeStore(TripleStoreBackend):
-            def create_table(self, t): pass
-            def drop_table(self, t): pass
-            def insert_triples(self, t, triples, **kw): return 0
-            def query_triples(self, t): return []
-            def count_triples(self, t): return 0
-            def table_exists(self, t): return True
-            def get_status(self, t): return {}
+            def create_table(self, t):
+                pass
+
+            def drop_table(self, t):
+                pass
+
+            def insert_triples(self, t, triples, **kw):
+                return 0
+
+            def query_triples(self, t):
+                return []
+
+            def count_triples(self, t):
+                return 0
+
+            def table_exists(self, t):
+                return True
+
+            def get_status(self, t):
+                return {}
+
             def execute_query(self, q):
                 if "WITH RECURSIVE" in q:
                     return [
-                        {"subject": "http://ex.org/a", "predicate": "http://ex.org/isPartOf", "object": "http://ex.org/c"},
+                        {
+                            "subject": "http://ex.org/a",
+                            "predicate": "http://ex.org/isPartOf",
+                            "object": "http://ex.org/c",
+                        },
                     ]
                 return []
 
@@ -72,19 +91,35 @@ class TestTransitiveClosureSQL:
         from back.core.triplestore import TripleStoreBackend
 
         class FakeStore(TripleStoreBackend):
-            def create_table(self, t): pass
-            def drop_table(self, t): pass
-            def insert_triples(self, t, triples, **kw): return 0
-            def query_triples(self, t): return []
-            def count_triples(self, t): return 0
-            def table_exists(self, t): return True
-            def get_status(self, t): return {}
+            def create_table(self, t):
+                pass
+
+            def drop_table(self, t):
+                pass
+
+            def insert_triples(self, t, triples, **kw):
+                return 0
+
+            def query_triples(self, t):
+                return []
+
+            def count_triples(self, t):
+                return 0
+
+            def table_exists(self, t):
+                return True
+
+            def get_status(self, t):
+                return {}
+
             def execute_query(self, q):
                 assert "http://ex.org/start" in q
                 return []
 
         store = FakeStore()
-        store.transitive_closure("t", "http://ex.org/P", start_uri="http://ex.org/start")
+        store.transitive_closure(
+            "t", "http://ex.org/P", start_uri="http://ex.org/start"
+        )
 
 
 class TestSymmetricExpandSQL:
@@ -92,16 +127,34 @@ class TestSymmetricExpandSQL:
         from back.core.triplestore import TripleStoreBackend
 
         class FakeStore(TripleStoreBackend):
-            def create_table(self, t): pass
-            def drop_table(self, t): pass
-            def insert_triples(self, t, triples, **kw): return 0
-            def query_triples(self, t): return []
-            def count_triples(self, t): return 0
-            def table_exists(self, t): return True
-            def get_status(self, t): return {}
+            def create_table(self, t):
+                pass
+
+            def drop_table(self, t):
+                pass
+
+            def insert_triples(self, t, triples, **kw):
+                return 0
+
+            def query_triples(self, t):
+                return []
+
+            def count_triples(self, t):
+                return 0
+
+            def table_exists(self, t):
+                return True
+
+            def get_status(self, t):
+                return {}
+
             def execute_query(self, q):
                 return [
-                    {"subject": "http://ex.org/b", "predicate": "http://ex.org/borders", "object": "http://ex.org/a"},
+                    {
+                        "subject": "http://ex.org/b",
+                        "predicate": "http://ex.org/borders",
+                        "object": "http://ex.org/a",
+                    },
                 ]
 
         store = FakeStore()
@@ -114,14 +167,29 @@ class TestShortestPathSQL:
         from back.core.triplestore import TripleStoreBackend
 
         class FakeStore(TripleStoreBackend):
-            def create_table(self, t): pass
-            def drop_table(self, t): pass
-            def insert_triples(self, t, triples, **kw): return 0
-            def query_triples(self, t): return []
-            def count_triples(self, t): return 0
-            def table_exists(self, t): return True
-            def get_status(self, t): return {}
-            def execute_query(self, q): return []
+            def create_table(self, t):
+                pass
+
+            def drop_table(self, t):
+                pass
+
+            def insert_triples(self, t, triples, **kw):
+                return 0
+
+            def query_triples(self, t):
+                return []
+
+            def count_triples(self, t):
+                return 0
+
+            def table_exists(self, t):
+                return True
+
+            def get_status(self, t):
+                return {}
+
+            def execute_query(self, q):
+                return []
 
         store = FakeStore()
         result = store.shortest_path("t", "http://ex.org/a", "http://ex.org/b")

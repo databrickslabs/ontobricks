@@ -18,6 +18,7 @@ logger = get_logger(__name__)
 # Read tools
 # =====================================================
 
+
 def tool_get_ontology_classes(ctx: ToolContext, **_kwargs) -> str:
     """Return all classes in the current ontology."""
     classes = ctx.ontology_classes
@@ -60,9 +61,17 @@ def tool_get_ontology_properties(ctx: ToolContext, **_kwargs) -> str:
 # Mutation tools – entities (classes)
 # =====================================================
 
-def tool_add_entity(ctx: ToolContext, *, name: str, label: str = "",
-                    description: str = "", parent: str = "",
-                    emoji: str = "📦", **_kwargs) -> str:
+
+def tool_add_entity(
+    ctx: ToolContext,
+    *,
+    name: str,
+    label: str = "",
+    description: str = "",
+    parent: str = "",
+    emoji: str = "📦",
+    **_kwargs,
+) -> str:
     """Add a new entity (class) to the ontology."""
     classes = ctx.ontology_classes
     if any(c.get("name") == name for c in classes):
@@ -98,11 +107,13 @@ def tool_remove_entity(ctx: ToolContext, *, name: str, **_kwargs) -> str:
 
     classes.pop(idx)
 
-    removed_props = [p.get("name") for p in properties
-                     if p.get("domain") == name or p.get("range") == name]
+    removed_props = [
+        p.get("name")
+        for p in properties
+        if p.get("domain") == name or p.get("range") == name
+    ]
     ctx.ontology_properties[:] = [
-        p for p in properties
-        if p.get("domain") != name and p.get("range") != name
+        p for p in properties if p.get("domain") != name and p.get("range") != name
     ]
 
     for c in classes:
@@ -110,16 +121,23 @@ def tool_remove_entity(ctx: ToolContext, *, name: str, **_kwargs) -> str:
             c["parent"] = ""
 
     ctx.ontology_dirty = True
-    logger.info("tool_remove_entity: removed '%s', cascade-removed %d relationships", name, len(removed_props))
-    return json.dumps({
-        "success": True,
-        "removed_entity": name,
-        "removed_relationships": removed_props,
-    })
+    logger.info(
+        "tool_remove_entity: removed '%s', cascade-removed %d relationships",
+        name,
+        len(removed_props),
+    )
+    return json.dumps(
+        {
+            "success": True,
+            "removed_entity": name,
+            "removed_relationships": removed_props,
+        }
+    )
 
 
-def tool_rename_entity(ctx: ToolContext, *, old_name: str, new_name: str,
-                       new_label: str = "", **_kwargs) -> str:
+def tool_rename_entity(
+    ctx: ToolContext, *, old_name: str, new_name: str, new_label: str = "", **_kwargs
+) -> str:
     """Rename an entity and update all references (properties, inheritance)."""
     classes = ctx.ontology_classes
     properties = ctx.ontology_properties
@@ -152,9 +170,16 @@ def tool_rename_entity(ctx: ToolContext, *, old_name: str, new_name: str,
     return json.dumps({"success": True, "old_name": old_name, "new_name": new_name})
 
 
-def tool_update_entity(ctx: ToolContext, *, name: str, label: str = None,
-                       description: str = None, parent: str = None,
-                       emoji: str = None, **_kwargs) -> str:
+def tool_update_entity(
+    ctx: ToolContext,
+    *,
+    name: str,
+    label: str = None,
+    description: str = None,
+    parent: str = None,
+    emoji: str = None,
+    **_kwargs,
+) -> str:
     """Update fields of an existing entity."""
     classes = ctx.ontology_classes
     cls = next((c for c in classes if c.get("name") == name), None)
@@ -181,9 +206,15 @@ def tool_update_entity(ctx: ToolContext, *, name: str, label: str = None,
     return json.dumps({"success": True, "entity": name, "updated_fields": updated})
 
 
-def tool_add_attribute(ctx: ToolContext, *, entity_name: str,
-                       attribute_name: str, attribute_type: str = "xsd:string",
-                       description: str = "", **_kwargs) -> str:
+def tool_add_attribute(
+    ctx: ToolContext,
+    *,
+    entity_name: str,
+    attribute_name: str,
+    attribute_type: str = "xsd:string",
+    description: str = "",
+    **_kwargs,
+) -> str:
     """Add a data property (attribute) to an entity."""
     classes = ctx.ontology_classes
     cls = next((c for c in classes if c.get("name") == entity_name), None)
@@ -192,23 +223,32 @@ def tool_add_attribute(ctx: ToolContext, *, entity_name: str,
 
     data_props = cls.setdefault("dataProperties", [])
     if any(dp.get("name") == attribute_name for dp in data_props):
-        return json.dumps({"error": f"Attribute '{attribute_name}' already exists on '{entity_name}'"})
+        return json.dumps(
+            {"error": f"Attribute '{attribute_name}' already exists on '{entity_name}'"}
+        )
 
     base_uri = ctx.ontology_base_uri
-    data_props.append({
-        "uri": f"{base_uri}{attribute_name}" if base_uri else attribute_name,
-        "name": attribute_name,
-        "localName": attribute_name,
-        "range": attribute_type,
-        "description": description,
-    })
+    data_props.append(
+        {
+            "uri": f"{base_uri}{attribute_name}" if base_uri else attribute_name,
+            "name": attribute_name,
+            "localName": attribute_name,
+            "range": attribute_type,
+            "description": description,
+        }
+    )
     ctx.ontology_dirty = True
-    logger.info("tool_add_attribute: added '%s' to entity '%s'", attribute_name, entity_name)
-    return json.dumps({"success": True, "entity": entity_name, "attribute": attribute_name})
+    logger.info(
+        "tool_add_attribute: added '%s' to entity '%s'", attribute_name, entity_name
+    )
+    return json.dumps(
+        {"success": True, "entity": entity_name, "attribute": attribute_name}
+    )
 
 
-def tool_remove_attribute(ctx: ToolContext, *, entity_name: str,
-                          attribute_name: str, **_kwargs) -> str:
+def tool_remove_attribute(
+    ctx: ToolContext, *, entity_name: str, attribute_name: str, **_kwargs
+) -> str:
     """Remove a data property (attribute) from an entity."""
     classes = ctx.ontology_classes
     cls = next((c for c in classes if c.get("name") == entity_name), None)
@@ -217,23 +257,41 @@ def tool_remove_attribute(ctx: ToolContext, *, entity_name: str,
 
     data_props = cls.get("dataProperties", [])
     before = len(data_props)
-    cls["dataProperties"] = [dp for dp in data_props if dp.get("name") != attribute_name]
+    cls["dataProperties"] = [
+        dp for dp in data_props if dp.get("name") != attribute_name
+    ]
     if len(cls["dataProperties"]) == before:
-        return json.dumps({"error": f"Attribute '{attribute_name}' not found on '{entity_name}'"})
+        return json.dumps(
+            {"error": f"Attribute '{attribute_name}' not found on '{entity_name}'"}
+        )
 
     ctx.ontology_dirty = True
-    logger.info("tool_remove_attribute: removed '%s' from entity '%s'", attribute_name, entity_name)
-    return json.dumps({"success": True, "entity": entity_name, "removed_attribute": attribute_name})
+    logger.info(
+        "tool_remove_attribute: removed '%s' from entity '%s'",
+        attribute_name,
+        entity_name,
+    )
+    return json.dumps(
+        {"success": True, "entity": entity_name, "removed_attribute": attribute_name}
+    )
 
 
 # =====================================================
 # Mutation tools – relationships (properties)
 # =====================================================
 
-def tool_add_relationship(ctx: ToolContext, *, name: str, domain: str,
-                          range: str, label: str = "",
-                          description: str = "",
-                          direction: str = "forward", **_kwargs) -> str:
+
+def tool_add_relationship(
+    ctx: ToolContext,
+    *,
+    name: str,
+    domain: str,
+    range: str,
+    label: str = "",
+    description: str = "",
+    direction: str = "forward",
+    **_kwargs,
+) -> str:
     """Add a new relationship (object property) to the ontology."""
     properties = ctx.ontology_properties
     classes = ctx.ontology_classes
@@ -261,17 +319,20 @@ def tool_add_relationship(ctx: ToolContext, *, name: str, domain: str,
     properties.append(new_prop)
     ctx.ontology_dirty = True
     logger.info("tool_add_relationship: added '%s' (%s -> %s)", name, domain, range)
-    return json.dumps({"success": True, "relationship": name, "domain": domain, "range": range})
+    return json.dumps(
+        {"success": True, "relationship": name, "domain": domain, "range": range}
+    )
 
 
-def tool_remove_relationship(ctx: ToolContext, *, name: str,
-                             domain: str = "", range: str = "",
-                             **_kwargs) -> str:
+def tool_remove_relationship(
+    ctx: ToolContext, *, name: str, domain: str = "", range: str = "", **_kwargs
+) -> str:
     """Remove a relationship (object property). If domain/range given, match exactly."""
     properties = ctx.ontology_properties
 
     matches = [
-        (i, p) for i, p in enumerate(properties)
+        (i, p)
+        for i, p in enumerate(properties)
         if p.get("name") == name
         and (not domain or p.get("domain") == domain)
         and (not range or p.get("range") == range)
@@ -283,15 +344,26 @@ def tool_remove_relationship(ctx: ToolContext, *, name: str,
         properties.pop(i)
 
     ctx.ontology_dirty = True
-    logger.info("tool_remove_relationship: removed %d instance(s) of '%s'", len(matches), name)
-    return json.dumps({"success": True, "removed_relationship": name, "count": len(matches)})
+    logger.info(
+        "tool_remove_relationship: removed %d instance(s) of '%s'", len(matches), name
+    )
+    return json.dumps(
+        {"success": True, "removed_relationship": name, "count": len(matches)}
+    )
 
 
-def tool_update_relationship(ctx: ToolContext, *, name: str,
-                             new_name: str = None, label: str = None,
-                             description: str = None, domain: str = None,
-                             range: str = None, direction: str = None,
-                             **_kwargs) -> str:
+def tool_update_relationship(
+    ctx: ToolContext,
+    *,
+    name: str,
+    new_name: str = None,
+    label: str = None,
+    description: str = None,
+    domain: str = None,
+    range: str = None,
+    direction: str = None,
+    **_kwargs,
+) -> str:
     """Update fields of an existing relationship."""
     properties = ctx.ontology_properties
     prop = next((p for p in properties if p.get("name") == name), None)
@@ -324,10 +396,14 @@ def tool_update_relationship(ctx: ToolContext, *, name: str,
     if updated:
         ctx.ontology_dirty = True
     logger.info("tool_update_relationship: '%s' updated fields: %s", name, updated)
-    return json.dumps({"success": True, "relationship": name, "updated_fields": updated})
+    return json.dumps(
+        {"success": True, "relationship": name, "updated_fields": updated}
+    )
 
 
-def tool_set_inheritance(ctx: ToolContext, *, child: str, parent: str, **_kwargs) -> str:
+def tool_set_inheritance(
+    ctx: ToolContext, *, child: str, parent: str, **_kwargs
+) -> str:
     """Set or change the parent (superclass) of an entity."""
     classes = ctx.ontology_classes
     child_cls = next((c for c in classes if c.get("name") == child), None)
@@ -339,8 +415,20 @@ def tool_set_inheritance(ctx: ToolContext, *, child: str, parent: str, **_kwargs
     old_parent = child_cls.get("parent", "")
     child_cls["parent"] = parent
     ctx.ontology_dirty = True
-    logger.info("tool_set_inheritance: '%s' parent changed from '%s' to '%s'", child, old_parent, parent)
-    return json.dumps({"success": True, "child": child, "old_parent": old_parent, "new_parent": parent})
+    logger.info(
+        "tool_set_inheritance: '%s' parent changed from '%s' to '%s'",
+        child,
+        old_parent,
+        parent,
+    )
+    return json.dumps(
+        {
+            "success": True,
+            "child": child,
+            "old_parent": old_parent,
+            "new_parent": parent,
+        }
+    )
 
 
 # =====================================================
@@ -373,10 +461,16 @@ _ADD_ENTITY_DEF = {
         "parameters": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Entity class name (PascalCase, e.g. 'Customer')"},
+                "name": {
+                    "type": "string",
+                    "description": "Entity class name (PascalCase, e.g. 'Customer')",
+                },
                 "label": {"type": "string", "description": "Human-readable label"},
                 "description": {"type": "string", "description": "Short description"},
-                "parent": {"type": "string", "description": "Parent entity name for inheritance (empty if none)"},
+                "parent": {
+                    "type": "string",
+                    "description": "Parent entity name for inheritance (empty if none)",
+                },
                 "emoji": {"type": "string", "description": "Icon emoji for the entity"},
             },
             "required": ["name"],
@@ -409,7 +503,10 @@ _RENAME_ENTITY_DEF = {
             "properties": {
                 "old_name": {"type": "string", "description": "Current entity name"},
                 "new_name": {"type": "string", "description": "New entity name"},
-                "new_label": {"type": "string", "description": "New human-readable label (defaults to new_name)"},
+                "new_label": {
+                    "type": "string",
+                    "description": "New human-readable label (defaults to new_name)",
+                },
             },
             "required": ["old_name", "new_name"],
         },
@@ -427,7 +524,10 @@ _UPDATE_ENTITY_DEF = {
                 "name": {"type": "string", "description": "Entity name to update"},
                 "label": {"type": "string", "description": "New label"},
                 "description": {"type": "string", "description": "New description"},
-                "parent": {"type": "string", "description": "New parent entity name (empty to remove)"},
+                "parent": {
+                    "type": "string",
+                    "description": "New parent entity name (empty to remove)",
+                },
                 "emoji": {"type": "string", "description": "New icon emoji"},
             },
             "required": ["name"],
@@ -443,9 +543,18 @@ _ADD_ATTRIBUTE_DEF = {
         "parameters": {
             "type": "object",
             "properties": {
-                "entity_name": {"type": "string", "description": "Entity to add the attribute to"},
-                "attribute_name": {"type": "string", "description": "Attribute name (camelCase)"},
-                "attribute_type": {"type": "string", "description": "XSD type (e.g. xsd:string, xsd:integer, xsd:date)"},
+                "entity_name": {
+                    "type": "string",
+                    "description": "Entity to add the attribute to",
+                },
+                "attribute_name": {
+                    "type": "string",
+                    "description": "Attribute name (camelCase)",
+                },
+                "attribute_type": {
+                    "type": "string",
+                    "description": "XSD type (e.g. xsd:string, xsd:integer, xsd:date)",
+                },
                 "description": {"type": "string", "description": "Short description"},
             },
             "required": ["entity_name", "attribute_name"],
@@ -461,8 +570,14 @@ _REMOVE_ATTRIBUTE_DEF = {
         "parameters": {
             "type": "object",
             "properties": {
-                "entity_name": {"type": "string", "description": "Entity to remove the attribute from"},
-                "attribute_name": {"type": "string", "description": "Attribute name to remove"},
+                "entity_name": {
+                    "type": "string",
+                    "description": "Entity to remove the attribute from",
+                },
+                "attribute_name": {
+                    "type": "string",
+                    "description": "Attribute name to remove",
+                },
             },
             "required": ["entity_name", "attribute_name"],
         },
@@ -477,12 +592,19 @@ _ADD_RELATIONSHIP_DEF = {
         "parameters": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Relationship name (camelCase, e.g. 'belongsTo')"},
+                "name": {
+                    "type": "string",
+                    "description": "Relationship name (camelCase, e.g. 'belongsTo')",
+                },
                 "domain": {"type": "string", "description": "Source entity name"},
                 "range": {"type": "string", "description": "Target entity name"},
                 "label": {"type": "string", "description": "Human-readable label"},
                 "description": {"type": "string", "description": "Short description"},
-                "direction": {"type": "string", "enum": ["forward", "inverse"], "description": "Relationship direction"},
+                "direction": {
+                    "type": "string",
+                    "enum": ["forward", "inverse"],
+                    "description": "Relationship direction",
+                },
             },
             "required": ["name", "domain", "range"],
         },
@@ -497,9 +619,18 @@ _REMOVE_RELATIONSHIP_DEF = {
         "parameters": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Relationship name to remove"},
-                "domain": {"type": "string", "description": "Optional: filter by domain entity"},
-                "range": {"type": "string", "description": "Optional: filter by range entity"},
+                "name": {
+                    "type": "string",
+                    "description": "Relationship name to remove",
+                },
+                "domain": {
+                    "type": "string",
+                    "description": "Optional: filter by domain entity",
+                },
+                "range": {
+                    "type": "string",
+                    "description": "Optional: filter by range entity",
+                },
             },
             "required": ["name"],
         },
@@ -520,7 +651,11 @@ _UPDATE_RELATIONSHIP_DEF = {
                 "description": {"type": "string", "description": "New description"},
                 "domain": {"type": "string", "description": "New domain entity"},
                 "range": {"type": "string", "description": "New range entity"},
-                "direction": {"type": "string", "enum": ["forward", "inverse"], "description": "New direction"},
+                "direction": {
+                    "type": "string",
+                    "enum": ["forward", "inverse"],
+                    "description": "New direction",
+                },
             },
             "required": ["name"],
         },
@@ -536,7 +671,10 @@ _SET_INHERITANCE_DEF = {
             "type": "object",
             "properties": {
                 "child": {"type": "string", "description": "Child entity name"},
-                "parent": {"type": "string", "description": "Parent entity name (empty to remove inheritance)"},
+                "parent": {
+                    "type": "string",
+                    "description": "Parent entity name (empty to remove inheritance)",
+                },
             },
             "required": ["child", "parent"],
         },

@@ -37,9 +37,11 @@ _TRACE_NAME = "ontology_assistant"
 # Data classes
 # =====================================================
 
+
 @dataclass
 class AgentResult:
     """Outcome of a single assistant turn."""
+
     success: bool
     reply: str = ""
     classes: list = field(default_factory=list)
@@ -110,6 +112,7 @@ FORMATTING
 # Public entry point
 # =====================================================
 
+
 @trace_agent(name="ontology_assistant")
 def run_agent(
     host: str,
@@ -134,7 +137,9 @@ def run_agent(
     """
     logger.info(
         "===== ONTOLOGY ASSISTANT START ===== endpoint=%s, classes=%d, properties=%d",
-        endpoint_name, len(classes), len(properties),
+        endpoint_name,
+        len(classes),
+        len(properties),
     )
 
     ctx = ToolContext(
@@ -166,13 +171,21 @@ def run_agent(
         t0 = time.time()
         try:
             llm_response = call_serving_endpoint(
-                host, token, endpoint_name, messages,
-                tools=send_tools, max_tokens=2048, temperature=0.2,
-                timeout=LLM_TIMEOUT, trace_name=_TRACE_NAME,
+                host,
+                token,
+                endpoint_name,
+                messages,
+                tools=send_tools,
+                max_tokens=2048,
+                temperature=0.2,
+                timeout=LLM_TIMEOUT,
+                trace_name=_TRACE_NAME,
             )
         except Exception as exc:
             error_msg = f"LLM request failed: {exc}"
-            logger.error("ontology_assistant: %s at iteration %d", error_msg, iteration + 1)
+            logger.error(
+                "ontology_assistant: %s at iteration %d", error_msg, iteration + 1
+            )
             result.error = error_msg
             return result
 
@@ -182,7 +195,10 @@ def run_agent(
 
         choices = llm_response.get("choices", [])
         if not choices:
-            logger.warning("ontology_assistant: empty choices in LLM response at iteration %d", iteration + 1)
+            logger.warning(
+                "ontology_assistant: empty choices in LLM response at iteration %d",
+                iteration + 1,
+            )
             result.error = "No choices in LLM response"
             return result
 
@@ -200,37 +216,48 @@ def run_agent(
                 raw_args = func.get("arguments", "{}")
 
                 try:
-                    arguments = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                    arguments = (
+                        json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                    )
                 except json.JSONDecodeError:
                     arguments = {}
 
                 logger.info(
                     "ontology_assistant: iteration %d — tool_call '%s'",
-                    iteration + 1, tool_name,
+                    iteration + 1,
+                    tool_name,
                 )
 
-                result.steps.append(AgentStep(
-                    step_type="tool_call",
-                    content=json.dumps(arguments, default=str),
-                    tool_name=tool_name,
-                ))
+                result.steps.append(
+                    AgentStep(
+                        step_type="tool_call",
+                        content=json.dumps(arguments, default=str),
+                        tool_name=tool_name,
+                    )
+                )
 
                 tool_t0 = time.time()
-                tool_result = dispatch_tool(TOOL_HANDLERS, ctx, tool_name, arguments, trace_name=_TRACE_NAME)
+                tool_result = dispatch_tool(
+                    TOOL_HANDLERS, ctx, tool_name, arguments, trace_name=_TRACE_NAME
+                )
                 tool_elapsed = int((time.time() - tool_t0) * 1000)
 
-                result.steps.append(AgentStep(
-                    step_type="tool_result",
-                    content=tool_result[:500],
-                    tool_name=tool_name,
-                    duration_ms=tool_elapsed,
-                ))
+                result.steps.append(
+                    AgentStep(
+                        step_type="tool_result",
+                        content=tool_result[:500],
+                        tool_name=tool_name,
+                        duration_ms=tool_elapsed,
+                    )
+                )
 
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_id,
-                    "content": tool_result,
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_id,
+                        "content": tool_result,
+                    }
+                )
         else:
             result.success = True
             result.reply = content
@@ -238,14 +265,18 @@ def run_agent(
             result.properties = ctx.ontology_properties
             result.ontology_changed = ctx.ontology_dirty
 
-            result.steps.append(AgentStep(
-                step_type="output",
-                content=content[:500],
-            ))
+            result.steps.append(
+                AgentStep(
+                    step_type="output",
+                    content=content[:500],
+                )
+            )
 
             logger.info(
                 "===== ONTOLOGY ASSISTANT DONE ===== iterations=%d, changed=%s, reply_len=%d",
-                result.iterations, ctx.ontology_dirty, len(content),
+                result.iterations,
+                ctx.ontology_dirty,
+                len(content),
             )
             return result
 

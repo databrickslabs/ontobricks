@@ -13,7 +13,9 @@ from back.core.reasoning.OWLRLReasoner import OWLRLReasoner  # noqa: F401
 from back.core.reasoning.SWRLEngine import SWRLEngine  # noqa: F401
 from back.core.reasoning.SWRLSQLTranslator import SWRLSQLTranslator  # noqa: F401
 from back.core.reasoning.SWRLCypherTranslator import SWRLCypherTranslator  # noqa: F401
-from back.core.reasoning.SWRLFlatCypherTranslator import SWRLFlatCypherTranslator  # noqa: F401
+from back.core.reasoning.SWRLFlatCypherTranslator import (
+    SWRLFlatCypherTranslator,
+)  # noqa: F401
 from back.core.reasoning.SWRLBuiltinRegistry import (  # noqa: F401
     SWRLBuiltin,
     SWRLBuiltinRegistry,

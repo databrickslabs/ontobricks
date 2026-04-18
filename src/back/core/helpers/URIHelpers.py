@@ -9,7 +9,9 @@ class URIHelpers:
     @staticmethod
     def is_uri(value: str) -> bool:
         """Return ``True`` if *value* looks like an absolute HTTP(S) URI."""
-        return bool(value) and (value.startswith("http://") or value.startswith("https://"))
+        return bool(value) and (
+            value.startswith("http://") or value.startswith("https://")
+        )
 
     @staticmethod
     def extract_local_name(uri: str) -> str:

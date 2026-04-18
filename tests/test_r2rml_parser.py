@@ -1,4 +1,5 @@
 """Tests for R2RML parser."""
+
 import pytest
 from back.core.errors import ValidationError
 from back.core.w3c.r2rml.R2RMLParser import R2RMLParser
@@ -40,30 +41,30 @@ class TestR2RMLParser:
         entities, relationships = parser.extract_mappings()
         assert len(entities) >= 1
         entity = entities[0]
-        assert entity['ontology_class_label'] == 'Customer'
-        assert entity['id_column'] == 'customer_id'
-        assert entity['table'] == 'customers'
+        assert entity["ontology_class_label"] == "Customer"
+        assert entity["id_column"] == "customer_id"
+        assert entity["table"] == "customers"
 
     def test_parse_table_name_three_parts(self):
         parser = R2RMLParser(SAMPLE_R2RML)
-        cat, schema, table = parser._parse_table_name('cat.sch.tbl')
-        assert cat == 'cat'
-        assert schema == 'sch'
-        assert table == 'tbl'
+        cat, schema, table = parser._parse_table_name("cat.sch.tbl")
+        assert cat == "cat"
+        assert schema == "sch"
+        assert table == "tbl"
 
     def test_parse_table_name_two_parts(self):
         parser = R2RMLParser(SAMPLE_R2RML)
-        cat, schema, table = parser._parse_table_name('sch.tbl')
+        cat, schema, table = parser._parse_table_name("sch.tbl")
         assert cat is None
-        assert schema == 'sch'
-        assert table == 'tbl'
+        assert schema == "sch"
+        assert table == "tbl"
 
     def test_parse_table_name_one_part(self):
         parser = R2RMLParser(SAMPLE_R2RML)
-        cat, schema, table = parser._parse_table_name('tbl')
+        cat, schema, table = parser._parse_table_name("tbl")
         assert cat is None
         assert schema is None
-        assert table == 'tbl'
+        assert table == "tbl"
 
     def test_parse_table_name_none(self):
         parser = R2RMLParser(SAMPLE_R2RML)
@@ -81,19 +82,21 @@ class TestRoundtrip:
     def test_generate_then_parse(self):
         gen = R2RMLGenerator("http://test.org/ontology/")
         mapping_config = {
-            'entities': [{
-                'ontology_class': 'http://test.org/ontology/Customer',
-                'ontology_class_label': 'Customer',
-                'sql_query': '',
-                'id_column': 'customer_id',
-                'catalog': 'cat',
-                'schema': 'sch',
-                'table': 'customers',
-                'attribute_mappings': {},
-            }],
-            'relationships': [],
+            "entities": [
+                {
+                    "ontology_class": "http://test.org/ontology/Customer",
+                    "ontology_class_label": "Customer",
+                    "sql_query": "",
+                    "id_column": "customer_id",
+                    "catalog": "cat",
+                    "schema": "sch",
+                    "table": "customers",
+                    "attribute_mappings": {},
+                }
+            ],
+            "relationships": [],
         }
         r2rml = gen.generate_mapping(mapping_config)
         entities, rels = parse_r2rml_content(r2rml)
         assert len(entities) >= 1
-        assert entities[0]['id_column'] == 'customer_id'
+        assert entities[0]["id_column"] == "customer_id"

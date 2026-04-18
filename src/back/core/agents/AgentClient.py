@@ -4,6 +4,7 @@ Currently runs agents in-process via the ``agents`` package.
 When agents become a separate service, route calls through an HTTP
 client without changing callers.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
@@ -11,7 +12,9 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 if TYPE_CHECKING:
     from agents.agent_owl_generator.engine import AgentResult
     from agents.agent_auto_assignment.engine import AgentResult as AutoAssignAgentResult
-    from agents.agent_auto_icon_assign.engine import AgentResult as IconAssignAgentResult
+    from agents.agent_auto_icon_assign.engine import (
+        AgentResult as IconAssignAgentResult,
+    )
 
 from back.core.logging import get_logger
 
@@ -60,6 +63,7 @@ class AgentClient:
                 auth, or model errors).
         """
         from agents.agent_owl_generator import run_agent
+
         return run_agent(
             host=host,
             token=token,
@@ -112,6 +116,7 @@ class AgentClient:
             Exception: Propagates any failure raised by ``run_agent``.
         """
         from agents.agent_auto_assignment import run_agent
+
         return run_agent(
             host=host,
             token=token,
@@ -156,6 +161,7 @@ class AgentClient:
             Exception: Propagates any failure raised by ``run_agent``.
         """
         from agents.agent_auto_icon_assign import run_agent
+
         return run_agent(
             host=host,
             token=token,
@@ -195,6 +201,7 @@ class AgentClient:
             Exception: Propagates any failure raised by ``run_agent``.
         """
         from agents.agent_ontology_assistant import run_agent
+
         return run_agent(
             host=host,
             token=token,

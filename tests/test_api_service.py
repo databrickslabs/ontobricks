@@ -1,4 +1,5 @@
 """Tests for api.service — external REST API business logic."""
+
 import pytest
 
 from api.service import (
@@ -27,7 +28,12 @@ VERSIONED_DOMAIN = {
                     {"uri": "http://test.org#B", "name": "B", "label": "B"},
                 ],
                 "properties": [
-                    {"uri": "http://test.org#rel", "name": "rel", "domain": "A", "range": "B"},
+                    {
+                        "uri": "http://test.org#rel",
+                        "name": "rel",
+                        "domain": "A",
+                        "range": "B",
+                    },
                 ],
             },
             "assignment": {
@@ -116,7 +122,12 @@ class TestGetOntologyClasses:
         data = {
             "ontology": {
                 "classes": [
-                    {"uri": "http://x.org#A", "name": "A", "label": "ClassA", "attributes": ["x"]},
+                    {
+                        "uri": "http://x.org#A",
+                        "name": "A",
+                        "label": "ClassA",
+                        "attributes": ["x"],
+                    },
                 ]
             }
         }
@@ -131,7 +142,13 @@ class TestGetOntologyProperties:
         data = {
             "ontology": {
                 "properties": [
-                    {"uri": "http://x.org#p", "name": "p", "label": "prop", "domain": "A", "range": "B"},
+                    {
+                        "uri": "http://x.org#p",
+                        "name": "p",
+                        "label": "prop",
+                        "domain": "A",
+                        "range": "B",
+                    },
                 ]
             }
         }

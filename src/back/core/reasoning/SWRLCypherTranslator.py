@@ -2,6 +2,7 @@
 
 Uses typed node/relationship tables from the graph schema.
 """
+
 from typing import Dict, List, Optional
 
 from back.core.logging import get_logger
@@ -31,7 +32,8 @@ class SWRLCypherTranslator:
 
     @staticmethod
     def _build_cypher_builtin_filters(
-        builtin_atoms: List[Dict], var_alias: Dict[str, str],
+        builtin_atoms: List[Dict],
+        var_alias: Dict[str, str],
     ) -> List[str]:
         """Translate built-in atoms to Cypher WHERE fragments."""
         filters: List[str] = []
@@ -56,14 +58,16 @@ class SWRLCypherTranslator:
             elif bi.category == "date" and bi.arity == 2:
                 filters.append(bi.cypher_template.format(*resolved[:2]))
             elif bi.arity <= len(resolved):
-                filters.append(bi.cypher_template.format(*resolved[:bi.arity]))
+                filters.append(bi.cypher_template.format(*resolved[: bi.arity]))
         return filters
 
-    def _resolve_node_table(self, class_name: str, base_uri: str,
-                            uri_map: Optional[Dict] = None) -> str:
+    def _resolve_node_table(
+        self, class_name: str, base_uri: str, uri_map: Optional[Dict] = None
+    ) -> str:
         """Map a SWRL class name to a graph-schema node table name."""
         if self._schema is None:
             from back.core.graphdb.ladybugdb.GraphSchema import GraphSchema
+
             return GraphSchema.safe_identifier(class_name)
 
         uri = SWRLParser.resolve_uri(class_name, base_uri, uri_map)
@@ -71,16 +75,19 @@ class SWRLCypherTranslator:
         if tbl:
             return tbl
         from back.core.graphdb.ladybugdb.GraphSchema import GraphSchema
+
         safe = GraphSchema.safe_identifier(class_name)
         if safe in self._schema.node_tables:
             return safe
         return safe
 
-    def _resolve_rel_table(self, prop_name: str, base_uri: str,
-                           uri_map: Optional[Dict] = None) -> str:
+    def _resolve_rel_table(
+        self, prop_name: str, base_uri: str, uri_map: Optional[Dict] = None
+    ) -> str:
         """Map a SWRL property name to a graph-schema relationship table."""
         if self._schema is None:
             from back.core.graphdb.ladybugdb.GraphSchema import GraphSchema
+
             return GraphSchema.safe_identifier(prop_name)
 
         uri = SWRLParser.resolve_uri(prop_name, base_uri, uri_map)
@@ -88,6 +95,7 @@ class SWRLCypherTranslator:
         if tbl:
             return tbl
         from back.core.graphdb.ladybugdb.GraphSchema import GraphSchema
+
         safe = GraphSchema.safe_identifier(prop_name)
         if safe in self._schema.rel_tables:
             return safe
@@ -240,16 +248,24 @@ class SWRLCypherTranslator:
         if not ante_atoms or not cons_atoms:
             return None
 
-        class_atoms = [a for a in ante_atoms
-                       if a["arity"] == 1 and not a.get("builtin") and not a.get("negated")]
-        prop_atoms = [a for a in ante_atoms
-                      if a["arity"] == 2 and not a.get("builtin") and not a.get("negated")]
+        class_atoms = [
+            a
+            for a in ante_atoms
+            if a["arity"] == 1 and not a.get("builtin") and not a.get("negated")
+        ]
+        prop_atoms = [
+            a
+            for a in ante_atoms
+            if a["arity"] == 2 and not a.get("builtin") and not a.get("negated")
+        ]
         if not class_atoms:
             return None
 
         var_tables: Dict[str, str] = {}
         for a in class_atoms:
-            var_tables[a["args"][0]] = self._resolve_node_table(a["name"], base_uri, uri_map)
+            var_tables[a["args"][0]] = self._resolve_node_table(
+                a["name"], base_uri, uri_map
+            )
 
         primary_var = class_atoms[0]["args"][0]
         connected = SWRLParser.find_connected_vars(primary_var, prop_atoms)
@@ -285,7 +301,9 @@ class SWRLCypherTranslator:
                     logger.warning(
                         "SWRL materialisation: skipping consequent '%s' — "
                         "variables %s/%s not connected (cartesian product)",
-                        atom["name"], var_s, var_o,
+                        atom["name"],
+                        var_s,
+                        var_o,
                     )
                     continue
                 rel_table = self._resolve_rel_table(atom["name"], base_uri, uri_map)
@@ -313,16 +331,24 @@ class SWRLCypherTranslator:
         if not ante_atoms or not cons_atoms:
             return None
 
-        class_atoms = [a for a in ante_atoms
-                       if a["arity"] == 1 and not a.get("builtin") and not a.get("negated")]
-        prop_atoms = [a for a in ante_atoms
-                      if a["arity"] == 2 and not a.get("builtin") and not a.get("negated")]
+        class_atoms = [
+            a
+            for a in ante_atoms
+            if a["arity"] == 1 and not a.get("builtin") and not a.get("negated")
+        ]
+        prop_atoms = [
+            a
+            for a in ante_atoms
+            if a["arity"] == 2 and not a.get("builtin") and not a.get("negated")
+        ]
         if not class_atoms:
             return None
 
         var_tables: Dict[str, str] = {}
         for a in class_atoms:
-            var_tables[a["args"][0]] = self._resolve_node_table(a["name"], base_uri, uri_map)
+            var_tables[a["args"][0]] = self._resolve_node_table(
+                a["name"], base_uri, uri_map
+            )
 
         primary_var = class_atoms[0]["args"][0]
         connected = SWRLParser.find_connected_vars(primary_var, prop_atoms)
@@ -366,9 +392,7 @@ class SWRLCypherTranslator:
                     continue
                 cls_uri = SWRLParser.resolve_uri(atom["name"], base_uri, uri_map)
                 v = self._var_name(var)
-                ret = (
-                    f"{v}.uri AS subject, '{RDF_TYPE}' AS predicate, '{cls_uri}' AS object"
-                )
+                ret = f"{v}.uri AS subject, '{RDF_TYPE}' AS predicate, '{cls_uri}' AS object"
                 not_exists = (
                     f"NOT EXISTS {{ MATCH ({v})-[:rdf_type]->(:{{uri: '{cls_uri}'}}) }}"
                 )
@@ -380,7 +404,9 @@ class SWRLCypherTranslator:
                     logger.warning(
                         "SWRL inference: skipping consequent property atom '%s' — "
                         "variables %s/%s are not connected (would cause cartesian product)",
-                        atom["name"], var_s, var_o,
+                        atom["name"],
+                        var_s,
+                        var_o,
                     )
                     continue
                 prop_uri = SWRLParser.resolve_uri(atom["name"], base_uri, uri_map)

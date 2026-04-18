@@ -44,9 +44,11 @@ _TRACE_NAME = "auto_assignment"
 # Data classes
 # =====================================================
 
+
 @dataclass
 class AgentResult:
     """Outcome of a full auto-mapping agent run."""
+
     success: bool
     entity_mappings: list = field(default_factory=list)
     relationship_mappings: list = field(default_factory=list)
@@ -122,6 +124,7 @@ GENERAL RULES
 # Internal helpers
 # =====================================================
 
+
 def _build_user_prompt(entities: List[dict], relationships: List[dict]) -> str:
     parts = []
     parts.append(
@@ -143,6 +146,7 @@ def _build_user_prompt(entities: List[dict], relationships: List[dict]) -> str:
 # =====================================================
 # Public entry point
 # =====================================================
+
 
 @trace_agent(name="auto_assignment")
 def run_agent(
@@ -175,9 +179,14 @@ def run_agent(
 
     logger.info(
         "===== AUTO-ASSIGN AGENT START ===== endpoint=%s, entities=%d, relationships=%d, max_iter=%d",
-        endpoint_name, len(entities), len(relationships), iteration_limit,
+        endpoint_name,
+        len(entities),
+        len(relationships),
+        iteration_limit,
     )
-    logger.debug("run_agent: metadata tables=%d", len((metadata or {}).get("tables", [])))
+    logger.debug(
+        "run_agent: metadata tables=%d", len((metadata or {}).get("tables", []))
+    )
 
     ctx = ToolContext(
         host=host.rstrip("/"),
@@ -200,7 +209,8 @@ def run_agent(
     ]
     logger.info(
         "Agent conversation initialized: system=%d chars, user=%d chars",
-        len(SYSTEM_PROMPT), len(user_prompt),
+        len(SYSTEM_PROMPT),
+        len(user_prompt),
     )
 
     total_usage: Dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0}
@@ -228,14 +238,21 @@ def run_agent(
     for iteration in range(iteration_limit):
         # Delay between iterations to avoid "too many requests" rate limits
         if iteration > 0:
-            logger.debug("Iteration %d: waiting %ds before LLM call (rate limit mitigation)", iteration + 1, _ITERATION_DELAY_SEC)
+            logger.debug(
+                "Iteration %d: waiting %ds before LLM call (rate limit mitigation)",
+                iteration + 1,
+                _ITERATION_DELAY_SEC,
+            )
             time.sleep(_ITERATION_DELAY_SEC)
 
         current_iteration = iteration + 1
         logger.info(
             "----- Iteration %d/%d — %d messages, %d entity mappings, %d rel mappings -----",
-            current_iteration, iteration_limit, len(messages),
-            len(ctx.entity_mappings), len(ctx.relationships),
+            current_iteration,
+            iteration_limit,
+            len(messages),
+            len(ctx.entity_mappings),
+            len(ctx.relationships),
         )
         mapped = len(ctx.entity_mappings) + len(ctx.relationships)
         notify(f"Mapped {mapped}/{total_items} — thinking…")
@@ -246,25 +263,36 @@ def run_agent(
         t0 = time.time()
         try:
             llm_response = call_serving_endpoint(
-                host, token, endpoint_name, messages,
-                tools=send_tools, max_tokens=2048, temperature=0.1,
-                timeout=LLM_TIMEOUT, trace_name=_TRACE_NAME,
+                host,
+                token,
+                endpoint_name,
+                messages,
+                tools=send_tools,
+                max_tokens=2048,
+                temperature=0.1,
+                timeout=LLM_TIMEOUT,
+                trace_name=_TRACE_NAME,
             )
         except requests.exceptions.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else "?"
             logger.warning("Iteration %d: HTTPError status=%s", iteration + 1, status)
             logger.debug(
-                "Iteration %d: HTTPError body: %.500s", iteration + 1,
+                "Iteration %d: HTTPError body: %.500s",
+                iteration + 1,
                 exc.response.text if exc.response is not None else "N/A",
             )
             if exc.response is not None and status in (400, 422) and tools_supported:
-                logger.warning("Agent: endpoint rejected tools — falling back to direct mode")
+                logger.warning(
+                    "Agent: endpoint rejected tools — falling back to direct mode"
+                )
                 tools_supported = False
                 notify("Endpoint does not support tools – aborting.")
                 result.error = "LLM endpoint does not support function calling"
                 return result
             result.error = f"LLM request failed: {exc}"
-            logger.error("Agent: LLM request failed at iteration %d: %s", iteration + 1, exc)
+            logger.error(
+                "Agent: LLM request failed at iteration %d: %s", iteration + 1, exc
+            )
             return result
         except requests.exceptions.ReadTimeout:
             result.error = f"LLM request timed out after {LLM_TIMEOUT}s"
@@ -272,7 +300,9 @@ def run_agent(
             return result
         except requests.exceptions.RequestException as exc:
             result.error = f"LLM request failed: {exc}"
-            logger.error("Agent: request exception at iteration %d: %s", iteration + 1, exc)
+            logger.error(
+                "Agent: request exception at iteration %d: %s", iteration + 1, exc
+            )
             return result
 
         elapsed_ms = int((time.time() - t0) * 1000)
@@ -288,13 +318,17 @@ def run_agent(
         has_content = bool(message.get("content"))
         logger.info(
             "Iteration %d: finish_reason=%s, tool_calls=%d, has_content=%s",
-            iteration + 1, finish_reason, len(tool_calls), has_content,
+            iteration + 1,
+            finish_reason,
+            len(tool_calls),
+            has_content,
         )
 
         if tool_calls:
             logger.info(
                 "Iteration %d: processing %d tool call(s): [%s]",
-                iteration + 1, len(tool_calls),
+                iteration + 1,
+                len(tool_calls),
                 ", ".join(tc.get("function", {}).get("name", "?") for tc in tool_calls),
             )
             messages.append(message)
@@ -312,7 +346,10 @@ def run_agent(
 
                 logger.info(
                     "Iteration %d: calling tool '%s' (%d/%d)",
-                    iteration + 1, tool_name, tc_idx, len(tool_calls),
+                    iteration + 1,
+                    tool_name,
+                    tc_idx,
+                    len(tool_calls),
                 )
 
                 if tool_name == "submit_entity_mapping":
@@ -333,53 +370,74 @@ def run_agent(
                 else:
                     notify(f"Calling {tool_name}…")
 
-                result.steps.append(AgentStep(
-                    step_type="tool_call",
-                    content=json.dumps(arguments, default=str)[:500],
-                    tool_name=tool_name,
-                ))
+                result.steps.append(
+                    AgentStep(
+                        step_type="tool_call",
+                        content=json.dumps(arguments, default=str)[:500],
+                        tool_name=tool_name,
+                    )
+                )
 
                 t1 = time.time()
-                tool_result = dispatch_tool(TOOL_HANDLERS, ctx, tool_name, arguments, trace_name=_TRACE_NAME)
+                tool_result = dispatch_tool(
+                    TOOL_HANDLERS, ctx, tool_name, arguments, trace_name=_TRACE_NAME
+                )
                 tool_ms = int((time.time() - t1) * 1000)
 
                 logger.info(
                     "Iteration %d: tool '%s' returned %d chars in %dms",
-                    iteration + 1, tool_name, len(tool_result), tool_ms,
+                    iteration + 1,
+                    tool_name,
+                    len(tool_result),
+                    tool_ms,
                 )
 
-                result.steps.append(AgentStep(
-                    step_type="tool_result",
-                    content=(tool_result[:500] + "…") if len(tool_result) > 500 else tool_result,
-                    tool_name=tool_name,
-                    duration_ms=tool_ms,
-                ))
+                result.steps.append(
+                    AgentStep(
+                        step_type="tool_result",
+                        content=(
+                            (tool_result[:500] + "…")
+                            if len(tool_result) > 500
+                            else tool_result
+                        ),
+                        tool_name=tool_name,
+                        duration_ms=tool_ms,
+                    )
+                )
 
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_id,
-                    "content": tool_result,
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_id,
+                        "content": tool_result,
+                    }
+                )
 
             mapped = len(ctx.entity_mappings) + len(ctx.relationships)
             notify(f"Mapped {mapped}/{total_items} items")
             logger.info(
                 "Iteration %d: tool calls done, conversation=%d messages, mappings=%d/%d",
-                iteration + 1, len(messages), mapped, total_items,
+                iteration + 1,
+                len(messages),
+                mapped,
+                total_items,
             )
         else:
             # Agent produced text — should be the final summary
             content = extract_message_content(llm_response)
             logger.info(
                 "Iteration %d: agent produced text output — %d chars",
-                iteration + 1, len(content),
+                iteration + 1,
+                len(content),
             )
 
-            result.steps.append(AgentStep(
-                step_type="output",
-                content=(content[:500] + "…") if len(content) > 500 else content,
-                duration_ms=elapsed_ms,
-            ))
+            result.steps.append(
+                AgentStep(
+                    step_type="output",
+                    content=(content[:500] + "…") if len(content) > 500 else content,
+                    duration_ms=elapsed_ms,
+                )
+            )
 
             result.success = True
             result.entity_mappings = ctx.entity_mappings
@@ -420,7 +478,9 @@ def run_agent(
         result.error = f"Agent used all {iteration_limit} iterations but submitted partial mappings"
         logger.warning(
             "===== AUTO-ASSIGN AGENT PARTIAL ===== %s — entity=%d, rel=%d",
-            result.error, len(ctx.entity_mappings), len(ctx.relationships),
+            result.error,
+            len(ctx.entity_mappings),
+            len(ctx.relationships),
         )
     else:
         result.error = f"Agent reached maximum iterations ({iteration_limit}) without producing mappings"

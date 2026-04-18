@@ -1,4 +1,5 @@
 """Tests for UnityCatalog (Databricks Unity Catalog metadata)."""
+
 import importlib
 import pytest
 from unittest.mock import MagicMock, Mock, patch
@@ -84,7 +85,9 @@ class TestGetSchemas:
 
     @patch("databricks.sql.connect")
     def test_returns_schema_names(self, mock_connect, auth_with_warehouse):
-        mock_cursor = _make_sql_mocks(mock_connect, fetchall=[["default"], ["information_schema"]])
+        mock_cursor = _make_sql_mocks(
+            mock_connect, fetchall=[["default"], ["information_schema"]]
+        )
         uc = UnityCatalog(auth_with_warehouse)
         out = uc.get_schemas("main")
         assert out == ["default", "information_schema"]

@@ -3,6 +3,7 @@
 Reads SHACL Turtle (or other RDF serialisations) and extracts internal
 shape dicts compatible with ``SHACLService``.
 """
+
 import uuid
 from typing import Dict, List, Optional
 
@@ -21,6 +22,7 @@ class SHACLParser:
     @staticmethod
     def _local_name(uri: str) -> str:
         from back.core.helpers import extract_local_name
+
         return extract_local_name(uri)
 
     def parse(self, turtle_content: str, format: str = "turtle") -> List[Dict]:
@@ -51,12 +53,16 @@ class SHACLParser:
                 break
 
             for ps in g.objects(node_shape, SH.property):
-                shape = self._parse_property_shape(g, ps, target_class, target_class_uri)
+                shape = self._parse_property_shape(
+                    g, ps, target_class, target_class_uri
+                )
                 if shape:
                     shapes.append(shape)
 
             for sparql_node in g.objects(node_shape, SH.sparql):
-                shape = self._parse_sparql_constraint(g, sparql_node, target_class, target_class_uri)
+                shape = self._parse_sparql_constraint(
+                    g, sparql_node, target_class, target_class_uri
+                )
                 if shape:
                     shapes.append(shape)
 
@@ -65,25 +71,31 @@ class SHACLParser:
                 if str(val).lower() == "true":
                     closed = True
             if closed:
-                shapes.append({
-                    "id": f"shape_structural_{target_class or 'global'}_closed_{uuid.uuid4().hex[:6]}",
-                    "category": "structural",
-                    "label": f"{target_class or 'Global'} is a closed shape",
-                    "target_class": target_class,
-                    "target_class_uri": target_class_uri,
-                    "property_path": "",
-                    "property_uri": "",
-                    "shacl_type": "sh:closed",
-                    "parameters": {},
-                    "severity": "sh:Violation",
-                    "message": f"{target_class or 'Shape'} does not allow unexpected properties",
-                    "enabled": True,
-                })
+                shapes.append(
+                    {
+                        "id": f"shape_structural_{target_class or 'global'}_closed_{uuid.uuid4().hex[:6]}",
+                        "category": "structural",
+                        "label": f"{target_class or 'Global'} is a closed shape",
+                        "target_class": target_class,
+                        "target_class_uri": target_class_uri,
+                        "property_path": "",
+                        "property_uri": "",
+                        "shacl_type": "sh:closed",
+                        "parameters": {},
+                        "severity": "sh:Violation",
+                        "message": f"{target_class or 'Shape'} does not allow unexpected properties",
+                        "enabled": True,
+                    }
+                )
 
         return shapes
 
     def _parse_property_shape(
-        self, g: Graph, ps, target_class: str, target_class_uri: str,
+        self,
+        g: Graph,
+        ps,
+        target_class: str,
+        target_class_uri: str,
     ) -> Optional[Dict]:
         prop_uri = ""
         prop_path = ""
@@ -160,7 +172,11 @@ class SHACLParser:
         }
 
     def _parse_sparql_constraint(
-        self, g: Graph, sparql_node, target_class: str, target_class_uri: str,
+        self,
+        g: Graph,
+        sparql_node,
+        target_class: str,
+        target_class_uri: str,
     ) -> Optional[Dict]:
         query = ""
         for sel in g.objects(sparql_node, SH.select):

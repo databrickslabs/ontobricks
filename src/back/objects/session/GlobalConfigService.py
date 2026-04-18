@@ -8,6 +8,7 @@ volume as ``.global_config.json``. Admins (CAN MANAGE) control **warehouse_id**
 In local (non-App) mode the same file applies when a registry exists; env vars
 and fallbacks cover bootstrap and unconfigured deployments.
 """
+
 import json
 import time
 from typing import Any, Dict, Optional, Tuple
@@ -36,6 +37,7 @@ class GlobalConfigService:
     @staticmethod
     def _config_path(registry_cfg: Dict[str, str]) -> str:
         from back.objects.registry import RegistryCfg
+
         c = RegistryCfg.from_dict(registry_cfg)
         return f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/{_CONFIG_FILENAME}"
 
@@ -94,7 +96,12 @@ class GlobalConfigService:
         return empty
 
     def get(
-        self, host: str, token: str, registry_cfg: Dict[str, str], key: str, default: str = ""
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        key: str,
+        default: str = "",
     ) -> str:
         """Return a single value from the global config."""
         data = self.load(host, token, registry_cfg)
@@ -131,7 +138,10 @@ class GlobalConfigService:
     ) -> Tuple[bool, str]:
         """Merge *updates* into the global config and persist to UC Volume."""
         if not registry_cfg.get("catalog") or not registry_cfg.get("schema"):
-            return False, "Registry not configured — set catalog and schema in Settings first"
+            return (
+                False,
+                "Registry not configured — set catalog and schema in Settings first",
+            )
 
         data = self.load(host, token, registry_cfg, force=True)
         data["version"] = data.get("version", 1)
@@ -149,7 +159,9 @@ class GlobalConfigService:
                 return False, f"Failed to save global config: {msg}"
             self._cache = data
             self._cache_ts = time.time()
-            logger.info("Saved global config updates %s to %s", list(updates.keys()), path)
+            logger.info(
+                "Saved global config updates %s to %s", list(updates.keys()), path
+            )
             return True, "Global configuration saved"
         except Exception as e:
             logger.exception("Error saving global config: %s", e)
@@ -204,7 +216,10 @@ class GlobalConfigService:
         """Persist a new graph DB engine selection in the global config file."""
         engine = (engine or "").strip().lower()
         if engine not in self.ALLOWED_GRAPH_ENGINES:
-            return False, f"Unknown graph engine '{engine}'. Allowed: {', '.join(self.ALLOWED_GRAPH_ENGINES)}"
+            return (
+                False,
+                f"Unknown graph engine '{engine}'. Allowed: {', '.join(self.ALLOWED_GRAPH_ENGINES)}",
+            )
         return self._save(host, token, registry_cfg, {"graph_engine": engine})
 
     def get_graph_engine_config(
@@ -235,6 +250,7 @@ class GlobalConfigService:
         if val and str(val).isdigit():
             return int(val)
         from back.objects.registry.registry_cache import get_registry_cache_ttl
+
         return get_registry_cache_ttl()
 
     def set_registry_cache_ttl(

@@ -5,6 +5,7 @@ External API package (``api``) — shared constants and OpenAPI metadata.
 (aligned with the application release by default). Path routing uses
 ``API_URL_PATH_VERSION`` (e.g. ``v1`` → ``/api/v1/...``).
 """
+
 from __future__ import annotations
 
 from typing import Dict, List
@@ -39,7 +40,9 @@ API_V1_PREFIX: str = f"/{API_URL_PATH_VERSION}"
 API_DIGITALTWIN_PREFIX: str = f"/{API_URL_PATH_VERSION}/digitaltwin"
 API_GRAPHQL_PREFIX: str = f"/{API_URL_PATH_VERSION}/graphql"
 
-EXTERNAL_GRAPHQL_PUBLIC_PREFIX: str = f"{EXTERNAL_API_MOUNT_PREFIX}/{API_URL_PATH_VERSION}/graphql"
+EXTERNAL_GRAPHQL_PUBLIC_PREFIX: str = (
+    f"{EXTERNAL_API_MOUNT_PREFIX}/{API_URL_PATH_VERSION}/graphql"
+)
 """Full URL path prefix for GraphQL on the mounted external app (e.g. ``/api/v1/graphql``)."""
 
 # ---------------------------------------------------------------------------

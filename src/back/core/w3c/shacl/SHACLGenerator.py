@@ -4,6 +4,7 @@ Builds an RDFLib graph of ``sh:NodeShape`` / ``sh:PropertyShape``
 resources from the internal shape-dict representation and serialises
 the result to Turtle.
 """
+
 from collections import defaultdict
 from typing import Dict, List, Optional
 
@@ -137,7 +138,9 @@ class SHACLGenerator:
         if param == "sh:in":
             lst_node = BNode()
             g.add((lst_node, RDF.type, RDF.List))
-            self._build_rdf_list(g, lst_node, value if isinstance(value, list) else [value])
+            self._build_rdf_list(
+                g, lst_node, value if isinstance(value, list) else [value]
+            )
             return
 
         entry = mapping.get(param)

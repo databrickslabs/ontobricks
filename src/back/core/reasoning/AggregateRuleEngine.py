@@ -9,6 +9,7 @@ Each rule defines:
 - *operator* + *threshold*: the condition on the aggregate
 - *result_class*: the class to assign to matching instances
 """
+
 import time
 from typing import Any, Dict, List, Optional
 
@@ -65,7 +66,11 @@ class AggregateRuleEngine:
             if not rule.get(field_uri):
                 name = rule.get(field_name, "")
                 if name:
-                    fallback = (base_uri + sep + name) if is_class else (data_ns + name if data_ns else base_uri + sep + name)
+                    fallback = (
+                        (base_uri + sep + name)
+                        if is_class
+                        else (data_ns + name if data_ns else base_uri + sep + name)
+                    )
                     rule[field_uri] = uri_map.get(name.lower(), fallback)
 
         _resolve("target_class", "target_class_uri", is_class=True)
@@ -95,18 +100,25 @@ class AggregateRuleEngine:
             try:
                 resolved = self._resolve_rule(rule, ontology)
                 rule_result = self._execute_one(
-                    resolved, store, table_name, base_uri, is_cypher, materialize,
+                    resolved,
+                    store,
+                    table_name,
+                    base_uri,
+                    is_cypher,
+                    materialize,
                 )
                 result.merge(rule_result)
             except Exception as e:
                 logger.error("Aggregate rule '%s' failed: %s", name, e)
-                result.violations.append(RuleViolation(
-                    rule_name=name,
-                    subject="",
-                    message=f"Execution error: {e}",
-                    check_type="aggregate",
-                    rule_type="aggregate",
-                ))
+                result.violations.append(
+                    RuleViolation(
+                        rule_name=name,
+                        subject="",
+                        message=f"Execution error: {e}",
+                        check_type="aggregate",
+                        rule_type="aggregate",
+                    )
+                )
 
         result.stats = {
             "phase": "aggregate_rules",
@@ -118,8 +130,13 @@ class AggregateRuleEngine:
         return result
 
     def _execute_one(
-        self, rule: Dict, store: Any, table_name: str,
-        base_uri: str, is_cypher: bool, materialize: bool,
+        self,
+        rule: Dict,
+        store: Any,
+        table_name: str,
+        base_uri: str,
+        is_cypher: bool,
+        materialize: bool,
     ) -> ReasoningResult:
         result = ReasoningResult()
         name = rule.get("name", "unnamed")
@@ -139,41 +156,49 @@ class AggregateRuleEngine:
                 for row in raw:
                     subj = row[0] if row else ""
                     agg_val = row[1] if len(row) > 1 else ""
-                    result.violations.append(RuleViolation(
-                        rule_name=name,
-                        subject=subj,
-                        message=f"Aggregate rule '{name}': value={agg_val}",
-                        check_type="aggregate",
-                        rule_type="aggregate",
-                    ))
-                    if materialize and rule.get("result_class_uri"):
-                        result.inferred_triples.append(InferredTriple(
-                            subject=subj,
-                            predicate=RDF_TYPE,
-                            object=rule["result_class_uri"],
-                            provenance=f"aggregate:{name}",
+                    result.violations.append(
+                        RuleViolation(
                             rule_name=name,
-                        ))
+                            subject=subj,
+                            message=f"Aggregate rule '{name}': value={agg_val}",
+                            check_type="aggregate",
+                            rule_type="aggregate",
+                        )
+                    )
+                    if materialize and rule.get("result_class_uri"):
+                        result.inferred_triples.append(
+                            InferredTriple(
+                                subject=subj,
+                                predicate=RDF_TYPE,
+                                object=rule["result_class_uri"],
+                                provenance=f"aggregate:{name}",
+                                rule_name=name,
+                            )
+                        )
             else:
                 raw = store.execute_query(query)
                 for row in raw:
                     subj = row.get("s", "")
                     agg_val = row.get("agg_val", "")
-                    result.violations.append(RuleViolation(
-                        rule_name=name,
-                        subject=subj,
-                        message=f"Aggregate rule '{name}': value={agg_val}",
-                        check_type="aggregate",
-                        rule_type="aggregate",
-                    ))
-                    if materialize and rule.get("result_class_uri"):
-                        result.inferred_triples.append(InferredTriple(
-                            subject=subj,
-                            predicate=RDF_TYPE,
-                            object=rule["result_class_uri"],
-                            provenance=f"aggregate:{name}",
+                    result.violations.append(
+                        RuleViolation(
                             rule_name=name,
-                        ))
+                            subject=subj,
+                            message=f"Aggregate rule '{name}': value={agg_val}",
+                            check_type="aggregate",
+                            rule_type="aggregate",
+                        )
+                    )
+                    if materialize and rule.get("result_class_uri"):
+                        result.inferred_triples.append(
+                            InferredTriple(
+                                subject=subj,
+                                predicate=RDF_TYPE,
+                                object=rule["result_class_uri"],
+                                provenance=f"aggregate:{name}",
+                                rule_name=name,
+                            )
+                        )
         except Exception as e:
             logger.error("Aggregate rule query failed for '%s': %s", name, e)
 
@@ -216,7 +241,11 @@ class AggregateRuleEngine:
                 f"HAVING {func}(CAST(t_agg.object AS DOUBLE)) {sql_op} {threshold}"
             )
         elif group_prop_uri:
-            agg_expr = f"{func}(CAST(t_grp.object AS DOUBLE))" if func != "COUNT" else "COUNT(t_grp.object)"
+            agg_expr = (
+                f"{func}(CAST(t_grp.object AS DOUBLE))"
+                if func != "COUNT"
+                else "COUNT(t_grp.object)"
+            )
             return (
                 f"SELECT t0.subject AS s, {agg_expr} AS agg_val\n"
                 f"FROM {table} t0\n"
@@ -234,7 +263,11 @@ class AggregateRuleEngine:
             )
 
     def build_cypher(
-        self, rule: Dict, table_name: str, base_uri: str, store: Any,
+        self,
+        rule: Dict,
+        table_name: str,
+        base_uri: str,
+        store: Any,
     ) -> Optional[str]:
         """Build Cypher aggregate query for the flat triple table."""
         target_uri = rule.get("target_class_uri", "")
@@ -272,7 +305,11 @@ class AggregateRuleEngine:
                 f"RETURN s, agg_val"
             )
         elif group_prop_uri:
-            agg_expr = f"{agg_func}(CAST(tg.object AS DOUBLE))" if agg_func != "count" else "count(tg.object)"
+            agg_expr = (
+                f"{agg_func}(CAST(tg.object AS DOUBLE))"
+                if agg_func != "count"
+                else "count(tg.object)"
+            )
             return (
                 f"MATCH (t0:{tbl}), (tg:{tbl})\n"
                 f"WHERE t0.predicate = '{RDF_TYPE}' AND t0.object = '{target_uri}'\n"
@@ -306,5 +343,7 @@ class AggregateRuleEngine:
             errors.append(f"Invalid operator: {op}")
         if not rule.get("group_by_property") and not rule.get("aggregate_property"):
             if func and func != "count":
-                errors.append("Must specify at least one of group_by_property or aggregate_property (only COUNT works without them)")
+                errors.append(
+                    "Must specify at least one of group_by_property or aggregate_property (only COUNT works without them)"
+                )
         return errors

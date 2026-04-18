@@ -1,4 +1,5 @@
 """State conflict, e.g. duplicate entity (409)."""
+
 from __future__ import annotations
 
 from back.core.errors.OntoBricksError import OntoBricksError

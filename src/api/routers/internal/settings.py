@@ -3,6 +3,7 @@ Internal API -- Settings / configuration JSON endpoints.
 
 Moved from app/frontend/settings/routes.py during the front/back split.
 """
+
 from fastapi import APIRouter, Request, Depends
 
 from shared.config.settings import get_settings, Settings
@@ -19,7 +20,9 @@ router = APIRouter(prefix="/settings", tags=["Settings"])
 
 def _settings_request_identity(request: Request) -> tuple[str, str, str, str, str]:
     """Extract user identity primitives for :class:`SettingsService` (no FastAPI types in domain layer)."""
-    email = getattr(request.state, "user_email", "") or request.headers.get("x-forwarded-email", "")
+    email = getattr(request.state, "user_email", "") or request.headers.get(
+        "x-forwarded-email", ""
+    )
     display_name = request.headers.get("x-forwarded-preferred-username", email) or ""
     user_token = request.headers.get("x-forwarded-access-token", "") or ""
     user_role = getattr(request.state, "user_role", "") or ""
@@ -31,8 +34,12 @@ def _settings_request_identity(request: Request) -> tuple[str, str, str, str, st
 # Main Configuration
 # ===========================================
 
+
 @router.get("/current")
-async def get_current_config(session_mgr: SessionManager = Depends(get_session_manager), settings: Settings = Depends(get_settings)):
+async def get_current_config(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
     """Get current Databricks configuration."""
     return config_service.build_current_config(session_mgr, settings)
 
@@ -49,12 +56,19 @@ async def save_config(
     Catalog/schema are NOT stored -- they are selected dynamically when needed.
     """
     data = await request.json()
-    email, _display_name, user_token, _user_role, _user_domain_role = _settings_request_identity(request)
-    return config_service.apply_config_save(data, email, user_token, session_mgr, settings)
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.apply_config_save(
+        data, email, user_token, session_mgr, settings
+    )
 
 
 @router.post("/test-connection")
-async def test_connection_post(session_mgr: SessionManager = Depends(get_session_manager), settings: Settings = Depends(get_settings)):
+async def test_connection_post(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
     """Test Databricks connection (POST)."""
     return await config_service.test_connection(session_mgr, settings)
 
@@ -63,8 +77,12 @@ async def test_connection_post(session_mgr: SessionManager = Depends(get_session
 # Warehouse Selection
 # ===========================================
 
+
 @router.get("/warehouses")
-async def get_warehouses(session_mgr: SessionManager = Depends(get_session_manager), settings: Settings = Depends(get_settings)):
+async def get_warehouses(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
     """Get available SQL warehouses."""
     return await config_service.fetch_warehouses(session_mgr, settings)
 
@@ -83,9 +101,15 @@ async def select_warehouse(
     can immediately browse catalogs and set up the registry.
     """
     data = await request.json()
-    email, _display_name, user_token, _user_role, _user_domain_role = _settings_request_identity(request)
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
     return config_service.select_warehouse(
-        data.get('warehouse_id'), email, user_token, session_mgr, settings,
+        data.get("warehouse_id"),
+        email,
+        user_token,
+        session_mgr,
+        settings,
     )
 
 
@@ -93,37 +117,66 @@ async def select_warehouse(
 # Catalog/Schema/Volume Navigation
 # ===========================================
 
+
 @router.get("/catalogs")
-async def get_catalogs(session_mgr: SessionManager = Depends(get_session_manager), settings: Settings = Depends(get_settings)):
+async def get_catalogs(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
     """Get available Unity Catalog catalogs."""
     return await config_service.fetch_catalogs(session_mgr, settings)
 
 
 @router.get("/schemas")
-async def get_schemas(catalog: str, session_mgr: SessionManager = Depends(get_session_manager), settings: Settings = Depends(get_settings)):
+async def get_schemas(
+    catalog: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
     """Get schemas in a catalog (query param version)."""
     return await config_service.fetch_schemas(catalog, session_mgr, settings)
 
 
 @router.get("/schemas/{catalog}")
-async def get_schemas_path(catalog: str, session_mgr: SessionManager = Depends(get_session_manager), settings: Settings = Depends(get_settings)):
+async def get_schemas_path(
+    catalog: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
     """Get schemas in a catalog (path param version)."""
     return await config_service.fetch_schemas(
-        catalog, session_mgr, settings, log_label="Get schemas (path)",
+        catalog,
+        session_mgr,
+        settings,
+        log_label="Get schemas (path)",
     )
 
 
 @router.get("/volumes")
-async def get_volumes(catalog: str, schema: str, session_mgr: SessionManager = Depends(get_session_manager), settings: Settings = Depends(get_settings)):
+async def get_volumes(
+    catalog: str,
+    schema: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
     """Get volumes in a schema (query param version)."""
     return await config_service.fetch_volumes(catalog, schema, session_mgr, settings)
 
 
 @router.get("/volumes/{catalog}/{schema}")
-async def get_volumes_path(catalog: str, schema: str, session_mgr: SessionManager = Depends(get_session_manager), settings: Settings = Depends(get_settings)):
+async def get_volumes_path(
+    catalog: str,
+    schema: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
     """Get volumes in a schema (path param version)."""
     return await config_service.fetch_volumes(
-        catalog, schema, session_mgr, settings, log_label="Get volumes (path)",
+        catalog,
+        schema,
+        session_mgr,
+        settings,
+        log_label="Get volumes (path)",
     )
 
 
@@ -133,20 +186,24 @@ async def get_volumes_path(catalog: str, schema: str, session_mgr: SessionManage
 
 
 @router.get("/registry")
-async def get_registry(session_mgr: SessionManager = Depends(get_session_manager),
-                       settings: Settings = Depends(get_settings)):
+async def get_registry(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
     """Return current domain-registry configuration and initialization status."""
     return config_service.build_registry_get_payload(session_mgr, settings)
 
 
 @router.post("/registry")
-async def save_registry(request: Request,
-                        session_mgr: SessionManager = Depends(get_session_manager),
-                        settings: Settings = Depends(get_settings)):
+async def save_registry(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
     """Persist registry catalog / schema / volume in settings.registry."""
     if config_service.is_registry_locked(settings):
         raise ValidationError(
-            'Registry is configured via Databricks App resources and cannot be changed here.',
+            "Registry is configured via Databricks App resources and cannot be changed here.",
         )
 
     data = await request.json()
@@ -154,8 +211,10 @@ async def save_registry(request: Request,
 
 
 @router.post("/registry/initialize")
-async def initialize_registry(session_mgr: SessionManager = Depends(get_session_manager),
-                              settings: Settings = Depends(get_settings)):
+async def initialize_registry(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
     """Create the registry Volume (and root marker) if they do not exist."""
     return config_service.initialize_registry_result(session_mgr, settings)
 
@@ -163,7 +222,7 @@ async def initialize_registry(session_mgr: SessionManager = Depends(get_session_
 @router.get("/registry/domains")
 async def list_registry_domains(
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """List domains in the registry with name and description."""
     return config_service.list_registry_domains_result(session_mgr, settings)
@@ -182,10 +241,12 @@ async def list_registry_bridges(
 async def delete_registry_domain(
     domain_name: str,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Delete a domain folder and all its versions from the registry."""
-    return config_service.delete_registry_domain_result(domain_name, session_mgr, settings)
+    return config_service.delete_registry_domain_result(
+        domain_name, session_mgr, settings
+    )
 
 
 @router.delete("/registry/domains/{domain_name}/versions/{version}")
@@ -193,11 +254,14 @@ async def delete_registry_version(
     domain_name: str,
     version: str,
     session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """Delete a single version file from a domain in the registry."""
     return config_service.delete_registry_version_result(
-        domain_name, version, session_mgr, settings,
+        domain_name,
+        version,
+        session_mgr,
+        settings,
     )
 
 
@@ -213,13 +277,18 @@ async def set_registry_version_active(
     data = await request.json()
     enabled = bool(data.get("enabled", False))
     return config_service.set_registry_version_active_result(
-        domain_name, version, enabled, session_mgr, settings,
+        domain_name,
+        version,
+        enabled,
+        session_mgr,
+        settings,
     )
 
 
 # ===========================================
 # Emoji & Base URI Settings
 # ===========================================
+
 
 @router.get("/get-default-emoji")
 async def get_default_emoji(
@@ -228,7 +297,7 @@ async def get_default_emoji(
 ):
     """Get default emoji setting (instance-global)."""
     domain = get_domain(session_mgr)
-    return {'success': True, 'emoji': resolve_default_emoji(domain, settings)}
+    return {"success": True, "emoji": resolve_default_emoji(domain, settings)}
 
 
 @router.post("/set-default-emoji")
@@ -239,9 +308,13 @@ async def set_default_emoji(
 ):
     """Set default emoji (admin only, stored globally)."""
     data = await request.json()
-    emoji = data.get('emoji', '📦')
-    email, _display_name, user_token, _user_role, _user_domain_role = _settings_request_identity(request)
-    return config_service.set_default_emoji_result(emoji, email, user_token, session_mgr, settings)
+    emoji = data.get("emoji", "📦")
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.set_default_emoji_result(
+        emoji, email, user_token, session_mgr, settings
+    )
 
 
 @router.get("/get-base-uri")
@@ -251,7 +324,7 @@ async def get_base_uri(
 ):
     """Get default base URI domain (instance-global)."""
     domain = get_domain(session_mgr)
-    return {'success': True, 'base_uri': resolve_default_base_uri(domain, settings)}
+    return {"success": True, "base_uri": resolve_default_base_uri(domain, settings)}
 
 
 @router.post("/save-base-uri")
@@ -262,9 +335,13 @@ async def save_base_uri(
 ):
     """Save default base URI domain (admin only, stored globally)."""
     data = await request.json()
-    base_uri = data.get('base_uri', DEFAULT_BASE_URI.rstrip('/'))
-    email, _display_name, user_token, _user_role, _user_domain_role = _settings_request_identity(request)
-    return config_service.save_base_uri_result(base_uri, email, user_token, session_mgr, settings)
+    base_uri = data.get("base_uri", DEFAULT_BASE_URI.rstrip("/"))
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_base_uri_result(
+        base_uri, email, user_token, session_mgr, settings
+    )
 
 
 @router.get("/get-registry-cache-ttl")
@@ -284,9 +361,13 @@ async def save_registry_cache_ttl(
 ):
     """Save registry cache TTL in seconds (admin only, stored globally)."""
     data = await request.json()
-    ttl = int(data.get('registry_cache_ttl', 300))
-    email, _display_name, user_token, _user_role, _user_domain_role = _settings_request_identity(request)
-    return config_service.save_registry_cache_ttl_result(ttl, email, user_token, session_mgr, settings)
+    ttl = int(data.get("registry_cache_ttl", 300))
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_registry_cache_ttl_result(
+        ttl, email, user_token, session_mgr, settings
+    )
 
 
 # ===========================================
@@ -301,9 +382,17 @@ async def permissions_me(
     settings: Settings = Depends(get_settings),
 ):
     """Return the current user's identity and resolved role."""
-    email, display_name, user_token, user_role, user_domain_role = _settings_request_identity(request)
+    email, display_name, user_token, user_role, user_domain_role = (
+        _settings_request_identity(request)
+    )
     return config_service.build_permissions_me(
-        email, display_name, user_token, user_role, user_domain_role, session_mgr, settings,
+        email,
+        display_name,
+        user_token,
+        user_role,
+        user_domain_role,
+        session_mgr,
+        settings,
     )
 
 
@@ -314,9 +403,16 @@ async def permissions_diag(
 ):
     """Diagnostic: run the admin check in detail and return raw results."""
     email = request.headers.get("x-forwarded-email", "")
-    _, display_name, user_token, user_role, user_domain_role = _settings_request_identity(request)
+    _, display_name, user_token, user_role, user_domain_role = (
+        _settings_request_identity(request)
+    )
     return config_service.build_permissions_diag(
-        email, display_name, user_token, user_role, user_domain_role, settings,
+        email,
+        display_name,
+        user_token,
+        user_role,
+        user_domain_role,
+        settings,
     )
 
 
@@ -377,7 +473,9 @@ async def search_principals(
     """
     if len(q.strip()) < 2:
         return {"success": True, "results": []}
-    return config_service.search_workspace_principals(q.strip(), type, session_mgr, settings)
+    return config_service.search_workspace_principals(
+        q.strip(), type, session_mgr, settings
+    )
 
 
 # ===========================================
@@ -392,7 +490,9 @@ async def list_domain_permissions(
     settings: Settings = Depends(get_settings),
 ):
     """List permission entries for a specific domain (admin only)."""
-    return config_service.list_domain_permissions_result(domain_name, session_mgr, settings)
+    return config_service.list_domain_permissions_result(
+        domain_name, session_mgr, settings
+    )
 
 
 @router.post("/domain-permissions/{domain_name}")
@@ -404,7 +504,9 @@ async def add_domain_permission(
 ):
     """Add or update a permission entry for a specific domain (admin only)."""
     data = await request.json()
-    return config_service.add_domain_permission_result(domain_name, data, session_mgr, settings)
+    return config_service.add_domain_permission_result(
+        domain_name, data, session_mgr, settings
+    )
 
 
 @router.delete("/domain-permissions/{domain_name}/{principal:path}")
@@ -415,7 +517,9 @@ async def delete_domain_permission(
     settings: Settings = Depends(get_settings),
 ):
     """Remove a permission entry for a specific domain (admin only)."""
-    return config_service.delete_domain_permission_result(domain_name, principal, session_mgr, settings)
+    return config_service.delete_domain_permission_result(
+        domain_name, principal, session_mgr, settings
+    )
 
 
 # ===========================================
@@ -440,9 +544,13 @@ async def set_graph_engine(
 ):
     """Set the graph DB engine (admin only, stored globally)."""
     data = await request.json()
-    engine = data.get('graph_engine', 'ladybug')
-    email, _display_name, user_token, _user_role, _user_domain_role = _settings_request_identity(request)
-    return config_service.set_graph_engine_result(engine, email, user_token, session_mgr, settings)
+    engine = data.get("graph_engine", "ladybug")
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.set_graph_engine_result(
+        engine, email, user_token, session_mgr, settings
+    )
 
 
 @router.get("/graph-engine-config")
@@ -462,9 +570,11 @@ async def set_graph_engine_config(
 ):
     """Set the engine-specific JSON configuration (admin only, stored globally)."""
     data = await request.json()
-    config = data.get('graph_engine_config', {})
+    config = data.get("graph_engine_config", {})
     email, _dn, user_token, _ur, _udr = _settings_request_identity(request)
-    return config_service.set_graph_engine_config_result(config, email, user_token, session_mgr, settings)
+    return config_service.set_graph_engine_config_result(
+        config, email, user_token, session_mgr, settings
+    )
 
 
 # ===========================================
@@ -487,6 +597,7 @@ async def delete_ladybugdb_file(filename: str):
 # ===========================================
 # Scheduled Builds
 # ===========================================
+
 
 @router.get("/schedules")
 async def list_schedules(
@@ -515,7 +626,9 @@ async def get_schedule_history(
     settings: Settings = Depends(get_settings),
 ):
     """Return the run history for a single domain schedule."""
-    return config_service.get_schedule_history_result(domain_name, session_mgr, settings)
+    return config_service.get_schedule_history_result(
+        domain_name, session_mgr, settings
+    )
 
 
 @router.get("/schedules/status")

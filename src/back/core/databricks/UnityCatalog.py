@@ -4,6 +4,7 @@ Provides catalogue / schema / table / column / volume discovery using
 both the SQL connector (for metadata queries) and the REST API (for
 volume management).
 """
+
 import requests
 from databricks import sql
 from typing import Dict, List
@@ -36,7 +37,9 @@ class UnityCatalog:
         try:
             logger.info(
                 "Connecting — host=%s, warehouse=%s, app_mode=%s",
-                self._auth.host, self._auth.warehouse_id, self._auth.is_app_mode,
+                self._auth.host,
+                self._auth.warehouse_id,
+                self._auth.is_app_mode,
             )
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
@@ -94,11 +97,13 @@ class UnityCatalog:
                     cur.execute(f"DESCRIBE {catalog}.{schema}.{table}")
                     columns = []
                     for row in cur.fetchall():
-                        columns.append({
-                            "name": row[0],
-                            "type": row[1],
-                            "comment": row[2] if len(row) > 2 and row[2] else "",
-                        })
+                        columns.append(
+                            {
+                                "name": row[0],
+                                "type": row[1],
+                                "comment": row[2] if len(row) > 2 and row[2] else "",
+                            }
+                        )
                     return columns
         except Exception as exc:
             logger.exception("Error fetching table columns: %s", exc)

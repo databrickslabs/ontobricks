@@ -15,7 +15,11 @@ def _read_version() -> str:
     """Read version from pyproject.toml (single source of truth)."""
     try:
         toml_path = os.path.join(
-            os.path.dirname(__file__), os.pardir, os.pardir, os.pardir, "pyproject.toml",
+            os.path.dirname(__file__),
+            os.pardir,
+            os.pardir,
+            os.pardir,
+            "pyproject.toml",
         )
         with open(os.path.normpath(toml_path), encoding="utf-8") as fh:
             for line in fh:
@@ -37,7 +41,7 @@ HTTP_USER_AGENT: str = f"{APP_NAME}/{APP_VERSION}"
 # Logging
 # =====================================================
 APP_LOGGER_NAME: str = "ontobricks"
-DEFAULT_LOG_LEVEL: str = "DEBUG"        # DEBUG | INFO | WARNING | ERROR | CRITICAL
+DEFAULT_LOG_LEVEL: str = "DEBUG"  # DEBUG | INFO | WARNING | ERROR | CRITICAL
 DEFAULT_LOG_FILE: str = "ontobricks.log"
 LOG_MAX_BYTES: int = 10 * 1024 * 1024  # 10 MB per file
 LOG_BACKUP_COUNT: int = 5
@@ -69,7 +73,7 @@ SESSION_COOKIE_NAME: str = "ontobricks_session"
 # =====================================================
 # Auto-Mapping Chunking
 # =====================================================
-AUTO_ASSIGN_CHUNK_SIZE: int = 5       # max entities + relationships per agent run
+AUTO_ASSIGN_CHUNK_SIZE: int = 5  # max entities + relationships per agent run
 AUTO_ASSIGN_CHUNK_COOLDOWN: int = 15  # seconds to wait between chunks
 
 # =====================================================

@@ -20,7 +20,9 @@ from back.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 
 
 def log_agent(experiment_name: str = "ontobricks-agents") -> str:
@@ -33,7 +35,12 @@ def log_agent(experiment_name: str = "ontobricks-agents") -> str:
     mlflow.set_experiment(experiment_name)
 
     input_example = {
-        "input": [{"role": "user", "content": "Add an entity called Vehicle with attributes vin and color"}],
+        "input": [
+            {
+                "role": "user",
+                "content": "Add an entity called Vehicle with attributes vin and color",
+            }
+        ],
         "custom_inputs": {
             "host": "https://example.cloud.databricks.com",
             "token": "dapi...",
@@ -59,4 +66,6 @@ def log_agent(experiment_name: str = "ontobricks-agents") -> str:
 if __name__ == "__main__":
     experiment = os.getenv("ONTOBRICKS_MLFLOW_EXPERIMENT", "ontobricks-agents")
     uri = log_agent(experiment)
-    logger.info("Done. Use this URI to load the model: mlflow.pyfunc.load_model('%s')", uri)
+    logger.info(
+        "Done. Use this URI to load the model: mlflow.pyfunc.load_model('%s')", uri
+    )

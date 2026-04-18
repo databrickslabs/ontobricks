@@ -5,6 +5,7 @@ so that call sites that need "a bit of everything" can use a single
 entry point.  Prefer importing the individual service classes directly
 for narrower, more testable dependencies.
 """
+
 from typing import Optional
 
 from .DatabricksAuth import DatabricksAuth
@@ -72,8 +73,12 @@ class DatabricksClient:
     def create_or_replace_view(self, catalog, schema, view_name, select_sql):
         return self.sql.create_or_replace_view(catalog, schema, view_name, select_sql)
 
-    def create_or_replace_table_from_query(self, catalog, schema, table_name, select_sql):
-        return self.sql.create_or_replace_table_from_query(catalog, schema, table_name, select_sql)
+    def create_or_replace_table_from_query(
+        self, catalog, schema, table_name, select_sql
+    ):
+        return self.sql.create_or_replace_table_from_query(
+            catalog, schema, table_name, select_sql
+        )
 
     def get_warehouses(self):
         return self.sql.get_warehouses()

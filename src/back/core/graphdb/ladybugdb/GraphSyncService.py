@@ -10,6 +10,7 @@ alongside the domain version files in the registry:
 Legacy registries may still use ``projects/`` instead of ``domains/``;
 the path is resolved by :class:`RegistryService` at I/O time.
 """
+
 import io
 import os
 import shutil
@@ -42,6 +43,7 @@ class GraphSyncService:
     def sanitize_db_name(db_name: str) -> str:
         """Sanitize *db_name* for paths (uses ``safe_identifier``)."""
         from back.core.helpers import safe_identifier
+
         return safe_identifier(db_name)
 
     @property
@@ -72,7 +74,8 @@ class GraphSyncService:
             archive_bytes = buf.getvalue()
             logger.info(
                 "LadybugDB graph archived: %s (%.1f KB)",
-                local_path, len(archive_bytes) / 1024,
+                local_path,
+                len(archive_bytes) / 1024,
             )
         except Exception as exc:
             msg = f"Failed to archive graph directory: {exc}"
@@ -122,11 +125,14 @@ class GraphSyncService:
                 )
                 if os.path.exists(legacy_path):
                     os.rename(legacy_path, local_path)
-                    logger.info("Renamed legacy graph %s -> %s", legacy_path, local_path)
+                    logger.info(
+                        "Renamed legacy graph %s -> %s", legacy_path, local_path
+                    )
 
             logger.info(
                 "LadybugDB graph restored from Volume: %s -> %s",
-                vol_path, local_path,
+                vol_path,
+                local_path,
             )
             return True, f"Graph restored to {local_path}"
         except Exception as exc:

@@ -1,4 +1,5 @@
 """Data models for graph community detection."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

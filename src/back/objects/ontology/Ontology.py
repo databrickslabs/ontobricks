@@ -3,12 +3,18 @@
 Use :class:`Ontology` with a :class:`~back.objects.session.DomainSession` for
 operations that persist to the session; use static methods for pure transforms.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Set
 
 from back.core.logging import get_logger
-from back.core.errors import InfrastructureError, NotFoundError, OntoBricksError, ValidationError
+from back.core.errors import (
+    InfrastructureError,
+    NotFoundError,
+    OntoBricksError,
+    ValidationError,
+)
 from shared.config.constants import DEFAULT_BASE_URI
 from back.core.industry import (
     fetch_and_parse_cdisc,
@@ -19,7 +25,9 @@ from back.core.w3c import OntologyGenerator, OntologyParser
 from back.core.w3c.shacl.constants import QUALITY_CATEGORIES
 
 if TYPE_CHECKING:
-    from agents.agent_auto_icon_assign.engine import AgentResult as IconAssignAgentResult
+    from agents.agent_auto_icon_assign.engine import (
+        AgentResult as IconAssignAgentResult,
+    )
     from agents.agent_owl_generator.engine import AgentResult
     from back.objects.session.DomainSession import DomainSession
 
@@ -156,48 +164,48 @@ class Ontology:
     @staticmethod
     def ensure_uris(config: Dict[str, Any]) -> Dict[str, Any]:
         """Ensure all classes and properties have URIs.
-        
+
         Args:
             config: Ontology configuration dict
-            
+
         Returns:
             dict: Configuration with URIs ensured
         """
-        base_uri = config.get('base_uri', 'http://example.org/')
-        if not base_uri.endswith('#') and not base_uri.endswith('/'):
-            base_uri = base_uri + '#'
-        
-        for cls in config.get('classes', []):
-            if not cls.get('uri') and cls.get('name'):
-                cls['uri'] = base_uri + cls['name']
-            if not cls.get('localName') and cls.get('name'):
-                cls['localName'] = cls['name']
-        
-        for prop in config.get('properties', []):
-            if not prop.get('uri') and prop.get('name'):
-                prop['uri'] = base_uri + prop['name']
-            if not prop.get('localName') and prop.get('name'):
-                prop['localName'] = prop['name']
-        
+        base_uri = config.get("base_uri", "http://example.org/")
+        if not base_uri.endswith("#") and not base_uri.endswith("/"):
+            base_uri = base_uri + "#"
+
+        for cls in config.get("classes", []):
+            if not cls.get("uri") and cls.get("name"):
+                cls["uri"] = base_uri + cls["name"]
+            if not cls.get("localName") and cls.get("name"):
+                cls["localName"] = cls["name"]
+
+        for prop in config.get("properties", []):
+            if not prop.get("uri") and prop.get("name"):
+                prop["uri"] = base_uri + prop["name"]
+            if not prop.get("localName") and prop.get("name"):
+                prop["localName"] = prop["name"]
+
         return config
 
     @staticmethod
     def get_ontology_stats(config: Dict[str, Any]) -> Dict[str, int]:
         """Get statistics from ontology configuration.
-        
+
         Args:
             config: Ontology configuration dict
-            
+
         Returns:
             dict: Stats with counts
         """
         return {
-            'classes': len(config.get('classes', [])),
-            'properties': len(config.get('properties', [])),
-            'constraints': len(config.get('constraints', [])),
-            'swrl_rules': len(config.get('swrl_rules', [])),
-            'axioms': len(config.get('axioms', [])),
-            'expressions': len(config.get('expressions', [])),
+            "classes": len(config.get("classes", [])),
+            "properties": len(config.get("properties", [])),
+            "constraints": len(config.get("constraints", [])),
+            "swrl_rules": len(config.get("swrl_rules", [])),
+            "axioms": len(config.get("axioms", [])),
+            "expressions": len(config.get("expressions", [])),
         }
 
     @staticmethod
@@ -216,7 +224,9 @@ class Ontology:
         """
         classes = ontology_config.get("classes", [])
         properties = ontology_config.get("properties", [])
-        class_name_lookup = {c["name"].lower(): c["name"] for c in classes if c.get("name")}
+        class_name_lookup = {
+            c["name"].lower(): c["name"] for c in classes if c.get("name")
+        }
         modified = False
         for prop in properties:
             for field in ("domain", "range"):
@@ -244,7 +254,9 @@ class Ontology:
         """
         s = self._domain
         entity_mappings = s.get_entity_mappings()
-        cleaned_entity = [m for m in entity_mappings if m.get("ontology_class") in class_uris]
+        cleaned_entity = [
+            m for m in entity_mappings if m.get("ontology_class") in class_uris
+        ]
         removed_entity = len(entity_mappings) - len(cleaned_entity)
 
         rel_mappings = s.get_relationship_mappings()
@@ -261,7 +273,9 @@ class Ontology:
             "relationship_mappings_removed": removed_rel,
         }
 
-    def save_ontology_config_from_editor(self, raw_body: Dict[str, Any]) -> Dict[str, Any]:
+    def save_ontology_config_from_editor(
+        self, raw_body: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Persist ontology from the visual editor API (wrapped or bare config dict)."""
         s = self._domain
         ontology_config = raw_body.get("config", raw_body)
@@ -276,18 +290,26 @@ class Ontology:
                 new,
             )
 
-        Ontology.normalize_property_domain_range(ontology_config, on_replace=_on_replace)
+        Ontology.normalize_property_domain_range(
+            ontology_config, on_replace=_on_replace
+        )
 
         existing_constraints = s.constraints
         existing_swrl_rules = s.swrl_rules
         existing_axioms = s.axioms
         existing_expressions = s.expressions
 
-        new_class_uris = {c.get("uri") for c in ontology_config.get("classes", []) if c.get("uri")}
-        new_property_uris = {p.get("uri") for p in ontology_config.get("properties", []) if p.get("uri")}
+        new_class_uris = {
+            c.get("uri") for c in ontology_config.get("classes", []) if c.get("uri")
+        }
+        new_property_uris = {
+            p.get("uri") for p in ontology_config.get("properties", []) if p.get("uri")
+        }
 
         entity_before = s.get_entity_mappings()
-        removed_counts = self.prune_mappings_to_ontology_uris(new_class_uris, new_property_uris)
+        removed_counts = self.prune_mappings_to_ontology_uris(
+            new_class_uris, new_property_uris
+        )
         removed_entity = removed_counts["entity_mappings_removed"]
         removed_rel = removed_counts["relationship_mappings_removed"]
 
@@ -307,18 +329,22 @@ class Ontology:
             )
 
         s.clear_generated_content()
-        canonical_name = s.info.get("name", "").lower() or ontology_config.get("name", "")
-        s.ontology.update({
-            "name": canonical_name,
-            "base_uri": ontology_config.get("base_uri", ""),
-            "description": ontology_config.get("description", ""),
-            "classes": ontology_config.get("classes", []),
-            "properties": ontology_config.get("properties", []),
-            "constraints": ontology_config.get("constraints", existing_constraints),
-            "swrl_rules": ontology_config.get("swrl_rules", existing_swrl_rules),
-            "axioms": ontology_config.get("axioms", existing_axioms),
-            "expressions": ontology_config.get("expressions", existing_expressions),
-        })
+        canonical_name = s.info.get("name", "").lower() or ontology_config.get(
+            "name", ""
+        )
+        s.ontology.update(
+            {
+                "name": canonical_name,
+                "base_uri": ontology_config.get("base_uri", ""),
+                "description": ontology_config.get("description", ""),
+                "classes": ontology_config.get("classes", []),
+                "properties": ontology_config.get("properties", []),
+                "constraints": ontology_config.get("constraints", existing_constraints),
+                "swrl_rules": ontology_config.get("swrl_rules", existing_swrl_rules),
+                "axioms": ontology_config.get("axioms", existing_axioms),
+                "expressions": ontology_config.get("expressions", existing_expressions),
+            }
+        )
         s.save()
 
         return {
@@ -345,7 +371,9 @@ class Ontology:
         s.ontology["classes"] = classes
         entity_mappings = s.get_entity_mappings()
         original_mapping_len = len(entity_mappings)
-        entity_mappings = [m for m in entity_mappings if m.get("ontology_class") != class_uri]
+        entity_mappings = [
+            m for m in entity_mappings if m.get("ontology_class") != class_uri
+        ]
         if len(entity_mappings) < original_mapping_len:
             s._data["assignment"]["entities"] = entity_mappings
 
@@ -450,22 +478,48 @@ class Ontology:
         - ``"load_file"``→ :meth:`build_load_owl_file_success_payload`
         """
         result = Ontology.parse_owl(owl_content, extract_advanced=True)
-        ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions, groups = result
+        (
+            ontology_info,
+            classes,
+            properties,
+            constraints,
+            swrl_rules,
+            axioms,
+            expressions,
+            groups,
+        ) = result
 
         resolved_name = self.apply_parsed_owl_to_domain(
-            ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions,
+            ontology_info,
+            classes,
+            properties,
+            constraints,
+            swrl_rules,
+            axioms,
+            expressions,
             groups=groups,
             name_fallback_to_domain=name_fallback_to_domain,
         )
 
         if outcome == "parse":
             return self.build_parse_owl_success_payload(
-                ontology_info, classes, properties, constraints,
-                swrl_rules, axioms, expressions, resolved_name,
+                ontology_info,
+                classes,
+                properties,
+                constraints,
+                swrl_rules,
+                axioms,
+                expressions,
+                resolved_name,
             )
         if outcome == "load_file":
             return self.build_load_owl_file_success_payload(
-                classes, properties, constraints, swrl_rules, axioms, expressions,
+                classes,
+                properties,
+                constraints,
+                swrl_rules,
+                axioms,
+                expressions,
             )
         return self.build_import_owl_success_payload(classes, properties, constraints)
 
@@ -475,12 +529,16 @@ class Ontology:
     ) -> Dict[str, Any]:
         """Parse RDFS content, apply to project, return success payload."""
         ontology_info, classes, properties = Ontology.parse_rdfs(rdfs_content)
-        self._domain.ontology.update({
-            "name": ontology_info.get("label", "Imported Vocabulary"),
-            "base_uri": ontology_info.get("namespace", ontology_info.get("uri", "")),
-            "classes": classes,
-            "properties": properties,
-        })
+        self._domain.ontology.update(
+            {
+                "name": ontology_info.get("label", "Imported Vocabulary"),
+                "base_uri": ontology_info.get(
+                    "namespace", ontology_info.get("uri", "")
+                ),
+                "classes": classes,
+                "properties": properties,
+            }
+        )
         self._domain.save()
         return {
             "success": True,
@@ -498,7 +556,11 @@ class Ontology:
     ) -> Dict[str, int]:
         """Rename a relationship across mappings, constraints, and axioms. Saves session."""
         s = self._domain
-        updates: Dict[str, int] = {"mappings_updated": 0, "constraints_updated": 0, "axioms_updated": 0}
+        updates: Dict[str, int] = {
+            "mappings_updated": 0,
+            "constraints_updated": 0,
+            "axioms_updated": 0,
+        }
         for rel_mapping in s.get_relationship_mappings():
             if rel_mapping.get("property_label") == old_name:
                 rel_mapping["property_label"] = new_name
@@ -537,15 +599,21 @@ class Ontology:
         ontology_config = Ontology.ensure_uris(ontology_config)
 
         if prune_orphan_mappings:
-            new_class_uris = {c.get("uri") for c in ontology_config["classes"] if c.get("uri")}
-            new_property_uris = {p.get("uri") for p in ontology_config["properties"] if p.get("uri")}
+            new_class_uris = {
+                c.get("uri") for c in ontology_config["classes"] if c.get("uri")
+            }
+            new_property_uris = {
+                p.get("uri") for p in ontology_config["properties"] if p.get("uri")
+            }
             self.prune_mappings_to_ontology_uris(new_class_uris, new_property_uris)
 
         s.clear_generated_content()
-        s.ontology.update({
-            "classes": ontology_config["classes"],
-            "properties": ontology_config["properties"],
-        })
+        s.ontology.update(
+            {
+                "classes": ontology_config["classes"],
+                "properties": ontology_config["properties"],
+            }
+        )
         s.save()
 
         return {
@@ -591,87 +659,111 @@ class Ontology:
         return turtle, stats
 
     @staticmethod
-    def build_class_from_data(data: Dict[str, Any], existing: Dict[str, Any] = None) -> Dict[str, Any]:
+    def build_class_from_data(
+        data: Dict[str, Any], existing: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         """Build a class dict from request data.
-        
+
         Args:
             data: Request data
             existing: Existing class data (for updates)
-            
+
         Returns:
             dict: Built class
         """
         existing = existing or {}
         return {
-            'uri': data.get('uri', existing.get('uri', '')),
-            'name': data.get('name', existing.get('name', '')),
-            'label': data.get('label', data.get('name', existing.get('label', ''))),
-            'description': data.get('description', existing.get('description', '')),
-            'parent': data.get('parent', existing.get('parent', '')),
-            'emoji': data.get('emoji', existing.get('emoji', '📦')),
-            'properties': data.get('properties', existing.get('properties', [])),
-            'dataProperties': data.get('dataProperties', existing.get('dataProperties', [])),
-            'dashboard': data.get('dashboard', existing.get('dashboard', '')),
-            'dashboardParams': data.get('dashboardParams', existing.get('dashboardParams', {})),
-            'bridges': data.get('bridges', existing.get('bridges', []))
+            "uri": data.get("uri", existing.get("uri", "")),
+            "name": data.get("name", existing.get("name", "")),
+            "label": data.get("label", data.get("name", existing.get("label", ""))),
+            "description": data.get("description", existing.get("description", "")),
+            "parent": data.get("parent", existing.get("parent", "")),
+            "emoji": data.get("emoji", existing.get("emoji", "📦")),
+            "properties": data.get("properties", existing.get("properties", [])),
+            "dataProperties": data.get(
+                "dataProperties", existing.get("dataProperties", [])
+            ),
+            "dashboard": data.get("dashboard", existing.get("dashboard", "")),
+            "dashboardParams": data.get(
+                "dashboardParams", existing.get("dashboardParams", {})
+            ),
+            "bridges": data.get("bridges", existing.get("bridges", [])),
         }
 
     @staticmethod
-    def build_property_from_data(data: Dict[str, Any], existing: Dict[str, Any] = None) -> Dict[str, Any]:
+    def build_property_from_data(
+        data: Dict[str, Any], existing: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         """Build a property dict from request data.
-        
+
         Args:
             data: Request data
             existing: Existing property data (for updates)
-            
+
         Returns:
             dict: Built property
         """
         existing = existing or {}
         return {
-            'uri': data.get('uri', existing.get('uri', '')),
-            'name': data.get('name', existing.get('name', '')),
-            'label': data.get('label', data.get('name', existing.get('label', ''))),
-            'description': data.get('description', existing.get('description', '')),
-            'type': data.get('type', existing.get('type', '')),
-            'domain': data.get('domain', existing.get('domain', '')),
-            'range': data.get('range', existing.get('range', '')),
-            'direction': data.get('direction', existing.get('direction', 'forward')),
-            'properties': data.get('properties', existing.get('properties', []))
+            "uri": data.get("uri", existing.get("uri", "")),
+            "name": data.get("name", existing.get("name", "")),
+            "label": data.get("label", data.get("name", existing.get("label", ""))),
+            "description": data.get("description", existing.get("description", "")),
+            "type": data.get("type", existing.get("type", "")),
+            "domain": data.get("domain", existing.get("domain", "")),
+            "range": data.get("range", existing.get("range", "")),
+            "direction": data.get("direction", existing.get("direction", "forward")),
+            "properties": data.get("properties", existing.get("properties", [])),
         }
 
     @staticmethod
     def validate_constraint(constraint: Dict[str, Any]) -> Optional[str]:
         """Validate constraint and return error message if invalid.
-        
+
         Args:
             constraint: Constraint data
-            
+
         Returns:
             str: Error message if invalid, None if valid
         """
-        constraint_type = constraint.get('type')
+        constraint_type = constraint.get("type")
         if not constraint_type:
-            return 'Constraint type is required'
-        
-        property_characteristics = ['functional', 'inverseFunctional', 'transitive', 
-                                    'symmetric', 'asymmetric', 'reflexive', 'irreflexive']
-        cardinality_constraints = ['minCardinality', 'maxCardinality', 'exactCardinality']
-        value_constraints = ['valueCheck', 'entityValueCheck', 'entityLabelCheck', 
-                            'attributeConstraint', 'globalRule']
-        
+            return "Constraint type is required"
+
+        property_characteristics = [
+            "functional",
+            "inverseFunctional",
+            "transitive",
+            "symmetric",
+            "asymmetric",
+            "reflexive",
+            "irreflexive",
+        ]
+        cardinality_constraints = [
+            "minCardinality",
+            "maxCardinality",
+            "exactCardinality",
+        ]
+        value_constraints = [
+            "valueCheck",
+            "entityValueCheck",
+            "entityLabelCheck",
+            "attributeConstraint",
+            "globalRule",
+        ]
+
         if constraint_type in cardinality_constraints:
-            if not constraint.get('property'):
-                return 'Relationship (property) is required for cardinality constraints'
-            if constraint.get('cardinalityValue') is None:
-                return 'Cardinality value is required'
+            if not constraint.get("property"):
+                return "Relationship (property) is required for cardinality constraints"
+            if constraint.get("cardinalityValue") is None:
+                return "Cardinality value is required"
         elif constraint_type in value_constraints:
-            if constraint_type != 'globalRule' and not constraint.get('className'):
-                return 'Entity (className) is required for value constraints'
+            if constraint_type != "globalRule" and not constraint.get("className"):
+                return "Entity (className) is required for value constraints"
         elif constraint_type in property_characteristics:
-            if not constraint.get('property'):
-                return 'Property is required for property characteristics'
-        
+            if not constraint.get("property"):
+                return "Property is required for property characteristics"
+
         return None
 
     @staticmethod
@@ -680,15 +772,15 @@ class Ontology:
         category = shape.get("category", "")
         if category not in QUALITY_CATEGORIES:
             return f"Invalid category '{category}'. Must be one of: {', '.join(QUALITY_CATEGORIES)}"
-    
+
         shacl_type = shape.get("shacl_type", "")
         if not shacl_type:
             return "shacl_type is required"
-    
+
         if shacl_type not in ("sh:sparql", "sh:closed"):
             if not shape.get("property_path") and not shape.get("property_uri"):
                 return "A property path or URI is required for this constraint type"
-    
+
         params = shape.get("parameters", {})
         if shacl_type in ("sh:minCount", "sh:maxCount"):
             for key in ("sh:minCount", "sh:maxCount"):
@@ -697,7 +789,7 @@ class Ontology:
                         int(params[key])
                     except (ValueError, TypeError):
                         return f"{key} must be an integer"
-    
+
         return None
 
     @staticmethod
@@ -711,22 +803,29 @@ class Ontology:
         """
         issues: List[str] = []
         for cls in classes:
-            if not cls.get('uri') and not cls.get('name') and not cls.get('localName'):
+            if not cls.get("uri") and not cls.get("name") and not cls.get("localName"):
                 issues.append(f"Entity '{cls.get('label', 'Unknown')}' has no URI")
         if not classes:
-            issues.append('No entities defined')
+            issues.append("No entities defined")
         return (len(classes) > 0 and len(issues) == 0), issues
 
     @staticmethod
     def generate_shacl(shapes: list, base_uri: str = "") -> str:
         """Generate SHACL Turtle from shape dicts."""
         from back.core.w3c import SHACLService
+
         svc = SHACLService(base_uri=base_uri or "http://example.org/ontology#")
         return svc.generate_turtle(shapes, base_uri=base_uri or None)
 
     @staticmethod
-    def generate_owl(data, constraints=None, swrl_rules=None, axioms=None,
-                     expressions=None, groups=None):
+    def generate_owl(
+        data,
+        constraints=None,
+        swrl_rules=None,
+        axioms=None,
+        expressions=None,
+        groups=None,
+    ):
         """Generate OWL from ontology configuration.
 
         Args:
@@ -741,10 +840,10 @@ class Ontology:
             str: Generated OWL content
         """
         generator = OntologyGenerator(
-            base_uri=data.get('base_uri', DEFAULT_BASE_URI),
-            ontology_name=data.get('name', 'MyOntology'),
-            classes=data.get('classes', []),
-            properties=data.get('properties', []),
+            base_uri=data.get("base_uri", DEFAULT_BASE_URI),
+            ontology_name=data.get("name", "MyOntology"),
+            classes=data.get("classes", []),
+            properties=data.get("properties", []),
             constraints=constraints,
             swrl_rules=swrl_rules,
             axioms=axioms,
@@ -776,37 +875,48 @@ class Ontology:
             swrl_rules = parser.get_swrl_rules()
             split = parser.get_axioms_and_expressions()
             groups = parser.get_groups()
-            return ontology_info, classes, properties, constraints, swrl_rules, split['axioms'], split['expressions'], groups
+            return (
+                ontology_info,
+                classes,
+                properties,
+                constraints,
+                swrl_rules,
+                split["axioms"],
+                split["expressions"],
+                groups,
+            )
 
         return ontology_info, classes, properties
 
     @staticmethod
     def parse_rdfs(content):
         """Parse RDFS content and return structured data.
-        
+
         Args:
             content: RDFS content (Turtle, RDF/XML, N3, etc.)
-            
+
         Returns:
             tuple: (ontology_info, classes, properties)
         """
         from back.core.w3c import RDFSParser
-        
+
         parser = RDFSParser(content)
         ontology_info = parser.get_ontology_info()
         classes = parser.get_classes()
         properties = parser.get_properties()
-        
+
         return ontology_info, classes, properties
 
-    def import_industry_ontology(self, kind: IndustryKind, domain_keys: List[str]) -> Dict[str, Any]:
+    def import_industry_ontology(
+        self, kind: IndustryKind, domain_keys: List[str]
+    ) -> Dict[str, Any]:
         """Fetch industry modules, merge, parse, persist to project session.
-    
+
         Returns the same dict shape as the former /import-fibo|cdisc|iof handlers.
         """
         if not domain_keys:
             raise ValidationError(_INDUSTRY_EMPTY_MESSAGE[kind])
-    
+
         try:
             result = _INDUSTRY_FETCH[kind](domain_keys)
 
@@ -821,22 +931,26 @@ class Ontology:
                 desc_prefix = "Financial Industry Business Ontology (FIBO) – "
             else:
                 ont_name = info.get("name", "IOF")
-                base_uri = info.get("uri", "https://spec.industrialontologies.org/ontology/")
+                base_uri = info.get(
+                    "uri", "https://spec.industrialontologies.org/ontology/"
+                )
                 desc_prefix = "Industrial Ontologies Foundry (IOF) – "
-    
-            self._domain.ontology.update({
-                "name": ont_name,
-                "base_uri": base_uri,
-                "description": desc_prefix + ", ".join(domain_keys),
-                "classes": result["classes"],
-                "properties": result["properties"],
-                "constraints": result["constraints"],
-                "swrl_rules": result["swrl_rules"],
-                "axioms": result["axioms"],
-                "expressions": result["expressions"],
-            })
+
+            self._domain.ontology.update(
+                {
+                    "name": ont_name,
+                    "base_uri": base_uri,
+                    "description": desc_prefix + ", ".join(domain_keys),
+                    "classes": result["classes"],
+                    "properties": result["properties"],
+                    "constraints": result["constraints"],
+                    "swrl_rules": result["swrl_rules"],
+                    "axioms": result["axioms"],
+                    "expressions": result["expressions"],
+                }
+            )
             self._domain.save()
-    
+
             return {
                 "success": True,
                 "message": result["message"],
@@ -872,17 +986,19 @@ class Ontology:
         else:
             resolved_name = ontology_info.get("name", "")
 
-        self._domain.ontology.update({
-            "name": resolved_name,
-            "base_uri": ontology_info.get("uri", ""),
-            "classes": classes,
-            "properties": properties,
-            "constraints": constraints,
-            "swrl_rules": swrl_rules,
-            "axioms": axioms,
-            "expressions": expressions or [],
-            "groups": groups or [],
-        })
+        self._domain.ontology.update(
+            {
+                "name": resolved_name,
+                "base_uri": ontology_info.get("uri", ""),
+                "classes": classes,
+                "properties": properties,
+                "constraints": constraints,
+                "swrl_rules": swrl_rules,
+                "axioms": axioms,
+                "expressions": expressions or [],
+                "groups": groups or [],
+            }
+        )
         self._domain.save()
         return resolved_name
 
@@ -961,9 +1077,9 @@ class Ontology:
     def _turtle_to_camel(words: list, is_pascal: bool) -> str:
         """Convert a list of words to camelCase or PascalCase."""
         if not words:
-            return ''
+            return ""
         if is_pascal:
-            return ''.join(w.capitalize() for w in words if w)
+            return "".join(w.capitalize() for w in words if w)
         result = words[0].lower()
         for w in words[1:]:
             if w:
@@ -978,42 +1094,51 @@ class Ontology:
         def _fix_match(match):
             prefix = match.group(1)
             name = match.group(2)
-            words = re.split(r'[_-]+', name)
+            words = re.split(r"[_-]+", name)
             if len(words) <= 1:
                 return match.group(0)
             is_pascal = words[0] and words[0][0].isupper()
             return prefix + Ontology._turtle_to_camel(words, is_pascal)
 
-        pattern = r'(?<![a-zA-Z])(:)([a-zA-Z][a-zA-Z0-9]*(?:[_-][a-zA-Z][a-zA-Z0-9]*)+)'
+        pattern = r"(?<![a-zA-Z])(:)([a-zA-Z][a-zA-Z0-9]*(?:[_-][a-zA-Z][a-zA-Z0-9]*)+)"
         return re.sub(pattern, _fix_match, content)
 
     @staticmethod
     def _fix_spaced_local_names(content: str) -> str:
         """Join space-separated words in bare ``:LocalName`` tokens."""
-        _TURTLE_KEYWORDS = frozenset({'a', 'rdf', 'rdfs', 'owl', 'xsd', 'xml', 'true', 'false'})
+        _TURTLE_KEYWORDS = frozenset(
+            {"a", "rdf", "rdfs", "owl", "xsd", "xml", "true", "false"}
+        )
 
         def _fix_line(line: str) -> str:
             stripped = line.strip()
-            if stripped.startswith('#') or stripped.startswith('@prefix') or stripped.startswith('@base'):
+            if (
+                stripped.startswith("#")
+                or stripped.startswith("@prefix")
+                or stripped.startswith("@base")
+            ):
                 return line
 
             result: list = []
             i = 0
             while i < len(line):
-                if line[i] == ':' and (i == 0 or line[i - 1] in ' \t;.,()[]'):
+                if line[i] == ":" and (i == 0 or line[i - 1] in " \t;.,()[]"):
                     j = i + 1
                     if j >= len(line):
-                        result.append(line[i]); i += 1; continue
+                        result.append(line[i])
+                        i += 1
+                        continue
 
                     words: list = []
-                    current_word = ''
+                    current_word = ""
                     while j < len(line):
                         ch = line[j]
                         if ch.isalnum():
-                            current_word += ch; j += 1
-                        elif ch == ' ' and current_word:
+                            current_word += ch
+                            j += 1
+                        elif ch == " " and current_word:
                             k = j + 1
-                            while k < len(line) and line[k] == ' ':
+                            while k < len(line) and line[k] == " ":
                                 k += 1
                             if k < len(line) and line[k].isalpha():
                                 nwe = k
@@ -1021,15 +1146,24 @@ class Ontology:
                                     nwe += 1
                                 nw = line[k:nwe]
                                 an = nwe
-                                while an < len(line) and line[an] == ' ':
+                                while an < len(line) and line[an] == " ":
                                     an += 1
-                                if (an < len(line) and line[an] == ':') or nw.lower() in _TURTLE_KEYWORDS or len(nw) == 1:
-                                    words.append(current_word); break
-                                words.append(current_word); current_word = ''; j = k
+                                if (
+                                    (an < len(line) and line[an] == ":")
+                                    or nw.lower() in _TURTLE_KEYWORDS
+                                    or len(nw) == 1
+                                ):
+                                    words.append(current_word)
+                                    break
+                                words.append(current_word)
+                                current_word = ""
+                                j = k
                             elif k < len(line):
-                                words.append(current_word); break
+                                words.append(current_word)
+                                break
                             else:
-                                words.append(current_word); break
+                                words.append(current_word)
+                                break
                         else:
                             if current_word:
                                 words.append(current_word)
@@ -1037,16 +1171,18 @@ class Ontology:
 
                     if words:
                         is_pascal = words[0] and words[0][0].isupper()
-                        result.append(':')
+                        result.append(":")
                         result.append(Ontology._turtle_to_camel(words, is_pascal))
                         i = j
                     else:
-                        result.append(line[i]); i += 1
+                        result.append(line[i])
+                        i += 1
                 else:
-                    result.append(line[i]); i += 1
-            return ''.join(result)
+                    result.append(line[i])
+                    i += 1
+            return "".join(result)
 
-        return '\n'.join(_fix_line(ln) for ln in content.split('\n'))
+        return "\n".join(_fix_line(ln) for ln in content.split("\n"))
 
     @staticmethod
     def _fix_local_names(content: str) -> str:
@@ -1065,31 +1201,34 @@ class Ontology:
     def clean_owl_output(content: str) -> str:
         """Clean up LLM output to extract valid Turtle content."""
         content = content.strip()
-    
+
         # Remove markdown code fences
-        if '```' in content:
+        if "```" in content:
             import re
-            m = re.search(r'```(?:turtle|ttl|sparql|rdf)?\s*\n(.*?)```', content, re.DOTALL)
+
+            m = re.search(
+                r"```(?:turtle|ttl|sparql|rdf)?\s*\n(.*?)```", content, re.DOTALL
+            )
             if m:
                 content = m.group(1).strip()
-            elif content.startswith('```'):
-                lines = content.split('\n')
+            elif content.startswith("```"):
+                lines = content.split("\n")
                 lines = lines[1:]
-                if lines and lines[-1].strip() == '```':
+                if lines and lines[-1].strip() == "```":
                     lines = lines[:-1]
-                content = '\n'.join(lines)
-    
+                content = "\n".join(lines)
+
         content = content.strip()
-    
+
         # Strip any natural-language preamble before the first @prefix or @base
-        prefix_idx = content.find('@prefix')
-        base_idx = content.find('@base')
+        prefix_idx = content.find("@prefix")
+        base_idx = content.find("@base")
         candidates = [i for i in (prefix_idx, base_idx) if i > 0]
         if candidates:
-            content = content[min(candidates):]
-    
+            content = content[min(candidates) :]
+
         content = content.strip()
-    
+
         # Fix any local names with spaces, underscores, or hyphens
         content = Ontology._fix_local_names(content)
 
@@ -1114,7 +1253,7 @@ class Ontology:
         Raises:
             ValidationError: if the name is missing or already exists (on create).
         """
-        name = (group.get('name') or '').strip()
+        name = (group.get("name") or "").strip()
         if not name:
             raise ValidationError("Group name is required")
 
@@ -1123,7 +1262,7 @@ class Ontology:
         if 0 <= index < len(groups):
             groups[index] = group
         else:
-            if any(g.get('name') == name for g in groups):
+            if any(g.get("name") == name for g in groups):
                 raise ValidationError(f'Group "{name}" already exists')
             groups.append(group)
 
@@ -1133,7 +1272,7 @@ class Ontology:
         self._domain.save()
         return self._domain.groups
 
-    def delete_group(self, *, index: int = -1, name: str = '') -> List[Dict]:
+    def delete_group(self, *, index: int = -1, name: str = "") -> List[Dict]:
         """Delete an entity group by *index* or *name*.
 
         Returns:
@@ -1147,7 +1286,7 @@ class Ontology:
         if 0 <= index < len(groups):
             groups.pop(index)
         elif name:
-            groups[:] = [g for g in groups if g.get('name') != name]
+            groups[:] = [g for g in groups if g.get("name") != name]
         else:
             raise ValidationError("Provide index or name to identify the group")
 
@@ -1156,9 +1295,9 @@ class Ontology:
         self._domain.save()
         return self._domain.groups
 
-    def update_group_members(self, group_name: str, *,
-                             add: List[str] = None,
-                             remove: List[str] = None) -> List[Dict]:
+    def update_group_members(
+        self, group_name: str, *, add: List[str] = None, remove: List[str] = None
+    ) -> List[Dict]:
         """Add or remove members from the group identified by *group_name*.
 
         Returns:
@@ -1171,18 +1310,18 @@ class Ontology:
             raise ValidationError("Group name is required")
 
         groups = self._domain.groups
-        target = next((g for g in groups if g.get('name') == group_name), None)
+        target = next((g for g in groups if g.get("name") == group_name), None)
         if target is None:
             raise ValidationError(f'Group "{group_name}" not found')
 
         to_remove = set(remove or [])
-        members = [m for m in target.get('members', []) if m not in to_remove]
+        members = [m for m in target.get("members", []) if m not in to_remove]
         existing = set(members)
-        for m in (add or []):
+        for m in add or []:
             if m and m not in existing:
                 members.append(m)
                 existing.add(m)
-        target['members'] = members
+        target["members"] = members
 
         self._enforce_exclusive_membership(groups, group_name)
         self._sync_class_group_field(groups)
@@ -1191,50 +1330,55 @@ class Ontology:
         return self._domain.groups
 
     @staticmethod
-    def _enforce_exclusive_membership(groups: List[Dict],
-                                      authoritative_group_name: str) -> None:
+    def _enforce_exclusive_membership(
+        groups: List[Dict], authoritative_group_name: str
+    ) -> None:
         """Ensure every entity belongs to at most one group.
 
         After the group identified by *authoritative_group_name* has been
         updated, remove any of its members that appear in other groups.
         """
-        target = next((g for g in groups if g.get('name') == authoritative_group_name), None)
+        target = next(
+            (g for g in groups if g.get("name") == authoritative_group_name), None
+        )
         if target is None:
             return
-        owner_members = set(target.get('members', []))
+        owner_members = set(target.get("members", []))
         for g in groups:
-            if g.get('name') == authoritative_group_name:
+            if g.get("name") == authoritative_group_name:
                 continue
-            g['members'] = [m for m in g.get('members', []) if m not in owner_members]
+            g["members"] = [m for m in g.get("members", []) if m not in owner_members]
 
     def _sync_class_group_field(self, groups: List[Dict]) -> None:
         """Keep each class's ``group`` field in sync with the groups list."""
         class_to_group: Dict[str, str] = {}
         for g in groups:
-            for m in g.get('members', []):
-                class_to_group[m] = g.get('name', '')
+            for m in g.get("members", []):
+                class_to_group[m] = g.get("name", "")
         for cls in self._domain.get_classes():
-            cls['group'] = class_to_group.get(cls.get('name', ''), '')
+            cls["group"] = class_to_group.get(cls.get("name", ""), "")
 
     @staticmethod
     def calculate_owl_stats(owl_content: str) -> Dict:
         """Calculate statistics from OWL content."""
-        stats = {
-            'classes': 0,
-            'properties': 0,
-            'dataProperties': 0
-        }
-        
+        stats = {"classes": 0, "properties": 0, "dataProperties": 0}
+
         try:
             # Count owl:Class declarations
-            stats['classes'] = owl_content.count('a owl:Class') + owl_content.count('rdf:type owl:Class')
-            
+            stats["classes"] = owl_content.count("a owl:Class") + owl_content.count(
+                "rdf:type owl:Class"
+            )
+
             # Count owl:ObjectProperty declarations
-            stats['properties'] = owl_content.count('a owl:ObjectProperty') + owl_content.count('rdf:type owl:ObjectProperty')
-            
+            stats["properties"] = owl_content.count(
+                "a owl:ObjectProperty"
+            ) + owl_content.count("rdf:type owl:ObjectProperty")
+
             # Count owl:DatatypeProperty declarations
-            stats['dataProperties'] = owl_content.count('a owl:DatatypeProperty') + owl_content.count('rdf:type owl:DatatypeProperty')
+            stats["dataProperties"] = owl_content.count(
+                "a owl:DatatypeProperty"
+            ) + owl_content.count("rdf:type owl:DatatypeProperty")
         except Exception as exc:
             logger.warning("OWL stats calculation error: %s", exc)
-        
+
         return stats

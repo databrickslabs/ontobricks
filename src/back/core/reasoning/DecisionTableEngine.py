@@ -1,4 +1,5 @@
 """Decision table engine — compile tabular business rules to SQL / Cypher."""
+
 import time
 from typing import Dict
 
@@ -73,19 +74,25 @@ class DecisionTableEngine:
         data_ns = base_uri.rstrip("#").rstrip("/") + "/" if base_uri else ""
         if not dt.get("target_class_uri"):
             name = dt.get("target_class", "")
-            dt["target_class_uri"] = uri_map.get(name.lower(), base_uri + sep + name if name else "")
+            dt["target_class_uri"] = uri_map.get(
+                name.lower(), base_uri + sep + name if name else ""
+            )
         resolved_cols = []
         for col in dt.get("input_columns", []):
             col = dict(col)
             if not col.get("property_uri"):
                 name = col.get("property", "")
-                col["property_uri"] = uri_map.get(name.lower(), data_ns + name if name else "")
+                col["property_uri"] = uri_map.get(
+                    name.lower(), data_ns + name if name else ""
+                )
             resolved_cols.append(col)
         dt["input_columns"] = resolved_cols
         out = dict(dt.get("output_column", {}))
         if not out.get("property_uri") and out.get("property"):
             name = out["property"]
-            out["property_uri"] = uri_map.get(name.lower(), data_ns + name if name else "")
+            out["property_uri"] = uri_map.get(
+                name.lower(), data_ns + name if name else ""
+            )
         dt["output_column"] = out
         return dt
 
@@ -100,17 +107,24 @@ class DecisionTableEngine:
                 continue
             try:
                 resolved = self._resolve_dt(dt, uri_map, base_uri)
-                dt_result = self._execute_one(resolved, store, table_name, base_uri, is_cypher, materialize)
+                dt_result = self._execute_one(
+                    resolved, store, table_name, base_uri, is_cypher, materialize
+                )
                 result.merge(dt_result)
             except Exception as e:
                 logger.error("Decision table '%s' failed: %s", dt.get("name", "?"), e)
-                result.violations.append(RuleViolation(
-                    rule_name=dt.get("name", "unknown"), subject="",
-                    message=f"Execution error: {e}",
-                    check_type="decision_table", rule_type="decision_table",
-                ))
+                result.violations.append(
+                    RuleViolation(
+                        rule_name=dt.get("name", "unknown"),
+                        subject="",
+                        message=f"Execution error: {e}",
+                        check_type="decision_table",
+                        rule_type="decision_table",
+                    )
+                )
         result.stats = {
-            "phase": "decision_tables", "tables_count": len(tables),
+            "phase": "decision_tables",
+            "tables_count": len(tables),
             "violations_count": len(result.violations),
             "inferred_count": len(result.inferred_triples),
             "duration_seconds": round(time.time() - t0, 3),
@@ -124,9 +138,12 @@ class DecisionTableEngine:
         if not rows:
             logger.debug("Decision table '%s': no rows defined, skipping", dt_name)
             return result
-        logger.debug("Decision table '%s': target_class_uri=%s, inputs=%s",
-                      dt_name, dt.get("target_class_uri"),
-                      [c.get("property_uri") for c in dt.get("input_columns", [])])
+        logger.debug(
+            "Decision table '%s': target_class_uri=%s, inputs=%s",
+            dt_name,
+            dt.get("target_class_uri"),
+            [c.get("property_uri") for c in dt.get("input_columns", [])],
+        )
         out_col = dt.get("output_column") or {}
         output_prop_uri = out_col.get("property_uri", "")
         output_prop_name = out_col.get("property", "")
@@ -135,18 +152,50 @@ class DecisionTableEngine:
         hit_policy = dt.get("hit_policy", "first")
         has_output = bool(output_prop_uri)
         if row_logic == "and" or not has_output:
-            self._execute_combined(dt, store, table_name, base_uri, is_cypher,
-                                   result, dt_name, output_prop_uri, output_prop_name,
-                                   rows, output_default_val)
+            self._execute_combined(
+                dt,
+                store,
+                table_name,
+                base_uri,
+                is_cypher,
+                result,
+                dt_name,
+                output_prop_uri,
+                output_prop_name,
+                rows,
+                output_default_val,
+            )
         else:
-            self._execute_per_row(dt, store, table_name, base_uri, is_cypher,
-                                  result, dt_name, output_prop_uri, output_prop_name,
-                                  rows, hit_policy, output_default_val)
+            self._execute_per_row(
+                dt,
+                store,
+                table_name,
+                base_uri,
+                is_cypher,
+                result,
+                dt_name,
+                output_prop_uri,
+                output_prop_name,
+                rows,
+                hit_policy,
+                output_default_val,
+            )
         return result
 
-    def _execute_combined(self, dt, store, table_name, base_uri, is_cypher,
-                          result, dt_name, output_prop_uri, output_prop_name,
-                          rows, output_default_val=""):
+    def _execute_combined(
+        self,
+        dt,
+        store,
+        table_name,
+        base_uri,
+        is_cypher,
+        result,
+        dt_name,
+        output_prop_uri,
+        output_prop_name,
+        rows,
+        output_default_val="",
+    ):
         if is_cypher:
             query = self.build_violation_cypher(dt, table_name, base_uri, store)
         else:
@@ -165,19 +214,41 @@ class DecisionTableEngine:
             msg = f"Matches decision table '{dt_name}'"
             if action_val and output_prop_name:
                 msg += f" → {output_prop_name} = {action_val}"
-            result.violations.append(RuleViolation(
-                rule_name=dt_name, subject=subj, message=msg,
-                check_type="decision_table", rule_type="decision_table",
-            ))
+            result.violations.append(
+                RuleViolation(
+                    rule_name=dt_name,
+                    subject=subj,
+                    message=msg,
+                    check_type="decision_table",
+                    rule_type="decision_table",
+                )
+            )
             if output_prop_uri and action_val:
-                result.inferred_triples.append(InferredTriple(
-                    subject=subj, predicate=output_prop_uri, object=action_val,
-                    provenance=f"decision_table:{dt_name}", rule_name=dt_name,
-                ))
+                result.inferred_triples.append(
+                    InferredTriple(
+                        subject=subj,
+                        predicate=output_prop_uri,
+                        object=action_val,
+                        provenance=f"decision_table:{dt_name}",
+                        rule_name=dt_name,
+                    )
+                )
 
-    def _execute_per_row(self, dt, store, table_name, base_uri, is_cypher,
-                         result, dt_name, output_prop_uri, output_prop_name,
-                         rows, hit_policy, output_default_val=""):
+    def _execute_per_row(
+        self,
+        dt,
+        store,
+        table_name,
+        base_uri,
+        is_cypher,
+        result,
+        dt_name,
+        output_prop_uri,
+        output_prop_name,
+        rows,
+        hit_policy,
+        output_default_val="",
+    ):
         seen: set = set()
         for ri, row in enumerate(rows):
             action_val = output_default_val or row.get("action_value", "")
@@ -185,12 +256,16 @@ class DecisionTableEngine:
             single_dt["rows"] = [row]
             single_dt["row_logic"] = "or"
             if is_cypher:
-                query = self.build_violation_cypher(single_dt, table_name, base_uri, store)
+                query = self.build_violation_cypher(
+                    single_dt, table_name, base_uri, store
+                )
             else:
                 query = self.build_violation_sql(single_dt, table_name, base_uri)
             if not query:
                 continue
-            logger.debug("Decision table '%s' row %d query:\n%s", dt_name, ri + 1, query)
+            logger.debug(
+                "Decision table '%s' row %d query:\n%s", dt_name, ri + 1, query
+            )
             for subj in self._run_query(store, query, is_cypher, dt_name):
                 if hit_policy == "first" and subj in seen:
                     continue
@@ -198,16 +273,25 @@ class DecisionTableEngine:
                 msg = f"Row {ri + 1} of '{dt_name}'"
                 if action_val and output_prop_name:
                     msg += f" → {output_prop_name} = {action_val}"
-                result.violations.append(RuleViolation(
-                    rule_name=dt_name, subject=subj, message=msg,
-                    check_type="decision_table", rule_type="decision_table",
-                ))
-                if output_prop_uri and action_val:
-                    result.inferred_triples.append(InferredTriple(
-                        subject=subj, predicate=output_prop_uri, object=action_val,
-                        provenance=f"decision_table:{dt_name}:row{ri + 1}",
+                result.violations.append(
+                    RuleViolation(
                         rule_name=dt_name,
-                    ))
+                        subject=subj,
+                        message=msg,
+                        check_type="decision_table",
+                        rule_type="decision_table",
+                    )
+                )
+                if output_prop_uri and action_val:
+                    result.inferred_triples.append(
+                        InferredTriple(
+                            subject=subj,
+                            predicate=output_prop_uri,
+                            object=action_val,
+                            provenance=f"decision_table:{dt_name}:row{ri + 1}",
+                            rule_name=dt_name,
+                        )
+                    )
 
     @staticmethod
     def _run_query(store, query, is_cypher, dt_name):
@@ -236,7 +320,10 @@ class DecisionTableEngine:
         if not target_cls_uri or not inputs or not rows:
             return None
         joins = []
-        base_where = [f"t0.predicate = '{RDF_TYPE}'", f"t0.object = '{self._esc_sql(target_cls_uri)}'"]
+        base_where = [
+            f"t0.predicate = '{RDF_TYPE}'",
+            f"t0.object = '{self._esc_sql(target_cls_uri)}'",
+        ]
         for i, inp in enumerate(inputs):
             alias = f"inp{i}"
             prop_uri = inp.get("property_uri", "")
@@ -261,10 +348,18 @@ class DecisionTableEngine:
                     continue
                 if self._is_numeric(val):
                     v_expr = val
-                    lhs = f"CAST({alias}.object AS DOUBLE)" if op in DT_NUMERIC_OPS else f"{alias}.object"
+                    lhs = (
+                        f"CAST({alias}.object AS DOUBLE)"
+                        if op in DT_NUMERIC_OPS
+                        else f"{alias}.object"
+                    )
                 else:
                     v_expr = f"'{self._esc_sql(val.lower())}'"
-                    lhs = f"LOWER({alias}.object)" if op in DT_STRING_OPS else f"{alias}.object"
+                    lhs = (
+                        f"LOWER({alias}.object)"
+                        if op in DT_STRING_OPS
+                        else f"{alias}.object"
+                    )
                 parts.append(f"{lhs} {sql_op.format(v=v_expr)}")
             if parts:
                 row_conditions.append("(" + " AND ".join(parts) + ")")
@@ -273,8 +368,7 @@ class DecisionTableEngine:
         row_joiner = " AND " if dt.get("row_logic") == "and" else " OR "
         sql = (
             f"SELECT DISTINCT t0.subject AS s\n"
-            f"FROM {table} t0\n"
-            + "\n".join(joins) + "\n"
+            f"FROM {table} t0\n" + "\n".join(joins) + "\n"
             f"WHERE {' AND '.join(base_where)}\n"
             f"  AND ({row_joiner.join(row_conditions)})"
         )
@@ -288,7 +382,10 @@ class DecisionTableEngine:
             return None
         tbl = store.get_node_table(table_name)
         match_parts = [f"MATCH (t0:{tbl})"]
-        where_parts = [f"t0.predicate = '{RDF_TYPE}'", f"t0.object = '{target_cls_uri}'"]
+        where_parts = [
+            f"t0.predicate = '{RDF_TYPE}'",
+            f"t0.object = '{target_cls_uri}'",
+        ]
         valid_inputs = []
         for i, inp in enumerate(inputs):
             alias = f"inp{i}"
@@ -316,10 +413,18 @@ class DecisionTableEngine:
                     continue
                 if self._is_numeric(val):
                     v_expr = val
-                    lhs = f"CAST({alias}.object AS DOUBLE)" if op in DT_NUMERIC_OPS else f"{alias}.object"
+                    lhs = (
+                        f"CAST({alias}.object AS DOUBLE)"
+                        if op in DT_NUMERIC_OPS
+                        else f"{alias}.object"
+                    )
                 else:
                     v_expr = f"'{val.lower()}'"
-                    lhs = f"toLower({alias}.object)" if op in DT_STRING_OPS else f"{alias}.object"
+                    lhs = (
+                        f"toLower({alias}.object)"
+                        if op in DT_STRING_OPS
+                        else f"{alias}.object"
+                    )
                 parts.append(f"{lhs} {cypher_op.format(v=v_expr)}")
             if parts:
                 row_conditions.append("(" + " AND ".join(parts) + ")")
@@ -347,5 +452,7 @@ class DecisionTableEngine:
             conds = row.get("conditions", [])
             expected = len(dt.get("input_columns", []))
             if len(conds) != expected:
-                errors.append(f"Row {i+1}: expected {expected} conditions, got {len(conds)}")
+                errors.append(
+                    f"Row {i+1}: expected {expected} conditions, got {len(conds)}"
+                )
         return errors

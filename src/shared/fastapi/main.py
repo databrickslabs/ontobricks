@@ -4,6 +4,7 @@ FastAPI Application Factory - OntoBricks
 This is the main FastAPI application (UI, GraphQL, health).
 Run with: uvicorn shared.fastapi.main:app --reload --port 8000
 """
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,27 +37,27 @@ tags_metadata = [
     {
         "name": "Ontology",
         "description": "Ontology management - Create and manage OWL ontologies with classes, "
-                       "properties, relationships, constraints, and SWRL rules.",
+        "properties, relationships, constraints, and SWRL rules.",
     },
     {
         "name": "Mapping",
         "description": "Data source mapping - Map ontology entities to Databricks tables and columns. "
-                       "Generate R2RML mappings for SPARQL-to-SQL translation.",
+        "Generate R2RML mappings for SPARQL-to-SQL translation.",
     },
     {
         "name": "Query",
         "description": "SPARQL query execution - Execute SPARQL queries against mapped data sources. "
-                       "Queries are translated to SQL and executed on Databricks.",
+        "Queries are translated to SQL and executed on Databricks.",
     },
     {
         "name": "Domain",
         "description": "Domain management - Save, load, import/export complete domain configurations "
-                       "including ontology, mappings, and settings.",
+        "including ontology, mappings, and settings.",
     },
     {
         "name": "GraphQL",
         "description": "**GraphQL API** - Auto-generated typed GraphQL schema from ontology. "
-                       "Query the knowledge graph with nested traversal and introspection.",
+        "Query the knowledge graph with nested traversal and introspection.",
     },
 ]
 
@@ -106,11 +107,13 @@ async def lifespan(app: FastAPI):
     logger.info("App docs: /docs | External REST: /api/docs")
 
     from agents.tracing import setup_tracing
+
     setup_tracing()
 
     build_scheduler = None
     try:
         from back.objects.registry import get_scheduler
+
         build_scheduler = get_scheduler()
         build_scheduler.start(settings)
     except Exception as e:
@@ -124,9 +127,16 @@ async def lifespan(app: FastAPI):
 
 
 _PERM_BYPASS_PREFIXES = (
-    "/static/", "/health", "/docs", "/redoc", "/openapi.json",
-    "/access-denied", "/settings/permissions/me", "/settings/permissions/diag",
-    "/api/", "/graphql/",
+    "/static/",
+    "/health",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/access-denied",
+    "/settings/permissions/me",
+    "/settings/permissions/diag",
+    "/api/",
+    "/graphql/",
 )
 
 _VIEWER_BLOCKED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -168,7 +178,10 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         except Exception as exc:
             logger.error(
                 "PermissionMiddleware: error resolving role for %s on %s: %s",
-                email, path, exc, exc_info=True,
+                email,
+                path,
+                exc,
+                exc_info=True,
             )
             role = ROLE_NONE
             domain_role = ROLE_NONE
@@ -177,7 +190,11 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         request.state.user_domain_role = domain_role
         logger.info(
             "PermissionMiddleware: %s %s email=%s → role=%s domain_role=%s",
-            request.method, path, email, role, domain_role,
+            request.method,
+            path,
+            email,
+            role,
+            domain_role,
         )
 
         if role == ROLE_NONE:
@@ -186,13 +203,17 @@ class PermissionMiddleware(BaseHTTPMiddleware):
             return RedirectResponse("/access-denied", status_code=302)
 
         if role == ROLE_VIEWER and request.method in _VIEWER_BLOCKED_METHODS:
-            return self._forbidden_json(request, "Viewer role does not allow write operations")
+            return self._forbidden_json(
+                request, "Viewer role does not allow write operations"
+            )
 
         if request.state.user_role != "admin":
             for prefix in _PERM_ADMIN_ONLY_PREFIXES:
                 if path.startswith(prefix):
                     if self._wants_json(request):
-                        return self._forbidden_json(request, "Only administrators can access settings")
+                        return self._forbidden_json(
+                            request, "Only administrators can access settings"
+                        )
                     return RedirectResponse("/", status_code=302)
 
         return await call_next(request)
@@ -201,6 +222,7 @@ class PermissionMiddleware(BaseHTTPMiddleware):
     def _forbidden_json(request: Request, message: str) -> JSONResponse:
         """Return a 403 response matching the standard ErrorResponse shape."""
         import uuid as _uuid
+
         request_id = request.headers.get("x-request-id") or str(_uuid.uuid4())
         return JSONResponse(
             {"error": "authorization", "message": message, "request_id": request_id},
@@ -235,17 +257,28 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         user_token = request.headers.get("x-forwarded-access-token", "")
 
         from back.objects.registry import RegistryCfg
+
         registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
 
         app_role = permission_service.get_user_role(
-            email, host, token, registry_cfg, settings.ontobricks_app_name,
+            email,
+            host,
+            token,
+            registry_cfg,
+            settings.ontobricks_app_name,
             user_token=user_token,
         )
 
-        domain_folder = getattr(domain, 'domain_folder', '') or ''
+        domain_folder = getattr(domain, "domain_folder", "") or ""
         domain_role = permission_service.get_domain_role(
-            email, host, token, registry_cfg, settings.ontobricks_app_name,
-            domain_folder, user_token=user_token, app_role=app_role,
+            email,
+            host,
+            token,
+            registry_cfg,
+            settings.ontobricks_app_name,
+            domain_folder,
+            user_token=user_token,
+            app_role=app_role,
         )
 
         return app_role, domain_role
@@ -294,7 +327,7 @@ def create_app() -> FastAPI:
         session_cookie=SESSION_COOKIE_NAME,
         max_age=settings.session_max_age,
         same_site="lax",
-        https_only=False  # Set to True in production
+        https_only=False,  # Set to True in production
     )
 
     # Static files -- served from front/static/
@@ -310,6 +343,7 @@ def create_app() -> FastAPI:
     app.mount(EXTERNAL_API_MOUNT_PREFIX, create_external_api_app())
 
     from back.core.errors import register_exception_handlers
+
     register_exception_handlers(app)
 
     return app
@@ -320,20 +354,24 @@ def _register_routers(app: FastAPI):
 
     # --- Health ---
     from shared.fastapi.health import router as health_router
+
     app.include_router(health_router)
 
     # --- Frontend HTML routes (from src/front/) ---
     from front.routes import all_frontend_routers
+
     for router in all_frontend_routers:
         app.include_router(router)
 
     # --- Internal API (session-aware JSON, from src/api/routers/internal/) ---
     from api.routers.internal import all_internal_routers
+
     for router in all_internal_routers:
         app.include_router(router)
 
     # --- GraphQL ---
     from back.fastapi.graphql_routes import router as graphql_router
+
     app.include_router(graphql_router, prefix="/graphql", tags=["GraphQL"])
 
 

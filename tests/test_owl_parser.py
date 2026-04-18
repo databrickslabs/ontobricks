@@ -1,4 +1,5 @@
 """Tests for OWL ontology parser."""
+
 import pytest
 from back.core.w3c.owl.OntologyParser import OntologyParser
 
@@ -138,36 +139,36 @@ class TestGetClasses:
     def test_extracts_classes(self):
         parser = OntologyParser(SAMPLE_TURTLE)
         classes = parser.get_classes()
-        names = [c['name'] for c in classes]
-        assert 'Customer' in names
-        assert 'Order' in names
-        assert 'VIPCustomer' in names
+        names = [c["name"] for c in classes]
+        assert "Customer" in names
+        assert "Order" in names
+        assert "VIPCustomer" in names
 
     def test_class_fields(self):
         parser = OntologyParser(SAMPLE_TURTLE)
-        classes = {c['name']: c for c in parser.get_classes()}
-        cust = classes['Customer']
-        assert cust['label'] == 'Customer'
-        assert cust['comment'] == 'A customer entity'
-        assert cust['emoji'] == '👤'
+        classes = {c["name"]: c for c in parser.get_classes()}
+        cust = classes["Customer"]
+        assert cust["label"] == "Customer"
+        assert cust["comment"] == "A customer entity"
+        assert cust["emoji"] == "👤"
 
     def test_parent_class(self):
         parser = OntologyParser(SAMPLE_TURTLE)
-        classes = {c['name']: c for c in parser.get_classes()}
-        assert classes['VIPCustomer']['parent'] == 'Customer'
-        assert classes['Customer']['parent'] == ''
+        classes = {c["name"]: c for c in parser.get_classes()}
+        assert classes["VIPCustomer"]["parent"] == "Customer"
+        assert classes["Customer"]["parent"] == ""
 
     def test_data_properties_assigned(self):
         parser = OntologyParser(SAMPLE_TURTLE)
-        classes = {c['name']: c for c in parser.get_classes()}
-        dp_names = [dp['name'] for dp in classes['Customer']['dataProperties']]
-        assert 'firstName' in dp_names
-        assert 'lastName' in dp_names
+        classes = {c["name"]: c for c in parser.get_classes()}
+        dp_names = [dp["name"] for dp in classes["Customer"]["dataProperties"]]
+        assert "firstName" in dp_names
+        assert "lastName" in dp_names
 
     def test_sorted_by_name(self):
         parser = OntologyParser(SAMPLE_TURTLE)
         classes = parser.get_classes()
-        names = [c['name'] for c in classes]
+        names = [c["name"] for c in classes]
         assert names == sorted(names)
 
 
@@ -175,52 +176,52 @@ class TestGetProperties:
     def test_extracts_properties(self):
         parser = OntologyParser(SAMPLE_TURTLE)
         props = parser.get_properties()
-        names = [p['name'] for p in props]
-        assert 'hasOrder' in names
-        assert 'firstName' in names
+        names = [p["name"] for p in props]
+        assert "hasOrder" in names
+        assert "firstName" in names
 
     def test_property_type(self):
         parser = OntologyParser(SAMPLE_TURTLE)
-        props = {p['name']: p for p in parser.get_properties()}
-        assert props['hasOrder']['type'] == 'ObjectProperty'
-        assert props['firstName']['type'] == 'DatatypeProperty'
+        props = {p["name"]: p for p in parser.get_properties()}
+        assert props["hasOrder"]["type"] == "ObjectProperty"
+        assert props["firstName"]["type"] == "DatatypeProperty"
 
     def test_domain_range(self):
         parser = OntologyParser(SAMPLE_TURTLE)
-        props = {p['name']: p for p in parser.get_properties()}
-        assert props['hasOrder']['domain'] == 'Customer'
-        assert props['hasOrder']['range'] == 'Order'
+        props = {p["name"]: p for p in parser.get_properties()}
+        assert props["hasOrder"]["domain"] == "Customer"
+        assert props["hasOrder"]["range"] == "Order"
 
 
 class TestGetOntologyInfo:
     def test_basic_info(self):
         parser = OntologyParser(SAMPLE_TURTLE)
         info = parser.get_ontology_info()
-        assert info['uri'] == 'http://test.org/ontology'
-        assert info['label'] == 'TestOntology'
-        assert info['comment'] == 'A test ontology'
+        assert info["uri"] == "http://test.org/ontology"
+        assert info["label"] == "TestOntology"
+        assert info["comment"] == "A test ontology"
 
     def test_namespace_has_separator(self):
         parser = OntologyParser(SAMPLE_TURTLE)
         info = parser.get_ontology_info()
-        assert info['namespace'].endswith('#') or info['namespace'].endswith('/')
+        assert info["namespace"].endswith("#") or info["namespace"].endswith("/")
 
 
 class TestGetConstraints:
     def test_functional_property(self):
         parser = OntologyParser(TURTLE_WITH_CONSTRAINTS)
         constraints = parser.get_constraints()
-        functional = [c for c in constraints if c['type'] == 'functional']
+        functional = [c for c in constraints if c["type"] == "functional"]
         assert len(functional) == 1
-        assert functional[0]['property'] == 'hasOrder'
+        assert functional[0]["property"] == "hasOrder"
 
     def test_min_cardinality(self):
         parser = OntologyParser(TURTLE_WITH_CONSTRAINTS)
         constraints = parser.get_constraints()
-        min_card = [c for c in constraints if c['type'] == 'minCardinality']
+        min_card = [c for c in constraints if c["type"] == "minCardinality"]
         assert len(min_card) == 1
-        assert min_card[0]['className'] == 'Customer'
-        assert min_card[0]['cardinalityValue'] == 1
+        assert min_card[0]["className"] == "Customer"
+        assert min_card[0]["cardinalityValue"] == 1
 
 
 class TestGetSwrlRules:
@@ -228,33 +229,33 @@ class TestGetSwrlRules:
         parser = OntologyParser(TURTLE_WITH_SWRL)
         rules = parser.get_swrl_rules()
         assert len(rules) == 1
-        assert rules[0]['name'] == 'CheckAge'
-        assert 'age' in rules[0]['antecedent']
-        assert 'InvalidAge' in rules[0]['consequent']
+        assert rules[0]["name"] == "CheckAge"
+        assert "age" in rules[0]["antecedent"]
+        assert "InvalidAge" in rules[0]["consequent"]
 
 
 class TestGetAxioms:
     def test_equivalent_class(self):
         parser = OntologyParser(TURTLE_WITH_AXIOMS)
         axioms = parser.get_axioms()
-        equiv = [a for a in axioms if a['type'] == 'equivalentClass']
+        equiv = [a for a in axioms if a["type"] == "equivalentClass"]
         assert len(equiv) == 1
-        assert equiv[0]['subject'] == 'Customer'
-        assert 'Client' in equiv[0]['objects']
+        assert equiv[0]["subject"] == "Customer"
+        assert "Client" in equiv[0]["objects"]
 
     def test_disjoint_with(self):
         parser = OntologyParser(TURTLE_WITH_AXIOMS)
         axioms = parser.get_axioms()
-        disj = [a for a in axioms if a['type'] == 'disjointWith']
+        disj = [a for a in axioms if a["type"] == "disjointWith"]
         assert len(disj) == 1
-        assert disj[0]['subject'] == 'Individual'
-        assert 'Company' in disj[0]['objects']
+        assert disj[0]["subject"] == "Individual"
+        assert "Company" in disj[0]["objects"]
 
     def test_get_axioms_and_expressions_split(self):
         parser = OntologyParser(TURTLE_WITH_AXIOMS)
         result = parser.get_axioms_and_expressions()
         assert isinstance(result, dict)
-        assert 'axioms' in result
-        assert 'expressions' in result
-        assert len(result['axioms']) == 2
-        assert len(result['expressions']) == 0
+        assert "axioms" in result
+        assert "expressions" in result
+        assert len(result["axioms"]) == 2
+        assert len(result["expressions"]) == 0

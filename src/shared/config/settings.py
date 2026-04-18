@@ -2,6 +2,7 @@
 
 Used across the codebase (HTML routes, objects, external ``api`` package, FastAPI).
 """
+
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from functools import lru_cache
@@ -10,7 +11,7 @@ import os
 
 def _get_default_session_dir() -> str:
     """Get the default session directory based on environment."""
-    if os.getenv('DATABRICKS_APP_PORT'):
+    if os.getenv("DATABRICKS_APP_PORT"):
         return "/tmp/ontobricks_session"
     return "./fastapi_session"
 

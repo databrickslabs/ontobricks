@@ -3,6 +3,7 @@
 Provides connection management, path helpers, and the common abstract
 base class that ``LadybugFlatStore`` and ``LadybugGraphStore`` inherit.
 """
+
 import os
 import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -49,6 +50,7 @@ class LadybugBase(GraphDBBackend):
     def safe_table_id(name: str) -> str:
         """Convert a table name to a valid LadybugDB node-table identifier."""
         from back.core.helpers import safe_identifier
+
         base = name.split(".")[-1] if "." in name else name
         if not base:
             return "triples"
@@ -139,16 +141,22 @@ class LadybugBase(GraphDBBackend):
     # -- GraphDBBackend sync -------------------------------------------------
 
     def sync_to_remote(
-        self, uc_path: str, volume_service: Any,
+        self,
+        uc_path: str,
+        volume_service: Any,
     ) -> Tuple[bool, str]:
         from back.core.graphdb.ladybugdb.GraphSyncService import GraphSyncService
+
         svc = GraphSyncService(volume_service, self.db_name, self.db_path)
         return svc.sync_to_volume(uc_path)
 
     def sync_from_remote(
-        self, uc_path: str, volume_service: Any,
+        self,
+        uc_path: str,
+        volume_service: Any,
     ) -> Tuple[bool, str]:
         from back.core.graphdb.ladybugdb.GraphSyncService import GraphSyncService
+
         svc = GraphSyncService(volume_service, self.db_name, self.db_path)
         return svc.sync_from_volume(uc_path)
 
@@ -157,12 +165,16 @@ class LadybugBase(GraphDBBackend):
 
     def remote_archive_path(self, uc_domain_path: str) -> Optional[str]:
         from back.core.graphdb.ladybugdb.GraphSyncService import GraphSyncService
+
         return GraphSyncService.volume_archive_path(uc_domain_path, self.db_name)
 
     # -- GraphDBBackend reasoning support ------------------------------------
 
     def get_query_translator(self, table_name: str = "") -> Any:
-        from back.core.reasoning.SWRLFlatCypherTranslator import SWRLFlatCypherTranslator
+        from back.core.reasoning.SWRLFlatCypherTranslator import (
+            SWRLFlatCypherTranslator,
+        )
+
         node_table = LadybugBase.safe_table_id(table_name) if table_name else "Triple"
         return SWRLFlatCypherTranslator(node_table=node_table)
 

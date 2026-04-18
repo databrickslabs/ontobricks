@@ -28,6 +28,7 @@ def _volume_docs_path(ctx: ToolContext) -> Optional[str]:
         logger.debug("_volume_docs_path: missing registry fields — reg=%s", reg)
         return None
     from back.objects.registry import RegistryCfg
+
     c = RegistryCfg.from_dict(reg)
     folder = ctx.domain_folder or ""
     if not folder:
@@ -36,6 +37,7 @@ def _volume_docs_path(ctx: ToolContext) -> Optional[str]:
         folder = sanitize_domain_folder(ctx.domain_name or "untitled_domain")
     version = ctx.domain_version or "1"
     from back.objects.registry.service import _DOMAINS_FOLDER
+
     path = f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/{_DOMAINS_FOLDER}/{folder}/V{version}/documents"
     logger.debug("_volume_docs_path: resolved to %s", path)
     return path
@@ -44,6 +46,7 @@ def _volume_docs_path(ctx: ToolContext) -> Optional[str]:
 # =====================================================
 # Tool implementations
 # =====================================================
+
 
 def tool_list_documents(ctx: ToolContext, **_kwargs) -> str:
     """List documents available in the domain UC volume."""
@@ -58,7 +61,11 @@ def tool_list_documents(ctx: ToolContext, **_kwargs) -> str:
     logger.debug("tool_list_documents: full url=%s", url)
     try:
         resp = requests.get(url, headers=_headers(ctx), timeout=_TOOL_TIMEOUT)
-        logger.debug("tool_list_documents: response status=%d, size=%d bytes", resp.status_code, len(resp.content))
+        logger.debug(
+            "tool_list_documents: response status=%d, size=%d bytes",
+            resp.status_code,
+            len(resp.content),
+        )
         if resp.status_code == 404:
             logger.info("tool_list_documents: documents directory not found (404)")
             return json.dumps({"files": [], "message": "No documents directory yet"})
@@ -66,9 +73,12 @@ def tool_list_documents(ctx: ToolContext, **_kwargs) -> str:
         entries = resp.json().get("contents", [])
         logger.debug("tool_list_documents: raw entries count=%d", len(entries))
         files = [
-            {"name": e.get("name", e.get("path", "").split("/")[-1]),
-             "size": e.get("file_size")}
-            for e in entries if not e.get("is_directory", False)
+            {
+                "name": e.get("name", e.get("path", "").split("/")[-1]),
+                "size": e.get("file_size"),
+            }
+            for e in entries
+            if not e.get("is_directory", False)
         ]
         logger.info("tool_list_documents: found %d file(s)", len(files))
         logger.debug("tool_list_documents: files=%s", [f["name"] for f in files])
@@ -98,34 +108,61 @@ def tool_read_document(ctx: ToolContext, *, filename: str = "", **_kwargs) -> st
         resp = requests.get(url, headers=_headers(ctx), timeout=60)
         logger.debug(
             "tool_read_document: response status=%d, content_type=%s, size=%d bytes",
-            resp.status_code, resp.headers.get("content-type", "?"), len(resp.content),
+            resp.status_code,
+            resp.headers.get("content-type", "?"),
+            len(resp.content),
         )
         resp.raise_for_status()
         try:
             content = resp.content.decode("utf-8")
         except UnicodeDecodeError:
-            logger.warning("tool_read_document: '%s' is binary (decode failed) — %d bytes", filename, len(resp.content))
-            return json.dumps({"filename": filename, "error": "Binary file – cannot read as text"})
+            logger.warning(
+                "tool_read_document: '%s' is binary (decode failed) — %d bytes",
+                filename,
+                len(resp.content),
+            )
+            return json.dumps(
+                {"filename": filename, "error": "Binary file – cannot read as text"}
+            )
 
         original_len = len(content)
         truncated = original_len > _MAX_DOC_CHARS
         if truncated:
             logger.info(
                 "tool_read_document: '%s' truncated %d → %d chars (limit=%d)",
-                filename, original_len, _MAX_DOC_CHARS, _MAX_DOC_CHARS,
+                filename,
+                original_len,
+                _MAX_DOC_CHARS,
+                _MAX_DOC_CHARS,
             )
-            content = content[:_MAX_DOC_CHARS] + f"\n\n[…truncated, {original_len} total chars]"
+            content = (
+                content[:_MAX_DOC_CHARS]
+                + f"\n\n[…truncated, {original_len} total chars]"
+            )
         logger.info(
             "tool_read_document: '%s' read OK — %d chars, truncated=%s",
-            filename, original_len, truncated,
+            filename,
+            original_len,
+            truncated,
         )
-        logger.debug("tool_read_document: '%s' content preview (300 chars): %.300s", filename, content)
-        return json.dumps({"filename": filename, "content": content,
-                           "size": original_len, "truncated": truncated})
+        logger.debug(
+            "tool_read_document: '%s' content preview (300 chars): %.300s",
+            filename,
+            content,
+        )
+        return json.dumps(
+            {
+                "filename": filename,
+                "content": content,
+                "size": original_len,
+                "truncated": truncated,
+            }
+        )
     except requests.exceptions.HTTPError as exc:
         logger.error(
             "tool_read_document: HTTP error for '%s': status=%s, body=%.300s",
-            filename, exc.response.status_code if exc.response is not None else "?",
+            filename,
+            exc.response.status_code if exc.response is not None else "?",
             exc.response.text[:300] if exc.response is not None else "N/A",
         )
         return json.dumps({"error": str(exc)})
@@ -142,12 +179,17 @@ def tool_get_documents_context(ctx: ToolContext, **_kwargs) -> str:
     """Return pre-loaded document content from imported domain documents.
     Does NOT query Unity Catalog — uses documents loaded at agent start.
     Limited to avoid context overflow when many/large documents are loaded."""
-    logger.info("tool_get_documents_context: returning %d pre-loaded document(s)", len(ctx.documents))
+    logger.info(
+        "tool_get_documents_context: returning %d pre-loaded document(s)",
+        len(ctx.documents),
+    )
     if not ctx.documents:
-        return json.dumps({
-            "documents": [],
-            "message": "No documents were loaded. Upload documents in Domain → Documents to enrich mapping context.",
-        })
+        return json.dumps(
+            {
+                "documents": [],
+                "message": "No documents were loaded. Upload documents in Domain → Documents to enrich mapping context.",
+            }
+        )
     result = []
     total_chars = 0
     for d in ctx.documents[:_MAX_DOCS_IN_CONTEXT]:
@@ -155,18 +197,37 @@ def tool_get_documents_context(ctx: ToolContext, **_kwargs) -> str:
         if total_chars + len(content) > _MAX_TOTAL_DOC_CHARS:
             remaining = _MAX_TOTAL_DOC_CHARS - total_chars
             if remaining > 5000:
-                content = content[:remaining] + f"\n\n[…truncated, document has {len(d.get('content', ''))} chars total]"
-                result.append({"name": d.get("name", "?"), "content": content, "size": len(content)})
+                content = (
+                    content[:remaining]
+                    + f"\n\n[…truncated, document has {len(d.get('content', ''))} chars total]"
+                )
+                result.append(
+                    {
+                        "name": d.get("name", "?"),
+                        "content": content,
+                        "size": len(content),
+                    }
+                )
                 total_chars = _MAX_TOTAL_DOC_CHARS
             break
-        result.append({"name": d.get("name", "?"), "content": content, "size": len(content)})
+        result.append(
+            {"name": d.get("name", "?"), "content": content, "size": len(content)}
+        )
         total_chars += len(content)
-    truncated = len(ctx.documents) > len(result) or total_chars < sum(len(d.get("content", "")) for d in ctx.documents)
+    truncated = len(ctx.documents) > len(result) or total_chars < sum(
+        len(d.get("content", "")) for d in ctx.documents
+    )
     out = {"documents": result, "count": len(result), "total_chars": total_chars}
     if truncated:
-        out["_message"] = f"Showing first {len(result)} document(s), {total_chars} chars total (limit to avoid context overflow)."
-    logger.info("tool_get_documents_context: returning %d doc(s), %d total chars%s",
-                len(result), total_chars, " (truncated)" if truncated else "")
+        out["_message"] = (
+            f"Showing first {len(result)} document(s), {total_chars} chars total (limit to avoid context overflow)."
+        )
+    logger.info(
+        "tool_get_documents_context: returning %d doc(s), %d total chars%s",
+        len(result),
+        total_chars,
+        " (truncated)" if truncated else "",
+    )
     return json.dumps(out)
 
 

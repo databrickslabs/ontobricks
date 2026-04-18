@@ -1,4 +1,5 @@
 """Tests for :class:`back.objects.ontology.Ontology` helpers used by ontology routes."""
+
 import copy
 
 import pytest
@@ -10,144 +11,159 @@ from back.objects.ontology import Ontology
 class TestEnsureUris:
     def test_adds_uri_to_class(self):
         config = {
-            'base_uri': 'http://test.org/ontology#',
-            'classes': [{'name': 'Customer'}],
-            'properties': [],
+            "base_uri": "http://test.org/ontology#",
+            "classes": [{"name": "Customer"}],
+            "properties": [],
         }
         result = Ontology.ensure_uris(config)
-        assert result['classes'][0]['uri'] == 'http://test.org/ontology#Customer'
+        assert result["classes"][0]["uri"] == "http://test.org/ontology#Customer"
 
     def test_adds_local_name(self):
         config = {
-            'base_uri': 'http://test.org/ontology#',
-            'classes': [{'name': 'Customer'}],
-            'properties': [],
+            "base_uri": "http://test.org/ontology#",
+            "classes": [{"name": "Customer"}],
+            "properties": [],
         }
         result = Ontology.ensure_uris(config)
-        assert result['classes'][0]['localName'] == 'Customer'
+        assert result["classes"][0]["localName"] == "Customer"
 
     def test_preserves_existing_uri(self):
         config = {
-            'base_uri': 'http://test.org/ontology#',
-            'classes': [{'name': 'Customer', 'uri': 'http://other.org/Customer'}],
-            'properties': [],
+            "base_uri": "http://test.org/ontology#",
+            "classes": [{"name": "Customer", "uri": "http://other.org/Customer"}],
+            "properties": [],
         }
         result = Ontology.ensure_uris(config)
-        assert result['classes'][0]['uri'] == 'http://other.org/Customer'
+        assert result["classes"][0]["uri"] == "http://other.org/Customer"
 
     def test_adds_separator_if_missing(self):
         config = {
-            'base_uri': 'http://test.org/ontology',
-            'classes': [{'name': 'Foo'}],
-            'properties': [],
+            "base_uri": "http://test.org/ontology",
+            "classes": [{"name": "Foo"}],
+            "properties": [],
         }
         result = Ontology.ensure_uris(config)
-        assert '#' in result['classes'][0]['uri']
+        assert "#" in result["classes"][0]["uri"]
 
     def test_property_uris(self):
         config = {
-            'base_uri': 'http://test.org/ontology#',
-            'classes': [],
-            'properties': [{'name': 'hasOrder'}],
+            "base_uri": "http://test.org/ontology#",
+            "classes": [],
+            "properties": [{"name": "hasOrder"}],
         }
         result = Ontology.ensure_uris(config)
-        assert result['properties'][0]['uri'] == 'http://test.org/ontology#hasOrder'
+        assert result["properties"][0]["uri"] == "http://test.org/ontology#hasOrder"
 
 
 class TestGetOntologyStats:
     def test_empty_config(self):
         stats = Ontology.get_ontology_stats({})
-        assert stats == {'classes': 0, 'properties': 0, 'constraints': 0, 'swrl_rules': 0, 'axioms': 0, 'expressions': 0}
+        assert stats == {
+            "classes": 0,
+            "properties": 0,
+            "constraints": 0,
+            "swrl_rules": 0,
+            "axioms": 0,
+            "expressions": 0,
+        }
 
     def test_with_data(self):
         config = {
-            'classes': [{'name': 'A'}, {'name': 'B'}],
-            'properties': [{'name': 'p'}],
-            'constraints': [{'type': 'functional'}],
-            'swrl_rules': [],
-            'axioms': [{'type': 'equivalentClass'}],
+            "classes": [{"name": "A"}, {"name": "B"}],
+            "properties": [{"name": "p"}],
+            "constraints": [{"type": "functional"}],
+            "swrl_rules": [],
+            "axioms": [{"type": "equivalentClass"}],
         }
         stats = Ontology.get_ontology_stats(config)
-        assert stats['classes'] == 2
-        assert stats['properties'] == 1
-        assert stats['constraints'] == 1
-        assert stats['axioms'] == 1
+        assert stats["classes"] == 2
+        assert stats["properties"] == 1
+        assert stats["constraints"] == 1
+        assert stats["axioms"] == 1
 
 
 class TestBuildClassFromData:
     def test_new_class(self):
-        data = {'name': 'Customer', 'label': 'Customer', 'description': 'Test'}
+        data = {"name": "Customer", "label": "Customer", "description": "Test"}
         cls = Ontology.build_class_from_data(data)
-        assert cls['name'] == 'Customer'
-        assert cls['label'] == 'Customer'
-        assert cls['description'] == 'Test'
-        assert cls['emoji'] == '📦'
+        assert cls["name"] == "Customer"
+        assert cls["label"] == "Customer"
+        assert cls["description"] == "Test"
+        assert cls["emoji"] == "📦"
 
     def test_merge_with_existing(self):
-        existing = {'name': 'Cust', 'emoji': '👤', 'uri': 'http://old'}
-        data = {'name': 'Customer'}
+        existing = {"name": "Cust", "emoji": "👤", "uri": "http://old"}
+        data = {"name": "Customer"}
         cls = Ontology.build_class_from_data(data, existing)
-        assert cls['name'] == 'Customer'
-        assert cls['emoji'] == '👤'
+        assert cls["name"] == "Customer"
+        assert cls["emoji"] == "👤"
 
 
 class TestBuildPropertyFromData:
     def test_new_property(self):
-        data = {'name': 'hasOrder', 'domain': 'Customer', 'range': 'Order'}
+        data = {"name": "hasOrder", "domain": "Customer", "range": "Order"}
         prop = Ontology.build_property_from_data(data)
-        assert prop['name'] == 'hasOrder'
-        assert prop['domain'] == 'Customer'
-        assert prop['direction'] == 'forward'
+        assert prop["name"] == "hasOrder"
+        assert prop["domain"] == "Customer"
+        assert prop["direction"] == "forward"
 
     def test_merge_existing(self):
-        existing = {'name': 'old', 'direction': 'reverse'}
-        data = {'name': 'hasOrder'}
+        existing = {"name": "old", "direction": "reverse"}
+        data = {"name": "hasOrder"}
         prop = Ontology.build_property_from_data(data, existing)
-        assert prop['name'] == 'hasOrder'
-        assert prop['direction'] == 'reverse'
+        assert prop["name"] == "hasOrder"
+        assert prop["direction"] == "reverse"
 
 
 class TestValidateConstraint:
     def test_missing_type(self):
-        assert Ontology.validate_constraint({}) == 'Constraint type is required'
+        assert Ontology.validate_constraint({}) == "Constraint type is required"
 
     def test_cardinality_missing_property(self):
-        err = Ontology.validate_constraint({'type': 'minCardinality'})
-        assert 'property' in err.lower() or 'Relationship' in err
+        err = Ontology.validate_constraint({"type": "minCardinality"})
+        assert "property" in err.lower() or "Relationship" in err
 
     def test_cardinality_missing_value(self):
-        err = Ontology.validate_constraint({'type': 'minCardinality', 'property': 'p'})
-        assert 'value' in err.lower()
+        err = Ontology.validate_constraint({"type": "minCardinality", "property": "p"})
+        assert "value" in err.lower()
 
     def test_valid_cardinality(self):
-        assert Ontology.validate_constraint({'type': 'minCardinality', 'property': 'p', 'cardinalityValue': 1}) is None
+        assert (
+            Ontology.validate_constraint(
+                {"type": "minCardinality", "property": "p", "cardinalityValue": 1}
+            )
+            is None
+        )
 
     def test_value_check_missing_class(self):
-        err = Ontology.validate_constraint({'type': 'valueCheck'})
+        err = Ontology.validate_constraint({"type": "valueCheck"})
         assert err is not None
 
     def test_global_rule_no_class_needed(self):
-        assert Ontology.validate_constraint({'type': 'globalRule'}) is None
+        assert Ontology.validate_constraint({"type": "globalRule"}) is None
 
     def test_valid_functional(self):
-        assert Ontology.validate_constraint({'type': 'functional', 'property': 'p'}) is None
+        assert (
+            Ontology.validate_constraint({"type": "functional", "property": "p"})
+            is None
+        )
 
     def test_functional_missing_property(self):
-        err = Ontology.validate_constraint({'type': 'functional'})
+        err = Ontology.validate_constraint({"type": "functional"})
         assert err is not None
 
 
 class TestGenerateOwl:
     def test_generates_valid_turtle(self):
         data = {
-            'base_uri': 'http://test.org/ontology#',
-            'name': 'TestOntology',
-            'classes': [{'name': 'Customer', 'label': 'Customer'}],
-            'properties': [],
+            "base_uri": "http://test.org/ontology#",
+            "name": "TestOntology",
+            "classes": [{"name": "Customer", "label": "Customer"}],
+            "properties": [],
         }
         owl = Ontology.generate_owl(data)
-        assert '@prefix' in owl
-        assert 'Customer' in owl
+        assert "@prefix" in owl
+        assert "Customer" in owl
 
 
 class TestParseOwl:
@@ -159,10 +175,12 @@ class TestParseOwl:
 <http://test.org/ontology> a owl:Ontology ; rdfs:label "Test" .
 :Foo a owl:Class ; rdfs:label "Foo" .
 """
-        info, classes, props, constraints, swrl, axioms, expressions, groups = Ontology.parse_owl(owl)
-        assert info['label'] == 'Test'
+        info, classes, props, constraints, swrl, axioms, expressions, groups = (
+            Ontology.parse_owl(owl)
+        )
+        assert info["label"] == "Test"
         assert len(classes) == 1
-        assert classes[0]['name'] == 'Foo'
+        assert classes[0]["name"] == "Foo"
 
     def test_parse_without_advanced(self):
         owl = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -215,7 +233,9 @@ class TestPruneMappingsToOntologyUris:
     ):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
-        ps._data["assignment"]["entities"] = copy.deepcopy(sample_mapping_config["entities"])
+        ps._data["assignment"]["entities"] = copy.deepcopy(
+            sample_mapping_config["entities"]
+        )
         ps._data["assignment"]["relationships"] = copy.deepcopy(
             sample_mapping_config["relationships"]
         )
@@ -235,7 +255,9 @@ class TestSaveOntologyConfigFromEditor:
     ):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
-        ps._data["assignment"]["entities"] = copy.deepcopy(sample_mapping_config["entities"])
+        ps._data["assignment"]["entities"] = copy.deepcopy(
+            sample_mapping_config["entities"]
+        )
         ps._data["assignment"]["relationships"] = copy.deepcopy(
             sample_mapping_config["relationships"]
         )
@@ -253,7 +275,9 @@ class TestDeleteClassAndPropertyByUri:
     ):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
-        ps._data["assignment"]["entities"] = copy.deepcopy(sample_mapping_config["entities"])
+        ps._data["assignment"]["entities"] = copy.deepcopy(
+            sample_mapping_config["entities"]
+        )
         r = Ontology(ps).delete_class_by_uri("http://test.org/ontology#Customer")
         assert r["success"]
         assert r["mapping_removed"] is True
@@ -274,7 +298,10 @@ class TestDeleteClassAndPropertyByUri:
         r = Ontology(ps).delete_property_by_uri("http://test.org/ontology#hasOrder")
         assert r["success"]
         assert r["mapping_removed"] is True
-        assert all(p.get("uri") != "http://test.org/ontology#hasOrder" for p in ps.get_properties())
+        assert all(
+            p.get("uri") != "http://test.org/ontology#hasOrder"
+            for p in ps.get_properties()
+        )
 
     def test_delete_property_missing_uri(self, domain_session):
         with pytest.raises(ValidationError):
@@ -285,7 +312,9 @@ class TestAddUpdateClassProperty:
     def test_add_class(self, domain_session, sample_ontology_config):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
-        r = Ontology(ps).add_class({"name": "Product", "uri": "http://test.org/ontology#Product"})
+        r = Ontology(ps).add_class(
+            {"name": "Product", "uri": "http://test.org/ontology#Product"}
+        )
         assert r["success"]
         assert r["class"]["name"] == "Product"
         assert len(ps.get_classes()) == 3
@@ -294,12 +323,16 @@ class TestAddUpdateClassProperty:
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         with pytest.raises(ValidationError):
-            Ontology(ps).add_class({"name": "Customer", "uri": "http://test.org/ontology#Customer"})
+            Ontology(ps).add_class(
+                {"name": "Customer", "uri": "http://test.org/ontology#Customer"}
+            )
 
     def test_update_class(self, domain_session, sample_ontology_config):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
-        r = Ontology(ps).update_class({"uri": "http://test.org/ontology#Customer", "name": "Client"})
+        r = Ontology(ps).update_class(
+            {"uri": "http://test.org/ontology#Customer", "name": "Client"}
+        )
         assert r["success"]
         assert r["class"]["name"] == "Client"
 
@@ -312,7 +345,9 @@ class TestAddUpdateClassProperty:
     def test_add_property(self, domain_session, sample_ontology_config):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
-        r = Ontology(ps).add_property({"name": "hasPart", "uri": "http://test.org/ontology#hasPart"})
+        r = Ontology(ps).add_property(
+            {"name": "hasPart", "uri": "http://test.org/ontology#hasPart"}
+        )
         assert r["success"]
         assert len(ps.get_properties()) == 2
 
@@ -320,12 +355,16 @@ class TestAddUpdateClassProperty:
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         with pytest.raises(ValidationError):
-            Ontology(ps).add_property({"name": "hasOrder", "uri": "http://test.org/ontology#hasOrder"})
+            Ontology(ps).add_property(
+                {"name": "hasOrder", "uri": "http://test.org/ontology#hasOrder"}
+            )
 
     def test_update_property(self, domain_session, sample_ontology_config):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
-        r = Ontology(ps).update_property({"uri": "http://test.org/ontology#hasOrder", "name": "placeOrder"})
+        r = Ontology(ps).update_property(
+            {"uri": "http://test.org/ontology#hasOrder", "name": "placeOrder"}
+        )
         assert r["success"]
         assert r["property"]["name"] == "placeOrder"
 
@@ -343,7 +382,9 @@ class TestIngestOwl:
 
     def test_ingest_owl_load_file(self, domain_session, sample_owl_content):
         r = Ontology(domain_session).ingest_owl(
-            sample_owl_content, name_fallback_to_domain=False, outcome="load_file",
+            sample_owl_content,
+            name_fallback_to_domain=False,
+            outcome="load_file",
         )
         assert r["success"]
 
@@ -368,7 +409,9 @@ class TestRenameRelationshipReferences:
     ):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
-        ps._data["ontology"]["constraints"] = [{"property": "hasOrder", "type": "functional"}]
+        ps._data["ontology"]["constraints"] = [
+            {"property": "hasOrder", "type": "functional"}
+        ]
         ps._data["ontology"]["axioms"] = [{"property": "hasOrder", "type": "reflexive"}]
         ps._data["assignment"]["relationships"] = copy.deepcopy(
             sample_mapping_config["relationships"]
@@ -380,10 +423,14 @@ class TestRenameRelationshipReferences:
 
 
 class TestApplyAgentOntologyChanges:
-    def test_with_prune(self, domain_session, sample_ontology_config, sample_mapping_config):
+    def test_with_prune(
+        self, domain_session, sample_ontology_config, sample_mapping_config
+    ):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
-        ps._data["assignment"]["entities"] = copy.deepcopy(sample_mapping_config["entities"])
+        ps._data["assignment"]["entities"] = copy.deepcopy(
+            sample_mapping_config["entities"]
+        )
         config = Ontology(ps).apply_agent_ontology_changes(
             [{"name": "Customer", "uri": "http://test.org/ontology#Customer"}],
             [],
@@ -392,10 +439,14 @@ class TestApplyAgentOntologyChanges:
         assert config["classes"][0]["name"] == "Customer"
         assert len(ps.get_entity_mappings()) == 1
 
-    def test_without_prune(self, domain_session, sample_ontology_config, sample_mapping_config):
+    def test_without_prune(
+        self, domain_session, sample_ontology_config, sample_mapping_config
+    ):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
-        ps._data["assignment"]["entities"] = copy.deepcopy(sample_mapping_config["entities"])
+        ps._data["assignment"]["entities"] = copy.deepcopy(
+            sample_mapping_config["entities"]
+        )
         Ontology(ps).apply_agent_ontology_changes(
             [{"name": "NewOnly", "uri": "http://test.org/ontology#NewOnly"}],
             [],
@@ -406,7 +457,12 @@ class TestApplyAgentOntologyChanges:
 
 class TestValidateSwrlRule:
     def test_valid(self):
-        assert Ontology.validate_swrl_rule({"name": "r", "antecedent": "A", "consequent": "B"}) == []
+        assert (
+            Ontology.validate_swrl_rule(
+                {"name": "r", "antecedent": "A", "consequent": "B"}
+            )
+            == []
+        )
 
     def test_missing_fields(self):
         errors = Ontology.validate_swrl_rule({})
@@ -415,7 +471,9 @@ class TestValidateSwrlRule:
 
 class TestMergeIconSuggestions:
     def test_case_insensitive(self):
-        result = Ontology.merge_icon_suggestions(["Foo", "bar"], {"foo": "🔧", "BAR": "📦"})
+        result = Ontology.merge_icon_suggestions(
+            ["Foo", "bar"], {"foo": "🔧", "BAR": "📦"}
+        )
         assert result == {"Foo": "🔧", "bar": "📦"}
 
     def test_missing_name(self):

@@ -1,4 +1,5 @@
 """FastAPI exception handler registration for OntoBricks."""
+
 from __future__ import annotations
 
 import uuid
@@ -52,7 +53,10 @@ def register_exception_handlers(app) -> None:
     async def _handle_ontobricks_error(request: Request, exc: OntoBricksError):
         logger.warning(
             "%s [%d]: %s (detail=%s)",
-            type(exc).__name__, exc.status_code, exc.message, exc.detail,
+            type(exc).__name__,
+            exc.status_code,
+            exc.message,
+            exc.detail,
         )
         return _build_response(
             request,
@@ -64,7 +68,9 @@ def register_exception_handlers(app) -> None:
 
     @app.exception_handler(Exception)
     async def _handle_unexpected_error(request: Request, exc: Exception):
-        logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+        logger.exception(
+            "Unhandled exception on %s %s", request.method, request.url.path
+        )
         return _build_response(
             request,
             status_code=500,

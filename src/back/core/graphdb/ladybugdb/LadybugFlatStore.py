@@ -4,6 +4,7 @@ Triples are stored as rows in a single node table
 ``Triple(id INT64 PRIMARY KEY, subject STRING, predicate STRING,
 object STRING)``.  All query methods are implemented in Cypher.
 """
+
 import csv
 import os
 import tempfile
@@ -85,6 +86,7 @@ class LadybugFlatStore(LadybugBase):
     ) -> int:
         """Insert triples via COPY FROM a temporary CSV (10-100x faster)."""
         import time
+
         t0 = time.monotonic()
 
         node = self._node_table(table_name)
@@ -104,12 +106,14 @@ class LadybugFlatStore(LadybugBase):
             with open(csv_path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 for i, t in enumerate(triples):
-                    writer.writerow([
-                        start_id + i,
-                        t.get("subject", "") or "",
-                        t.get("predicate", "") or "",
-                        t.get("object", "") or "",
-                    ])
+                    writer.writerow(
+                        [
+                            start_id + i,
+                            t.get("subject", "") or "",
+                            t.get("predicate", "") or "",
+                            t.get("object", "") or "",
+                        ]
+                    )
 
             conn.execute(f'COPY {node} FROM "{csv_path}" (header=false)')
             self._next_id = start_id + len(triples)
@@ -120,7 +124,9 @@ class LadybugFlatStore(LadybugBase):
             elapsed = time.monotonic() - t0
             logger.info(
                 "Bulk inserted %d triples into %s via COPY FROM in %.1fs",
-                len(triples), node, elapsed,
+                len(triples),
+                node,
+                elapsed,
             )
             return len(triples)
         finally:
@@ -169,7 +175,10 @@ class LadybugFlatStore(LadybugBase):
                 on_progress(total, len(triples))
             logger.debug(
                 "Inserted batch %d-%d of %d into %s",
-                i + 1, i + len(batch), len(triples), node,
+                i + 1,
+                i + len(batch),
+                len(triples),
+                node,
             )
 
         logger.info("Inserted %d triples into %s (row-by-row)", total, node)
@@ -203,16 +212,14 @@ class LadybugFlatStore(LadybugBase):
                 )
             where = " OR ".join(or_clauses)
             try:
-                conn.execute(
-                    f"MATCH (t:{node}) WHERE {where} DELETE t"
-                )
+                conn.execute(f"MATCH (t:{node}) WHERE {where} DELETE t")
                 deleted += len(batch)
             except Exception as e:
                 logger.debug("Batch delete failed, falling back to row-by-row: %s", e)
                 for t in batch:
-                    s = (t.get("subject", "") or "")
-                    p = (t.get("predicate", "") or "")
-                    o = (t.get("object", "") or "")
+                    s = t.get("subject", "") or ""
+                    p = t.get("predicate", "") or ""
+                    o = t.get("object", "") or ""
                     try:
                         conn.execute(
                             f"MATCH (t:{node}) "
@@ -226,7 +233,10 @@ class LadybugFlatStore(LadybugBase):
                     except Exception as e2:
                         logger.debug(
                             "Flat delete failed for (%s, %s, %s): %s",
-                            s[:40], p[:40], o[:40], e2,
+                            s[:40],
+                            p[:40],
+                            o[:40],
+                            e2,
                         )
             if on_progress:
                 on_progress(min(i + len(batch), len(triples)), len(triples))
@@ -243,8 +253,7 @@ class LadybugFlatStore(LadybugBase):
             f"t.predicate AS predicate, t.object AS object"
         )
         return [
-            {"subject": row[0], "predicate": row[1], "object": row[2]}
-            for row in result
+            {"subject": row[0], "predicate": row[1], "object": row[2]} for row in result
         ]
 
     def count_triples(self, table_name: str) -> int:
@@ -330,10 +339,7 @@ class LadybugFlatStore(LadybugBase):
             f"ORDER BY cnt DESC",
             parameters={"p": RDF_TYPE},
         )
-        return [
-            {"type_uri": row[0], "cnt": int(row[1])}
-            for row in result
-        ]
+        return [{"type_uri": row[0], "cnt": int(row[1])} for row in result]
 
     def get_predicate_distribution(self, table_name: str) -> List[Dict[str, Any]]:
         node = self._node_table(table_name)
@@ -343,10 +349,7 @@ class LadybugFlatStore(LadybugBase):
             f"RETURN t.predicate AS predicate, COUNT(t) AS cnt "
             f"ORDER BY cnt DESC"
         )
-        return [
-            {"predicate": row[0], "cnt": int(row[1])}
-            for row in result
-        ]
+        return [{"predicate": row[0], "cnt": int(row[1])} for row in result]
 
     def find_seed_subjects(
         self,
@@ -551,13 +554,10 @@ class LadybugFlatStore(LadybugBase):
             parameters={"subjects": subjects},
         )
         return [
-            {"subject": row[0], "predicate": row[1], "object": row[2]}
-            for row in result
+            {"subject": row[0], "predicate": row[1], "object": row[2]} for row in result
         ]
 
-    def get_predicates_for_type(
-        self, table_name: str, type_uri: str
-    ) -> List[str]:
+    def get_predicates_for_type(self, table_name: str, type_uri: str) -> List[str]:
         node = self._node_table(table_name)
         conn = self._get_connection()
         sample = conn.execute(
@@ -595,25 +595,24 @@ class LadybugFlatStore(LadybugBase):
             f"SKIP {int(offset)} LIMIT {int(limit)}"
         )
         return [
-            {"subject": row[0], "predicate": row[1], "object": row[2]}
-            for row in result
+            {"subject": row[0], "predicate": row[1], "object": row[2]} for row in result
         ]
 
-    def paginated_count(
-        self, table_name: str, conditions: List[str]
-    ) -> int:
+    def paginated_count(self, table_name: str, conditions: List[str]) -> int:
         node = self._node_table(table_name)
         conn = self._get_connection()
         cypher_conditions = self._translate_conditions(conditions, "t")
         where = f" WHERE {' AND '.join(cypher_conditions)}" if cypher_conditions else ""
-        result = conn.execute(
-            f"MATCH (t:{node}){where} RETURN COUNT(t) AS cnt"
-        )
+        result = conn.execute(f"MATCH (t:{node}){where} RETURN COUNT(t) AS cnt")
         row = result.get_next()
         return int(row[0]) if row else 0
 
     def _bfs_resolve_seeds(
-        self, conn, node: str, entity_type: str, search: str,
+        self,
+        conn,
+        node: str,
+        entity_type: str,
+        search: str,
     ) -> Set[str]:
         """Resolve BFS seed entities by type filter, search text, or all typed subjects."""
         seeds: Set[str] = set()
@@ -679,7 +678,12 @@ class LadybugFlatStore(LadybugBase):
         return seeds
 
     def _bfs_expand_level(
-        self, conn, node: str, current_level: Set[str], entity_levels: Dict[str, int], lvl: int,
+        self,
+        conn,
+        node: str,
+        current_level: Set[str],
+        entity_levels: Dict[str, int],
+        lvl: int,
     ) -> Set[str]:
         """Expand one BFS level by querying forward and reverse edges. Returns the new frontier."""
         neighbors_result = conn.execute(
@@ -727,8 +731,12 @@ class LadybugFlatStore(LadybugBase):
         return new_level
 
     def bfs_traversal(
-        self, table_name: str, seed_where: str, depth: int,
-        search: str = "", entity_type: str = "",
+        self,
+        table_name: str,
+        seed_where: str,
+        depth: int,
+        search: str = "",
+        entity_type: str = "",
     ) -> List[Dict[str, Any]]:
         """BFS traversal using iterative Cypher queries on the flat table."""
         node = self._node_table(table_name)
@@ -744,12 +752,11 @@ class LadybugFlatStore(LadybugBase):
         for lvl in range(1, depth + 1):
             if not current_level:
                 break
-            current_level = self._bfs_expand_level(conn, node, current_level, entity_levels, lvl)
+            current_level = self._bfs_expand_level(
+                conn, node, current_level, entity_levels, lvl
+            )
 
-        return [
-            {"entity": e, "min_lvl": l}
-            for e, l in entity_levels.items()
-        ]
+        return [{"entity": e, "min_lvl": l} for e, l in entity_levels.items()]
 
     def find_subjects_by_patterns(
         self, table_name: str, like_patterns: List[str]
@@ -812,18 +819,22 @@ class LadybugFlatStore(LadybugBase):
                         continue
                     visited.add(mid)
                     if (start, mid) not in existing:
-                        inferred.append({
-                            "subject": start,
-                            "predicate": predicate_uri,
-                            "object": mid,
-                        })
+                        inferred.append(
+                            {
+                                "subject": start,
+                                "predicate": predicate_uri,
+                                "object": mid,
+                            }
+                        )
                     for nxt in graph_fwd.get(mid, set()):
                         if nxt not in visited:
                             next_frontier.add(nxt)
                 frontier = next_frontier
                 depth += 1
 
-        logger.info("Flat transitive closure: %d inferred for %s", len(inferred), predicate_uri)
+        logger.info(
+            "Flat transitive closure: %d inferred for %s", len(inferred), predicate_uri
+        )
         return inferred
 
     def symmetric_expand(
@@ -846,13 +857,17 @@ class LadybugFlatStore(LadybugBase):
         inferred: List[Dict[str, Any]] = []
         for s, o in pairs:
             if (o, s) not in pairs:
-                inferred.append({
-                    "subject": o,
-                    "predicate": predicate_uri,
-                    "object": s,
-                })
+                inferred.append(
+                    {
+                        "subject": o,
+                        "predicate": predicate_uri,
+                        "object": s,
+                    }
+                )
 
-        logger.info("Flat symmetric expand: %d missing for %s", len(inferred), predicate_uri)
+        logger.info(
+            "Flat symmetric expand: %d missing for %s", len(inferred), predicate_uri
+        )
         return inferred
 
     def shortest_path(

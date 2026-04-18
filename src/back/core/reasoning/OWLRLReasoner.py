@@ -3,6 +3,7 @@
 Runs a forward-chaining deductive closure over OWL Turtle content and
 returns the inferred triples that were not present in the original graph.
 """
+
 import time
 from typing import List, Set, Tuple
 
@@ -46,7 +47,9 @@ class OWLRLReasoner:
         graph = self._parse_graph(owl_content)
         for t in instance_triples:
             obj_val = t["object"]
-            obj_node = URIRef(obj_val) if obj_val.startswith("http") else Literal(obj_val)
+            obj_node = (
+                URIRef(obj_val) if obj_val.startswith("http") else Literal(obj_val)
+            )
             graph.add((URIRef(t["subject"]), URIRef(t["predicate"]), obj_node))
         return self._run_closure(graph, phase="tbox_instances")
 
@@ -68,7 +71,10 @@ class OWLRLReasoner:
 
         logger.info(
             "OWL 2 RL closure: %d original, %d after, %d inferred (%.2fs)",
-            before_count, len(after), len(inferred), duration,
+            before_count,
+            len(after),
+            len(inferred),
+            duration,
         )
         return ReasoningResult(
             inferred_triples=inferred,
@@ -87,6 +93,7 @@ class OWLRLReasoner:
     def _parse_graph(owl_content: str) -> Graph:
         """Parse Turtle or RDF/XML into an rdflib Graph."""
         from back.core.w3c.rdf_utils import parse_rdf_flexible
+
         return parse_rdf_flexible(owl_content, formats=("turtle", "xml"))
 
     @staticmethod
@@ -95,9 +102,8 @@ class OWLRLReasoner:
         s, p, o = triple
         s_str = str(s)
         o_str = str(o)
-        return (
-            any(s_str.startswith(pfx) for pfx in AXIOMATIC_PREFIXES)
-            and any(o_str.startswith(pfx) for pfx in AXIOMATIC_PREFIXES)
+        return any(s_str.startswith(pfx) for pfx in AXIOMATIC_PREFIXES) and any(
+            o_str.startswith(pfx) for pfx in AXIOMATIC_PREFIXES
         )
 
     @staticmethod
@@ -130,10 +136,12 @@ class OWLRLReasoner:
             o_str = str(o)
             if p_str == RDF_TYPE and o_str in NOISE_TYPES:
                 continue
-            results.append(InferredTriple(
-                subject=str(s),
-                predicate=p_str,
-                object=o_str,
-                provenance=OWLRL_PROVENANCE,
-            ))
+            results.append(
+                InferredTriple(
+                    subject=str(s),
+                    predicate=p_str,
+                    object=o_str,
+                    provenance=OWLRL_PROVENANCE,
+                )
+            )
         return results

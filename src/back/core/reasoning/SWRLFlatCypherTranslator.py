@@ -3,6 +3,7 @@
 The flat model stores every triple as a node in a single table with
 ``subject``, ``predicate``, ``object`` columns.
 """
+
 from typing import Dict, List, Optional
 
 from back.core.logging import get_logger
@@ -202,10 +203,16 @@ class SWRLFlatCypherTranslator:
         if not ante_atoms or not cons_atoms:
             return None
 
-        class_atoms = [a for a in ante_atoms
-                       if a["arity"] == 1 and not a.get("builtin") and not a.get("negated")]
-        prop_atoms = [a for a in ante_atoms
-                      if a["arity"] == 2 and not a.get("builtin") and not a.get("negated")]
+        class_atoms = [
+            a
+            for a in ante_atoms
+            if a["arity"] == 1 and not a.get("builtin") and not a.get("negated")
+        ]
+        prop_atoms = [
+            a
+            for a in ante_atoms
+            if a["arity"] == 2 and not a.get("builtin") and not a.get("negated")
+        ]
         if not class_atoms:
             return None
 
@@ -256,7 +263,9 @@ class SWRLFlatCypherTranslator:
                     logger.warning(
                         "SWRL flat materialisation: skipping consequent '%s' — "
                         "variables %s/%s not connected (cartesian product)",
-                        atom["name"], subj_var, obj_var,
+                        atom["name"],
+                        subj_var,
+                        obj_var,
                     )
                     continue
                 prop_uri = SWRLParser.resolve_uri(atom["name"], base_uri, uri_map)
@@ -297,10 +306,16 @@ class SWRLFlatCypherTranslator:
         if not ante_atoms or not cons_atoms:
             return None
 
-        class_atoms = [a for a in ante_atoms
-                       if a["arity"] == 1 and not a.get("builtin") and not a.get("negated")]
-        prop_atoms = [a for a in ante_atoms
-                      if a["arity"] == 2 and not a.get("builtin") and not a.get("negated")]
+        class_atoms = [
+            a
+            for a in ante_atoms
+            if a["arity"] == 1 and not a.get("builtin") and not a.get("negated")
+        ]
+        prop_atoms = [
+            a
+            for a in ante_atoms
+            if a["arity"] == 2 and not a.get("builtin") and not a.get("negated")
+        ]
         if not class_atoms:
             return None
 
@@ -376,7 +391,9 @@ class SWRLFlatCypherTranslator:
                     logger.warning(
                         "SWRL flat inference: skipping consequent property atom '%s' — "
                         "variables %s/%s are not connected (would cause cartesian product)",
-                        atom["name"], subj_var, obj_var,
+                        atom["name"],
+                        subj_var,
+                        obj_var,
                     )
                     continue
                 prop_uri = SWRLParser.resolve_uri(atom["name"], base_uri, uri_map)

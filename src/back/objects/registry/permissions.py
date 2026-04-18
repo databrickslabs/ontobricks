@@ -8,6 +8,7 @@ Admin status is derived from the Databricks App CAN_MANAGE permission.
 Active only in Databricks App mode (DATABRICKS_APP_PORT is set).
 In local mode every user has unrestricted access.
 """
+
 import json
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -47,9 +48,9 @@ def min_role(a: str, b: str) -> str:
 
 _PERMISSIONS_FILENAME = ".permissions.json"
 _DOMAIN_PERMISSIONS_FILENAME = ".domain_permissions.json"
-_CACHE_TTL_PERMS = 300       # 5 min
+_CACHE_TTL_PERMS = 300  # 5 min
 _CACHE_TTL_DOMAIN_PERMS = 120  # 2 min – per-domain permission cache
-_CACHE_TTL_ADMIN = 60        # 1 min – keep short to pick up permission changes quickly
+_CACHE_TTL_ADMIN = 60  # 1 min – keep short to pick up permission changes quickly
 _CACHE_TTL_PRINCIPALS = 600  # 10 min
 
 
@@ -77,6 +78,7 @@ class PermissionService:
 
     def _permissions_path(self, registry_cfg: Dict[str, str]) -> str:
         from back.objects.registry.service import RegistryCfg
+
         c = RegistryCfg.from_dict(registry_cfg)
         return f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/{_PERMISSIONS_FILENAME}"
 
@@ -84,11 +86,20 @@ class PermissionService:
         return VolumeFileService(host=host, token=token)
 
     def load_permissions(
-        self, host: str, token: str, registry_cfg: Dict[str, str], *, force: bool = False
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        *,
+        force: bool = False,
     ) -> Dict[str, Any]:
         """Load and cache the permission file from the registry volume."""
         now = time.time()
-        if not force and self._perm_cache is not None and (now - self._perm_cache_ts) < _CACHE_TTL_PERMS:
+        if (
+            not force
+            and self._perm_cache is not None
+            and (now - self._perm_cache_ts) < _CACHE_TTL_PERMS
+        ):
             return self._perm_cache
 
         path = self._permissions_path(registry_cfg)
@@ -99,7 +110,11 @@ class PermissionService:
                 data = json.loads(content)
                 self._perm_cache = data
                 self._perm_cache_ts = now
-                logger.info("Loaded %d permission entries from %s", len(data.get('permissions', [])), path)
+                logger.info(
+                    "Loaded %d permission entries from %s",
+                    len(data.get("permissions", [])),
+                    path,
+                )
                 return data
             logger.debug("Permission file not found or empty at %s: %s", path, msg)
         except Exception as e:
@@ -114,8 +129,11 @@ class PermissionService:
         self, host: str, token: str, registry_cfg: Dict[str, str], data: Dict[str, Any]
     ) -> Tuple[bool, str]:
         """Write the permission file back to the registry volume."""
-        if not registry_cfg.get('catalog') or not registry_cfg.get('schema'):
-            return False, "Registry not configured — set catalog and schema in Settings first"
+        if not registry_cfg.get("catalog") or not registry_cfg.get("schema"):
+            return (
+                False,
+                "Registry not configured — set catalog and schema in Settings first",
+            )
         path = self._permissions_path(registry_cfg)
         try:
             uc = self._new_uc(host, token)
@@ -125,7 +143,11 @@ class PermissionService:
                 return False, f"Failed to save permissions: {msg}"
             self._perm_cache = data
             self._perm_cache_ts = time.time()
-            logger.info("Saved %d permission entries to %s", len(data.get('permissions', [])), path)
+            logger.info(
+                "Saved %d permission entries to %s",
+                len(data.get("permissions", [])),
+                path,
+            )
             return True, "Permissions saved"
         except Exception as e:
             logger.error("Error saving permission file: %s", e)
@@ -160,20 +182,27 @@ class PermissionService:
             return ROLE_ADMIN
 
         data = self.load_permissions(host, token, registry_cfg)
-        entries = data.get('permissions', [])
+        entries = data.get("permissions", [])
 
         if not entries:
-            logger.info("No permission entries yet — only admins (CAN_MANAGE) have access")
+            logger.info(
+                "No permission entries yet — only admins (CAN_MANAGE) have access"
+            )
             return ROLE_NONE
 
         for entry in entries:
-            if entry.get('principal_type') == 'user' and entry.get('principal', '').lower() == email.lower():
-                return entry.get('role', ROLE_VIEWER)
+            if (
+                entry.get("principal_type") == "user"
+                and entry.get("principal", "").lower() == email.lower()
+            ):
+                return entry.get("role", ROLE_VIEWER)
 
         user_groups = self._get_user_groups(email, host, token)
         for entry in entries:
-            if entry.get('principal_type') == 'group' and entry.get('principal', '').lower() in (g.lower() for g in user_groups):
-                return entry.get('role', ROLE_VIEWER)
+            if entry.get("principal_type") == "group" and entry.get(
+                "principal", ""
+            ).lower() in (g.lower() for g in user_groups):
+                return entry.get("role", ROLE_VIEWER)
 
         return ROLE_NONE
 
@@ -185,19 +214,22 @@ class PermissionService:
             return []
 
         try:
-            h = host.rstrip('/')
-            headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+            h = host.rstrip("/")
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            }
             resp = req.get(
                 f"{h}/api/2.0/preview/scim/v2/Users",
                 headers=headers,
-                params={'filter': f'userName eq "{email}"', 'count': 1},
+                params={"filter": f'userName eq "{email}"', "count": 1},
             )
             resp.raise_for_status()
-            resources = resp.json().get('Resources', [])
+            resources = resp.json().get("Resources", [])
             if not resources:
                 return []
-            groups = resources[0].get('groups', [])
-            return [g.get('display', '') for g in groups if g.get('display')]
+            groups = resources[0].get("groups", [])
+            return [g.get("display", "") for g in groups if g.get("display")]
         except Exception as e:
             logger.debug("Could not resolve groups for %s: %s", email, e)
             return []
@@ -261,35 +293,32 @@ class PermissionService:
 
         def _do():
             from databricks.sdk import WorkspaceClient
+
             w = WorkspaceClient()
             logger.info(
                 "SDK admin check: calling GET /api/2.0/permissions/apps/%s",
                 app_name,
             )
-            raw = w.api_client.do(
-                "GET", f"/api/2.0/permissions/apps/{app_name}"
-            )
+            raw = w.api_client.do("GET", f"/api/2.0/permissions/apps/{app_name}")
             acl_list = raw.get("access_control_list", [])
             managers = []
             for acl in acl_list:
-                principal = (
-                    acl.get("user_name")
-                    or acl.get("group_name")
-                    or ""
-                )
+                principal = acl.get("user_name") or acl.get("group_name") or ""
                 for p in acl.get("all_permissions", []):
                     if p.get("permission_level") == "CAN_MANAGE":
                         managers.append(principal)
                         if principal.lower() == email.lower():
                             logger.info(
                                 "SDK admin check: MATCH %s == %s",
-                                principal, email,
+                                principal,
+                                email,
                             )
                             return True
             logger.info(
                 "SDK admin check: CAN_MANAGE principals=%s, "
                 "looking for=%s → not found",
-                managers, email,
+                managers,
+                email,
             )
             return False
 
@@ -304,7 +333,9 @@ class PermissionService:
         except Exception as e:
             logger.warning(
                 "SDK admin check failed for %s: %s (%s)",
-                email, e, type(e).__name__,
+                email,
+                e,
+                type(e).__name__,
             )
             return None
 
@@ -317,8 +348,8 @@ class PermissionService:
         if not host or not token or not app_name:
             return None
         try:
-            h = host.rstrip('/')
-            headers = {'Authorization': f'Bearer {token}'}
+            h = host.rstrip("/")
+            headers = {"Authorization": f"Bearer {token}"}
             resp = req.get(
                 f"{h}/api/2.0/permissions/apps/{app_name}",
                 headers=headers,
@@ -326,15 +357,13 @@ class PermissionService:
             )
             resp.raise_for_status()
             data = resp.json()
-            for acl_entry in data.get('access_control_list', []):
+            for acl_entry in data.get("access_control_list", []):
                 principal = (
-                    acl_entry.get('user_name')
-                    or acl_entry.get('group_name')
-                    or ''
+                    acl_entry.get("user_name") or acl_entry.get("group_name") or ""
                 )
-                for p in acl_entry.get('all_permissions', []):
+                for p in acl_entry.get("all_permissions", []):
                     if (
-                        p.get('permission_level') == 'CAN_MANAGE'
+                        p.get("permission_level") == "CAN_MANAGE"
                         and principal.lower() == email.lower()
                     ):
                         return True
@@ -351,7 +380,7 @@ class PermissionService:
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> List[Dict[str, Any]]:
         data = self.load_permissions(host, token, registry_cfg)
-        return data.get('permissions', [])
+        return data.get("permissions", [])
 
     def add_or_update_entry(
         self,
@@ -364,34 +393,37 @@ class PermissionService:
         role: str,
     ) -> Tuple[bool, str]:
         data = self.load_permissions(host, token, registry_cfg, force=True)
-        entries = data.get('permissions', [])
+        entries = data.get("permissions", [])
 
         for entry in entries:
-            if entry['principal'].lower() == principal.lower():
-                entry['role'] = role
-                entry['display_name'] = display_name
-                entry['principal_type'] = principal_type
+            if entry["principal"].lower() == principal.lower():
+                entry["role"] = role
+                entry["display_name"] = display_name
+                entry["principal_type"] = principal_type
                 return self.save_permissions(host, token, registry_cfg, data)
 
-        entries.append({
-            'principal': principal,
-            'principal_type': principal_type,
-            'display_name': display_name,
-            'role': role,
-        })
-        data['permissions'] = entries
+        entries.append(
+            {
+                "principal": principal,
+                "principal_type": principal_type,
+                "display_name": display_name,
+                "role": role,
+            }
+        )
+        data["permissions"] = entries
         return self.save_permissions(host, token, registry_cfg, data)
 
     def remove_entry(
         self, host: str, token: str, registry_cfg: Dict[str, str], principal: str
     ) -> Tuple[bool, str]:
         data = self.load_permissions(host, token, registry_cfg, force=True)
-        before = len(data.get('permissions', []))
-        data['permissions'] = [
-            e for e in data.get('permissions', [])
-            if e['principal'].lower() != principal.lower()
+        before = len(data.get("permissions", []))
+        data["permissions"] = [
+            e
+            for e in data.get("permissions", [])
+            if e["principal"].lower() != principal.lower()
         ]
-        if len(data['permissions']) == before:
+        if len(data["permissions"]) == before:
             return False, f"Principal '{principal}' not found"
         return self.save_permissions(host, token, registry_cfg, data)
 
@@ -400,10 +432,13 @@ class PermissionService:
     # ------------------------------------------------------------------
 
     def _domain_permissions_path(
-        self, registry_cfg: Dict[str, str], domain_folder: str,
+        self,
+        registry_cfg: Dict[str, str],
+        domain_folder: str,
     ) -> str:
         """Path to .domain_permissions.json inside a domain folder."""
         from back.objects.registry.service import RegistryCfg
+
         c = RegistryCfg.from_dict(registry_cfg)
         return f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/domains/{domain_folder}/{_DOMAIN_PERMISSIONS_FILENAME}"
 
@@ -432,12 +467,17 @@ class PermissionService:
                 self._domain_perm_cache[domain_folder] = (data, now)
                 logger.info(
                     "Loaded %d domain permission entries for %s",
-                    len(data.get('permissions', [])), domain_folder,
+                    len(data.get("permissions", [])),
+                    domain_folder,
                 )
                 return data
-            logger.debug("Domain permission file not found for %s: %s", domain_folder, msg)
+            logger.debug(
+                "Domain permission file not found for %s: %s", domain_folder, msg
+            )
         except Exception as e:
-            logger.warning("Error loading domain permissions for %s: %s", domain_folder, e)
+            logger.warning(
+                "Error loading domain permissions for %s: %s", domain_folder, e
+            )
 
         empty: Dict[str, Any] = {"version": 1, "permissions": []}
         self._domain_perm_cache[domain_folder] = (empty, now)
@@ -452,19 +492,22 @@ class PermissionService:
         data: Dict[str, Any],
     ) -> Tuple[bool, str]:
         """Write the per-domain permission file."""
-        if not registry_cfg.get('catalog') or not registry_cfg.get('schema'):
+        if not registry_cfg.get("catalog") or not registry_cfg.get("schema"):
             return False, "Registry not configured"
         path = self._domain_permissions_path(registry_cfg, domain_folder)
         try:
             uc = self._new_uc(host, token)
             ok, msg = uc.write_file(path, json.dumps(data, indent=2), overwrite=True)
             if not ok:
-                logger.error("Failed to write domain permissions for %s: %s", domain_folder, msg)
+                logger.error(
+                    "Failed to write domain permissions for %s: %s", domain_folder, msg
+                )
                 return False, f"Failed to save domain permissions: {msg}"
             self._domain_perm_cache[domain_folder] = (data, time.time())
             logger.info(
                 "Saved %d domain permission entries for %s",
-                len(data.get('permissions', [])), domain_folder,
+                len(data.get("permissions", [])),
+                domain_folder,
             )
             return True, "Domain permissions saved"
         except Exception as e:
@@ -488,24 +531,23 @@ class PermissionService:
             return None
 
         data = self.load_domain_permissions(host, token, registry_cfg, domain_folder)
-        entries = data.get('permissions', [])
+        entries = data.get("permissions", [])
         if not entries:
             return None
 
         for entry in entries:
             if (
-                entry.get('principal_type') == 'user'
-                and entry.get('principal', '').lower() == email.lower()
+                entry.get("principal_type") == "user"
+                and entry.get("principal", "").lower() == email.lower()
             ):
-                return entry.get('role', ROLE_VIEWER)
+                return entry.get("role", ROLE_VIEWER)
 
         user_groups = self._get_user_groups(email, host, token)
         for entry in entries:
-            if (
-                entry.get('principal_type') == 'group'
-                and entry.get('principal', '').lower() in (g.lower() for g in user_groups)
-            ):
-                return entry.get('role', ROLE_VIEWER)
+            if entry.get("principal_type") == "group" and entry.get(
+                "principal", ""
+            ).lower() in (g.lower() for g in user_groups):
+                return entry.get("role", ROLE_VIEWER)
 
         return None
 
@@ -532,7 +574,12 @@ class PermissionService:
         """
         if not app_role:
             app_role = self.get_user_role(
-                email, host, token, registry_cfg, app_name, user_token=user_token,
+                email,
+                host,
+                token,
+                registry_cfg,
+                app_name,
+                user_token=user_token,
             )
         if app_role == ROLE_ADMIN:
             return ROLE_ADMIN
@@ -541,7 +588,11 @@ class PermissionService:
             return app_role
 
         domain_entry = self._resolve_domain_entry_role(
-            email, host, token, registry_cfg, domain_folder,
+            email,
+            host,
+            token,
+            registry_cfg,
+            domain_folder,
         )
         if domain_entry is None:
             return app_role
@@ -560,7 +611,7 @@ class PermissionService:
         domain_folder: str,
     ) -> List[Dict[str, Any]]:
         data = self.load_domain_permissions(host, token, registry_cfg, domain_folder)
-        return data.get('permissions', [])
+        return data.get("permissions", [])
 
     def add_or_update_domain_entry(
         self,
@@ -574,28 +625,42 @@ class PermissionService:
         role: str,
     ) -> Tuple[bool, str]:
         data = self.load_domain_permissions(
-            host, token, registry_cfg, domain_folder, force=True,
+            host,
+            token,
+            registry_cfg,
+            domain_folder,
+            force=True,
         )
-        entries = data.get('permissions', [])
+        entries = data.get("permissions", [])
 
         for entry in entries:
-            if entry['principal'].lower() == principal.lower():
-                entry['role'] = role
-                entry['display_name'] = display_name
-                entry['principal_type'] = principal_type
+            if entry["principal"].lower() == principal.lower():
+                entry["role"] = role
+                entry["display_name"] = display_name
+                entry["principal_type"] = principal_type
                 return self.save_domain_permissions(
-                    host, token, registry_cfg, domain_folder, data,
+                    host,
+                    token,
+                    registry_cfg,
+                    domain_folder,
+                    data,
                 )
 
-        entries.append({
-            'principal': principal,
-            'principal_type': principal_type,
-            'display_name': display_name,
-            'role': role,
-        })
-        data['permissions'] = entries
+        entries.append(
+            {
+                "principal": principal,
+                "principal_type": principal_type,
+                "display_name": display_name,
+                "role": role,
+            }
+        )
+        data["permissions"] = entries
         return self.save_domain_permissions(
-            host, token, registry_cfg, domain_folder, data,
+            host,
+            token,
+            registry_cfg,
+            domain_folder,
+            data,
         )
 
     def remove_domain_entry(
@@ -607,17 +672,26 @@ class PermissionService:
         principal: str,
     ) -> Tuple[bool, str]:
         data = self.load_domain_permissions(
-            host, token, registry_cfg, domain_folder, force=True,
+            host,
+            token,
+            registry_cfg,
+            domain_folder,
+            force=True,
         )
-        before = len(data.get('permissions', []))
-        data['permissions'] = [
-            e for e in data.get('permissions', [])
-            if e['principal'].lower() != principal.lower()
+        before = len(data.get("permissions", []))
+        data["permissions"] = [
+            e
+            for e in data.get("permissions", [])
+            if e["principal"].lower() != principal.lower()
         ]
-        if len(data['permissions']) == before:
+        if len(data["permissions"]) == before:
             return False, f"Principal '{principal}' not found in domain permissions"
         return self.save_domain_permissions(
-            host, token, registry_cfg, domain_folder, data,
+            host,
+            token,
+            registry_cfg,
+            domain_folder,
+            data,
         )
 
     def clear_domain_perm_cache(self, domain_folder: str = ""):
@@ -657,19 +731,22 @@ class PermissionService:
             and self._groups_cache is not None
             and (now - self._users_cache_ts) < _CACHE_TTL_PRINCIPALS
         ):
-            return {'users': self._users_cache, 'groups': self._groups_cache}
+            return {"users": self._users_cache, "groups": self._groups_cache}
 
         client = DatabricksClient(host=host, token=token)
         result = client.list_app_principals(app_name)
-        self._users_cache = result.get('users', [])
-        self._groups_cache = result.get('groups', [])
+        self._users_cache = result.get("users", [])
+        self._groups_cache = result.get("groups", [])
         self._users_cache_ts = now
         self._groups_cache_ts = now
         return result
 
     def list_users(self, host: str, token: str) -> List[Dict[str, Any]]:
         now = time.time()
-        if self._users_cache is not None and (now - self._users_cache_ts) < _CACHE_TTL_PRINCIPALS:
+        if (
+            self._users_cache is not None
+            and (now - self._users_cache_ts) < _CACHE_TTL_PRINCIPALS
+        ):
             return self._users_cache
 
         client = DatabricksClient(host=host, token=token)
@@ -680,7 +757,10 @@ class PermissionService:
 
     def list_groups(self, host: str, token: str) -> List[Dict[str, Any]]:
         now = time.time()
-        if self._groups_cache is not None and (now - self._groups_cache_ts) < _CACHE_TTL_PRINCIPALS:
+        if (
+            self._groups_cache is not None
+            and (now - self._groups_cache_ts) < _CACHE_TTL_PRINCIPALS
+        ):
             return self._groups_cache
 
         client = DatabricksClient(host=host, token=token)

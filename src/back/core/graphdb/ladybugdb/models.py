@@ -1,4 +1,5 @@
 """LadybugDB graph schema DTOs."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -23,8 +24,7 @@ class NodeTableDef:
             safe = GraphSchema.safe_identifier(p)
             prop_defs.append(f"{safe} STRING")
         return (
-            f"CREATE NODE TABLE IF NOT EXISTS {self.name}"
-            f"({', '.join(prop_defs)})"
+            f"CREATE NODE TABLE IF NOT EXISTS {self.name}" f"({', '.join(prop_defs)})"
         )
 
 

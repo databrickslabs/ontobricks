@@ -1,4 +1,5 @@
 """An external dependency (Databricks, network, ...) failed (502)."""
+
 from __future__ import annotations
 
 from back.core.errors.OntoBricksError import OntoBricksError

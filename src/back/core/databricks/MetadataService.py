@@ -3,6 +3,7 @@
 Handles loading, merging, and managing Unity Catalog metadata
 (tables, columns, descriptions / comments).
 """
+
 from typing import Any, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
@@ -32,7 +33,9 @@ class MetadataService:
 
     @staticmethod
     def has_metadata(metadata: Dict[str, Any]) -> bool:
-        return bool(metadata and metadata.get("tables") and len(metadata.get("tables", [])) > 0)
+        return bool(
+            metadata and metadata.get("tables") and len(metadata.get("tables", [])) > 0
+        )
 
     @staticmethod
     def extract_catalog_schema_from_full_name(full_name: str) -> Tuple[str, str, str]:
@@ -47,7 +50,9 @@ class MetadataService:
     def get_catalog_schema_from_metadata(metadata: Dict[str, Any]) -> Tuple[str, str]:
         tables = metadata.get("tables", [])
         if tables and tables[0].get("full_name"):
-            cat, sch, _ = MetadataService.extract_catalog_schema_from_full_name(tables[0]["full_name"])
+            cat, sch, _ = MetadataService.extract_catalog_schema_from_full_name(
+                tables[0]["full_name"]
+            )
             return cat, sch
         return "", ""
 
@@ -151,7 +156,11 @@ class MetadataService:
         try:
             fresh = self.get_table_metadata(catalog, schema, table_name)
             if not fresh or fresh.get("error"):
-                return False, f"Failed to get metadata for {table_name}", existing_metadata
+                return (
+                    False,
+                    f"Failed to get metadata for {table_name}",
+                    existing_metadata,
+                )
 
             tables = existing_metadata.get("tables", [])
             updated = False
@@ -179,21 +188,25 @@ class MetadataService:
             try:
                 columns = self._catalog.get_table_columns(catalog, schema, name)
                 comment = self._catalog.get_table_comment(catalog, schema, name)
-                tables.append({
-                    "name": name,
-                    "full_name": fqn,
-                    "comment": comment,
-                    "description": comment,
-                    "columns": columns,
-                })
+                tables.append(
+                    {
+                        "name": name,
+                        "full_name": fqn,
+                        "comment": comment,
+                        "description": comment,
+                        "columns": columns,
+                    }
+                )
             except Exception as exc:
                 logger.warning("Could not get metadata for %s: %s", name, exc)
-                tables.append({
-                    "name": name,
-                    "full_name": fqn,
-                    "comment": "",
-                    "description": "",
-                    "columns": [],
-                    "error": str(exc),
-                })
+                tables.append(
+                    {
+                        "name": name,
+                        "full_name": fqn,
+                        "comment": "",
+                        "description": "",
+                        "columns": [],
+                        "error": str(exc),
+                    }
+                )
         return tables

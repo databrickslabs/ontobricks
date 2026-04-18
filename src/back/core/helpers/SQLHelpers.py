@@ -1,6 +1,10 @@
 import re
 
-from shared.config.constants import DEFAULT_GRAPH_NAME, DEFAULT_GRAPH_VERSION, MSG_TABLE_NAME_REQUIRED
+from shared.config.constants import (
+    DEFAULT_GRAPH_NAME,
+    DEFAULT_GRAPH_VERSION,
+    MSG_TABLE_NAME_REQUIRED,
+)
 
 from back.core.logging import get_logger
 
@@ -27,6 +31,7 @@ class SQLHelpers:
         """
         if not table_name or not table_name.strip():
             from back.core.errors import ValidationError
+
             raise ValidationError(MSG_TABLE_NAME_REQUIRED)
 
     @staticmethod
@@ -36,25 +41,31 @@ class SQLHelpers:
         When *settings* is provided and the composed name is empty, falls back
         to ``settings.databricks_triplestore_table``.
         """
-        delta = getattr(domain, 'delta', None) or {}
-        catalog = delta.get('catalog', '')
-        schema = delta.get('schema', '')
-        name = (getattr(domain, 'info', None) or {}).get('name', '')
-        version = getattr(domain, 'current_version', DEFAULT_GRAPH_VERSION) or DEFAULT_GRAPH_VERSION
+        delta = getattr(domain, "delta", None) or {}
+        catalog = delta.get("catalog", "")
+        schema = delta.get("schema", "")
+        name = (getattr(domain, "info", None) or {}).get("name", "")
+        version = (
+            getattr(domain, "current_version", DEFAULT_GRAPH_VERSION)
+            or DEFAULT_GRAPH_VERSION
+        )
         if name:
-            safe = re.sub(r'[^a-z0-9_]', '_', name.lower())
+            safe = re.sub(r"[^a-z0-9_]", "_", name.lower())
             view_name = f"triplestore_{safe}_V{version}"
         else:
-            view_name = delta.get('table_name', '')
+            view_name = delta.get("table_name", "")
         parts = [catalog, schema, view_name]
-        table = '.'.join(p for p in parts if p)
+        table = ".".join(p for p in parts if p)
         if not table and settings:
-            table = getattr(settings, 'databricks_triplestore_table', '')
+            table = getattr(settings, "databricks_triplestore_table", "")
         return table
 
     @staticmethod
     def effective_graph_name(domain) -> str:
         """LadybugDB graph name derived from the domain name and version."""
-        name = (getattr(domain, 'info', None) or {}).get('name', DEFAULT_GRAPH_NAME)
-        version = getattr(domain, 'current_version', DEFAULT_GRAPH_VERSION) or DEFAULT_GRAPH_VERSION
+        name = (getattr(domain, "info", None) or {}).get("name", DEFAULT_GRAPH_NAME)
+        version = (
+            getattr(domain, "current_version", DEFAULT_GRAPH_VERSION)
+            or DEFAULT_GRAPH_VERSION
+        )
         return f"{name}_V{version}"

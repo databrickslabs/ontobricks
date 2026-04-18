@@ -4,6 +4,7 @@ Provides file read / write / list / delete operations on UC Volumes
 through the Databricks Files API.  Uses a shared ``DatabricksAuth``
 instance so OAuth / PAT logic is not duplicated.
 """
+
 import requests
 from urllib.parse import quote
 from typing import Dict, List, Optional, Tuple
@@ -78,7 +79,9 @@ class VolumeFileService:
             )
             if response.status_code == 200:
                 files = self._parse_directory_contents(
-                    response.json(), volume_path, extensions=extensions,
+                    response.json(),
+                    volume_path,
+                    extensions=extensions,
                 )
                 return True, files, f"Found {len(files)} files"
             if response.status_code == 404:
@@ -106,8 +109,10 @@ class VolumeFileService:
             )
             if response.status_code == 200:
                 items = self._parse_directory_contents(
-                    response.json(), dir_path,
-                    extensions=extensions, dirs_only=dirs_only,
+                    response.json(),
+                    dir_path,
+                    extensions=extensions,
+                    dirs_only=dirs_only,
                 )
                 return True, items, f"Found {len(items)} items"
             if response.status_code == 404:
@@ -166,7 +171,10 @@ class VolumeFileService:
             )
             if response.status_code in (200, 201, 204):
                 return True, f"Directory ensured: {directory_path}"
-            return False, f"Failed to create directory: {response.status_code} - {response.text}"
+            return (
+                False,
+                f"Failed to create directory: {response.status_code} - {response.text}",
+            )
         except Exception as exc:
             logger.exception("Error creating directory %s: %s", directory_path, exc)
             return False, f"Error: {exc}"
@@ -190,7 +198,10 @@ class VolumeFileService:
             )
             if response.status_code in (200, 201, 204):
                 return True, f"File saved successfully: {file_path}"
-            return False, f"Failed to write file: {response.status_code} - {response.text}"
+            return (
+                False,
+                f"Failed to write file: {response.status_code} - {response.text}",
+            )
         except Exception as exc:
             logger.exception("Error writing file: %s", exc)
             return False, f"Error: {exc}"
@@ -214,7 +225,10 @@ class VolumeFileService:
             )
             if response.status_code in (200, 201, 204):
                 return True, f"File saved successfully: {file_path}"
-            return False, f"Failed to write file: {response.status_code} - {response.text}"
+            return (
+                False,
+                f"Failed to write file: {response.status_code} - {response.text}",
+            )
         except Exception as exc:
             logger.exception("Error writing binary file: %s", exc)
             return False, f"Error: {exc}"
@@ -254,7 +268,10 @@ class VolumeFileService:
                 return True, "Directory deleted successfully"
             if response.status_code == 404:
                 return True, "Directory already gone"
-            return False, f"Failed to delete directory ({response.status_code}): {dir_path}"
+            return (
+                False,
+                f"Failed to delete directory ({response.status_code}): {dir_path}",
+            )
         except Exception as exc:
             logger.exception("Error deleting directory %s: %s", dir_path, exc)
             return False, f"Error: {exc}"
@@ -275,10 +292,12 @@ class VolumeFileService:
             if extensions and not is_dir:
                 if not any(name.lower().endswith(ext.lower()) for ext in extensions):
                     continue
-            items.append({
-                "name": name.rstrip("/"),
-                "path": f"{base_path}/{name}".replace("//", "/"),
-                "is_directory": is_dir,
-                "size": item.get("file_size", 0),
-            })
+            items.append(
+                {
+                    "name": name.rstrip("/"),
+                    "path": f"{base_path}/{name}".replace("//", "/"),
+                    "is_directory": is_dir,
+                    "size": item.get("file_size", 0),
+                }
+            )
         return items

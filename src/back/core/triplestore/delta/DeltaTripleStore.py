@@ -1,4 +1,5 @@
 """Delta (Databricks SQL Warehouse) triple store backend."""
+
 from typing import Any, Callable, Dict, List, Optional
 
 from back.core.logging import get_logger
@@ -71,7 +72,12 @@ class DeltaTripleStore(TripleStoreBackend):
                     total += len(batch)
                     if on_progress:
                         on_progress(total, len(triples))
-                    logger.debug("Inserted batch %d-%d of %d", i + 1, i + len(batch), len(triples))
+                    logger.debug(
+                        "Inserted batch %d-%d of %d",
+                        i + 1,
+                        i + len(batch),
+                        len(triples),
+                    )
 
         logger.info("Inserted %d triples into %s", total, table_name)
         return total
@@ -100,7 +106,10 @@ class DeltaTripleStore(TripleStoreBackend):
             return True
         except Exception as e:
             error_msg = str(e)
-            if "TABLE_OR_VIEW_NOT_FOUND" in error_msg or "does not exist" in error_msg.lower():
+            if (
+                "TABLE_OR_VIEW_NOT_FOUND" in error_msg
+                or "does not exist" in error_msg.lower()
+            ):
                 return False
             raise
 

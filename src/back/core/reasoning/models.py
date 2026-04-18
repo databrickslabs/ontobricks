@@ -1,4 +1,5 @@
 """Data models for the reasoning engine."""
+
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
@@ -38,7 +39,9 @@ class ReasoningResult:
         self.inferred_triples.extend(other.inferred_triples)
         self.violations.extend(other.violations)
         for key, val in other.stats.items():
-            if isinstance(val, (int, float)) and isinstance(self.stats.get(key), (int, float)):
+            if isinstance(val, (int, float)) and isinstance(
+                self.stats.get(key), (int, float)
+            ):
                 self.stats[key] = self.stats[key] + val
             else:
                 self.stats[key] = val

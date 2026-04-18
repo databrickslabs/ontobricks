@@ -1,4 +1,5 @@
 """Tests for the LadybugDB triple store backend (flat model)."""
+
 import os
 import shutil
 import uuid
@@ -29,13 +30,33 @@ def store():
 
 
 SAMPLE_TRIPLES = [
-    {"subject": "http://ex.org/Customer/1", "predicate": RDF_TYPE, "object": "http://ex.org/Customer"},
+    {
+        "subject": "http://ex.org/Customer/1",
+        "predicate": RDF_TYPE,
+        "object": "http://ex.org/Customer",
+    },
     {"subject": "http://ex.org/Customer/1", "predicate": RDFS_LABEL, "object": "Alice"},
-    {"subject": "http://ex.org/Customer/2", "predicate": RDF_TYPE, "object": "http://ex.org/Customer"},
+    {
+        "subject": "http://ex.org/Customer/2",
+        "predicate": RDF_TYPE,
+        "object": "http://ex.org/Customer",
+    },
     {"subject": "http://ex.org/Customer/2", "predicate": RDFS_LABEL, "object": "Bob"},
-    {"subject": "http://ex.org/Order/10", "predicate": RDF_TYPE, "object": "http://ex.org/Order"},
-    {"subject": "http://ex.org/Order/10", "predicate": RDFS_LABEL, "object": "Order-10"},
-    {"subject": "http://ex.org/Customer/1", "predicate": "http://ex.org/hasOrder", "object": "http://ex.org/Order/10"},
+    {
+        "subject": "http://ex.org/Order/10",
+        "predicate": RDF_TYPE,
+        "object": "http://ex.org/Order",
+    },
+    {
+        "subject": "http://ex.org/Order/10",
+        "predicate": RDFS_LABEL,
+        "object": "Order-10",
+    },
+    {
+        "subject": "http://ex.org/Customer/1",
+        "predicate": "http://ex.org/hasOrder",
+        "object": "http://ex.org/Order/10",
+    },
 ]
 
 
@@ -93,7 +114,9 @@ class TestInsertAndQuery:
 
     def test_insert_empty_table_raises(self, store):
         with pytest.raises(ValidationError, match="table_name cannot be empty"):
-            store.insert_triples("", [{"subject": "a", "predicate": "b", "object": "c"}])
+            store.insert_triples(
+                "", [{"subject": "a", "predicate": "b", "object": "c"}]
+            )
 
     def test_query_triples_returns_all(self, store):
         _loaded_store(store)
@@ -106,8 +129,12 @@ class TestInsertAndQuery:
     def test_on_progress_callback(self, store):
         store.create_table("t")
         progress_calls = []
-        store.insert_triples("t", SAMPLE_TRIPLES, batch_size=3,
-                             on_progress=lambda done, total: progress_calls.append((done, total)))
+        store.insert_triples(
+            "t",
+            SAMPLE_TRIPLES,
+            batch_size=3,
+            on_progress=lambda done, total: progress_calls.append((done, total)),
+        )
         assert len(progress_calls) > 0
         assert progress_calls[-1][0] == len(SAMPLE_TRIPLES)
 
@@ -169,14 +196,20 @@ class TestFindSubjectsByType:
 
     def test_find_with_search(self, store):
         _loaded_store(store)
-        subjects = store.find_subjects_by_type("t", "http://ex.org/Customer", search="alice")
+        subjects = store.find_subjects_by_type(
+            "t", "http://ex.org/Customer", search="alice"
+        )
         assert len(subjects) == 1
         assert subjects[0] == "http://ex.org/Customer/1"
 
     def test_find_with_limit_offset(self, store):
         _loaded_store(store)
-        page1 = store.find_subjects_by_type("t", "http://ex.org/Customer", limit=1, offset=0)
-        page2 = store.find_subjects_by_type("t", "http://ex.org/Customer", limit=1, offset=1)
+        page1 = store.find_subjects_by_type(
+            "t", "http://ex.org/Customer", limit=1, offset=0
+        )
+        page2 = store.find_subjects_by_type(
+            "t", "http://ex.org/Customer", limit=1, offset=1
+        )
         assert len(page1) == 1
         assert len(page2) == 1
         assert page1[0] != page2[0]
@@ -222,20 +255,27 @@ class TestFindSeedSubjects:
 
     def test_by_label_contains(self, store):
         _loaded_store(store)
-        seeds = store.find_seed_subjects("t", value="bob", field="label", match_type="contains")
+        seeds = store.find_seed_subjects(
+            "t", value="bob", field="label", match_type="contains"
+        )
         assert "http://ex.org/Customer/2" in seeds
 
     def test_by_type_and_label(self, store):
         _loaded_store(store)
         seeds = store.find_seed_subjects(
-            "t", entity_type="http://ex.org/Customer",
-            value="alice", field="label", match_type="contains",
+            "t",
+            entity_type="http://ex.org/Customer",
+            value="alice",
+            field="label",
+            match_type="contains",
         )
         assert seeds == {"http://ex.org/Customer/1"}
 
     def test_by_id_field(self, store):
         _loaded_store(store)
-        seeds = store.find_seed_subjects("t", value="Customer/1", field="id", match_type="contains")
+        seeds = store.find_seed_subjects(
+            "t", value="Customer/1", field="id", match_type="contains"
+        )
         assert "http://ex.org/Customer/1" in seeds
 
 
@@ -295,7 +335,9 @@ class TestExpandEntityNeighbors:
 
 class TestTranslateConditions:
     def test_eq_condition(self):
-        result = LadybugTripleStore._translate_conditions(["predicate = 'http://x'"], "t")
+        result = LadybugTripleStore._translate_conditions(
+            ["predicate = 'http://x'"], "t"
+        )
         assert result == ["t.predicate = 'http://x'"]
 
     def test_like_contains(self):
@@ -311,5 +353,7 @@ class TestTranslateConditions:
         assert result == ["t.subject STARTS WITH 'http'"]
 
     def test_unsupported_dropped(self):
-        result = LadybugTripleStore._translate_conditions(["subject IN (SELECT ...)"], "t")
+        result = LadybugTripleStore._translate_conditions(
+            ["subject IN (SELECT ...)"], "t"
+        )
         assert result == []

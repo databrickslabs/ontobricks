@@ -1,4 +1,5 @@
 """Tests for back.core.graphql — schema builder and resolvers."""
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -54,6 +55,7 @@ PROPERTIES = [
 # Static helper tests (via backward-compat aliases)
 # ------------------------------------------------------------------
 
+
 class TestSchemaHelpers:
     def test_safe_name_basic(self):
         assert _safe_name("hello") == "hello"
@@ -101,6 +103,7 @@ class TestSchemaHelpers:
 # GraphQLSchemaBuilder class tests
 # ------------------------------------------------------------------
 
+
 class TestGraphQLSchemaBuilder:
     def setup_method(self):
         self.builder = GraphQLSchemaBuilder()
@@ -122,7 +125,9 @@ class TestGraphQLSchemaBuilder:
         assert h1 != h2
 
     def test_build_for_domain(self):
-        result = self.builder.build_for_domain(CLASSES, PROPERTIES, BASE_URI, "test_builder")
+        result = self.builder.build_for_domain(
+            CLASSES, PROPERTIES, BASE_URI, "test_builder"
+        )
         assert result is not None
         schema, metadata = result
         assert schema is not None
@@ -130,12 +135,16 @@ class TestGraphQLSchemaBuilder:
         assert "Order" in metadata.types
 
     def test_empty_classes_returns_none(self):
-        result = self.builder.build_for_domain([], PROPERTIES, BASE_URI, "empty_builder")
+        result = self.builder.build_for_domain(
+            [], PROPERTIES, BASE_URI, "empty_builder"
+        )
         assert result is None
 
     def test_cache_hit(self):
         self.builder.build_for_domain(CLASSES, PROPERTIES, BASE_URI, "cached_builder")
-        result = self.builder.build_for_domain(CLASSES, PROPERTIES, BASE_URI, "cached_builder")
+        result = self.builder.build_for_domain(
+            CLASSES, PROPERTIES, BASE_URI, "cached_builder"
+        )
         assert result is not None
 
     def test_cache_invalidation(self):
@@ -144,13 +153,17 @@ class TestGraphQLSchemaBuilder:
         assert "inv_builder" not in self.builder._cache
 
     def test_metadata_has_type_info(self):
-        _, metadata = self.builder.build_for_domain(CLASSES, PROPERTIES, BASE_URI, "meta_builder")
+        _, metadata = self.builder.build_for_domain(
+            CLASSES, PROPERTIES, BASE_URI, "meta_builder"
+        )
         ti = metadata.types["Customer"]
         assert ti.name == "Customer"
         assert ti.cls_uri == f"{BASE_URI}Customer"
 
     def test_relationship_registered(self):
-        _, metadata = self.builder.build_for_domain(CLASSES, PROPERTIES, BASE_URI, "rel_builder")
+        _, metadata = self.builder.build_for_domain(
+            CLASSES, PROPERTIES, BASE_URI, "rel_builder"
+        )
         ti = metadata.types["Customer"]
         assert "hasOrder" in ti.relationships
 
@@ -165,9 +178,12 @@ class TestGraphQLSchemaBuilder:
 # Module-level delegate tests (backward compat)
 # ------------------------------------------------------------------
 
+
 class TestBuildSchema:
     def test_basic_build(self):
-        result = build_schema_for_domain(CLASSES, PROPERTIES, BASE_URI, "test_domain_graphql")
+        result = build_schema_for_domain(
+            CLASSES, PROPERTIES, BASE_URI, "test_domain_graphql"
+        )
         assert result is not None
         schema, metadata = result
         assert schema is not None
@@ -190,14 +206,20 @@ class TestBuildSchema:
         assert result is not None
 
     def test_metadata_has_type_info(self):
-        _, metadata = build_schema_for_domain(CLASSES, PROPERTIES, BASE_URI, "meta_domain")
+        _, metadata = build_schema_for_domain(
+            CLASSES, PROPERTIES, BASE_URI, "meta_domain"
+        )
         ti = metadata.types["Customer"]
         assert ti.name == "Customer"
         assert ti.cls_uri == f"{BASE_URI}Customer"
-        assert "firstName" in [GraphQLSchemaBuilder.safe_name(k) for k in ti.predicate_to_field.values()]
+        assert "firstName" in [
+            GraphQLSchemaBuilder.safe_name(k) for k in ti.predicate_to_field.values()
+        ]
 
     def test_relationship_registered(self):
-        _, metadata = build_schema_for_domain(CLASSES, PROPERTIES, BASE_URI, "rel_domain")
+        _, metadata = build_schema_for_domain(
+            CLASSES, PROPERTIES, BASE_URI, "rel_domain"
+        )
         ti = metadata.types["Customer"]
         assert "hasOrder" in ti.relationships
 
@@ -205,6 +227,7 @@ class TestBuildSchema:
 # ------------------------------------------------------------------
 # Resolver helpers
 # ------------------------------------------------------------------
+
 
 class TestResolverHelpers:
     def test_sql_escape(self):
@@ -219,7 +242,9 @@ class TestResolverHelpers:
 class TestSchemaMetadata:
     def test_register_and_lookup(self):
         meta = SchemaMetadata(base_uri=BASE_URI)
-        ti = TypeInfo(name="Test", cls_uri=f"{BASE_URI}Test", gql_type=type("Test", (), {}))
+        ti = TypeInfo(
+            name="Test", cls_uri=f"{BASE_URI}Test", gql_type=type("Test", (), {})
+        )
         meta.register(ti)
         assert "Test" in meta.types
 

@@ -5,6 +5,7 @@ existing graph data.  For LadybugDB backends the CONSTRUCT is converted
 to Cypher; for Delta backends the existing ``translate_sparql_to_spark()``
 infrastructure is used.
 """
+
 import re
 import time
 from typing import Any, Dict, List, Optional
@@ -12,7 +13,12 @@ from typing import Any, Dict, List, Optional
 from back.core.logging import get_logger
 from back.core.graphdb.GraphDBBackend import GraphDBBackend
 from back.core.w3c.rdf_utils import uri_local_name
-from back.core.reasoning.constants import CONSTRUCT_RE, NS_PREFIX_MAP, RDF_TYPE, TRIPLE_PATTERN_RE
+from back.core.reasoning.constants import (
+    CONSTRUCT_RE,
+    NS_PREFIX_MAP,
+    RDF_TYPE,
+    TRIPLE_PATTERN_RE,
+)
 from back.core.reasoning.models import InferredTriple, ReasoningResult, RuleViolation
 
 logger = get_logger(__name__)
@@ -73,18 +79,26 @@ class SPARQLRuleEngine:
                 continue
             try:
                 rule_result = self._execute_one(
-                    name, query_text, store, table_name, ontology, is_cypher, materialize,
+                    name,
+                    query_text,
+                    store,
+                    table_name,
+                    ontology,
+                    is_cypher,
+                    materialize,
                 )
                 result.merge(rule_result)
             except Exception as e:
                 logger.error("SPARQL rule '%s' failed: %s", name, e)
-                result.violations.append(RuleViolation(
-                    rule_name=name,
-                    subject="",
-                    message=f"Execution error: {e}",
-                    check_type="sparql_rule",
-                    rule_type="sparql",
-                ))
+                result.violations.append(
+                    RuleViolation(
+                        rule_name=name,
+                        subject="",
+                        message=f"Execution error: {e}",
+                        check_type="sparql_rule",
+                        rule_type="sparql",
+                    )
+                )
 
         result.stats = {
             "phase": "sparql_rules",
@@ -96,21 +110,31 @@ class SPARQLRuleEngine:
         return result
 
     def _execute_one(
-        self, name: str, query: str, store: Any,
-        table_name: str, ontology: Dict, is_cypher: bool,
+        self,
+        name: str,
+        query: str,
+        store: Any,
+        table_name: str,
+        ontology: Dict,
+        is_cypher: bool,
         materialize: bool,
     ) -> ReasoningResult:
         result = ReasoningResult()
 
         if is_cypher:
             sql = self._construct_to_flat_cypher_select(
-                query, table_name, ontology, store,
+                query,
+                table_name,
+                ontology,
+                store,
             )
         else:
             sql = self._construct_to_sql(query, table_name, ontology)
 
         if not sql:
-            logger.warning("Could not translate SPARQL rule '%s'. Input:\n%s", name, query)
+            logger.warning(
+                "Could not translate SPARQL rule '%s'. Input:\n%s", name, query
+            )
             return result
 
         logger.debug("SPARQL rule '%s' translated query:\n%s", name, sql)
@@ -123,28 +147,37 @@ class SPARQLRuleEngine:
                     s = row[0] if len(row) > 0 else ""
                     p = row[1] if len(row) > 1 else ""
                     o = row[2] if len(row) > 2 else ""
-                    result.inferred_triples.append(InferredTriple(
-                        subject=s, predicate=p, object=o,
-                        provenance=f"sparql:{name}",
-                        rule_name=name,
-                    ))
+                    result.inferred_triples.append(
+                        InferredTriple(
+                            subject=s,
+                            predicate=p,
+                            object=o,
+                            provenance=f"sparql:{name}",
+                            rule_name=name,
+                        )
+                    )
             else:
                 raw = store.execute_query(sql)
                 for row in raw:
-                    result.inferred_triples.append(InferredTriple(
-                        subject=row.get("s", ""),
-                        predicate=row.get("p", ""),
-                        object=row.get("o", ""),
-                        provenance=f"sparql:{name}",
-                        rule_name=name,
-                    ))
+                    result.inferred_triples.append(
+                        InferredTriple(
+                            subject=row.get("s", ""),
+                            predicate=row.get("p", ""),
+                            object=row.get("o", ""),
+                            provenance=f"sparql:{name}",
+                            rule_name=name,
+                        )
+                    )
         except Exception as e:
             logger.error("SPARQL rule query failed for '%s': %s", name, e)
 
         return result
 
     def _construct_to_sql(
-        self, query: str, table: str, ontology: Dict,
+        self,
+        query: str,
+        table: str,
+        ontology: Dict,
     ) -> Optional[str]:
         """Translate a CONSTRUCT query to a SELECT for the flat triple table.
 
@@ -164,7 +197,7 @@ class SPARQLRuleEngine:
         if not construct_triples:
             return None
 
-        um = getattr(self, '_uri_map', None)
+        um = getattr(self, "_uri_map", None)
         s_expr = self._resolve_term(construct_triples[0][0], base_uri, um)
         p_expr = self._resolve_term(construct_triples[0][1], base_uri, um)
         o_expr = self._resolve_term(construct_triples[0][2], base_uri, um)
@@ -181,7 +214,9 @@ class SPARQLRuleEngine:
         for ws, wp, wo in where_triples:
             alias = f"w{alias_idx}"
             alias_idx += 1
-            joins.append(f"{table} {alias}" if alias_idx == 1 else f"JOIN {table} {alias} ON 1=1")
+            joins.append(
+                f"{table} {alias}" if alias_idx == 1 else f"JOIN {table} {alias} ON 1=1"
+            )
 
             wp_resolved = self._resolve_term(wp, base_uri, um)
             if wp_resolved == "a":
@@ -195,7 +230,9 @@ class SPARQLRuleEngine:
                 else:
                     var_bindings[var] = f"{alias}.subject"
             else:
-                conditions.append(f"{alias}.subject = '{self._resolve_term(ws, base_uri, um)}'")
+                conditions.append(
+                    f"{alias}.subject = '{self._resolve_term(ws, base_uri, um)}'"
+                )
 
             if wo.startswith("?"):
                 var = wo
@@ -204,7 +241,9 @@ class SPARQLRuleEngine:
                 else:
                     var_bindings[var] = f"{alias}.object"
             else:
-                conditions.append(f"{alias}.object = '{self._resolve_term(wo, base_uri, um)}'")
+                conditions.append(
+                    f"{alias}.object = '{self._resolve_term(wo, base_uri, um)}'"
+                )
 
         filter_match = re.search(r"FILTER\s*\((.+?)\)", where_part, re.IGNORECASE)
         if filter_match:
@@ -213,12 +252,20 @@ class SPARQLRuleEngine:
             if sql_filter:
                 conditions.append(sql_filter)
 
-        s_sql = var_bindings.get(s_expr, f"'{s_expr}'") if s_expr.startswith("?") else f"'{s_expr}'"
+        s_sql = (
+            var_bindings.get(s_expr, f"'{s_expr}'")
+            if s_expr.startswith("?")
+            else f"'{s_expr}'"
+        )
         if p_expr == "a":
             p_sql = f"'{RDF_TYPE}'"
         else:
             p_sql = f"'{p_expr}'"
-        o_sql = var_bindings.get(o_expr, f"'{o_expr}'") if o_expr.startswith("?") else f"'{o_expr}'"
+        o_sql = (
+            var_bindings.get(o_expr, f"'{o_expr}'")
+            if o_expr.startswith("?")
+            else f"'{o_expr}'"
+        )
 
         from_clause = joins[0] if joins else table
         join_clause = "\n".join(joins[1:]) if len(joins) > 1 else ""
@@ -235,7 +282,11 @@ class SPARQLRuleEngine:
         return sql
 
     def _construct_to_flat_cypher_select(
-        self, query: str, table_name: str, ontology: Dict, store: Any,
+        self,
+        query: str,
+        table_name: str,
+        ontology: Dict,
+        store: Any,
     ) -> Optional[str]:
         """Translate CONSTRUCT to a Cypher SELECT on the flat triple table."""
         m = CONSTRUCT_RE.search(query)
@@ -254,7 +305,7 @@ class SPARQLRuleEngine:
         if not where_triples:
             return None
 
-        um = getattr(self, '_uri_map', None)
+        um = getattr(self, "_uri_map", None)
         node_tbl = (
             store.get_node_table(table_name)
             if isinstance(store, GraphDBBackend)
@@ -281,7 +332,9 @@ class SPARQLRuleEngine:
                 else:
                     var_alias[ws] = f"{alias}.subject"
             else:
-                where_parts.append(f"{alias}.subject = '{self._resolve_term(ws, base_uri, um)}'")
+                where_parts.append(
+                    f"{alias}.subject = '{self._resolve_term(ws, base_uri, um)}'"
+                )
 
             if wo.startswith("?"):
                 if wo in var_alias:
@@ -289,7 +342,9 @@ class SPARQLRuleEngine:
                 else:
                     var_alias[wo] = f"{alias}.object"
             else:
-                where_parts.append(f"{alias}.object = '{self._resolve_term(wo, base_uri, um)}'")
+                where_parts.append(
+                    f"{alias}.object = '{self._resolve_term(wo, base_uri, um)}'"
+                )
 
         s_ref = var_alias.get(construct_triples[0][0], f"'{construct_triples[0][0]}'")
         p_term = self._resolve_term(construct_triples[0][1], base_uri, um)
@@ -302,7 +357,9 @@ class SPARQLRuleEngine:
         return "\n".join(lines)
 
     @staticmethod
-    def _resolve_term(term: str, base_uri: str, uri_map: Optional[Dict[str, str]] = None) -> str:
+    def _resolve_term(
+        term: str, base_uri: str, uri_map: Optional[Dict[str, str]] = None
+    ) -> str:
         if term.startswith("<") and term.endswith(">"):
             return term[1:-1]
         if term == "a":
@@ -360,5 +417,7 @@ class SPARQLRuleEngine:
         if not query.strip():
             errors.append("SPARQL rule must have a query")
         elif not CONSTRUCT_RE.search(query):
-            errors.append("Query must be a SPARQL CONSTRUCT (CONSTRUCT { ... } WHERE { ... })")
+            errors.append(
+                "Query must be a SPARQL CONSTRUCT (CONSTRUCT { ... } WHERE { ... })"
+            )
         return errors

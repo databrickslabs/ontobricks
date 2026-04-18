@@ -1,4 +1,5 @@
 """GraphQL data transfer objects."""
+
 from dataclasses import dataclass, field
 from typing import Dict, Tuple
 

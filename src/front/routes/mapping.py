@@ -1,4 +1,5 @@
 """Frontend HTML route -- Mapping page."""
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 

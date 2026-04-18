@@ -1,4 +1,5 @@
 """SPARQL utilities for query translation and execution."""
+
 from back.core.w3c.sparql.constants import DIALECT_SPARK
 from back.core.w3c.sparql.DomainQueryService import DomainQueryService
 from back.core.w3c.sparql.SparqlQueryRunner import SparqlQueryRunner
@@ -16,20 +17,28 @@ def extract_r2rml_mappings(r2rml_content):
 
 
 def translate_sparql_to_spark(
-    sparql_query, entity_mappings, limit, relationship_mappings=None, dialect=DIALECT_SPARK,
+    sparql_query,
+    entity_mappings,
+    limit,
+    relationship_mappings=None,
+    dialect=DIALECT_SPARK,
 ):
     """Backward-compatible wrapper for :meth:`SparqlTranslator.translate_sparql_to_spark`."""
     return SparqlTranslator.translate_sparql_to_spark(
-        sparql_query, entity_mappings, limit, relationship_mappings, dialect=dialect,
+        sparql_query,
+        entity_mappings,
+        limit,
+        relationship_mappings,
+        dialect=dialect,
     )
 
 
 __all__ = [
-    'DIALECT_SPARK',
-    'execute_local_query',
-    'extract_r2rml_mappings',
-    'translate_sparql_to_spark',
-    'DomainQueryService',
-    'SparqlQueryRunner',
-    'SparqlTranslator',
+    "DIALECT_SPARK",
+    "execute_local_query",
+    "extract_r2rml_mappings",
+    "translate_sparql_to_spark",
+    "DomainQueryService",
+    "SparqlQueryRunner",
+    "SparqlTranslator",
 ]

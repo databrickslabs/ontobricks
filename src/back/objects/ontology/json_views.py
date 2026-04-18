@@ -1,4 +1,5 @@
 """Read-model helpers for ontology data inside domain JSON dicts."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List

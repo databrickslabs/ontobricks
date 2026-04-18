@@ -7,6 +7,7 @@ then provides a Playwright browser and page to each test.
 NOTE: E2E tests should be run separately from unit tests:
     .venv/bin/python -m pytest tests/e2e/ -v
 """
+
 import atexit
 import os
 import signal
@@ -67,18 +68,25 @@ def live_server(_set_env):
     if not _port_free(E2E_PORT):
         pytest.skip(f"Port {E2E_PORT} is already in use -- cannot start test server")
 
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    repo_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
     src_dir = os.path.join(repo_root, "src")
     env = {**os.environ}
     env["PYTHONPATH"] = src_dir + os.pathsep + env.get("PYTHONPATH", "")
 
     _server_proc = subprocess.Popen(
         [
-            sys.executable, "-m", "uvicorn",
+            sys.executable,
+            "-m",
+            "uvicorn",
             "shared.fastapi.main:app",
-            "--host", "127.0.0.1",
-            "--port", str(E2E_PORT),
-            "--log-level", "warning",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(E2E_PORT),
+            "--log-level",
+            "warning",
         ],
         env=env,
         stdout=subprocess.DEVNULL,

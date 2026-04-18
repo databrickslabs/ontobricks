@@ -4,6 +4,7 @@ Complements test_reasoning.py (models + OWLRL) and test_swrl_engine.py
 (SWRL translators + engine) by covering the service-level orchestration,
 phase skipping, graph reasoning, constraint checks, and helper functions.
 """
+
 import importlib
 
 import pytest
@@ -22,6 +23,7 @@ requires_owlrl = pytest.mark.skipif(not _has_owlrl, reason="owlrl not installed"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _domain_session(
     ontology=None,
@@ -58,6 +60,7 @@ def _domain_session(
 # ===========================================================================
 # Utility function tests
 # ===========================================================================
+
 
 class TestLocalName:
     def test_fragment(self):
@@ -96,6 +99,7 @@ class TestNamespaceParts:
 # Normalize property URI
 # ===========================================================================
 
+
 class TestNormalizePropertyUri:
     def test_empty_uri_uses_name(self):
         uri = ReasoningService._normalize_property_uri(
@@ -105,13 +109,21 @@ class TestNormalizePropertyUri:
 
     def test_uri_not_in_data_ns_gets_rewritten(self):
         uri = ReasoningService._normalize_property_uri(
-            "http://other.org/myProp", "http://ex.org/data/", "http://ex.org#", "#", "myProp"
+            "http://other.org/myProp",
+            "http://ex.org/data/",
+            "http://ex.org#",
+            "#",
+            "myProp",
         )
         assert uri == "http://ex.org/data/myProp"
 
     def test_uri_already_in_data_ns_unchanged(self):
         uri = ReasoningService._normalize_property_uri(
-            "http://ex.org/data/myProp", "http://ex.org/data/", "http://ex.org#", "#", "myProp"
+            "http://ex.org/data/myProp",
+            "http://ex.org/data/",
+            "http://ex.org#",
+            "#",
+            "myProp",
         )
         assert uri == "http://ex.org/data/myProp"
 
@@ -120,16 +132,27 @@ class TestNormalizePropertyUri:
 # Find properties by characteristic
 # ===========================================================================
 
+
 class TestFindPropertiesByCharacteristic:
     def test_finds_transitive(self):
         ontology = {
             "base_uri": "http://ex.org#",
             "properties": [
-                {"name": "isPartOf", "uri": "http://ex.org#isPartOf", "characteristics": ["transitive"]},
-                {"name": "hasOrder", "uri": "http://ex.org#hasOrder", "characteristics": []},
+                {
+                    "name": "isPartOf",
+                    "uri": "http://ex.org#isPartOf",
+                    "characteristics": ["transitive"],
+                },
+                {
+                    "name": "hasOrder",
+                    "uri": "http://ex.org#hasOrder",
+                    "characteristics": [],
+                },
             ],
         }
-        result = ReasoningService._find_properties_by_characteristic(ontology, "transitive")
+        result = ReasoningService._find_properties_by_characteristic(
+            ontology, "transitive"
+        )
         assert len(result) == 1
         assert "isPartOf" in result[0]
 
@@ -137,26 +160,39 @@ class TestFindPropertiesByCharacteristic:
         ontology = {
             "base_uri": "http://ex.org#",
             "properties": [
-                {"name": "hasSibling", "uri": "http://ex.org#hasSibling", "characteristics": ["Symmetric"]},
+                {
+                    "name": "hasSibling",
+                    "uri": "http://ex.org#hasSibling",
+                    "characteristics": ["Symmetric"],
+                },
             ],
         }
-        result = ReasoningService._find_properties_by_characteristic(ontology, "symmetric")
+        result = ReasoningService._find_properties_by_characteristic(
+            ontology, "symmetric"
+        )
         assert len(result) == 1
 
     def test_no_matching_characteristic(self):
         ontology = {
             "base_uri": "http://ex.org#",
             "properties": [
-                {"name": "hasOrder", "uri": "http://ex.org#hasOrder", "characteristics": []},
+                {
+                    "name": "hasOrder",
+                    "uri": "http://ex.org#hasOrder",
+                    "characteristics": [],
+                },
             ],
         }
-        result = ReasoningService._find_properties_by_characteristic(ontology, "transitive")
+        result = ReasoningService._find_properties_by_characteristic(
+            ontology, "transitive"
+        )
         assert len(result) == 0
 
 
 # ===========================================================================
 # run_full_reasoning — phase orchestration
 # ===========================================================================
+
 
 class TestRunFullReasoning:
     def test_all_phases_disabled(self):
@@ -209,6 +245,7 @@ class TestRunFullReasoning:
 # run_tbox_reasoning
 # ===========================================================================
 
+
 class TestRunTboxReasoning:
     def test_no_owl_content(self):
         svc = ReasoningService(_domain_session(owl_content=""))
@@ -234,6 +271,7 @@ class TestRunTboxReasoning:
 # run_swrl_rules
 # ===========================================================================
 
+
 class TestRunSwrlRules:
     def test_no_rules(self):
         svc = ReasoningService(_domain_session(swrl_rules=[]))
@@ -242,16 +280,20 @@ class TestRunSwrlRules:
 
     def test_no_store(self):
         rules = [{"name": "r1", "antecedent": "A(?x)", "consequent": "B(?x)"}]
-        svc = ReasoningService(_domain_session(swrl_rules=rules), triplestore_backend=None)
+        svc = ReasoningService(
+            _domain_session(swrl_rules=rules), triplestore_backend=None
+        )
         result = svc.run_swrl_rules()
         assert result.stats.get("skipped") is True
 
     def test_with_rules_and_store(self):
-        rules = [{
-            "name": "test_rule",
-            "antecedent": "Customer(?x) \u2227 hasOrder(?x, ?y)",
-            "consequent": "hasOrder(?x, ?z)",
-        }]
+        rules = [
+            {
+                "name": "test_rule",
+                "antecedent": "Customer(?x) \u2227 hasOrder(?x, ?y)",
+                "consequent": "hasOrder(?x, ?z)",
+            }
+        ]
         store = MagicMock()
         store.execute_query.return_value = [{"s": "http://test.org/data/c1"}]
         svc = ReasoningService(
@@ -266,6 +308,7 @@ class TestRunSwrlRules:
 # run_graph_reasoning
 # ===========================================================================
 
+
 class TestRunGraphReasoning:
     def test_no_store(self):
         svc = ReasoningService(_domain_session(), triplestore_backend=None)
@@ -275,7 +318,11 @@ class TestRunGraphReasoning:
     def test_transitive_closure(self):
         store = MagicMock()
         store.transitive_closure.return_value = [
-            {"subject": "http://ex.org/a", "predicate": "http://ex.org/isPartOf", "object": "http://ex.org/c"},
+            {
+                "subject": "http://ex.org/a",
+                "predicate": "http://ex.org/isPartOf",
+                "object": "http://ex.org/c",
+            },
         ]
         store.symmetric_expand.return_value = []
 
@@ -283,7 +330,11 @@ class TestRunGraphReasoning:
             "base_uri": "http://ex.org#",
             "classes": [],
             "properties": [
-                {"name": "isPartOf", "uri": "http://ex.org#isPartOf", "characteristics": ["transitive"]},
+                {
+                    "name": "isPartOf",
+                    "uri": "http://ex.org#isPartOf",
+                    "characteristics": ["transitive"],
+                },
             ],
             "constraints": [],
             "swrl_rules": [],
@@ -302,14 +353,22 @@ class TestRunGraphReasoning:
         store = MagicMock()
         store.transitive_closure.return_value = []
         store.symmetric_expand.return_value = [
-            {"subject": "http://ex.org/b", "predicate": "http://ex.org/hasSibling", "object": "http://ex.org/a"},
+            {
+                "subject": "http://ex.org/b",
+                "predicate": "http://ex.org/hasSibling",
+                "object": "http://ex.org/a",
+            },
         ]
 
         ontology = {
             "base_uri": "http://ex.org#",
             "classes": [],
             "properties": [
-                {"name": "hasSibling", "uri": "http://ex.org#hasSibling", "characteristics": ["symmetric"]},
+                {
+                    "name": "hasSibling",
+                    "uri": "http://ex.org#hasSibling",
+                    "characteristics": ["symmetric"],
+                },
             ],
             "constraints": [],
             "swrl_rules": [],
@@ -332,7 +391,11 @@ class TestRunGraphReasoning:
             "base_uri": "http://ex.org#",
             "classes": [],
             "properties": [
-                {"name": "isPartOf", "uri": "http://ex.org#isPartOf", "characteristics": ["transitive"]},
+                {
+                    "name": "isPartOf",
+                    "uri": "http://ex.org#isPartOf",
+                    "characteristics": ["transitive"],
+                },
             ],
             "constraints": [],
             "swrl_rules": [],
@@ -351,6 +414,7 @@ class TestRunGraphReasoning:
 # run_constraint_checks
 # ===========================================================================
 
+
 class TestRunConstraintChecks:
     def test_no_constraints_and_no_shapes(self):
         svc = ReasoningService(_domain_session())
@@ -362,11 +426,20 @@ class TestRunConstraintChecks:
             "base_uri": "http://ex.org#",
             "classes": [],
             "properties": [],
-            "constraints": [{"type": "minCardinality", "className": "X", "property": "p", "cardinalityValue": 1}],
+            "constraints": [
+                {
+                    "type": "minCardinality",
+                    "className": "X",
+                    "property": "p",
+                    "cardinalityValue": 1,
+                }
+            ],
             "swrl_rules": [],
             "shacl_shapes": [],
         }
-        svc = ReasoningService(_domain_session(ontology=ontology), triplestore_backend=None)
+        svc = ReasoningService(
+            _domain_session(ontology=ontology), triplestore_backend=None
+        )
         result = svc.run_constraint_checks()
         assert result.stats.get("skipped") is True
 
@@ -375,12 +448,21 @@ class TestRunConstraintChecks:
             "base_uri": "http://ex.org#",
             "classes": [],
             "properties": [],
-            "constraints": [{"type": "minCardinality", "className": "X", "property": "p", "cardinalityValue": 1}],
+            "constraints": [
+                {
+                    "type": "minCardinality",
+                    "className": "X",
+                    "property": "p",
+                    "cardinalityValue": 1,
+                }
+            ],
             "swrl_rules": [],
             "shacl_shapes": [],
         }
         store = MagicMock()  # not LadybugBase
-        svc = ReasoningService(_domain_session(ontology=ontology), triplestore_backend=store)
+        svc = ReasoningService(
+            _domain_session(ontology=ontology), triplestore_backend=store
+        )
         result = svc.run_constraint_checks()
         assert result.stats.get("skipped") is True
         assert "Cypher-capable" in result.stats.get("reason", "")
@@ -390,12 +472,15 @@ class TestRunConstraintChecks:
 # materialize_inferred
 # ===========================================================================
 
+
 class TestMaterializeInferred:
     def test_no_store(self):
         svc = ReasoningService(_domain_session(), triplestore_backend=None)
-        result = ReasoningResult(inferred_triples=[
-            InferredTriple("s1", "p1", "o1", "test"),
-        ])
+        result = ReasoningResult(
+            inferred_triples=[
+                InferredTriple("s1", "p1", "o1", "test"),
+            ]
+        )
         assert svc.materialize_inferred(result) == 0
 
     def test_empty_triples(self):
@@ -409,10 +494,16 @@ class TestMaterializeInferred:
         store = MagicMock()
         store.insert_triples.return_value = 2
         svc = ReasoningService(_domain_session(), triplestore_backend=store)
-        result = ReasoningResult(inferred_triples=[
-            InferredTriple("http://ex.org/a", "http://ex.org/p", "http://ex.org/b", "test"),
-            InferredTriple("http://ex.org/c", "http://ex.org/p", "http://ex.org/d", "test"),
-        ])
+        result = ReasoningResult(
+            inferred_triples=[
+                InferredTriple(
+                    "http://ex.org/a", "http://ex.org/p", "http://ex.org/b", "test"
+                ),
+                InferredTriple(
+                    "http://ex.org/c", "http://ex.org/p", "http://ex.org/d", "test"
+                ),
+            ]
+        )
         count = svc.materialize_inferred(result)
         assert count == 2
         store.insert_triples.assert_called_once()
@@ -421,10 +512,12 @@ class TestMaterializeInferred:
         store = MagicMock()
         store.insert_triples.return_value = 1
         svc = ReasoningService(_domain_session(), triplestore_backend=store)
-        result = ReasoningResult(inferred_triples=[
-            InferredTriple("(batch)", "p", "o", "test"),
-            InferredTriple("http://ex.org/a", "p", "o", "test"),
-        ])
+        result = ReasoningResult(
+            inferred_triples=[
+                InferredTriple("(batch)", "p", "o", "test"),
+                InferredTriple("http://ex.org/a", "p", "o", "test"),
+            ]
+        )
         svc.materialize_inferred(result)
         triples_arg = store.insert_triples.call_args[0][1]
         assert len(triples_arg) == 1

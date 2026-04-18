@@ -26,6 +26,7 @@ _MAX_COLUMNS_PER_TABLE = 80
 # Tool implementations
 # =====================================================
 
+
 def tool_get_metadata(ctx: ToolContext, **_kwargs) -> str:
     """Return domain table metadata from imported metadata only.
     Does NOT query Unity Catalog — uses pre-loaded metadata from Domain settings.
@@ -41,14 +42,21 @@ def tool_get_metadata(ctx: ToolContext, **_kwargs) -> str:
     tables = tables[:_MAX_TABLES_IN_METADATA]
     truncated_tables = total_tables > len(tables)
 
-    logger.debug("tool_get_metadata: processing %d table(s)%s", len(tables),
-                 f" (showing first {len(tables)} of {total_tables})" if truncated_tables else "")
+    logger.debug(
+        "tool_get_metadata: processing %d table(s)%s",
+        len(tables),
+        f" (showing first {len(tables)} of {total_tables})" if truncated_tables else "",
+    )
 
     result: List[dict] = []
     total_cols = 0
     for t in tables:
         cols = [
-            {"name": c.get("name"), "type": c.get("type"), "comment": (c.get("comment") or "")[:200]}
+            {
+                "name": c.get("name"),
+                "type": c.get("type"),
+                "comment": (c.get("comment") or "")[:200],
+            }
             for c in t.get("columns", [])[:_MAX_COLUMNS_PER_TABLE]
         ]
         original_col_count = len(t.get("columns", []))
@@ -62,11 +70,14 @@ def tool_get_metadata(ctx: ToolContext, **_kwargs) -> str:
             "columns": cols,
         }
         if truncated_cols:
-            entry["_note"] = f"Showing first {len(cols)} of {original_col_count} columns. Use get_table_detail('{entry['full_name']}') for full schema."
+            entry["_note"] = (
+                f"Showing first {len(cols)} of {original_col_count} columns. Use get_table_detail('{entry['full_name']}') for full schema."
+            )
         result.append(entry)
         logger.debug(
             "tool_get_metadata: table '%s' — %d columns",
-            entry["full_name"], len(cols),
+            entry["full_name"],
+            len(cols),
         )
 
     out = {
@@ -75,10 +86,16 @@ def tool_get_metadata(ctx: ToolContext, **_kwargs) -> str:
     }
     if truncated_tables:
         out["_truncated"] = True
-        out["_message"] = f"Showing first {len(result)} of {total_tables} tables to avoid context overflow. Use get_table_detail(table_name) for any table's full schema."
+        out["_message"] = (
+            f"Showing first {len(result)} of {total_tables} tables to avoid context overflow. Use get_table_detail(table_name) for any table's full schema."
+        )
 
-    logger.info("tool_get_metadata: returning %d table(s), %d total column(s)%s",
-                len(result), total_cols, " (truncated)" if truncated_tables else "")
+    logger.info(
+        "tool_get_metadata: returning %d table(s), %d total column(s)%s",
+        len(result),
+        total_cols,
+        " (truncated)" if truncated_tables else "",
+    )
     return json.dumps(out)
 
 
@@ -92,31 +109,42 @@ def tool_get_table_detail(ctx: ToolContext, *, table_name: str = "", **_kwargs) 
     available_tables = ctx.metadata.get("tables", [])
     logger.debug(
         "tool_get_table_detail: searching '%s' in %d table(s): [%s]",
-        table_name, len(available_tables),
+        table_name,
+        len(available_tables),
         ", ".join(t.get("full_name", t.get("name", "?")) for t in available_tables),
     )
     for t in available_tables:
         name = t.get("full_name", t.get("name", ""))
         if name == table_name or t.get("name") == table_name:
             cols = [
-                {"name": c.get("name"), "type": c.get("type"), "comment": c.get("comment", "")}
+                {
+                    "name": c.get("name"),
+                    "type": c.get("type"),
+                    "comment": c.get("comment", ""),
+                }
                 for c in t.get("columns", [])
             ]
-            logger.info("tool_get_table_detail: found '%s' — %d column(s)", name, len(cols))
+            logger.info(
+                "tool_get_table_detail: found '%s' — %d column(s)", name, len(cols)
+            )
             logger.debug(
                 "tool_get_table_detail: '%s' columns: [%s]",
-                name, ", ".join(f"{c['name']}:{c['type']}" for c in cols),
+                name,
+                ", ".join(f"{c['name']}:{c['type']}" for c in cols),
             )
-            return json.dumps({
-                "name": t.get("name"),
-                "full_name": t.get("full_name"),
-                "comment": t.get("comment", ""),
-                "columns": cols,
-                "column_count": len(cols),
-            })
+            return json.dumps(
+                {
+                    "name": t.get("name"),
+                    "full_name": t.get("full_name"),
+                    "comment": t.get("comment", ""),
+                    "columns": cols,
+                    "column_count": len(cols),
+                }
+            )
     logger.warning(
         "tool_get_table_detail: table '%s' not found in %d available table(s)",
-        table_name, len(available_tables),
+        table_name,
+        len(available_tables),
     )
     return json.dumps({"error": f"Table '{table_name}' not found"})
 

@@ -9,6 +9,7 @@ Covers:
 - Phase 6: Aggregate rules (engine, SQL/Cypher generation, validation)
 - Cross-cutting: RuleViolation model, ReasoningService orchestration
 """
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -39,6 +40,7 @@ class _StubLadybugStyleNodeTable:
 # ===========================================================================
 # Phase 1: SWRL Built-ins
 # ===========================================================================
+
 
 class TestSWRLBuiltinRegistry:
     def test_get_builtin_comparison(self):
@@ -121,7 +123,9 @@ class TestParseSwrlAtomsWithBuiltins:
         assert negated[0]["args"] == ["?x", "?y"]
 
     def test_mixed_atoms(self):
-        expr = "Person(?x), hasAge(?x, ?a), greaterThan(?a, 18), not(hasLicense(?x, ?l))"
+        expr = (
+            "Person(?x), hasAge(?x, ?a), greaterThan(?a, 18), not(hasLicense(?x, ?l))"
+        )
         atoms = SWRLParser.parse_atoms(expr)
         regular = [a for a in atoms if not a.get("builtin") and not a.get("negated")]
         builtins = [a for a in atoms if a.get("builtin")]
@@ -180,6 +184,7 @@ class TestSWRLFlatCypherBuiltinTranslation:
 # Phase 3: Closed-World Negation
 # ===========================================================================
 
+
 class TestNegationSQL:
     def test_negated_antecedent_sql(self):
         translator = SWRLSQLTranslator()
@@ -218,6 +223,7 @@ class TestNegationSQL:
 # Phase 4: Decision Tables
 # ===========================================================================
 
+
 class TestDecisionTableEngine:
     @pytest.fixture
     def sample_table(self):
@@ -227,13 +233,36 @@ class TestDecisionTableEngine:
             "target_class": "Customer",
             "target_class_uri": "http://test.org/ontology#Customer",
             "input_columns": [
-                {"property": "tier", "property_uri": "http://test.org/ontology/tier", "label": "Tier"},
-                {"property": "amount", "property_uri": "http://test.org/ontology/amount", "label": "Amount"},
+                {
+                    "property": "tier",
+                    "property_uri": "http://test.org/ontology/tier",
+                    "label": "Tier",
+                },
+                {
+                    "property": "amount",
+                    "property_uri": "http://test.org/ontology/amount",
+                    "label": "Amount",
+                },
             ],
-            "output_column": {"property": "discount", "property_uri": "http://test.org/ontology/discount"},
+            "output_column": {
+                "property": "discount",
+                "property_uri": "http://test.org/ontology/discount",
+            },
             "rows": [
-                {"conditions": [{"op": "eq", "value": "Gold"}, {"op": "gt", "value": "1000"}], "action": "15"},
-                {"conditions": [{"op": "eq", "value": "Gold"}, {"op": "lte", "value": "1000"}], "action": "10"},
+                {
+                    "conditions": [
+                        {"op": "eq", "value": "Gold"},
+                        {"op": "gt", "value": "1000"},
+                    ],
+                    "action": "15",
+                },
+                {
+                    "conditions": [
+                        {"op": "eq", "value": "Gold"},
+                        {"op": "lte", "value": "1000"},
+                    ],
+                    "action": "10",
+                },
                 {"conditions": [{"op": "any"}, {"op": "any"}], "action": "0"},
             ],
             "hit_policy": "first",
@@ -242,7 +271,9 @@ class TestDecisionTableEngine:
 
     def test_build_violation_sql(self, sample_table):
         engine = DecisionTableEngine()
-        sql = engine.build_violation_sql(sample_table, "triples", "http://test.org/ontology#")
+        sql = engine.build_violation_sql(
+            sample_table, "triples", "http://test.org/ontology#"
+        )
         assert sql is not None
         assert "SELECT DISTINCT" in sql
         assert "http://test.org/ontology#Customer" in sql
@@ -252,7 +283,10 @@ class TestDecisionTableEngine:
         engine = DecisionTableEngine()
         store = _StubLadybugStyleNodeTable()
         cypher = engine.build_violation_cypher(
-            sample_table, "Triple", "http://test.org/ontology#", store,
+            sample_table,
+            "Triple",
+            "http://test.org/ontology#",
+            store,
         )
         assert cypher is not None
         assert "RETURN DISTINCT" in cypher
@@ -262,21 +296,30 @@ class TestDecisionTableEngine:
         assert errors == []
 
     def test_validate_missing_name(self):
-        errors = DecisionTableEngine.validate_table({
-            "target_class": "X", "input_columns": [{}], "rows": [{"conditions": [{}]}],
-        })
+        errors = DecisionTableEngine.validate_table(
+            {
+                "target_class": "X",
+                "input_columns": [{}],
+                "rows": [{"conditions": [{}]}],
+            }
+        )
         assert any("name" in e.lower() for e in errors)
 
     def test_validate_missing_rows(self):
-        errors = DecisionTableEngine.validate_table({
-            "name": "Test", "target_class": "X", "input_columns": [{}],
-        })
+        errors = DecisionTableEngine.validate_table(
+            {
+                "name": "Test",
+                "target_class": "X",
+                "input_columns": [{}],
+            }
+        )
         assert any("row" in e.lower() for e in errors)
 
 
 # ===========================================================================
 # Phase 5: SPARQL CONSTRUCT Rules
 # ===========================================================================
+
 
 class TestSPARQLRuleEngine:
     @pytest.fixture
@@ -302,13 +345,16 @@ class TestSPARQLRuleEngine:
         assert any("name" in e.lower() for e in errors)
 
     def test_validate_non_construct(self):
-        errors = SPARQLRuleEngine.validate_rule({"name": "Test", "query": "SELECT * WHERE { ?s ?p ?o }"})
+        errors = SPARQLRuleEngine.validate_rule(
+            {"name": "Test", "query": "SELECT * WHERE { ?s ?p ?o }"}
+        )
         assert any("CONSTRUCT" in e for e in errors)
 
     def test_construct_to_sql(self, sample_rule):
         engine = SPARQLRuleEngine()
         sql = engine._construct_to_sql(
-            sample_rule["query"], "triples",
+            sample_rule["query"],
+            "triples",
             {"base_uri": "http://test.org/ontology#"},
         )
         assert sql is not None
@@ -318,6 +364,7 @@ class TestSPARQLRuleEngine:
 # ===========================================================================
 # Phase 6: Aggregate Rules
 # ===========================================================================
+
 
 class TestAggregateRuleEngine:
     @pytest.fixture
@@ -351,7 +398,10 @@ class TestAggregateRuleEngine:
         engine = AggregateRuleEngine()
         store = _StubLadybugStyleNodeTable()
         cypher = engine.build_cypher(
-            sample_rule, "Triple", "http://test.org/ontology#", store,
+            sample_rule,
+            "Triple",
+            "http://test.org/ontology#",
+            store,
         )
         assert cypher is not None
         assert "count" in cypher.lower()
@@ -362,18 +412,24 @@ class TestAggregateRuleEngine:
         assert errors == []
 
     def test_validate_missing_name(self):
-        errors = AggregateRuleEngine.validate_rule({
-            "target_class": "X", "aggregate_function": "count",
-            "group_by_property": "p",
-        })
+        errors = AggregateRuleEngine.validate_rule(
+            {
+                "target_class": "X",
+                "aggregate_function": "count",
+                "group_by_property": "p",
+            }
+        )
         assert any("name" in e.lower() for e in errors)
 
     def test_validate_invalid_function(self):
-        errors = AggregateRuleEngine.validate_rule({
-            "name": "Test", "target_class": "X",
-            "aggregate_function": "median",
-            "group_by_property": "p",
-        })
+        errors = AggregateRuleEngine.validate_rule(
+            {
+                "name": "Test",
+                "target_class": "X",
+                "aggregate_function": "median",
+                "group_by_property": "p",
+            }
+        )
         assert any("function" in e.lower() for e in errors)
 
     def test_build_sql_with_agg_property(self):
@@ -456,36 +512,42 @@ class TestAggregateRuleEngine:
 
     def test_validate_count_only_no_properties(self):
         """COUNT-only rules are valid without group_by or aggregate_property."""
-        errors = AggregateRuleEngine.validate_rule({
-            "name": "CountCustomers",
-            "target_class": "Customer",
-            "aggregate_function": "count",
-            "operator": "gt",
-        })
+        errors = AggregateRuleEngine.validate_rule(
+            {
+                "name": "CountCustomers",
+                "target_class": "Customer",
+                "aggregate_function": "count",
+                "operator": "gt",
+            }
+        )
         assert errors == []
 
     def test_validate_sum_requires_property(self):
         """Non-COUNT functions require at least one property."""
-        errors = AggregateRuleEngine.validate_rule({
-            "name": "SumWithout",
-            "target_class": "Customer",
-            "aggregate_function": "sum",
-            "operator": "gt",
-        })
+        errors = AggregateRuleEngine.validate_rule(
+            {
+                "name": "SumWithout",
+                "target_class": "Customer",
+                "aggregate_function": "sum",
+                "operator": "gt",
+            }
+        )
         assert any("group_by" in e.lower() or "aggregate" in e.lower() for e in errors)
 
     def test_resolve_rule_with_data_properties(self):
         """dataProperties on classes should be resolved in the URI map."""
         ontology = {
             "base_uri": "http://test.org/ontology#",
-            "classes": [{
-                "name": "Customer",
-                "uri": "http://test.org/ontology#Customer",
-                "dataProperties": [
-                    {"name": "age", "uri": "http://test.org/ontology/age"},
-                    {"name": "score", "localName": "score"},
-                ],
-            }],
+            "classes": [
+                {
+                    "name": "Customer",
+                    "uri": "http://test.org/ontology#Customer",
+                    "dataProperties": [
+                        {"name": "age", "uri": "http://test.org/ontology/age"},
+                        {"name": "score", "localName": "score"},
+                    ],
+                }
+            ],
             "properties": [],
         }
         rule = {
@@ -505,6 +567,7 @@ class TestAggregateRuleEngine:
 # ===========================================================================
 # Cross-cutting: Models
 # ===========================================================================
+
 
 class TestRuleViolationModel:
     def test_rule_type_field(self):
@@ -539,6 +602,7 @@ class TestRuleViolationModel:
 # ===========================================================================
 # Cross-cutting: ReasoningService orchestration
 # ===========================================================================
+
 
 class TestReasoningServiceNewPhases:
     def _domain_session(self, **overrides):
@@ -599,11 +663,18 @@ class TestReasoningServiceNewPhases:
     def test_full_reasoning_enables_new_phases(self):
         domain = self._domain_session()
         svc = ReasoningService(domain)
-        result = svc.run_full_reasoning({
-            "tbox": False, "swrl": False, "graph": False,
-            "constraints": False,
-            "decision_tables": True,
-            "sparql_rules": True,
-            "aggregate_rules": True,
-        })
-        assert "decision_tables_skipped" in result.stats or "decision_tables_duration_seconds" in result.stats
+        result = svc.run_full_reasoning(
+            {
+                "tbox": False,
+                "swrl": False,
+                "graph": False,
+                "constraints": False,
+                "decision_tables": True,
+                "sparql_rules": True,
+                "aggregate_rules": True,
+            }
+        )
+        assert (
+            "decision_tables_skipped" in result.stats
+            or "decision_tables_duration_seconds" in result.stats
+        )

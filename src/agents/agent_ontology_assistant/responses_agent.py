@@ -102,7 +102,9 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
             return
 
         if not host or not token or not endpoint_name:
-            yield self._error_event("Missing host, token, or endpoint_name in custom_inputs.")
+            yield self._error_event(
+                "Missing host, token, or endpoint_name in custom_inputs."
+            )
             return
 
         ctx = ToolContext(
@@ -124,7 +126,9 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
             is_last = iteration == MAX_ITERATIONS - 1
             send_tools = TOOL_DEFINITIONS if not is_last else None
 
-            llm_response = self._call_llm(host, token, endpoint_name, messages, send_tools)
+            llm_response = self._call_llm(
+                host, token, endpoint_name, messages, send_tools
+            )
             if llm_response is None:
                 yield self._error_event("LLM request failed.")
                 return
@@ -146,7 +150,11 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
                     tool_id = tc.get("id", "")
                     raw_args = func.get("arguments", "{}")
                     try:
-                        arguments = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                        arguments = (
+                            json.loads(raw_args)
+                            if isinstance(raw_args, str)
+                            else raw_args
+                        )
                     except json.JSONDecodeError:
                         arguments = {}
 
@@ -170,11 +178,13 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
                         ),
                     )
 
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_id,
-                        "content": tool_result,
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_id,
+                            "content": tool_result,
+                        }
+                    )
             else:
                 msg_id = f"msg_{uuid4().hex[:8]}"
                 yield ResponsesAgentStreamEvent(
@@ -223,9 +233,15 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
     ) -> Optional[dict]:
         try:
             return call_serving_endpoint(
-                host, token, endpoint_name, messages,
-                tools=tools, max_tokens=2048, temperature=0.2,
-                timeout=LLM_TIMEOUT, trace_name="responses_agent:llm",
+                host,
+                token,
+                endpoint_name,
+                messages,
+                tools=tools,
+                max_tokens=2048,
+                temperature=0.2,
+                timeout=LLM_TIMEOUT,
+                trace_name="responses_agent:llm",
             )
         except Exception as exc:
             logger.error("ResponsesAgent _call_llm failed: %s", exc)
@@ -234,7 +250,10 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
     @mlflow.trace(span_type=SpanType.TOOL)
     def _execute_tool(self, ctx: ToolContext, tool_name: str, arguments: dict) -> str:
         return dispatch_tool(
-            TOOL_HANDLERS, ctx, tool_name, arguments,
+            TOOL_HANDLERS,
+            ctx,
+            tool_name,
+            arguments,
             trace_name="responses_agent:tool",
         )
 
@@ -261,10 +280,12 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
         for item in items[:-1]:
             dumped = item.model_dump() if hasattr(item, "model_dump") else item
             if isinstance(dumped, dict) and dumped.get("role") in ("user", "assistant"):
-                history.append({
-                    "role": dumped["role"],
-                    "content": dumped.get("content", ""),
-                })
+                history.append(
+                    {
+                        "role": dumped["role"],
+                        "content": dumped.get("content", ""),
+                    }
+                )
         return history
 
     def _error_event(self, text: str) -> ResponsesAgentStreamEvent:

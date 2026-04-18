@@ -15,6 +15,7 @@ targets a specific version; when omitted, the latest version is used.
 
 Use ``GET /api/v1/domain/versions?domain_name=...`` to discover available versions.
 """
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import AliasChoices, BaseModel, Field
 from typing import Any, Dict, List, Optional
@@ -25,7 +26,12 @@ from api.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
 from back.core.triplestore import get_triplestore
-from back.core.helpers import get_databricks_credentials, sql_escape, effective_view_table, effective_graph_name
+from back.core.helpers import (
+    get_databricks_credentials,
+    sql_escape,
+    effective_view_table,
+    effective_graph_name,
+)
 from back.objects.digitaltwin import DigitalTwin, DomainSnapshot
 
 # Tests may patch ``api.routers.digitaltwin`` for registry resolution helpers.
@@ -41,6 +47,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
+
 
 class StatusResponse(BaseModel):
     success: bool
@@ -77,8 +84,13 @@ class StatsResponse(BaseModel):
 
 
 class BuildRequest(BaseModel):
-    build_mode: str = Field("incremental", description="'incremental' (detect changes, apply diff) or 'full' (drop and recreate)")
-    drop_existing: bool = Field(False, description="Deprecated: use build_mode='full' instead")
+    build_mode: str = Field(
+        "incremental",
+        description="'incremental' (detect changes, apply diff) or 'full' (drop and recreate)",
+    )
+    drop_existing: bool = Field(
+        False, description="Deprecated: use build_mode='full' instead"
+    )
 
 
 class BuildStartedResponse(BaseModel):
@@ -89,9 +101,12 @@ class BuildStartedResponse(BaseModel):
 
 class TaskProgressResponse(BaseModel):
     """Generic task-polling response used by all async task endpoints."""
+
     success: bool
     task_id: str
-    status: str = Field(..., description="pending | running | completed | failed | cancelled")
+    status: str = Field(
+        ..., description="pending | running | completed | failed | cancelled"
+    )
     progress: int = Field(0, ge=0, le=100)
     message: Optional[str] = None
     result: Optional[Dict[str, Any]] = None
@@ -104,14 +119,18 @@ BuildProgressResponse = TaskProgressResponse
 def _poll_task(task_id: str) -> TaskProgressResponse:
     """Shared helper: look up a task and return its progress response."""
     from back.core.task_manager import get_task_manager
+
     task = get_task_manager().get_task(task_id)
     if not task:
         raise NotFoundError("Task not found")
     return TaskProgressResponse(
-        success=True, task_id=task.id, status=task.status,
+        success=True,
+        task_id=task.id,
+        status=task.status,
         progress=task.progress or 0,
-        message=task.message or '',
-        result=task.result, error=task.error,
+        message=task.message or "",
+        result=task.result,
+        error=task.error,
     )
 
 
@@ -131,7 +150,9 @@ class TriplesResponse(BaseModel):
 
 class FindResponse(BaseModel):
     success: bool
-    seed_count: int = Field(0, description="Number of entities matching the initial search")
+    seed_count: int = Field(
+        0, description="Number of entities matching the initial search"
+    )
     depth: int = Field(1, description="Traversal depth used")
     triples: List[TripleRow] = []
     count: int = Field(0, description="Triples returned in this page")
@@ -143,8 +164,13 @@ class FindResponse(BaseModel):
 
 
 class DataQualityRequest(BaseModel):
-    category: Optional[str] = Field(None, description="Filter shapes by category (e.g. 'cardinality', 'value')")
-    backend: str = Field("graph", description="Backend to run checks against: 'view' (SQL) or 'graph' (in-memory)")
+    category: Optional[str] = Field(
+        None, description="Filter shapes by category (e.g. 'cardinality', 'value')"
+    )
+    backend: str = Field(
+        "graph",
+        description="Backend to run checks against: 'view' (SQL) or 'graph' (in-memory)",
+    )
 
 
 class DataQualityStartedResponse(BaseModel):
@@ -159,12 +185,26 @@ class InferenceRequest(BaseModel):
     swrl: bool = Field(True, description="Run SWRL rule execution")
     graph: bool = Field(True, description="Run graph-structural reasoning")
     constraints: bool = Field(True, description="Run constraint checks")
-    decision_tables: bool = Field(False, description="Run DMN-style decision table rules")
-    sparql_rules: bool = Field(False, description="Run SPARQL CONSTRUCT inference rules")
-    aggregate_rules: bool = Field(False, description="Run aggregate (GROUP BY/HAVING) rules")
-    append_graph: bool = Field(False, description="Append inferred triples to the knowledge graph after inference completes")
-    materialize: bool = Field(False, description="Write inferred triples to a Delta table")
-    materialize_table: Optional[str] = Field(None, description="Fully-qualified table name for materialization (catalog.schema.table)")
+    decision_tables: bool = Field(
+        False, description="Run DMN-style decision table rules"
+    )
+    sparql_rules: bool = Field(
+        False, description="Run SPARQL CONSTRUCT inference rules"
+    )
+    aggregate_rules: bool = Field(
+        False, description="Run aggregate (GROUP BY/HAVING) rules"
+    )
+    append_graph: bool = Field(
+        False,
+        description="Append inferred triples to the knowledge graph after inference completes",
+    )
+    materialize: bool = Field(
+        False, description="Write inferred triples to a Delta table"
+    )
+    materialize_table: Optional[str] = Field(
+        None,
+        description="Fully-qualified table name for materialization (catalog.schema.table)",
+    )
 
 
 class InferenceStartedResponse(BaseModel):
@@ -185,19 +225,20 @@ class InferenceResultResponse(BaseModel):
 # GET /registry  — stateless registry discovery for external clients (MCP)
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/registry",
     summary="Get registry configuration",
     description="Return the domain registry location (catalog.schema.volume). "
-                "Reads from the current session if available, otherwise from "
-                "environment variables (REGISTRY_CATALOG, REGISTRY_SCHEMA, REGISTRY_VOLUME).",
+    "Reads from the current session if available, otherwise from "
+    "environment variables (REGISTRY_CATALOG, REGISTRY_SCHEMA, REGISTRY_VOLUME).",
 )
 async def dt_registry(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
     reg = DigitalTwin.resolve_registry(session_mgr, settings)
-    catalog, schema, volume = reg['catalog'], reg['schema'], reg['volume']
+    catalog, schema, volume = reg["catalog"], reg["schema"], reg["volume"]
     return {
         "catalog": catalog,
         "schema": schema,
@@ -210,12 +251,13 @@ async def dt_registry(
 # GET /status
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/status",
     response_model=StatusResponse,
     summary="Triple store status",
     description="Check whether the triple store is configured, which backend is used, "
-                "and how many triples it currently contains.",
+    "and how many triples it currently contains.",
 )
 async def dt_status(
     domain_name: Optional[str] = Query(
@@ -228,48 +270,76 @@ async def dt_status(
         validation_alias=AliasChoices("domain_version", "project_version"),
         description="Domain version to load (uses latest version if omitted)",
     ),
-    registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
-    registry_schema: Optional[str] = Query(None, description="Override registry schema"),
-    registry_volume: Optional[str] = Query(None, description="Override registry volume"),
+    registry_catalog: Optional[str] = Query(
+        None, description="Override registry catalog"
+    ),
+    registry_schema: Optional[str] = Query(
+        None, description="Override registry schema"
+    ),
+    registry_volume: Optional[str] = Query(
+        None, description="Override registry volume"
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = DigitalTwin.resolve_domain(domain_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, domain_version)
+    domain = DigitalTwin.resolve_domain(
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
+    )
     view_table = effective_view_table(domain, settings).strip()
     graph_name = effective_graph_name(domain)
 
     graph_store = get_triplestore(domain, settings, backend="graph")
     if not graph_store:
-        return StatusResponse(success=True, view_table=view_table, graph_name=graph_name,
-                              reason='Graph backend not configured')
+        return StatusResponse(
+            success=True,
+            view_table=view_table,
+            graph_name=graph_name,
+            reason="Graph backend not configured",
+        )
 
     try:
         if not graph_store.table_exists(graph_name):
-            return StatusResponse(success=True, view_table=view_table, graph_name=graph_name,
-                                  reason='Graph does not exist yet')
+            return StatusResponse(
+                success=True,
+                view_table=view_table,
+                graph_name=graph_name,
+                reason="Graph does not exist yet",
+            )
         status = graph_store.get_status(graph_name)
-        count = status.get('count', 0)
-        last_mod = status.get('last_modified')
+        count = status.get("count", 0)
+        last_mod = status.get("last_modified")
         return StatusResponse(
-            success=True, view_table=view_table, graph_name=graph_name,
-            has_data=count > 0, count=count,
+            success=True,
+            view_table=view_table,
+            graph_name=graph_name,
+            has_data=count > 0,
+            count=count,
             last_modified=str(last_mod) if last_mod else None,
         )
     except Exception as e:
         logger.exception("dt_status failed: %s", e)
-        raise InfrastructureError("Digital Twin status check failed", detail=str(e)) from e
+        raise InfrastructureError(
+            "Digital Twin status check failed", detail=str(e)
+        ) from e
 
 
 # ---------------------------------------------------------------------------
 # GET /stats
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/stats",
     response_model=StatsResponse,
     summary="Triple store insights",
     description="Return content statistics: entity type breakdown, predicate counts, "
-                "label/relationship totals.",
+    "label/relationship totals.",
 )
 async def dt_stats(
     domain_name: Optional[str] = Query(
@@ -282,13 +352,27 @@ async def dt_stats(
         validation_alias=AliasChoices("domain_version", "project_version"),
         description="Domain version to load (uses latest version if omitted)",
     ),
-    registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
-    registry_schema: Optional[str] = Query(None, description="Override registry schema"),
-    registry_volume: Optional[str] = Query(None, description="Override registry volume"),
+    registry_catalog: Optional[str] = Query(
+        None, description="Override registry catalog"
+    ),
+    registry_schema: Optional[str] = Query(
+        None, description="Override registry schema"
+    ),
+    registry_volume: Optional[str] = Query(
+        None, description="Override registry volume"
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = DigitalTwin.resolve_domain(domain_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, domain_version)
+    domain = DigitalTwin.resolve_domain(
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
+    )
     graph_name = effective_graph_name(domain)
 
     if not graph_name:
@@ -313,27 +397,40 @@ async def dt_stats(
 
         return StatsResponse(
             success=True,
-            total_triples=total, distinct_subjects=subj, distinct_predicates=pred,
-            entity_types=[EntityTypeStat(uri=r['type_uri'], count=int(r['cnt'])) for r in entity_rows],
-            top_predicates=[PredicateStat(uri=r['predicate'], count=int(r['cnt'])) for r in pred_rows],
-            label_count=lbl, type_assertion_count=type_cnt, relationship_count=rel_cnt,
+            total_triples=total,
+            distinct_subjects=subj,
+            distinct_predicates=pred,
+            entity_types=[
+                EntityTypeStat(uri=r["type_uri"], count=int(r["cnt"]))
+                for r in entity_rows
+            ],
+            top_predicates=[
+                PredicateStat(uri=r["predicate"], count=int(r["cnt"]))
+                for r in pred_rows
+            ],
+            label_count=lbl,
+            type_assertion_count=type_cnt,
+            relationship_count=rel_cnt,
         )
     except Exception as e:
         logger.exception("dt_stats failed: %s", e)
-        raise InfrastructureError("Triple store stats retrieval failed", detail=str(e)) from e
+        raise InfrastructureError(
+            "Triple store stats retrieval failed", detail=str(e)
+        ) from e
 
 
 # ---------------------------------------------------------------------------
 # POST /build
 # ---------------------------------------------------------------------------
 
+
 @router.post(
     "/build",
     response_model=BuildStartedResponse,
     summary="Start a Digital Twin build",
     description="Generate all triples from the current ontology + mapping configuration "
-                "and write them to the configured triple store backend. "
-                "Returns a `task_id` that can be polled via `GET /build/{task_id}`.",
+    "and write them to the configured triple store backend. "
+    "Returns a `task_id` that can be polled via `GET /build/{task_id}`.",
 )
 async def dt_build(
     body: BuildRequest = BuildRequest(),
@@ -347,22 +444,36 @@ async def dt_build(
         validation_alias=AliasChoices("domain_version", "project_version"),
         description="Domain version to load (uses latest version if omitted)",
     ),
-    registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
-    registry_schema: Optional[str] = Query(None, description="Override registry schema"),
-    registry_volume: Optional[str] = Query(None, description="Override registry volume"),
+    registry_catalog: Optional[str] = Query(
+        None, description="Override registry catalog"
+    ),
+    registry_schema: Optional[str] = Query(
+        None, description="Override registry schema"
+    ),
+    registry_volume: Optional[str] = Query(
+        None, description="Override registry volume"
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
     import threading
     from back.core.task_manager import get_task_manager
 
-    domain = DigitalTwin.resolve_domain(domain_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, domain_version)
+    domain = DigitalTwin.resolve_domain(
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
+    )
     view_table = effective_view_table(domain, settings).strip()
     graph_name = effective_graph_name(domain)
     if not view_table:
         raise ValidationError("View location not configured")
 
-    parts = view_table.split('.')
+    parts = view_table.split(".")
     if len(parts) != 3:
         raise ValidationError("View must be fully qualified: catalog.schema.view_name")
 
@@ -377,23 +488,28 @@ async def dt_build(
     if not warehouse_id:
         raise ValidationError("No SQL warehouse configured")
 
-    base_uri = domain.ontology.get('base_uri', DEFAULT_BASE_URI)
+    base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
     mapping_config = domain.assignment
     ontology_config = domain.ontology
 
     snap = DomainSnapshot(domain)
-    force_full = body.build_mode == 'full' or body.drop_existing
+    force_full = body.build_mode == "full" or body.drop_existing
     stored_source_versions = dict(domain.source_versions or {})
     delta_cfg = domain.delta or {}
 
     tm = get_task_manager()
-    task = tm.create_task(name="Digital Twin Build (API)", task_type="triplestore_sync",
-                          steps=[{'name': 'prepare', 'description': 'Preparing'},
-                                 {'name': 'gate', 'description': 'Checking source tables'},
-                                 {'name': 'view', 'description': 'Creating VIEW'},
-                                 {'name': 'diff', 'description': 'Computing diff'},
-                                 {'name': 'graph', 'description': 'Applying to graph'},
-                                 {'name': 'snapshot', 'description': 'Refreshing snapshot'}])
+    task = tm.create_task(
+        name="Digital Twin Build (API)",
+        task_type="triplestore_sync",
+        steps=[
+            {"name": "prepare", "description": "Preparing"},
+            {"name": "gate", "description": "Checking source tables"},
+            {"name": "view", "description": "Creating VIEW"},
+            {"name": "diff", "description": "Computing diff"},
+            {"name": "graph", "description": "Applying to graph"},
+            {"name": "snapshot", "description": "Refreshing snapshot"},
+        ],
+    )
 
     def _run():
         DigitalTwin.run_build_task(
@@ -419,19 +535,20 @@ async def dt_build(
         )
 
     threading.Thread(target=_run, daemon=True).start()
-    return BuildStartedResponse(success=True, task_id=task.id, message='Build started')
+    return BuildStartedResponse(success=True, task_id=task.id, message="Build started")
 
 
 # ---------------------------------------------------------------------------
 # GET /build/{task_id}
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/build/{task_id}",
     response_model=BuildProgressResponse,
     summary="Poll build progress",
     description="Check the progress of a previously started build. "
-                "Returns status, progress percentage, and result when completed.",
+    "Returns status, progress percentage, and result when completed.",
 )
 async def dt_build_progress(task_id: str):
     return _poll_task(task_id)
@@ -441,13 +558,14 @@ async def dt_build_progress(task_id: str):
 # GET /triples/find
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/triples/find",
     response_model=FindResponse,
     summary="Find entities and traverse relationships",
     description="Search for entities by type and/or label text, then traverse "
-                "their relationships up to N levels deep (BFS graph walk). "
-                "Returns all triples discovered during traversal.",
+    "their relationships up to N levels deep (BFS graph walk). "
+    "Returns all triples discovered during traversal.",
 )
 async def dt_triples_find(
     entity_type: Optional[str] = None,
@@ -465,9 +583,15 @@ async def dt_triples_find(
         validation_alias=AliasChoices("domain_version", "project_version"),
         description="Domain version to load (uses latest version if omitted)",
     ),
-    registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
-    registry_schema: Optional[str] = Query(None, description="Override registry schema"),
-    registry_volume: Optional[str] = Query(None, description="Override registry volume"),
+    registry_catalog: Optional[str] = Query(
+        None, description="Override registry catalog"
+    ),
+    registry_schema: Optional[str] = Query(
+        None, description="Override registry schema"
+    ),
+    registry_volume: Optional[str] = Query(
+        None, description="Override registry volume"
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -477,7 +601,15 @@ async def dt_triples_find(
     limit = max(1, min(limit, 10000))
     offset = max(0, offset)
 
-    domain = DigitalTwin.resolve_domain(domain_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, domain_version)
+    domain = DigitalTwin.resolve_domain(
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
+    )
     table = effective_graph_name(domain)
     if not table:
         raise ValidationError("Graph name not configured")
@@ -486,10 +618,10 @@ async def dt_triples_find(
     if not store:
         raise ValidationError("Graph backend not configured")
 
-    rdf_type = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+    rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
     try:
-        rdfs_label = 'http://www.w3.org/2000/01/rdf-schema#label'
+        rdfs_label = "http://www.w3.org/2000/01/rdf-schema#label"
 
         seed_conditions: list[str] = []
 
@@ -513,19 +645,26 @@ async def dt_triples_find(
                 f"OR LOWER(subject) LIKE '%#{esc}%')"
             )
 
-        seed_where = ' WHERE ' + ' AND '.join(seed_conditions)
+        seed_where = " WHERE " + " AND ".join(seed_conditions)
 
         bfs_rows = store.bfs_traversal(
-            table, seed_where, depth,
-            search=search or "", entity_type=entity_type or "",
+            table,
+            seed_where,
+            depth,
+            search=search or "",
+            entity_type=entity_type or "",
         )
 
         if not bfs_rows:
-            return FindResponse(success=True, seed_count=0, depth=depth,
-                                message='No matching entities found')
+            return FindResponse(
+                success=True,
+                seed_count=0,
+                depth=depth,
+                message="No matching entities found",
+            )
 
-        all_entities = {r['entity'] for r in bfs_rows}
-        seed_count = sum(1 for r in bfs_rows if int(r.get('min_lvl', 0)) == 0)
+        all_entities = {r["entity"] for r in bfs_rows}
+        seed_count = sum(1 for r in bfs_rows if int(r.get("min_lvl", 0)) == 0)
 
         all_entities = DigitalTwin.expand_uri_aliases(store, table, all_entities)
 
@@ -534,20 +673,26 @@ async def dt_triples_find(
         seen_triples: set = set()
         all_triples: list = []
         for r in all_rows:
-            key = (r['subject'], r['predicate'], r['object'])
+            key = (r["subject"], r["predicate"], r["object"])
             if key not in seen_triples:
                 seen_triples.add(key)
                 all_triples.append(r)
 
         total = len(all_triples)
-        page = all_triples[offset:offset + limit]
+        page = all_triples[offset : offset + limit]
 
         return FindResponse(
             success=True,
             seed_count=seed_count,
             depth=depth,
-            triples=[TripleRow(subject=r.get('subject', ''), predicate=r.get('predicate', ''),
-                               object=r.get('object', '')) for r in page],
+            triples=[
+                TripleRow(
+                    subject=r.get("subject", ""),
+                    predicate=r.get("predicate", ""),
+                    object=r.get("object", ""),
+                )
+                for r in page
+            ],
             count=len(page),
             total=total,
             limit=limit,
@@ -563,13 +708,14 @@ async def dt_triples_find(
 # GET /triples
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/triples",
     response_model=TriplesResponse,
     summary="Retrieve triples",
     description="Query triples from the configured triple store with optional filters. "
-                "Supports filtering by entity type, predicate, subject/object text search, "
-                "and pagination via limit/offset.",
+    "Supports filtering by entity type, predicate, subject/object text search, "
+    "and pagination via limit/offset.",
 )
 async def dt_triples(
     subject: Optional[str] = None,
@@ -579,7 +725,9 @@ async def dt_triples(
     search: Optional[str] = None,
     limit: int = 1000,
     offset: int = 0,
-    backend: Optional[str] = Query("graph", description="Backend: 'view' or 'graph' (default graph)"),
+    backend: Optional[str] = Query(
+        "graph", description="Backend: 'view' or 'graph' (default graph)"
+    ),
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
@@ -590,16 +738,33 @@ async def dt_triples(
         validation_alias=AliasChoices("domain_version", "project_version"),
         description="Domain version to load (uses latest version if omitted)",
     ),
-    registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
-    registry_schema: Optional[str] = Query(None, description="Override registry schema"),
-    registry_volume: Optional[str] = Query(None, description="Override registry volume"),
+    registry_catalog: Optional[str] = Query(
+        None, description="Override registry catalog"
+    ),
+    registry_schema: Optional[str] = Query(
+        None, description="Override registry schema"
+    ),
+    registry_volume: Optional[str] = Query(
+        None, description="Override registry volume"
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = DigitalTwin.resolve_domain(domain_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, domain_version)
+    domain = DigitalTwin.resolve_domain(
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
+    )
     be = backend or "graph"
-    table = (effective_view_table(domain, settings).strip() if be == "view"
-             else effective_graph_name(domain))
+    table = (
+        effective_view_table(domain, settings).strip()
+        if be == "view"
+        else effective_graph_name(domain)
+    )
     if not table:
         raise ValidationError("Triple store not configured")
 
@@ -616,7 +781,7 @@ async def dt_triples(
         if object:
             conditions.append(f"object LIKE '%{sql_escape(object)}%'")
         if entity_type:
-            rdf_type = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+            rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
             conditions.append(
                 f"subject IN (SELECT subject FROM {table} "
                 f"WHERE predicate = '{rdf_type}' AND object LIKE '%{sql_escape(entity_type)}%')"
@@ -632,15 +797,24 @@ async def dt_triples(
 
         return TriplesResponse(
             success=True,
-            triples=[TripleRow(subject=r.get('subject', ''), predicate=r.get('predicate', ''),
-                               object=r.get('object', '')) for r in rows],
+            triples=[
+                TripleRow(
+                    subject=r.get("subject", ""),
+                    predicate=r.get("predicate", ""),
+                    object=r.get("object", ""),
+                )
+                for r in rows
+            ],
             count=len(rows),
             total=total,
         )
     except Exception as e:
         logger.exception("dt_triples failed: %s", e)
         error_msg = str(e)
-        if 'TABLE_OR_VIEW_NOT_FOUND' in error_msg or 'does not exist' in error_msg.lower():
+        if (
+            "TABLE_OR_VIEW_NOT_FOUND" in error_msg
+            or "does not exist" in error_msg.lower()
+        ):
             raise NotFoundError(f"{table} does not exist. Run build first.") from e
         raise InfrastructureError("Triple retrieval failed", detail=error_msg) from e
 
@@ -649,13 +823,14 @@ async def dt_triples(
 # POST /dataquality/start
 # ---------------------------------------------------------------------------
 
+
 @router.post(
     "/dataquality/start",
     response_model=DataQualityStartedResponse,
     summary="Run data quality checks",
     description="Start SHACL-based data quality checks as an asynchronous task. "
-                "Evaluates all enabled SHACL shapes (or a filtered category) against "
-                "the triple store and returns a task_id to poll for progress.",
+    "Evaluates all enabled SHACL shapes (or a filtered category) against "
+    "the triple store and returns a task_id to poll for progress.",
 )
 async def dt_dataquality_start(
     body: DataQualityRequest = DataQualityRequest(),
@@ -669,17 +844,29 @@ async def dt_dataquality_start(
         validation_alias=AliasChoices("domain_version", "project_version"),
         description="Domain version to load (uses latest version if omitted)",
     ),
-    registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
-    registry_schema: Optional[str] = Query(None, description="Override registry schema"),
-    registry_volume: Optional[str] = Query(None, description="Override registry volume"),
+    registry_catalog: Optional[str] = Query(
+        None, description="Override registry catalog"
+    ),
+    registry_schema: Optional[str] = Query(
+        None, description="Override registry schema"
+    ),
+    registry_volume: Optional[str] = Query(
+        None, description="Override registry volume"
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
     import threading
     from back.core.task_manager import get_task_manager
+
     domain = DigitalTwin.resolve_domain(
-        domain_name, session_mgr, settings,
-        registry_catalog, registry_schema, registry_volume, domain_version,
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
     )
 
     shapes = domain.shacl_shapes
@@ -688,9 +875,11 @@ async def dt_dataquality_start(
     shapes = [s for s in shapes if s.get("enabled", True)]
 
     swrl_rules = domain.swrl_rules or []
-    ontology_dict = getattr(domain, 'ontology', None)
+    ontology_dict = getattr(domain, "ontology", None)
     if not isinstance(ontology_dict, dict):
-        ontology_dict = domain._data.get('ontology', {}) if hasattr(domain, '_data') else {}
+        ontology_dict = (
+            domain._data.get("ontology", {}) if hasattr(domain, "_data") else {}
+        )
 
     if not shapes and not swrl_rules:
         return DataQualityStartedResponse(
@@ -746,12 +935,13 @@ async def dt_dataquality_start(
 # GET /dataquality/{task_id}
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/dataquality/{task_id}",
     response_model=TaskProgressResponse,
     summary="Poll data quality progress",
     description="Check the progress of a previously started data quality check. "
-                "Returns status, progress percentage, and results when completed.",
+    "Returns status, progress percentage, and results when completed.",
 )
 async def dt_dataquality_progress(task_id: str):
     return _poll_task(task_id)
@@ -761,16 +951,17 @@ async def dt_dataquality_progress(task_id: str):
 # POST /inference/start
 # ---------------------------------------------------------------------------
 
+
 @router.post(
     "/inference/start",
     response_model=InferenceStartedResponse,
     summary="Run inference",
     description="Start OWL 2 RL inference, SWRL rule execution, graph reasoning, "
-                "constraint checking, SHACL inference rules, decision tables, "
-                "SPARQL CONSTRUCT rules, and aggregate rules as an asynchronous task. "
-                "Each phase can be toggled on or off. Optionally append inferred "
-                "triples to the knowledge graph via ``append_graph``. "
-                "Returns a task_id to poll.",
+    "constraint checking, SHACL inference rules, decision tables, "
+    "SPARQL CONSTRUCT rules, and aggregate rules as an asynchronous task. "
+    "Each phase can be toggled on or off. Optionally append inferred "
+    "triples to the knowledge graph via ``append_graph``. "
+    "Returns a task_id to poll.",
 )
 async def dt_inference_start(
     body: InferenceRequest = InferenceRequest(),
@@ -784,9 +975,15 @@ async def dt_inference_start(
         validation_alias=AliasChoices("domain_version", "project_version"),
         description="Domain version to load (uses latest version if omitted)",
     ),
-    registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
-    registry_schema: Optional[str] = Query(None, description="Override registry schema"),
-    registry_volume: Optional[str] = Query(None, description="Override registry volume"),
+    registry_catalog: Optional[str] = Query(
+        None, description="Override registry catalog"
+    ),
+    registry_schema: Optional[str] = Query(
+        None, description="Override registry schema"
+    ),
+    registry_volume: Optional[str] = Query(
+        None, description="Override registry volume"
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -794,8 +991,13 @@ async def dt_inference_start(
     from back.core.task_manager import get_task_manager
 
     domain = DigitalTwin.resolve_domain(
-        domain_name, session_mgr, settings,
-        registry_catalog, registry_schema, registry_volume, domain_version,
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
     )
     domain.ensure_generated_content()
     domain_snap = DigitalTwin.make_snapshot(domain)
@@ -844,12 +1046,13 @@ async def dt_inference_start(
 # GET /inference/results  (registered before {task_id} to avoid path collision)
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/inference/results",
     response_model=InferenceResultResponse,
     summary="Get inference results (stub)",
     description="Inference results are not persisted in the domain session. "
-                "Poll ``GET /digitaltwin/inference/{task_id}`` for the completed run payload.",
+    "Poll ``GET /digitaltwin/inference/{task_id}`` for the completed run payload.",
 )
 async def dt_inference_results(
     domain_name: Optional[str] = Query(
@@ -862,15 +1065,26 @@ async def dt_inference_results(
         validation_alias=AliasChoices("domain_version", "project_version"),
         description="Domain version to load (uses latest version if omitted)",
     ),
-    registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
-    registry_schema: Optional[str] = Query(None, description="Override registry schema"),
-    registry_volume: Optional[str] = Query(None, description="Override registry volume"),
+    registry_catalog: Optional[str] = Query(
+        None, description="Override registry catalog"
+    ),
+    registry_schema: Optional[str] = Query(
+        None, description="Override registry schema"
+    ),
+    registry_volume: Optional[str] = Query(
+        None, description="Override registry volume"
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
     _ = DigitalTwin.resolve_domain(
-        domain_name, session_mgr, settings,
-        registry_catalog, registry_schema, registry_volume, domain_version,
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
     )
     return InferenceResultResponse(
         success=True,
@@ -885,12 +1099,13 @@ async def dt_inference_results(
 # GET /inference/{task_id}
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/inference/{task_id}",
     response_model=TaskProgressResponse,
     summary="Poll inference progress",
     description="Check the progress of a previously started inference task. "
-                "Returns status, progress percentage, and results when completed.",
+    "Returns status, progress percentage, and results when completed.",
 )
 async def dt_inference_progress(task_id: str):
     return _poll_task(task_id)

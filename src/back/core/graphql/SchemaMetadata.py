@@ -1,4 +1,5 @@
 """GraphQL schema metadata registry and entity resolution."""
+
 import dataclasses
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -43,13 +44,20 @@ class SchemaMetadata:
     ) -> list:
         info = self.types.get(type_name)
         if not info:
-            logger.warning("GraphQL resolve_list: unknown type '%s'. Registered types: %s",
-                           type_name, list(self.types.keys()))
+            logger.warning(
+                "GraphQL resolve_list: unknown type '%s'. Registered types: %s",
+                type_name,
+                list(self.types.keys()),
+            )
             return []
 
         logger.info(
             "GraphQL resolve_list: type=%s, cls_uri=%s, table=%s, search=%s, limit=%d",
-            type_name, info.cls_uri, table, search, limit,
+            type_name,
+            info.cls_uri,
+            table,
+            search,
+            limit,
         )
 
         uris = self._query_subjects(store, table, info.cls_uri, limit, offset, search)
@@ -57,12 +65,20 @@ class SchemaMetadata:
             logger.warning(
                 "GraphQL resolve_list: no subjects found for type=%s (cls_uri=%s, search=%s). "
                 "Try the /graphql/{domain}/debug?type_name=%s endpoint to diagnose.",
-                type_name, info.cls_uri, search, type_name,
+                type_name,
+                info.cls_uri,
+                search,
+                type_name,
             )
             return []
 
         effective_depth = min(depth if depth is not None else DEFAULT_DEPTH, MAX_DEPTH)
-        logger.info("GraphQL resolve_list %s: %d URIs found, depth=%d", type_name, len(uris), effective_depth)
+        logger.info(
+            "GraphQL resolve_list %s: %d URIs found, depth=%d",
+            type_name,
+            len(uris),
+            effective_depth,
+        )
         return self._build_entities(store, table, info, uris, depth=effective_depth)
 
     def resolve_single(
@@ -82,7 +98,9 @@ class SchemaMetadata:
             return None
 
         effective_depth = min(depth if depth is not None else DEFAULT_DEPTH, MAX_DEPTH)
-        entities = self._build_entities(store, table, info, [uri], depth=effective_depth)
+        entities = self._build_entities(
+            store, table, info, [uri], depth=effective_depth
+        )
         return entities[0] if entities else None
 
     # ------------------------------------------------------------------
@@ -216,15 +234,16 @@ class SchemaMetadata:
             if not field_name:
                 if not _logged_diag:
                     store_preds = [
-                        tr["predicate"] for tr in triples
-                        if tr["predicate"] != RDF_TYPE
-                        and tr["predicate"] != RDFS_LABEL
+                        tr["predicate"]
+                        for tr in triples
+                        if tr["predicate"] != RDF_TYPE and tr["predicate"] != RDFS_LABEL
                     ]
                     logger.warning(
                         "GraphQL predicate mismatch for %s (%s). "
                         "Triple-store predicates: %s  |  "
                         "Schema predicate_to_field keys: %s",
-                        type_info.name, uri,
+                        type_info.name,
+                        uri,
                         store_preds[:8],
                         list(type_info.predicate_to_field.keys())[:8],
                     )
@@ -244,7 +263,9 @@ class SchemaMetadata:
         except Exception as e:
             logger.warning(
                 "GraphQL entity build failed for %s (%s): %s",
-                type_info.name, uri, e,
+                type_info.name,
+                uri,
+                e,
             )
             entity = type_info.gql_type(id=_extract_local(uri), uri=uri)
 

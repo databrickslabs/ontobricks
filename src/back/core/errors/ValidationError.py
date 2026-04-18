@@ -1,4 +1,5 @@
 """Client-supplied data is invalid (400)."""
+
 from __future__ import annotations
 
 from back.core.errors.OntoBricksError import OntoBricksError

@@ -1,2 +1,1 @@
 """Test suite for OntoBricks."""
-

@@ -71,7 +71,7 @@ class DatabricksHelpers:
         host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
         registry_cfg = DatabricksHelpers._resolve_registry_cfg(domain, settings)
 
-        if host and registry_cfg.get('catalog') and registry_cfg.get('schema'):
+        if host and registry_cfg.get("catalog") and registry_cfg.get("schema"):
             try:
                 wid = global_config_service.get_warehouse_id(host, token, registry_cfg)
                 if wid:
@@ -79,11 +79,11 @@ class DatabricksHelpers:
             except Exception as exc:
                 logger.debug("Could not read global warehouse config: %s", exc)
 
-        session_wid = domain.databricks.get('warehouse_id', '')
+        session_wid = domain.databricks.get("warehouse_id", "")
         if session_wid:
             return session_wid
 
-        if getattr(settings, 'sql_warehouse_id', ''):
+        if getattr(settings, "sql_warehouse_id", ""):
             return settings.sql_warehouse_id
 
         return os.getenv("DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT", "")
@@ -96,7 +96,7 @@ class DatabricksHelpers:
         host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
         registry_cfg = DatabricksHelpers._resolve_registry_cfg(domain, settings)
 
-        if host and registry_cfg.get('catalog') and registry_cfg.get('schema'):
+        if host and registry_cfg.get("catalog") and registry_cfg.get("schema"):
             try:
                 getter = getattr(global_config_service, getter_name)
                 val = getter(host, token, registry_cfg)
@@ -112,10 +112,9 @@ class DatabricksHelpers:
 
         Falls back to :data:`shared.config.constants.DEFAULT_BASE_URI` (no trailing slash).
         """
-        return (
-            DatabricksHelpers._resolve_global_setting(domain, settings, "get_default_base_uri")
-            or DEFAULT_BASE_URI.rstrip("/")
-        )
+        return DatabricksHelpers._resolve_global_setting(
+            domain, settings, "get_default_base_uri"
+        ) or DEFAULT_BASE_URI.rstrip("/")
 
     @staticmethod
     def resolve_default_emoji(domain, settings) -> str:
@@ -124,7 +123,9 @@ class DatabricksHelpers:
         Falls back to the hard-coded default ``📦``.
         """
         return (
-            DatabricksHelpers._resolve_global_setting(domain, settings, "get_default_emoji")
+            DatabricksHelpers._resolve_global_setting(
+                domain, settings, "get_default_emoji"
+            )
             or "📦"
         )
 
@@ -142,16 +143,20 @@ class DatabricksHelpers:
         Returns:
             DatabricksClient instance or None if not configured
         """
-        host = domain.databricks.get('host') or settings.databricks_host
-        token = domain.databricks.get('token') or settings.databricks_token
+        host = domain.databricks.get("host") or settings.databricks_host
+        token = domain.databricks.get("token") or settings.databricks_token
         warehouse_id = DatabricksHelpers.resolve_warehouse_id(domain, settings)
 
         # In Databricks Apps mode, always create a client (SDK handles auth)
         if _databricks.is_databricks_app():
-            return _databricks.DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
+            return _databricks.DatabricksClient(
+                host=host, token=token, warehouse_id=warehouse_id
+            )
 
         if host and token:
-            return _databricks.DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
+            return _databricks.DatabricksClient(
+                host=host, token=token, warehouse_id=warehouse_id
+            )
 
         return None
 
@@ -187,8 +192,8 @@ class DatabricksHelpers:
         Returns:
             Tuple of (host, token)
         """
-        host = domain.databricks.get('host') or settings.databricks_host
-        token = domain.databricks.get('token') or settings.databricks_token
+        host = domain.databricks.get("host") or settings.databricks_host
+        token = domain.databricks.get("token") or settings.databricks_token
 
         if host and token:
             return _databricks.normalize_host(host), token
@@ -208,7 +213,8 @@ class DatabricksHelpers:
 
     @staticmethod
     def require_serving_llm(
-        domain, settings,
+        domain,
+        settings,
     ) -> Tuple[str, str, str]:
         """Validate host, token, and domain LLM serving endpoint.
 
@@ -241,7 +247,7 @@ def effective_uc_version_path(domain) -> str:
     and returns an empty string when neither is available.
     """
     return (
-        getattr(domain, 'uc_version_path', '')
-        or getattr(domain, 'uc_domain_path', '')
-        or ''
+        getattr(domain, "uc_version_path", "")
+        or getattr(domain, "uc_domain_path", "")
+        or ""
     )

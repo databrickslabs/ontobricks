@@ -29,7 +29,9 @@ class ToolContext:
     ontology: Optional[dict] = None
     entity_mappings: list = field(default_factory=list)
     relationships: list = field(default_factory=list)
-    documents: list = field(default_factory=list)  # Pre-loaded doc content: [{"name": str, "content": str}]
+    documents: list = field(
+        default_factory=list
+    )  # Pre-loaded doc content: [{"name": str, "content": str}]
 
     # Auto-icon-assign fields
     icon_results: dict = field(default_factory=dict)

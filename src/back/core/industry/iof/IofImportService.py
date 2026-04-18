@@ -16,6 +16,7 @@ relationships so they appear correctly in OntoBricks.
 
 Reference: https://github.com/iofoundry/ontology
 """
+
 import time
 from typing import Dict, List, Any, Optional, Tuple, Set
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -48,7 +49,10 @@ class IofImportService:
             "color": "primary",
             "required": True,
             "modules": [
-                {"path": "core/meta/AnnotationVocabulary.rdf", "label": "Annotation Vocabulary"},
+                {
+                    "path": "core/meta/AnnotationVocabulary.rdf",
+                    "label": "Annotation Vocabulary",
+                },
                 {"path": "core/Core.rdf", "label": "IOF Core"},
             ],
         },
@@ -76,8 +80,8 @@ class IofImportService:
         },
     }
 
-    _REQUEST_TIMEOUT = 30   # seconds per module
-    _MAX_WORKERS = 5        # concurrent download threads
+    _REQUEST_TIMEOUT = 30  # seconds per module
+    _MAX_WORKERS = 5  # concurrent download threads
 
     # Hardcoded labels for common BFO / RO properties whose rdfs:label is
     # not present in the IOF modules (the full BFO ontology is not loaded).
@@ -143,15 +147,17 @@ class IofImportService:
         """
         catalog = []
         for key, domain in IofImportService.IOF_DOMAINS.items():
-            catalog.append({
-                "key": key,
-                "name": domain["name"],
-                "description": domain["description"],
-                "icon": domain["icon"],
-                "color": domain["color"],
-                "required": domain.get("required", False),
-                "module_count": len(domain["modules"]),
-            })
+            catalog.append(
+                {
+                    "key": key,
+                    "name": domain["name"],
+                    "description": domain["description"],
+                    "icon": domain["icon"],
+                    "color": domain["color"],
+                    "required": domain.get("required", False),
+                    "module_count": len(domain["modules"]),
+                }
+            )
         return catalog
 
     @staticmethod
@@ -278,8 +284,7 @@ class IofImportService:
         relationships: List[Dict[str, Any]] = []
         seen: set = set()
 
-        def _try_add(class_name: str, prop_name: str, target_name: str,
-                     prop_uri: str):
+        def _try_add(class_name: str, prop_name: str, target_name: str, prop_uri: str):
             """Add a relationship if both ends are known and not yet seen."""
             if class_name in known_class_names and target_name in known_class_names:
                 # Deduplicate on URI + endpoints to avoid duplicates when
@@ -287,15 +292,17 @@ class IofImportService:
                 key = f"{class_name}|{prop_uri}|{target_name}"
                 if key not in seen:
                     seen.add(key)
-                    relationships.append({
-                        "uri": prop_uri,
-                        "name": prop_name,
-                        "label": prop_name,
-                        "comment": "",
-                        "type": "ObjectProperty",
-                        "domain": class_name,
-                        "range": target_name,
-                    })
+                    relationships.append(
+                        {
+                            "uri": prop_uri,
+                            "name": prop_name,
+                            "label": prop_name,
+                            "comment": "",
+                            "type": "ObjectProperty",
+                            "domain": class_name,
+                            "range": target_name,
+                        }
+                    )
 
         # Scan both rdfs:subClassOf and owl:equivalentClass for restrictions
         for predicate in (RDFS.subClassOf, OWL.equivalentClass):
@@ -305,16 +312,20 @@ class IofImportService:
                 cls_name = _extract_local_name(str(cls))
 
                 # Direct restriction node
-                IofImportService._process_restriction(graph, cls_name, obj, known_class_names,
-                                                      _try_add)
+                IofImportService._process_restriction(
+                    graph, cls_name, obj, known_class_names, _try_add
+                )
 
                 # Intersection inside equivalentClass:
                 #   owl:equivalentClass [ owl:intersectionOf ( ... ) ]
                 for int_list in graph.objects(obj, OWL.intersectionOf):
-                    IofImportService._walk_rdf_list(graph, int_list,
-                                                    lambda node: IofImportService._process_restriction(
-                                                        graph, cls_name, node,
-                                                        known_class_names, _try_add))
+                    IofImportService._walk_rdf_list(
+                        graph,
+                        int_list,
+                        lambda node: IofImportService._process_restriction(
+                            graph, cls_name, node, known_class_names, _try_add
+                        ),
+                    )
 
         return relationships
 
@@ -337,13 +348,15 @@ class IofImportService:
 
         for target in graph.objects(node, OWL.someValuesFrom):
             if not isinstance(target, BNode):
-                callback(cls_name, prop_name, _extract_local_name(str(target)),
-                         prop_uri)
+                callback(
+                    cls_name, prop_name, _extract_local_name(str(target)), prop_uri
+                )
 
         for target in graph.objects(node, OWL.allValuesFrom):
             if not isinstance(target, BNode):
-                callback(cls_name, prop_name, _extract_local_name(str(target)),
-                         prop_uri)
+                callback(
+                    cls_name, prop_name, _extract_local_name(str(target)), prop_uri
+                )
 
     @staticmethod
     def _walk_rdf_list(graph, node, visitor):
@@ -411,7 +424,9 @@ class IofImportService:
                     logger.warning("FAIL %s: %s", label, error)
 
         elapsed = time.time() - start
-        logger.info("Fetched %d/%d modules in %.1fs", fetched_count, len(modules), elapsed)
+        logger.info(
+            "Fetched %d/%d modules in %.1fs", fetched_count, len(modules), elapsed
+        )
 
         if fetched_count == 0:
             hint = (
@@ -429,7 +444,16 @@ class IofImportService:
         from back.objects.ontology import Ontology
 
         result = Ontology.parse_owl(turtle_content, extract_advanced=True)
-        ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions, _groups = result
+        (
+            ontology_info,
+            classes,
+            properties,
+            constraints,
+            swrl_rules,
+            axioms,
+            expressions,
+            _groups,
+        ) = result
 
         # ------------------------------------------------------------------
         # Post-processing: fix relationships for BFO-based ontologies
@@ -469,7 +493,9 @@ class IofImportService:
         restriction_rels = IofImportService._extract_relationships_from_restrictions(
             merged_graph, known_class_names
         )
-        logger.info("Extracted %d relationships from OWL restrictions", len(restriction_rels))
+        logger.info(
+            "Extracted %d relationships from OWL restrictions", len(restriction_rels)
+        )
 
         # Step 4: merge and deduplicate (keyed on URI + endpoints)
         existing_keys = set()
@@ -486,8 +512,10 @@ class IofImportService:
                 cleaned_properties.append(rel)
 
         properties = sorted(cleaned_properties, key=lambda x: x.get("name", ""))
-        obj_count = sum(1 for p in properties if p.get('type') == 'ObjectProperty')
-        logger.info("Final property count: %d (%d relationships)", len(properties), obj_count)
+        obj_count = sum(1 for p in properties if p.get("type") == "ObjectProperty")
+        logger.info(
+            "Final property count: %d (%d relationships)", len(properties), obj_count
+        )
 
         stats = {
             "classes": len(classes),
@@ -498,7 +526,9 @@ class IofImportService:
         }
 
         domain_names = ", ".join(
-            IofImportService.IOF_DOMAINS[k]["name"] for k in domain_keys if k in IofImportService.IOF_DOMAINS
+            IofImportService.IOF_DOMAINS[k]["name"]
+            for k in domain_keys
+            if k in IofImportService.IOF_DOMAINS
         )
         msg = (
             f"IOF imported: {stats['classes']} classes, {stats['properties']} "

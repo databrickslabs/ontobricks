@@ -1,4 +1,5 @@
 """Tests for back.core.databricks.WorkspaceService."""
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -38,9 +39,7 @@ class TestGetCurrentUserEmail:
     @patch("requests.get")
     def test_failure(self, mock_get, clean_databricks_env):
         mock_get.return_value = MagicMock(status_code=500)
-        mock_get.return_value.raise_for_status.side_effect = (
-            requests.HTTPError()
-        )
+        mock_get.return_value.raise_for_status.side_effect = requests.HTTPError()
 
         auth = DatabricksAuth(host="https://h.com", token="tok")
         svc = WorkspaceService(auth)
@@ -77,9 +76,7 @@ class TestListUsers:
             ),
             _resp(
                 {
-                    "Resources": [
-                        {"userName": "b@x.com", "displayName": "B"}
-                    ],
+                    "Resources": [{"userName": "b@x.com", "displayName": "B"}],
                     "totalResults": 150,
                     "itemsPerPage": 100,
                 }
@@ -97,9 +94,7 @@ class TestListUsers:
     @patch("requests.get")
     def test_failure(self, mock_get, clean_databricks_env):
         mock_get.return_value = MagicMock(status_code=503)
-        mock_get.return_value.raise_for_status.side_effect = (
-            requests.HTTPError()
-        )
+        mock_get.return_value.raise_for_status.side_effect = requests.HTTPError()
 
         auth = DatabricksAuth(host="https://h.com", token="tok")
         svc = WorkspaceService(auth)
@@ -127,9 +122,7 @@ class TestListGroups:
 
     @patch("requests.get")
     def test_failure(self, mock_get, clean_databricks_env):
-        mock_get.return_value.raise_for_status.side_effect = (
-            requests.HTTPError()
-        )
+        mock_get.return_value.raise_for_status.side_effect = requests.HTTPError()
 
         auth = DatabricksAuth(host="https://h.com", token="tok")
         svc = WorkspaceService(auth)

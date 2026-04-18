@@ -1,4 +1,5 @@
 """Frontend HTML route -- Digital Twin / Query page."""
+
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
 
@@ -36,9 +37,13 @@ async def query_page(
         "materialize_table": f"{view_table}_inferred" if view_table else "",
     }
 
-    return templates.TemplateResponse(request, "dtwin.html", {
-        **triplestore_page_context(domain_session),
-        "reasoning_ctx": reasoning_ctx,
-        "domain_name": (domain_session.info or {}).get("name", "NewDomain"),
-        "current_version": domain_session.current_version or "1",
-    })
+    return templates.TemplateResponse(
+        request,
+        "dtwin.html",
+        {
+            **triplestore_page_context(domain_session),
+            "reasoning_ctx": reasoning_ctx,
+            "domain_name": (domain_session.info or {}).get("name", "NewDomain"),
+            "current_version": domain_session.current_version or "1",
+        },
+    )

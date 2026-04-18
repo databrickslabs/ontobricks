@@ -14,8 +14,8 @@ from back.core.logging import get_logger
 logger = get_logger(__name__)
 
 _RATE_LIMIT_RETRIES = 6
-_RATE_LIMIT_BASE_DELAY = 5   # seconds
-_RATE_LIMIT_MAX_DELAY = 60   # cap so we never sleep longer than this
+_RATE_LIMIT_BASE_DELAY = 5  # seconds
+_RATE_LIMIT_MAX_DELAY = 60  # cap so we never sleep longer than this
 
 
 def _get_retry_delay(attempt: int, response: requests.Response = None) -> float:
@@ -51,7 +51,11 @@ def call_llm_with_retry(
             elapsed_ms = int((time.time() - t0) * 1000)
             logger.info(
                 "LLM: status=%d, %d bytes in %dms (attempt %d/%d)",
-                resp.status_code, len(resp.content), elapsed_ms, attempt, _RATE_LIMIT_RETRIES,
+                resp.status_code,
+                len(resp.content),
+                elapsed_ms,
+                attempt,
+                _RATE_LIMIT_RETRIES,
             )
             if resp.status_code in (429, 503):
                 last_exc = requests.exceptions.HTTPError(
@@ -61,7 +65,10 @@ def call_llm_with_retry(
                     delay = _get_retry_delay(attempt, resp)
                     logger.warning(
                         "LLM: HTTP %d — waiting %.0fs before retry %d/%d",
-                        resp.status_code, delay, attempt + 1, _RATE_LIMIT_RETRIES,
+                        resp.status_code,
+                        delay,
+                        attempt + 1,
+                        _RATE_LIMIT_RETRIES,
                     )
                     time.sleep(delay)
                     continue
@@ -74,19 +81,28 @@ def call_llm_with_retry(
                 delay = _get_retry_delay(attempt, exc.response)
                 logger.warning(
                     "LLM: HTTP %s — waiting %.0fs before retry %d/%d",
-                    status, delay, attempt + 1, _RATE_LIMIT_RETRIES,
+                    status,
+                    delay,
+                    attempt + 1,
+                    _RATE_LIMIT_RETRIES,
                 )
                 time.sleep(delay)
                 last_exc = exc
                 continue
             raise
-        except (requests.exceptions.ReadTimeout, requests.exceptions.RequestException) as exc:
+        except (
+            requests.exceptions.ReadTimeout,
+            requests.exceptions.RequestException,
+        ) as exc:
             last_exc = exc
             if attempt < _RATE_LIMIT_RETRIES:
                 delay = _get_retry_delay(attempt)
                 logger.warning(
                     "LLM: %s — waiting %.0fs before retry %d/%d",
-                    type(exc).__name__, delay, attempt + 1, _RATE_LIMIT_RETRIES,
+                    type(exc).__name__,
+                    delay,
+                    attempt + 1,
+                    _RATE_LIMIT_RETRIES,
                 )
                 time.sleep(delay)
                 continue

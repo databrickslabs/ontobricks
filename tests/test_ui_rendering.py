@@ -4,6 +4,7 @@ Layer 1 UI Tests -- HTML Rendering Verification
 Fetches each page via the Starlette TestClient and parses HTML with the
 stdlib html.parser to verify DOM expectations (no third-party HTML parser).
 """
+
 from __future__ import annotations
 
 import re
@@ -86,12 +87,18 @@ def _title_text(html: str) -> str:
 class TestBaseTemplate:
     """Verify elements inherited from base.html on every page."""
 
-    @pytest.mark.parametrize("path", ["/", "/settings", "/ontology", "/mapping", "/domain", "/dtwin/", "/about"])
+    @pytest.mark.parametrize(
+        "path",
+        ["/", "/settings", "/ontology", "/mapping", "/domain", "/dtwin/", "/about"],
+    )
     def test_has_navbar(self, client, path):
         html = _html(client, path)
         assert _find(_tags(html), tag="nav", class_="navbar") is not None
 
-    @pytest.mark.parametrize("path", ["/", "/settings", "/ontology", "/mapping", "/domain", "/dtwin/", "/about"])
+    @pytest.mark.parametrize(
+        "path",
+        ["/", "/settings", "/ontology", "/mapping", "/domain", "/dtwin/", "/about"],
+    )
     def test_has_brand_link(self, client, path):
         html = _html(client, path)
         tags = _tags(html)
@@ -178,7 +185,11 @@ class TestHomePage:
     def test_quick_links(self, client):
         html = _html(client, "/")
         tags = _tags(html)
-        hrefs = [a.get("href", "") for t, a in tags if t == "a" and _has_class(a, "quick-link-sm")]
+        hrefs = [
+            a.get("href", "")
+            for t, a in tags
+            if t == "a" and _has_class(a, "quick-link-sm")
+        ]
         assert "/settings" in hrefs
         assert "/about" in hrefs
 
@@ -287,7 +298,9 @@ class TestOntologyPage:
     )
     def test_section_div_exists(self, client, section_id):
         html = _html(client, "/ontology")
-        assert _find(_tags(html), id_=section_id) is not None, f"Section div #{section_id} not found"
+        assert (
+            _find(_tags(html), id_=section_id) is not None
+        ), f"Section div #{section_id} not found"
 
     def test_ontoviz_script_loaded(self, client):
         html = _html(client, "/ontology")
@@ -320,7 +333,10 @@ class TestMappingPage:
         html = _html(client, "/mapping")
         assert _find(_tags(html), class_="sidebar-nav") is not None
 
-    @pytest.mark.parametrize("section", ["information", "design", "manual", "autoassign", "r2rml", "sparksql"])
+    @pytest.mark.parametrize(
+        "section",
+        ["information", "design", "manual", "autoassign", "r2rml", "sparksql"],
+    )
     def test_sidebar_has_section_link(self, client, section):
         html = _html(client, "/mapping")
         tags = _tags(html)
@@ -356,7 +372,9 @@ class TestDomainPage:
         found = any(t == "a" and a.get("data-section") == section for t, a in tags)
         assert found, f"Sidebar link for section '{section}' not found"
 
-    @pytest.mark.parametrize("section_id", ["information-section", "metadata-section", "validation-section"])
+    @pytest.mark.parametrize(
+        "section_id", ["information-section", "metadata-section", "validation-section"]
+    )
     def test_section_div_exists(self, client, section_id):
         html = _html(client, "/domain")
         assert _find(_tags(html), id_=section_id) is not None
@@ -376,7 +394,9 @@ class TestDigitalTwinPage:
         html = _html(client, "/dtwin/")
         assert _find(_tags(html), class_="sidebar-nav") is not None
 
-    @pytest.mark.parametrize("section", ["dataquality", "sigmagraph", "graphql", "reasoning"])
+    @pytest.mark.parametrize(
+        "section", ["dataquality", "sigmagraph", "graphql", "reasoning"]
+    )
     def test_sidebar_has_section_link(self, client, section):
         html = _html(client, "/dtwin/")
         tags = _tags(html)

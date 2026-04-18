@@ -1,4 +1,5 @@
 """Tests for back.objects.registry.permissions — permission service."""
+
 import json
 import time
 import pytest
@@ -76,9 +77,16 @@ class TestLoadPermissions:
             assert data == {"version": 1, "permissions": []}
 
     def test_load_existing(self, svc):
-        perm_data = {"version": 1, "permissions": [{"principal": "a@b.com", "role": "editor"}]}
+        perm_data = {
+            "version": 1,
+            "permissions": [{"principal": "a@b.com", "role": "editor"}],
+        }
         with patch.object(svc, "_new_uc") as mock_uc:
-            mock_uc.return_value.read_file.return_value = (True, json.dumps(perm_data), "ok")
+            mock_uc.return_value.read_file.return_value = (
+                True,
+                json.dumps(perm_data),
+                "ok",
+            )
             data = svc.load_permissions("h", "t", REGISTRY_CFG)
             assert len(data["permissions"]) == 1
 
@@ -131,46 +139,71 @@ class TestGetUserRole:
     def test_user_in_list(self, svc):
         perms = {
             "version": 1,
-            "permissions": [{"principal": "user@b.com", "principal_type": "user", "role": "editor"}],
+            "permissions": [
+                {"principal": "user@b.com", "principal_type": "user", "role": "editor"}
+            ],
         }
-        with patch.object(svc, "is_admin", return_value=False), \
-             patch.object(svc, "load_permissions", return_value=perms):
+        with (
+            patch.object(svc, "is_admin", return_value=False),
+            patch.object(svc, "load_permissions", return_value=perms),
+        ):
             role = svc.get_user_role("user@b.com", "h", "t", REGISTRY_CFG, "app")
             assert role == ROLE_EDITOR
 
     def test_user_not_in_list(self, svc):
-        perms = {"version": 1, "permissions": [{"principal": "other@b.com", "principal_type": "user", "role": "viewer"}]}
-        with patch.object(svc, "is_admin", return_value=False), \
-             patch.object(svc, "load_permissions", return_value=perms), \
-             patch.object(svc, "_get_user_groups", return_value=[]):
+        perms = {
+            "version": 1,
+            "permissions": [
+                {"principal": "other@b.com", "principal_type": "user", "role": "viewer"}
+            ],
+        }
+        with (
+            patch.object(svc, "is_admin", return_value=False),
+            patch.object(svc, "load_permissions", return_value=perms),
+            patch.object(svc, "_get_user_groups", return_value=[]),
+        ):
             role = svc.get_user_role("user@b.com", "h", "t", REGISTRY_CFG, "app")
             assert role == ROLE_NONE
 
     def test_empty_permissions_non_admin(self, svc):
         perms = {"version": 1, "permissions": []}
-        with patch.object(svc, "is_admin", return_value=False), \
-             patch.object(svc, "load_permissions", return_value=perms):
+        with (
+            patch.object(svc, "is_admin", return_value=False),
+            patch.object(svc, "load_permissions", return_value=perms),
+        ):
             role = svc.get_user_role("user@b.com", "h", "t", REGISTRY_CFG, "app")
             assert role == ROLE_NONE
 
     def test_group_membership(self, svc):
         perms = {
             "version": 1,
-            "permissions": [{"principal": "editors-group", "principal_type": "group", "role": "editor"}],
+            "permissions": [
+                {
+                    "principal": "editors-group",
+                    "principal_type": "group",
+                    "role": "editor",
+                }
+            ],
         }
-        with patch.object(svc, "is_admin", return_value=False), \
-             patch.object(svc, "load_permissions", return_value=perms), \
-             patch.object(svc, "_get_user_groups", return_value=["editors-group"]):
+        with (
+            patch.object(svc, "is_admin", return_value=False),
+            patch.object(svc, "load_permissions", return_value=perms),
+            patch.object(svc, "_get_user_groups", return_value=["editors-group"]),
+        ):
             role = svc.get_user_role("user@b.com", "h", "t", REGISTRY_CFG, "app")
             assert role == ROLE_EDITOR
 
     def test_case_insensitive_match(self, svc):
         perms = {
             "version": 1,
-            "permissions": [{"principal": "User@B.COM", "principal_type": "user", "role": "viewer"}],
+            "permissions": [
+                {"principal": "User@B.COM", "principal_type": "user", "role": "viewer"}
+            ],
         }
-        with patch.object(svc, "is_admin", return_value=False), \
-             patch.object(svc, "load_permissions", return_value=perms):
+        with (
+            patch.object(svc, "is_admin", return_value=False),
+            patch.object(svc, "load_permissions", return_value=perms),
+        ):
             role = svc.get_user_role("user@b.com", "h", "t", REGISTRY_CFG, "app")
             assert role == ROLE_VIEWER
 
@@ -191,13 +224,17 @@ class TestIsAdmin:
             assert svc.is_admin("a@b.com", "h", "t", "app") is False
 
     def test_sdk_fails_rest_succeeds(self, svc):
-        with patch.object(svc, "_check_admin_sdk", return_value=None), \
-             patch.object(svc, "_check_admin_rest", return_value=True):
+        with (
+            patch.object(svc, "_check_admin_sdk", return_value=None),
+            patch.object(svc, "_check_admin_rest", return_value=True),
+        ):
             assert svc.is_admin("a@b.com", "h", "t", "app") is True
 
     def test_sdk_fails_rest_fails(self, svc):
-        with patch.object(svc, "_check_admin_sdk", return_value=None), \
-             patch.object(svc, "_check_admin_rest", return_value=False):
+        with (
+            patch.object(svc, "_check_admin_sdk", return_value=None),
+            patch.object(svc, "_check_admin_rest", return_value=False),
+        ):
             assert svc.is_admin("a@b.com", "h", "t", "app") is False
 
     def test_cache_hit(self, svc):
@@ -238,19 +275,41 @@ class TestCRUD:
 
     def test_add_new_entry(self, svc):
         perms = {"version": 1, "permissions": []}
-        with patch.object(svc, "load_permissions", return_value=perms), \
-             patch.object(svc, "save_permissions", return_value=(True, "ok")) as mock_save:
-            ok, msg = svc.add_or_update_entry("h", "t", REGISTRY_CFG, "a@b.com", "user", "A", "editor")
+        with (
+            patch.object(svc, "load_permissions", return_value=perms),
+            patch.object(
+                svc, "save_permissions", return_value=(True, "ok")
+            ) as mock_save,
+        ):
+            ok, msg = svc.add_or_update_entry(
+                "h", "t", REGISTRY_CFG, "a@b.com", "user", "A", "editor"
+            )
             assert ok is True
             saved_data = mock_save.call_args[0][3]
             assert len(saved_data["permissions"]) == 1
             assert saved_data["permissions"][0]["role"] == "editor"
 
     def test_update_existing_entry(self, svc):
-        perms = {"version": 1, "permissions": [{"principal": "a@b.com", "principal_type": "user", "display_name": "A", "role": "viewer"}]}
-        with patch.object(svc, "load_permissions", return_value=perms), \
-             patch.object(svc, "save_permissions", return_value=(True, "ok")) as mock_save:
-            ok, msg = svc.add_or_update_entry("h", "t", REGISTRY_CFG, "a@b.com", "user", "A", "editor")
+        perms = {
+            "version": 1,
+            "permissions": [
+                {
+                    "principal": "a@b.com",
+                    "principal_type": "user",
+                    "display_name": "A",
+                    "role": "viewer",
+                }
+            ],
+        }
+        with (
+            patch.object(svc, "load_permissions", return_value=perms),
+            patch.object(
+                svc, "save_permissions", return_value=(True, "ok")
+            ) as mock_save,
+        ):
+            ok, msg = svc.add_or_update_entry(
+                "h", "t", REGISTRY_CFG, "a@b.com", "user", "A", "editor"
+            )
             assert ok is True
             saved_data = mock_save.call_args[0][3]
             assert len(saved_data["permissions"]) == 1
@@ -258,8 +317,10 @@ class TestCRUD:
 
     def test_remove_entry(self, svc):
         perms = {"version": 1, "permissions": [{"principal": "a@b.com"}]}
-        with patch.object(svc, "load_permissions", return_value=perms), \
-             patch.object(svc, "save_permissions", return_value=(True, "ok")):
+        with (
+            patch.object(svc, "load_permissions", return_value=perms),
+            patch.object(svc, "save_permissions", return_value=(True, "ok")),
+        ):
             ok, msg = svc.remove_entry("h", "t", REGISTRY_CFG, "a@b.com")
             assert ok is True
 
@@ -281,7 +342,10 @@ DOMAIN = "my_domain"
 class TestDomainPermissionsPath:
     def test_path(self, svc):
         path = svc._domain_permissions_path(REGISTRY_CFG, DOMAIN)
-        assert path == f"/Volumes/cat/sch/OntoBricksRegistry/domains/{DOMAIN}/.domain_permissions.json"
+        assert (
+            path
+            == f"/Volumes/cat/sch/OntoBricksRegistry/domains/{DOMAIN}/.domain_permissions.json"
+        )
 
 
 class TestLoadDomainPermissions:
@@ -316,7 +380,9 @@ class TestSaveDomainPermissions:
 
     def test_save_no_registry(self, svc):
         data = {"version": 1, "permissions": []}
-        ok, msg = svc.save_domain_permissions("h", "t", {"catalog": "", "schema": ""}, DOMAIN, data)
+        ok, msg = svc.save_domain_permissions(
+            "h", "t", {"catalog": "", "schema": ""}, DOMAIN, data
+        )
         assert ok is False
 
 
@@ -332,26 +398,34 @@ class TestGetDomainRole:
             assert role == ROLE_BUILDER
 
     def test_no_domain_entry_inherits_app_role(self, svc):
-        with patch.object(svc, "get_user_role", return_value=ROLE_BUILDER), \
-             patch.object(svc, "_resolve_domain_entry_role", return_value=None):
+        with (
+            patch.object(svc, "get_user_role", return_value=ROLE_BUILDER),
+            patch.object(svc, "_resolve_domain_entry_role", return_value=None),
+        ):
             role = svc.get_domain_role("a@b.com", "h", "t", REGISTRY_CFG, "app", DOMAIN)
             assert role == ROLE_BUILDER
 
     def test_domain_restricts_app_role(self, svc):
-        with patch.object(svc, "get_user_role", return_value=ROLE_BUILDER), \
-             patch.object(svc, "_resolve_domain_entry_role", return_value=ROLE_VIEWER):
+        with (
+            patch.object(svc, "get_user_role", return_value=ROLE_BUILDER),
+            patch.object(svc, "_resolve_domain_entry_role", return_value=ROLE_VIEWER),
+        ):
             role = svc.get_domain_role("a@b.com", "h", "t", REGISTRY_CFG, "app", DOMAIN)
             assert role == ROLE_VIEWER
 
     def test_domain_cannot_elevate(self, svc):
-        with patch.object(svc, "get_user_role", return_value=ROLE_EDITOR), \
-             patch.object(svc, "_resolve_domain_entry_role", return_value=ROLE_BUILDER):
+        with (
+            patch.object(svc, "get_user_role", return_value=ROLE_EDITOR),
+            patch.object(svc, "_resolve_domain_entry_role", return_value=ROLE_BUILDER),
+        ):
             role = svc.get_domain_role("a@b.com", "h", "t", REGISTRY_CFG, "app", DOMAIN)
             assert role == ROLE_EDITOR
 
     def test_domain_same_as_app(self, svc):
-        with patch.object(svc, "get_user_role", return_value=ROLE_EDITOR), \
-             patch.object(svc, "_resolve_domain_entry_role", return_value=ROLE_EDITOR):
+        with (
+            patch.object(svc, "get_user_role", return_value=ROLE_EDITOR),
+            patch.object(svc, "_resolve_domain_entry_role", return_value=ROLE_EDITOR),
+        ):
             role = svc.get_domain_role("a@b.com", "h", "t", REGISTRY_CFG, "app", DOMAIN)
             assert role == ROLE_EDITOR
 
@@ -364,24 +438,38 @@ class TestResolveDomainEntryRole:
     def test_no_entries(self, svc):
         dp = {"version": 1, "permissions": []}
         with patch.object(svc, "load_domain_permissions", return_value=dp):
-            result = svc._resolve_domain_entry_role("a@b.com", "h", "t", REGISTRY_CFG, DOMAIN)
+            result = svc._resolve_domain_entry_role(
+                "a@b.com", "h", "t", REGISTRY_CFG, DOMAIN
+            )
             assert result is None
 
     def test_user_match(self, svc):
-        dp = {"version": 1, "permissions": [
-            {"principal": "a@b.com", "principal_type": "user", "role": "builder"}
-        ]}
+        dp = {
+            "version": 1,
+            "permissions": [
+                {"principal": "a@b.com", "principal_type": "user", "role": "builder"}
+            ],
+        }
         with patch.object(svc, "load_domain_permissions", return_value=dp):
-            result = svc._resolve_domain_entry_role("a@b.com", "h", "t", REGISTRY_CFG, DOMAIN)
+            result = svc._resolve_domain_entry_role(
+                "a@b.com", "h", "t", REGISTRY_CFG, DOMAIN
+            )
             assert result == ROLE_BUILDER
 
     def test_group_match(self, svc):
-        dp = {"version": 1, "permissions": [
-            {"principal": "data-team", "principal_type": "group", "role": "viewer"}
-        ]}
-        with patch.object(svc, "load_domain_permissions", return_value=dp), \
-             patch.object(svc, "_get_user_groups", return_value=["data-team"]):
-            result = svc._resolve_domain_entry_role("a@b.com", "h", "t", REGISTRY_CFG, DOMAIN)
+        dp = {
+            "version": 1,
+            "permissions": [
+                {"principal": "data-team", "principal_type": "group", "role": "viewer"}
+            ],
+        }
+        with (
+            patch.object(svc, "load_domain_permissions", return_value=dp),
+            patch.object(svc, "_get_user_groups", return_value=["data-team"]),
+        ):
+            result = svc._resolve_domain_entry_role(
+                "a@b.com", "h", "t", REGISTRY_CFG, DOMAIN
+            )
             assert result == ROLE_VIEWER
 
 
@@ -394,29 +482,51 @@ class TestDomainPermCRUD:
 
     def test_add_new_domain_entry(self, svc):
         dp = {"version": 1, "permissions": []}
-        with patch.object(svc, "load_domain_permissions", return_value=dp), \
-             patch.object(svc, "save_domain_permissions", return_value=(True, "ok")) as mock_save:
-            ok, _ = svc.add_or_update_domain_entry("h", "t", REGISTRY_CFG, DOMAIN, "a@b.com", "user", "A", "builder")
+        with (
+            patch.object(svc, "load_domain_permissions", return_value=dp),
+            patch.object(
+                svc, "save_domain_permissions", return_value=(True, "ok")
+            ) as mock_save,
+        ):
+            ok, _ = svc.add_or_update_domain_entry(
+                "h", "t", REGISTRY_CFG, DOMAIN, "a@b.com", "user", "A", "builder"
+            )
             assert ok is True
             saved = mock_save.call_args[0][4]
             assert len(saved["permissions"]) == 1
             assert saved["permissions"][0]["role"] == "builder"
 
     def test_update_existing_domain_entry(self, svc):
-        dp = {"version": 1, "permissions": [
-            {"principal": "a@b.com", "principal_type": "user", "display_name": "A", "role": "viewer"}
-        ]}
-        with patch.object(svc, "load_domain_permissions", return_value=dp), \
-             patch.object(svc, "save_domain_permissions", return_value=(True, "ok")) as mock_save:
-            ok, _ = svc.add_or_update_domain_entry("h", "t", REGISTRY_CFG, DOMAIN, "a@b.com", "user", "A", "builder")
+        dp = {
+            "version": 1,
+            "permissions": [
+                {
+                    "principal": "a@b.com",
+                    "principal_type": "user",
+                    "display_name": "A",
+                    "role": "viewer",
+                }
+            ],
+        }
+        with (
+            patch.object(svc, "load_domain_permissions", return_value=dp),
+            patch.object(
+                svc, "save_domain_permissions", return_value=(True, "ok")
+            ) as mock_save,
+        ):
+            ok, _ = svc.add_or_update_domain_entry(
+                "h", "t", REGISTRY_CFG, DOMAIN, "a@b.com", "user", "A", "builder"
+            )
             assert ok is True
             saved = mock_save.call_args[0][4]
             assert saved["permissions"][0]["role"] == "builder"
 
     def test_remove_domain_entry(self, svc):
         dp = {"version": 1, "permissions": [{"principal": "a@b.com"}]}
-        with patch.object(svc, "load_domain_permissions", return_value=dp), \
-             patch.object(svc, "save_domain_permissions", return_value=(True, "ok")):
+        with (
+            patch.object(svc, "load_domain_permissions", return_value=dp),
+            patch.object(svc, "save_domain_permissions", return_value=(True, "ok")),
+        ):
             ok, _ = svc.remove_domain_entry("h", "t", REGISTRY_CFG, DOMAIN, "a@b.com")
             assert ok is True
 

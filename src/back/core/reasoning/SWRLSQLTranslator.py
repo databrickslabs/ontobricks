@@ -3,6 +3,7 @@
 Extracted from ``app/frontend/digitaltwin/routes.py`` to be reusable across the
 reasoning engine and quality-check pipeline.
 """
+
 from typing import Dict, List, Optional
 
 from back.core.logging import get_logger
@@ -39,7 +40,8 @@ class SWRLSQLTranslator:
 
     @staticmethod
     def _build_builtin_filters(
-        builtin_atoms: List[Dict], var_bindings: Dict[str, tuple],
+        builtin_atoms: List[Dict],
+        var_bindings: Dict[str, tuple],
     ) -> List[str]:
         filters: List[str] = []
         for atom in builtin_atoms:
@@ -47,8 +49,7 @@ class SWRLSQLTranslator:
             if bi is None:
                 continue
             resolved = [
-                SWRLSQLTranslator._resolve_arg(a, var_bindings)
-                for a in atom["args"]
+                SWRLSQLTranslator._resolve_arg(a, var_bindings) for a in atom["args"]
             ]
             if bi.category == "comparison" and bi.arity == 2:
                 expr = bi.sql_template.format(*resolved[:2])
@@ -59,14 +60,15 @@ class SWRLSQLTranslator:
             elif bi.category == "math" and bi.arity == 3:
                 expr = bi.sql_template.format(*resolved[:2])
                 result_ref = SWRLSQLTranslator._resolve_arg(
-                    atom["args"][2], var_bindings,
+                    atom["args"][2],
+                    var_bindings,
                 )
                 filters.append(f"{result_ref} = ({expr})")
             elif bi.category == "date" and bi.arity == 2:
                 expr = bi.sql_template.format(*resolved[:2])
                 filters.append(expr)
             elif bi.arity <= len(resolved):
-                expr = bi.sql_template.format(*resolved[:bi.arity])
+                expr = bi.sql_template.format(*resolved[: bi.arity])
                 filters.append(expr)
         return filters
 
@@ -181,8 +183,11 @@ class SWRLSQLTranslator:
 
         connected_props = SWRLParser.order_connected_props(
             violation_var,
-            [p for p in prop_atoms
-             if p["args"][0] in connected and p["args"][1] in connected],
+            [
+                p
+                for p in prop_atoms
+                if p["args"][0] in connected and p["args"][1] in connected
+            ],
         )
 
         for idx, prop in enumerate(connected_props):
@@ -229,14 +234,20 @@ class SWRLSQLTranslator:
 
         # -- Built-in filter atoms (Phase 1) ----------------------------------
         builtin_filters = SWRLSQLTranslator._build_builtin_filters(
-            builtin_atoms, var_bindings,
+            builtin_atoms,
+            var_bindings,
         )
         if builtin_filters:
             where_parts.extend(builtin_filters)
 
         # -- Negated antecedent atoms (Phase 3: closed-world) ----------------
         negated_sql = SWRLSQLTranslator._build_negated_atoms(
-            negated_atoms, table, var_bindings, base_uri, uri_map, _next,
+            negated_atoms,
+            table,
+            var_bindings,
+            base_uri,
+            uri_map,
+            _next,
         )
         if negated_sql:
             where_parts.extend(negated_sql)
@@ -332,11 +343,19 @@ class SWRLSQLTranslator:
         if not ante_atoms or not cons_atoms:
             return None
 
-        class_atoms = [a for a in ante_atoms
-                       if a["arity"] == 1 and not a.get("builtin") and not a.get("negated")]
-        prop_atoms = [a for a in ante_atoms
-                      if a["arity"] == 2 and not a.get("builtin") and not a.get("negated")]
-        builtin_atoms = [a for a in ante_atoms if a.get("builtin") and not a.get("negated")]
+        class_atoms = [
+            a
+            for a in ante_atoms
+            if a["arity"] == 1 and not a.get("builtin") and not a.get("negated")
+        ]
+        prop_atoms = [
+            a
+            for a in ante_atoms
+            if a["arity"] == 2 and not a.get("builtin") and not a.get("negated")
+        ]
+        builtin_atoms = [
+            a for a in ante_atoms if a.get("builtin") and not a.get("negated")
+        ]
         negated_atoms = [a for a in ante_atoms if a.get("negated")]
         if not class_atoms:
             return None
@@ -377,8 +396,11 @@ class SWRLSQLTranslator:
 
         connected_props = SWRLParser.order_connected_props(
             violation_var,
-            [p for p in prop_atoms
-             if p["args"][0] in connected and p["args"][1] in connected],
+            [
+                p
+                for p in prop_atoms
+                if p["args"][0] in connected and p["args"][1] in connected
+            ],
         )
 
         for idx, prop in enumerate(connected_props):
@@ -413,13 +435,19 @@ class SWRLSQLTranslator:
                     var_bindings[new_var] = (a_prop, col)
 
         builtin_filters = SWRLSQLTranslator._build_builtin_filters(
-            builtin_atoms, var_bindings,
+            builtin_atoms,
+            var_bindings,
         )
         if builtin_filters:
             where_parts.extend(builtin_filters)
 
         negated_sql = SWRLSQLTranslator._build_negated_atoms(
-            negated_atoms, table, var_bindings, base_uri, uri_map, _next,
+            negated_atoms,
+            table,
+            var_bindings,
+            base_uri,
+            uri_map,
+            _next,
         )
         if negated_sql:
             where_parts.extend(negated_sql)
@@ -527,8 +555,7 @@ class SWRLSQLTranslator:
                 stmts.append(
                     f"INSERT INTO {table} (subject, predicate, object)\n"
                     f"SELECT DISTINCT {_ref(var)}, '{RDF_TYPE}', '{c_uri}'\n"
-                    f"FROM {from_part}\n"
-                    + "\n".join(join_parts) + "\n"
+                    f"FROM {from_part}\n" + "\n".join(join_parts) + "\n"
                     f"WHERE {' AND '.join(where_parts)}\n"
                     f"  AND {not_exists}"
                 )
@@ -548,8 +575,7 @@ class SWRLSQLTranslator:
                 stmts.append(
                     f"INSERT INTO {table} (subject, predicate, object)\n"
                     f"SELECT DISTINCT {_ref(var_s)}, '{c_uri}', {obj_expr}\n"
-                    f"FROM {from_part}\n"
-                    + "\n".join(join_parts) + "\n"
+                    f"FROM {from_part}\n" + "\n".join(join_parts) + "\n"
                     f"WHERE {' AND '.join(where_parts)}\n"
                     f"  AND {not_exists}"
                 )
@@ -654,8 +680,7 @@ class SWRLSQLTranslator:
                 selects.append(
                     f"SELECT DISTINCT {_ref(var)} AS subject, "
                     f"'{RDF_TYPE}' AS predicate, '{c_uri}' AS object\n"
-                    f"FROM {from_part}\n"
-                    + "\n".join(join_parts) + "\n"
+                    f"FROM {from_part}\n" + "\n".join(join_parts) + "\n"
                     f"WHERE {' AND '.join(where_parts)}\n"
                     f"  AND {not_exists}"
                 )
@@ -675,8 +700,7 @@ class SWRLSQLTranslator:
                 selects.append(
                     f"SELECT DISTINCT {_ref(var_s)} AS subject, "
                     f"'{c_uri}' AS predicate, {obj_expr} AS object\n"
-                    f"FROM {from_part}\n"
-                    + "\n".join(join_parts) + "\n"
+                    f"FROM {from_part}\n" + "\n".join(join_parts) + "\n"
                     f"WHERE {' AND '.join(where_parts)}\n"
                     f"  AND {not_exists}"
                 )

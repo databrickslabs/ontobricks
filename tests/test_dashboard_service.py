@@ -1,4 +1,5 @@
 """Tests for back.core.databricks.DashboardService."""
+
 import json
 import pytest
 from unittest.mock import MagicMock, patch
@@ -148,9 +149,7 @@ class TestExtractParameters:
                     ],
                 }
             ],
-            "parameters": [
-                {"name": "dash_only", "keyword": "dash_kw", "type": "date"}
-            ],
+            "parameters": [{"name": "dash_only", "keyword": "dash_kw", "type": "date"}],
         }
         params = DashboardService._extract_parameters(dash_def)
         by_kw = {p["keyword"]: p for p in params}
@@ -174,9 +173,7 @@ class TestLinkFilterWidgets:
                                 "spec": {
                                     "widgetType": "dropdown_filter",
                                     "encodings": {
-                                        "fields": [
-                                            {"parameterName": "region"}
-                                        ]
+                                        "fields": [{"parameterName": "region"}]
                                     },
                                 },
                             }

@@ -1,4 +1,5 @@
 """Tests for the SWRL SQL/Cypher translators and SWRLEngine."""
+
 import pytest
 
 from back.core.reasoning.models import InferredTriple, ReasoningResult
@@ -9,6 +10,7 @@ from back.core.reasoning.SWRLFlatCypherTranslator import SWRLFlatCypherTranslato
 
 
 # -- Atom parser tests ----------------------------------------------------
+
 
 class TestParseSwrlAtoms:
     def test_class_atom(self):
@@ -44,13 +46,16 @@ class TestParseSwrlAtoms:
 
 # -- URI resolution tests -------------------------------------------------
 
+
 class TestResolveSwrlUri:
     def test_full_uri_passthrough(self):
         assert SWRLParser.resolve_uri("http://ex.org/Foo", "") == "http://ex.org/Foo"
 
     def test_uri_map_lookup(self):
         uri_map = {"customer": "http://ex.org/Customer"}
-        assert SWRLParser.resolve_uri("Customer", "", uri_map) == "http://ex.org/Customer"
+        assert (
+            SWRLParser.resolve_uri("Customer", "", uri_map) == "http://ex.org/Customer"
+        )
 
     def test_base_uri_fallback(self):
         assert SWRLParser.resolve_uri("Foo", "http://ex.org") == "http://ex.org#Foo"
@@ -63,6 +68,7 @@ class TestResolveSwrlUri:
 
 
 # -- SQL Translator tests -------------------------------------------------
+
 
 class TestSWRLSQLTranslator:
     def setup_method(self):
@@ -116,6 +122,7 @@ class TestSWRLSQLTranslator:
 
 # -- Cypher Translator tests -----------------------------------------------
 
+
 class TestSWRLCypherTranslator:
     def setup_method(self):
         self.translator = SWRLCypherTranslator(graph_schema=None)
@@ -162,6 +169,7 @@ class TestSWRLCypherTranslator:
 
 # -- SWRLEngine tests ------------------------------------------------------
 
+
 class TestSWRLEngine:
     def test_execute_rules_with_mock_store(self):
         from back.core.reasoning.SWRLEngine import SWRLEngine
@@ -169,20 +177,28 @@ class TestSWRLEngine:
 
         store = MagicMock()
         store.execute_query.return_value = [
-            {"subject": "http://ex.org/entity1", "predicate": "http://ex.org/hasContract", "object": ""},
+            {
+                "subject": "http://ex.org/entity1",
+                "predicate": "http://ex.org/hasContract",
+                "object": "",
+            },
         ]
 
-        engine = SWRLEngine(ontology={
-            "base_uri": "http://ex.org",
-            "classes": [{"name": "Customer"}],
-            "properties": [{"name": "hasClaim"}, {"name": "hasContract"}],
-        })
+        engine = SWRLEngine(
+            ontology={
+                "base_uri": "http://ex.org",
+                "classes": [{"name": "Customer"}],
+                "properties": [{"name": "hasClaim"}, {"name": "hasContract"}],
+            }
+        )
 
-        rules = [{
-            "name": "test_rule",
-            "antecedent": "Customer(?x) \u2227 hasClaim(?x, ?y)",
-            "consequent": "hasContract(?x, ?z)",
-        }]
+        rules = [
+            {
+                "name": "test_rule",
+                "antecedent": "Customer(?x) \u2227 hasClaim(?x, ?y)",
+                "consequent": "hasContract(?x, ?z)",
+            }
+        ]
 
         result = engine.execute_rules(rules, store, "triples")
         assert result.stats["phase"] == "swrl"
@@ -202,14 +218,17 @@ class TestSWRLEngine:
 
 # -- ReasoningResult deduplication tests -----------------------------------
 
+
 class TestReasoningResultDeduplication:
     def test_deduplicate_removes_cross_phase_duplicates(self):
-        result = ReasoningResult(inferred_triples=[
-            InferredTriple("s1", "p1", "o1", "tbox"),
-            InferredTriple("s1", "p1", "o1", "swrl:Rule1"),
-            InferredTriple("s1", "p1", "o1", "graph:transitive"),
-            InferredTriple("s2", "p2", "o2", "tbox"),
-        ])
+        result = ReasoningResult(
+            inferred_triples=[
+                InferredTriple("s1", "p1", "o1", "tbox"),
+                InferredTriple("s1", "p1", "o1", "swrl:Rule1"),
+                InferredTriple("s1", "p1", "o1", "graph:transitive"),
+                InferredTriple("s2", "p2", "o2", "tbox"),
+            ]
+        )
         removed = result.deduplicate()
         assert removed == 2
         assert len(result.inferred_triples) == 2
@@ -217,10 +236,12 @@ class TestReasoningResultDeduplication:
         assert result.inferred_triples[1].subject == "s2"
 
     def test_deduplicate_no_duplicates(self):
-        result = ReasoningResult(inferred_triples=[
-            InferredTriple("s1", "p1", "o1", "tbox"),
-            InferredTriple("s2", "p2", "o2", "swrl:R1"),
-        ])
+        result = ReasoningResult(
+            inferred_triples=[
+                InferredTriple("s1", "p1", "o1", "tbox"),
+                InferredTriple("s2", "p2", "o2", "swrl:R1"),
+            ]
+        )
         removed = result.deduplicate()
         assert removed == 0
         assert len(result.inferred_triples) == 2
@@ -230,14 +251,18 @@ class TestReasoningResultDeduplication:
         assert result.deduplicate() == 0
 
     def test_merge_then_deduplicate(self):
-        r1 = ReasoningResult(inferred_triples=[
-            InferredTriple("s1", "p1", "o1", "tbox"),
-            InferredTriple("s2", "p2", "o2", "tbox"),
-        ])
-        r2 = ReasoningResult(inferred_triples=[
-            InferredTriple("s1", "p1", "o1", "swrl:R1"),
-            InferredTriple("s3", "p3", "o3", "swrl:R1"),
-        ])
+        r1 = ReasoningResult(
+            inferred_triples=[
+                InferredTriple("s1", "p1", "o1", "tbox"),
+                InferredTriple("s2", "p2", "o2", "tbox"),
+            ]
+        )
+        r2 = ReasoningResult(
+            inferred_triples=[
+                InferredTriple("s1", "p1", "o1", "swrl:R1"),
+                InferredTriple("s3", "p3", "o3", "swrl:R1"),
+            ]
+        )
         r1.merge(r2)
         assert len(r1.inferred_triples) == 4
         removed = r1.deduplicate()
@@ -246,6 +271,7 @@ class TestReasoningResultDeduplication:
 
 
 # -- Flat Cypher Translator inference NOT EXISTS tests ---------------------
+
 
 class TestSWRLFlatCypherTranslatorInference:
     def setup_method(self):
@@ -277,6 +303,7 @@ class TestSWRLFlatCypherTranslatorInference:
 
 
 # -- Graph Cypher Translator inference NOT EXISTS tests --------------------
+
 
 class TestSWRLCypherTranslatorInference:
     def setup_method(self):

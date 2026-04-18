@@ -1,4 +1,5 @@
 """Tests for back.core.databricks.MetadataService — metadata management."""
+
 import importlib
 from unittest.mock import patch
 
@@ -179,7 +180,9 @@ class TestMetadataService:
         cat_instance.get_table_comment.return_value = "updated"
 
         existing = {
-            "tables": [{"name": "t1", "full_name": "c.s.t1", "columns": [{"name": "old"}]}],
+            "tables": [
+                {"name": "t1", "full_name": "c.s.t1", "columns": [{"name": "old"}]}
+            ],
             "table_count": 1,
         }
         svc = MetadataService(host="h", token="t", warehouse_id="w")

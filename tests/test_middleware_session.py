@@ -1,4 +1,5 @@
 """Tests for back.objects.session.FileSessionMiddleware — file-based session middleware."""
+
 import json
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
@@ -22,6 +23,7 @@ class TestSessionHelpers:
     def test_get_session_missing(self):
         """When request.state exists but has no 'session' attribute."""
         from starlette.datastructures import State
+
         request = MagicMock()
         request.state = State()
         assert get_session(request) == {}
@@ -30,6 +32,7 @@ class TestSessionHelpers:
 class TestFileSessionMiddleware:
     def test_init_creates_directory(self, tmp_path):
         from fastapi import FastAPI
+
         app = FastAPI()
         session_dir = tmp_path / "sessions"
         middleware = FileSessionMiddleware(
@@ -40,6 +43,7 @@ class TestFileSessionMiddleware:
 
     def test_generate_session_id(self, tmp_path):
         from fastapi import FastAPI
+
         app = FastAPI()
         middleware = FileSessionMiddleware(
             app, secret_key="key", session_dir=str(tmp_path)
@@ -50,6 +54,7 @@ class TestFileSessionMiddleware:
 
     def test_save_and_load_session(self, tmp_path):
         from fastapi import FastAPI
+
         app = FastAPI()
         middleware = FileSessionMiddleware(
             app, secret_key="key", session_dir=str(tmp_path)
@@ -63,6 +68,7 @@ class TestFileSessionMiddleware:
 
     def test_load_missing_session(self, tmp_path):
         from fastapi import FastAPI
+
         app = FastAPI()
         middleware = FileSessionMiddleware(
             app, secret_key="key", session_dir=str(tmp_path)
@@ -72,6 +78,7 @@ class TestFileSessionMiddleware:
 
     def test_load_corrupted_session(self, tmp_path):
         from fastapi import FastAPI
+
         app = FastAPI()
         middleware = FileSessionMiddleware(
             app, secret_key="key", session_dir=str(tmp_path)
@@ -83,6 +90,7 @@ class TestFileSessionMiddleware:
 
     def test_get_session_id_from_cookie(self, tmp_path):
         from fastapi import FastAPI
+
         app = FastAPI()
         middleware = FileSessionMiddleware(
             app, secret_key="key", session_dir=str(tmp_path)
@@ -93,6 +101,7 @@ class TestFileSessionMiddleware:
 
     def test_get_session_id_no_cookie(self, tmp_path):
         from fastapi import FastAPI
+
         app = FastAPI()
         middleware = FileSessionMiddleware(
             app, secret_key="key", session_dir=str(tmp_path)

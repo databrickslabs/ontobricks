@@ -3,6 +3,7 @@
 All shared URIs, compiled regexes, operator maps, and vocabulary sets
 used across the reasoning engines live here as a single source of truth.
 """
+
 import re
 
 from back.core.triplestore.constants import RDF_TYPE, RDFS_LABEL  # noqa: F401
@@ -59,8 +60,12 @@ NEGATED_ATOM_RE = re.compile(r"not\(\s*([A-Za-z_][\w.]*)\(([^)]+)\)\s*\)")
 AGG_FUNCTIONS = {"count", "sum", "avg", "min", "max"}
 
 AGG_OPERATORS = {
-    "lt": "<", "gt": ">", "eq": "=",
-    "lte": "<=", "gte": ">=", "neq": "<>",
+    "lt": "<",
+    "gt": ">",
+    "eq": "=",
+    "lte": "<=",
+    "gte": ">=",
+    "neq": "<>",
 }
 
 # ---------------------------------------------------------------------------
@@ -129,5 +134,9 @@ NS_PREFIX_MAP = {
 # ---------------------------------------------------------------------------
 
 CONSTRAINT_SKIP_TYPES = {
-    "transitive", "symmetric", "asymmetric", "reflexive", "irreflexive",
+    "transitive",
+    "symmetric",
+    "asymmetric",
+    "reflexive",
+    "irreflexive",
 }

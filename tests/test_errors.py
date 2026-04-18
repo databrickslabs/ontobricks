@@ -1,4 +1,5 @@
 """Tests for the centralized error handling module (back.core.errors)."""
+
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -18,6 +19,7 @@ from back.core.errors import (
 # ---------------------------------------------------------------------------
 # Exception hierarchy
 # ---------------------------------------------------------------------------
+
 
 class TestExceptionHierarchy:
     """All custom exceptions inherit from OntoBricksError."""
@@ -60,8 +62,13 @@ class TestExceptionHierarchy:
         assert exc.status_code == 409
 
     def test_all_are_catchable_as_base(self):
-        for cls in (NotFoundError, ValidationError, AuthorizationError,
-                    InfrastructureError, ConflictError):
+        for cls in (
+            NotFoundError,
+            ValidationError,
+            AuthorizationError,
+            InfrastructureError,
+            ConflictError,
+        ):
             with pytest.raises(OntoBricksError):
                 raise cls()
 
@@ -69,6 +76,7 @@ class TestExceptionHierarchy:
 # ---------------------------------------------------------------------------
 # Error code derivation
 # ---------------------------------------------------------------------------
+
 
 class TestErrorCodeFromClass:
     def test_not_found(self):
@@ -93,6 +101,7 @@ class TestErrorCodeFromClass:
 # ---------------------------------------------------------------------------
 # ErrorResponse model
 # ---------------------------------------------------------------------------
+
 
 class TestErrorResponseModel:
     def test_full(self):
@@ -119,6 +128,7 @@ class TestErrorResponseModel:
 # Global handler integration (via TestClient)
 # ---------------------------------------------------------------------------
 
+
 class TestGlobalExceptionHandler:
     """Test that the global handler converts exceptions to ErrorResponse JSON."""
 
@@ -126,13 +136,19 @@ class TestGlobalExceptionHandler:
     def client(self):
         from fastapi.testclient import TestClient
         from shared.fastapi.main import app
+
         return TestClient(app, raise_server_exceptions=False)
 
     def test_ontobricks_error_returns_json(self, client):
         """POST to /api/v1/domains/list without credentials triggers ValidationError."""
-        resp = client.post("/api/v1/domains/list", json={
-            "catalog": "c", "schema": "s", "volume": "v",
-        })
+        resp = client.post(
+            "/api/v1/domains/list",
+            json={
+                "catalog": "c",
+                "schema": "s",
+                "volume": "v",
+            },
+        )
         assert resp.status_code == 400
         body = resp.json()
         assert "error" in body
@@ -157,26 +173,33 @@ class TestGlobalExceptionHandler:
 # Migrated API service tests
 # ---------------------------------------------------------------------------
 
+
 class TestApiServiceMigration:
     """Verify the service layer now raises instead of returning tuples."""
 
     def test_list_domains_no_creds_raises(self):
         from api.service import list_domains_from_uc
+
         with pytest.raises(ValidationError, match="credentials"):
             list_domains_from_uc("cat", "sch", "vol", None, None)
 
     def test_load_domain_no_creds_raises(self):
         from api.service import load_domain_from_uc
+
         with pytest.raises(ValidationError, match="credentials"):
             load_domain_from_uc("/some/path", None, None)
 
     def test_execute_sparql_no_r2rml_raises(self):
         from api.service import execute_sparql_query
+
         with pytest.raises(ValidationError, match="R2RML"):
             execute_sparql_query({"ontology": {}}, "SELECT ?s WHERE {?s ?p ?o}")
 
     def test_execute_sparql_spark_engine_raises(self):
         from api.service import execute_sparql_query
+
         domain_data = {"assignment": {"r2rml_output": "some content"}}
         with pytest.raises(ValidationError, match="Spark engine"):
-            execute_sparql_query(domain_data, "SELECT ?s WHERE {?s ?p ?o}", engine="spark")
+            execute_sparql_query(
+                domain_data, "SELECT ?s WHERE {?s ?p ?o}", engine="spark"
+            )

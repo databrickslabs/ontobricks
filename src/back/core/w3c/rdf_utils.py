@@ -1,4 +1,5 @@
 """Shared RDF parsing utilities."""
+
 from rdflib import Graph
 
 from back.core.logging import get_logger

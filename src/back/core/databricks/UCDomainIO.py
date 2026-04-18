@@ -1,4 +1,5 @@
 """Unity Catalog I/O for OntoBricks domain JSON files (stateless, credential-based)."""
+
 from __future__ import annotations
 
 import json

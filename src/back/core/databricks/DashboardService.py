@@ -3,6 +3,7 @@
 Isolates dashboard listing and parameter extraction from the rest of
 the Databricks client surface area.
 """
+
 import json
 from typing import Any, Dict, List
 
@@ -65,20 +66,26 @@ class DashboardService:
 
                 for dash in data.get("dashboards", []):
                     did = dash.get("dashboard_id", "")
-                    dashboards.append({
-                        "id": did,
-                        "name": dash.get("display_name", dash.get("name", "Unnamed")),
-                        "path": dash.get("path", dash.get("warehouse_id", "")),
-                        "url": f"{host}/dashboardsv3/{did}" if did else "",
-                        "type": "lakeview",
-                    })
+                    dashboards.append(
+                        {
+                            "id": did,
+                            "name": dash.get(
+                                "display_name", dash.get("name", "Unnamed")
+                            ),
+                            "path": dash.get("path", dash.get("warehouse_id", "")),
+                            "url": f"{host}/dashboardsv3/{did}" if did else "",
+                            "type": "lakeview",
+                        }
+                    )
 
                 page_token = data.get("next_page_token")
                 pages += 1
                 if not page_token:
                     break
 
-            logger.info("Found %d Lakeview dashboards (%d page(s))", len(dashboards), pages)
+            logger.info(
+                "Found %d Lakeview dashboards (%d page(s))", len(dashboards), pages
+            )
         except Exception as exc:
             logger.exception("Lakeview API error: %s", exc)
 
@@ -99,13 +106,15 @@ class DashboardService:
 
                 for dash in results:
                     did = dash.get("id", "")
-                    dashboards.append({
-                        "id": did,
-                        "name": dash.get("name", "Unnamed"),
-                        "path": dash.get("slug", ""),
-                        "url": f"{host}/sql/dashboards/{did}" if did else "",
-                        "type": "legacy",
-                    })
+                    dashboards.append(
+                        {
+                            "id": did,
+                            "name": dash.get("name", "Unnamed"),
+                            "path": dash.get("slug", ""),
+                            "url": f"{host}/sql/dashboards/{did}" if did else "",
+                            "type": "legacy",
+                        }
+                    )
 
                 if len(results) < _LEGACY_PAGE_SIZE:
                     break
@@ -148,7 +157,11 @@ class DashboardService:
 
             if serialized:
                 try:
-                    dash_def = json.loads(serialized) if isinstance(serialized, str) else serialized
+                    dash_def = (
+                        json.loads(serialized)
+                        if isinstance(serialized, str)
+                        else serialized
+                    )
                     parameters = self._extract_parameters(dash_def)
                     self._link_filter_widgets(dash_def, parameters)
                 except json.JSONDecodeError:
@@ -157,11 +170,17 @@ class DashboardService:
             debug_info: dict = {}
             if serialized:
                 try:
-                    dd = json.loads(serialized) if isinstance(serialized, str) else serialized
+                    dd = (
+                        json.loads(serialized)
+                        if isinstance(serialized, str)
+                        else serialized
+                    )
                     debug_info["datasets"] = dd.get("datasets", [])
                     debug_info["pages"] = dd.get("pages", [])
                 except Exception:
-                    logger.debug("Could not parse dashboard debug structure", exc_info=True)
+                    logger.debug(
+                        "Could not parse dashboard debug structure", exc_info=True
+                    )
 
             return {
                 "id": dashboard_id,
@@ -191,29 +210,35 @@ class DashboardService:
                 name = param.get("name", keyword)
                 ptype = param.get("dataType", param.get("type", "STRING"))
                 internal_id = (
-                    param.get("id", "") or param.get("parameterId", "") or param.get("fieldId", "")
+                    param.get("id", "")
+                    or param.get("parameterId", "")
+                    or param.get("fieldId", "")
                 )
                 effective = keyword or display or name
                 if effective:
-                    parameters.append({
-                        "name": display or effective,
-                        "keyword": keyword or effective,
-                        "type": ptype.lower() if ptype else "string",
-                        "dataset": dataset_display,
-                        "datasetId": dataset_id,
-                        "paramId": internal_id,
-                    })
+                    parameters.append(
+                        {
+                            "name": display or effective,
+                            "keyword": keyword or effective,
+                            "type": ptype.lower() if ptype else "string",
+                            "dataset": dataset_display,
+                            "datasetId": dataset_id,
+                            "paramId": internal_id,
+                        }
+                    )
 
         for param in dash_def.get("parameters", []):
             pname = param.get("name", "")
             pkeyword = param.get("keyword", pname)
             if pname and not any(p["name"] == pname for p in parameters):
-                parameters.append({
-                    "name": pname,
-                    "keyword": pkeyword,
-                    "type": param.get("type", "string"),
-                    "dataset": "",
-                })
+                parameters.append(
+                    {
+                        "name": pname,
+                        "keyword": pkeyword,
+                        "type": param.get("type", "string"),
+                        "dataset": "",
+                    }
+                )
         return parameters
 
     @staticmethod
@@ -230,7 +255,10 @@ class DashboardService:
                     for field in spec.get("encodings", {}).get("fields", []):
                         pname = field.get("parameterName", "")
                         if pname:
-                            mappings[pname] = {"pageId": page_name, "widgetId": widget_name}
+                            mappings[pname] = {
+                                "pageId": page_name,
+                                "widgetId": widget_name,
+                            }
 
         for param in parameters:
             kw = param.get("keyword", "")

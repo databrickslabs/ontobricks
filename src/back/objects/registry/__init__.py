@@ -1,4 +1,5 @@
 """Registry — domain registry, permissions, and scheduled builds."""
+
 from back.objects.registry.service import (
     RegistryCfg,
     RegistryService,

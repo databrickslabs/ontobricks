@@ -1,4 +1,5 @@
 """Task data models for the async task manager."""
+
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from enum import Enum
@@ -16,6 +17,7 @@ class TaskStatus(str, Enum):
 @dataclass
 class TaskStep:
     """A step within a task."""
+
     name: str
     description: str
     status: str = "pending"
@@ -29,6 +31,7 @@ class TaskStep:
 @dataclass
 class Task:
     """Represents an async task."""
+
     id: str
     name: str
     task_type: str
@@ -45,17 +48,17 @@ class Task:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'id': self.id,
-            'name': self.name,
-            'task_type': self.task_type,
-            'status': self.status.value,
-            'progress': self.progress,
-            'message': self.message,
-            'result': self.result,
-            'error': self.error,
-            'created_at': self.created_at,
-            'started_at': self.started_at,
-            'completed_at': self.completed_at,
-            'steps': [s.to_dict() for s in self.steps],
-            'current_step': self.current_step
+            "id": self.id,
+            "name": self.name,
+            "task_type": self.task_type,
+            "status": self.status.value,
+            "progress": self.progress,
+            "message": self.message,
+            "result": self.result,
+            "error": self.error,
+            "created_at": self.created_at,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+            "steps": [s.to_dict() for s in self.steps],
+            "current_step": self.current_step,
         }

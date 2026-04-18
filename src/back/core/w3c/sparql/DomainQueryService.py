@@ -1,4 +1,5 @@
 """SPARQL validation, execution, and samples over domain JSON (R2RML in assignment)."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple

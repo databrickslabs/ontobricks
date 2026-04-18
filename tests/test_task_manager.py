@@ -1,4 +1,5 @@
 """Tests for back.core.task_manager — async task tracking."""
+
 import pytest
 from back.core.task_manager import TaskManager, TaskStatus, Task, TaskStep
 
@@ -145,7 +146,10 @@ class TestTaskLifecycle:
         assert task.completed_at is not None
 
     def test_complete_marks_remaining_steps(self, mgr):
-        steps = [{"name": "s1", "description": "d1"}, {"name": "s2", "description": "d2"}]
+        steps = [
+            {"name": "s1", "description": "d1"},
+            {"name": "s2", "description": "d2"},
+        ]
         task = mgr.create_task("T", "t", steps=steps)
         mgr.start_task(task.id)
         mgr.complete_task(task.id)
@@ -163,7 +167,10 @@ class TestTaskLifecycle:
         assert "Failed:" in task.message
 
     def test_fail_marks_current_step(self, mgr):
-        steps = [{"name": "s1", "description": "d1"}, {"name": "s2", "description": "d2"}]
+        steps = [
+            {"name": "s1", "description": "d1"},
+            {"name": "s2", "description": "d2"},
+        ]
         task = mgr.create_task("T", "t", steps=steps)
         mgr.start_task(task.id)
         mgr.advance_step(task.id)

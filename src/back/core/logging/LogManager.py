@@ -90,7 +90,9 @@ class LogManager:
 
         resolved_level = (level or os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL)).upper()
         config = self._build_config(
-            level=resolved_level, log_dir=log_dir, log_file=log_file,
+            level=resolved_level,
+            log_dir=log_dir,
+            log_file=log_file,
         )
         logging.config.dictConfig(config)
 

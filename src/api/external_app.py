@@ -8,6 +8,7 @@ Interactive docs live at ``/api/docs`` and ``/api/redoc``; OpenAPI JSON at ``/ap
 OpenAPI path keys are prefixed with :data:`api.constants.OPENAPI_PATH_PREFIX` so Swagger UI
 resolves requests correctly when the schema is served from the mounted app.
 """
+
 from __future__ import annotations
 
 from fastapi import FastAPI
@@ -50,7 +51,9 @@ def create_external_api_app() -> FastAPI:
 
     app.include_router(api_v1_router, prefix=API_V1_PREFIX, tags=["API v1"])
     app.include_router(domains_router, prefix=API_V1_PREFIX, tags=["Domain"])
-    app.include_router(dt_api_router, prefix=API_DIGITALTWIN_PREFIX, tags=["Digital Twin"])
+    app.include_router(
+        dt_api_router, prefix=API_DIGITALTWIN_PREFIX, tags=["Digital Twin"]
+    )
     app.include_router(graphql_router, prefix=API_GRAPHQL_PREFIX, tags=["GraphQL"])
 
     def custom_openapi():

@@ -1,4 +1,5 @@
 """Databricks integration layer — typed facades for every API surface."""
+
 from back.core.databricks.DatabricksAuth import DatabricksAuth  # noqa: F401
 from back.core.databricks.DatabricksClient import DatabricksClient  # noqa: F401
 from back.core.databricks.SQLWarehouse import SQLWarehouse  # noqa: F401
@@ -17,16 +18,30 @@ build_metadata_dict = MetadataService.build_metadata_dict
 validate_metadata = MetadataService.validate_metadata
 has_metadata = MetadataService.has_metadata
 get_catalog_schema_from_metadata = MetadataService.get_catalog_schema_from_metadata
-extract_catalog_schema_from_full_name = MetadataService.extract_catalog_schema_from_full_name
+extract_catalog_schema_from_full_name = (
+    MetadataService.extract_catalog_schema_from_full_name
+)
 list_domains_from_uc = UCDomainIO.list_domains
 load_domain_from_uc = UCDomainIO.load_domain
 
 __all__ = [
-    "DatabricksAuth", "DatabricksClient", "SQLWarehouse", "UnityCatalog",
-    "VolumeFileService", "WorkspaceService", "DashboardService", "MetadataService",
+    "DatabricksAuth",
+    "DatabricksClient",
+    "SQLWarehouse",
+    "UnityCatalog",
+    "VolumeFileService",
+    "WorkspaceService",
+    "DashboardService",
+    "MetadataService",
     "UCDomainIO",
-    "is_databricks_app", "normalize_host", "get_workspace_host",
-    "build_metadata_dict", "validate_metadata", "has_metadata",
-    "get_catalog_schema_from_metadata", "extract_catalog_schema_from_full_name",
-    "list_domains_from_uc", "load_domain_from_uc",
+    "is_databricks_app",
+    "normalize_host",
+    "get_workspace_host",
+    "build_metadata_dict",
+    "validate_metadata",
+    "has_metadata",
+    "get_catalog_schema_from_metadata",
+    "extract_catalog_schema_from_full_name",
+    "list_domains_from_uc",
+    "load_domain_from_uc",
 ]

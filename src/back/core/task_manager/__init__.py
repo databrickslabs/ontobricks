@@ -1,4 +1,5 @@
 """Async Task Manager — in-memory task tracking for long-running operations."""
+
 from back.core.task_manager.models import TaskStatus, TaskStep, Task  # noqa: F401
 from back.core.task_manager.TaskManager import TaskManager  # noqa: F401
 
@@ -13,7 +14,9 @@ def get_task_manager() -> TaskManager:
 
 def run_background_task(name, task_type, target, *args, steps=None, **kwargs) -> Task:
     """Backward-compatible wrapper — delegates to TaskManager.run_background_task."""
-    return task_manager.run_background_task(name, task_type, target, *args, steps=steps, **kwargs)
+    return task_manager.run_background_task(
+        name, task_type, target, *args, steps=steps, **kwargs
+    )
 
 
 __all__ = [

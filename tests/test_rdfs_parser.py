@@ -1,4 +1,5 @@
 """Tests for back.core.rdfs.rdfs_parser — RDFS vocabulary parsing."""
+
 import pytest
 
 from back.core.w3c.rdfs.RDFSParser import RDFSParser

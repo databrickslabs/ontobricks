@@ -1,4 +1,5 @@
 """Frontend HTML route -- Ontology page."""
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 

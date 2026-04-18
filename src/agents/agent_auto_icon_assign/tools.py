@@ -24,9 +24,7 @@ from agents.tools.icons import (
 __all__ = ["ToolContext", "TOOL_DEFINITIONS", "TOOL_HANDLERS"]
 
 TOOL_DEFINITIONS: List[dict] = (
-    [GET_METADATA_DEF]
-    + ONTOLOGY_TOOL_DEFINITIONS
-    + ICON_TOOL_DEFINITIONS
+    [GET_METADATA_DEF] + ONTOLOGY_TOOL_DEFINITIONS + ICON_TOOL_DEFINITIONS
 )
 
 TOOL_HANDLERS: Dict[str, Callable] = {

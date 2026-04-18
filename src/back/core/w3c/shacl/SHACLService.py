@@ -4,6 +4,7 @@ Central orchestrator for all SHACL data-quality operations.  Routes and
 UI code should only import ``SHACLService``; the generator and parser
 are internal implementation details.
 """
+
 import hashlib
 import re
 import uuid
@@ -12,7 +13,11 @@ from typing import Any, Dict, List, Optional
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.triplestore.constants import RDF_TYPE
-from back.core.w3c.shacl.constants import QUALITY_CATEGORIES, RDFS_LABEL, XSD_TO_SPARK_TYPE
+from back.core.w3c.shacl.constants import (
+    QUALITY_CATEGORIES,
+    RDFS_LABEL,
+    XSD_TO_SPARK_TYPE,
+)
 from back.core.w3c.shacl.SHACLGenerator import SHACLGenerator
 from back.core.w3c.shacl.SHACLParser import SHACLParser
 
@@ -59,13 +64,17 @@ class SHACLService:
         """
         cat = category if category in QUALITY_CATEGORIES else "conformance"
         safe_cls = re.sub(r"[^a-zA-Z0-9_]", "", target_class or "global")
-        safe_prop = re.sub(r"[^a-zA-Z0-9_]", "", property_path or shacl_type.replace("sh:", ""))
+        safe_prop = re.sub(
+            r"[^a-zA-Z0-9_]", "", property_path or shacl_type.replace("sh:", "")
+        )
         if not shape_id:
             shape_id = f"shape_{cat}_{safe_cls}_{safe_prop}_{uuid.uuid4().hex[:6]}"
         return {
             "id": shape_id,
             "category": cat,
-            "label": label or message or f"{shacl_type} on {target_class}.{property_path}",
+            "label": label
+            or message
+            or f"{shacl_type} on {target_class}.{property_path}",
             "target_class": target_class,
             "target_class_uri": target_class_uri,
             "property_path": property_path,
@@ -116,14 +125,22 @@ class SHACLService:
         ]
         digest = hashlib.sha256("|".join(key_parts).encode()).hexdigest()[:10]
         ctype = re.sub(r"[^a-zA-Z0-9_]", "", constraint.get("type", "unknown"))
-        cls = re.sub(r"[^a-zA-Z0-9_]", "", constraint.get("className", "") or constraint.get("attributeName", "") or "global")
+        cls = re.sub(
+            r"[^a-zA-Z0-9_]",
+            "",
+            constraint.get("className", "")
+            or constraint.get("attributeName", "")
+            or "global",
+        )
         return f"migrated_{ctype}_{cls}_{digest}"
 
     # ------------------------------------------------------------------
     # Turtle generation / parsing
     # ------------------------------------------------------------------
 
-    def generate_turtle(self, shapes: List[Dict], base_uri: Optional[str] = None) -> str:
+    def generate_turtle(
+        self, shapes: List[Dict], base_uri: Optional[str] = None
+    ) -> str:
         """Generate SHACL Turtle from the shapes list."""
         uri = base_uri or self._base_uri
         return self._generator.generate(shapes, base_uri=uri)
@@ -137,7 +154,9 @@ class SHACLService:
     # ------------------------------------------------------------------
 
     def run_inference(
-        self, data_turtle: str, rule_shapes: List[Dict],
+        self,
+        data_turtle: str,
+        rule_shapes: List[Dict],
         base_uri: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Run SHACL-AF inference rules and return newly inferred triples.
@@ -155,8 +174,14 @@ class SHACLService:
             import pyshacl
             from rdflib import Graph as RG
         except ImportError:
-            logger.error("pyshacl/rdflib not installed — cannot run SHACL rule inference")
-            return {"inferred_triples": [], "count": 0, "error": "pyshacl not available"}
+            logger.error(
+                "pyshacl/rdflib not installed — cannot run SHACL rule inference"
+            )
+            return {
+                "inferred_triples": [],
+                "count": 0,
+                "error": "pyshacl not available",
+            }
 
         shapes_turtle = self._generate_rule_shapes_turtle(rule_shapes, base_uri)
         if not shapes_turtle:
@@ -187,7 +212,12 @@ class SHACLService:
 
         new_count = len(data_graph)
         inferred = new_count - original_count
-        logger.info("SHACL rules inferred %d new triples (%d → %d)", inferred, original_count, new_count)
+        logger.info(
+            "SHACL rules inferred %d new triples (%d → %d)",
+            inferred,
+            original_count,
+            new_count,
+        )
 
         inferred_triples = []
         if inferred > 0:
@@ -199,14 +229,20 @@ class SHACLService:
             for s, p, o in data_graph:
                 key = (str(s), str(p), str(o))
                 if key not in original_set:
-                    inferred_triples.append({
-                        "subject": str(s), "predicate": str(p), "object": str(o),
-                    })
+                    inferred_triples.append(
+                        {
+                            "subject": str(s),
+                            "predicate": str(p),
+                            "object": str(o),
+                        }
+                    )
 
         return {"inferred_triples": inferred_triples, "count": len(inferred_triples)}
 
     def _generate_rule_shapes_turtle(
-        self, rule_shapes: List[Dict], base_uri: Optional[str] = None,
+        self,
+        rule_shapes: List[Dict],
+        base_uri: Optional[str] = None,
     ) -> str:
         """Generate Turtle for SHACL rule shapes (sh:TripleRule / sh:SPARQLRule)."""
         uri = base_uri or self._base_uri
@@ -264,7 +300,10 @@ class SHACLService:
     # ------------------------------------------------------------------
 
     def validate_graph(
-        self, data_turtle: str, shapes: List[Dict], base_uri: Optional[str] = None,
+        self,
+        data_turtle: str,
+        shapes: List[Dict],
+        base_uri: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Run PySHACL validation and return a result dict.
 
@@ -347,19 +386,23 @@ class SHACLService:
                 elif "Info" in sev_str:
                     severity = "sh:Info"
 
-            violations.append({
-                "focus_node": focus,
-                "result_path": path,
-                "message": message,
-                "severity": severity,
-            })
+            violations.append(
+                {
+                    "focus_node": focus,
+                    "result_path": path,
+                    "message": message,
+                    "severity": severity,
+                }
+            )
         return violations
 
     # ------------------------------------------------------------------
     # Legacy constraint migration
     # ------------------------------------------------------------------
 
-    def migrate_legacy_constraints(self, constraints: List[Dict], base_uri: str = "") -> List[Dict]:
+    def migrate_legacy_constraints(
+        self, constraints: List[Dict], base_uri: str = ""
+    ) -> List[Dict]:
         """Convert old OntoBricks constraint dicts to SHACL shape dicts.
 
         Handles all types stored in ``ontology.constraints``:
@@ -386,7 +429,9 @@ class SHACLService:
 
         return shapes
 
-    def _migrate_cardinality(self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = "") -> Optional[Dict]:
+    def _migrate_cardinality(
+        self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = ""
+    ) -> Optional[Dict]:
         ctype = c["type"]
         cls = c.get("className", "")
         cls_uri = c.get("classUri", f"{uri}{sep}{cls}" if cls else "")
@@ -405,27 +450,36 @@ class SHACLService:
 
         return self.create_shape(
             category="structural",
-            target_class=cls, target_class_uri=cls_uri,
-            property_path=prop, property_uri=prop_uri,
+            target_class=cls,
+            target_class_uri=cls_uri,
+            property_path=prop,
+            property_uri=prop_uri,
             shacl_type=list(params.keys())[0] if params else "sh:minCount",
             parameters=params,
             message=f"{ctype}({prop}={val}) on {cls}",
             shape_id=stable_id,
         )
 
-    def _migrate_functional(self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = "") -> Optional[Dict]:
+    def _migrate_functional(
+        self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = ""
+    ) -> Optional[Dict]:
         prop = c.get("property", "")
         prop_uri = c.get("propertyUri", f"{data_ns}{prop}" if prop else "")
         return self.create_shape(
             category="consistency",
-            target_class="", target_class_uri="",
-            property_path=prop, property_uri=prop_uri,
-            shacl_type="sh:maxCount", parameters={"sh:maxCount": 1},
+            target_class="",
+            target_class_uri="",
+            property_path=prop,
+            property_uri=prop_uri,
+            shacl_type="sh:maxCount",
+            parameters={"sh:maxCount": 1},
             message=f"Functional property {prop}: at most one value per subject",
             shape_id=stable_id,
         )
 
-    def _migrate_inverse_functional(self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = "") -> Optional[Dict]:
+    def _migrate_inverse_functional(
+        self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = ""
+    ) -> Optional[Dict]:
         prop = c.get("property", "")
         prop_uri = c.get("propertyUri", f"{data_ns}{prop}" if prop else "")
         query = (
@@ -434,14 +488,19 @@ class SHACLService:
         )
         return self.create_shape(
             category="consistency",
-            target_class="", target_class_uri="",
-            property_path=prop, property_uri=prop_uri,
-            shacl_type="sh:sparql", parameters={"sh:select": query},
+            target_class="",
+            target_class_uri="",
+            property_path=prop,
+            property_uri=prop_uri,
+            shacl_type="sh:sparql",
+            parameters={"sh:select": query},
             message=f"Inverse-functional property {prop}: each value maps to at most one subject",
             shape_id=stable_id,
         )
 
-    def _migrate_value_check(self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = "") -> Optional[Dict]:
+    def _migrate_value_check(
+        self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = ""
+    ) -> Optional[Dict]:
         cls = c.get("className", "")
         cls_uri = f"{uri}{sep}{cls}" if cls else ""
         attr = c.get("attributeName", "")
@@ -452,9 +511,12 @@ class SHACLService:
         if check_type == "notNull":
             return self.create_shape(
                 category="consistency",
-                target_class=cls, target_class_uri=cls_uri,
-                property_path=attr, property_uri=attr_uri,
-                shacl_type="sh:minCount", parameters={"sh:minCount": 1},
+                target_class=cls,
+                target_class_uri=cls_uri,
+                property_path=attr,
+                property_uri=attr_uri,
+                shacl_type="sh:minCount",
+                parameters={"sh:minCount": 1},
                 message=f"{cls}.{attr} must not be empty",
                 shape_id=stable_id,
             )
@@ -468,8 +530,10 @@ class SHACLService:
         if check_type in pattern_map:
             return self.create_shape(
                 category="consistency",
-                target_class=cls, target_class_uri=cls_uri,
-                property_path=attr, property_uri=attr_uri,
+                target_class=cls,
+                target_class_uri=cls_uri,
+                property_path=attr,
+                property_uri=attr_uri,
                 shacl_type="sh:pattern",
                 parameters={"sh:pattern": pattern_map[check_type], "sh:flags": "i"},
                 message=f"{cls}.{attr} must match {check_type} '{check_value}'",
@@ -479,9 +543,12 @@ class SHACLService:
         if check_type == "equals":
             return self.create_shape(
                 category="consistency",
-                target_class=cls, target_class_uri=cls_uri,
-                property_path=attr, property_uri=attr_uri,
-                shacl_type="sh:hasValue", parameters={"sh:hasValue": check_value},
+                target_class=cls,
+                target_class_uri=cls_uri,
+                property_path=attr,
+                property_uri=attr_uri,
+                shacl_type="sh:hasValue",
+                parameters={"sh:hasValue": check_value},
                 message=f"{cls}.{attr} must equal '{check_value}'",
                 shape_id=stable_id,
             )
@@ -493,16 +560,21 @@ class SHACLService:
             )
             return self.create_shape(
                 category="consistency",
-                target_class=cls, target_class_uri=cls_uri,
-                property_path=attr, property_uri=attr_uri,
-                shacl_type="sh:sparql", parameters={"sh:select": query},
+                target_class=cls,
+                target_class_uri=cls_uri,
+                property_path=attr,
+                property_uri=attr_uri,
+                shacl_type="sh:sparql",
+                parameters={"sh:select": query},
                 message=f"{cls}.{attr} must not equal '{check_value}'",
                 shape_id=stable_id,
             )
 
         return None
 
-    def _migrate_all_values_from(self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = "") -> Optional[Dict]:
+    def _migrate_all_values_from(
+        self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = ""
+    ) -> Optional[Dict]:
         cls = c.get("className", "")
         cls_uri = c.get("classUri", f"{uri}{sep}{cls}" if cls else "")
         prop = c.get("property", "")
@@ -511,14 +583,19 @@ class SHACLService:
         val_class_uri = f"{uri}{sep}{val_class}" if val_class else ""
         return self.create_shape(
             category="consistency",
-            target_class=cls, target_class_uri=cls_uri,
-            property_path=prop, property_uri=prop_uri,
-            shacl_type="sh:class", parameters={"sh:class": val_class_uri},
+            target_class=cls,
+            target_class_uri=cls_uri,
+            property_path=prop,
+            property_uri=prop_uri,
+            shacl_type="sh:class",
+            parameters={"sh:class": val_class_uri},
             message=f"All values of {cls}.{prop} must be of type {val_class}",
             shape_id=stable_id,
         )
 
-    def _migrate_some_values_from(self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = "") -> Optional[Dict]:
+    def _migrate_some_values_from(
+        self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = ""
+    ) -> Optional[Dict]:
         cls = c.get("className", "")
         cls_uri = c.get("classUri", f"{uri}{sep}{cls}" if cls else "")
         prop = c.get("property", "")
@@ -531,14 +608,19 @@ class SHACLService:
         )
         return self.create_shape(
             category="consistency",
-            target_class=cls, target_class_uri=cls_uri,
-            property_path=prop, property_uri=prop_uri,
-            shacl_type="sh:sparql", parameters={"sh:select": query},
+            target_class=cls,
+            target_class_uri=cls_uri,
+            property_path=prop,
+            property_uri=prop_uri,
+            shacl_type="sh:sparql",
+            parameters={"sh:select": query},
             message=f"{cls}.{prop} must have at least one value of type {val_class}",
             shape_id=stable_id,
         )
 
-    def _migrate_has_value(self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = "") -> Optional[Dict]:
+    def _migrate_has_value(
+        self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = ""
+    ) -> Optional[Dict]:
         cls = c.get("className", "")
         cls_uri = c.get("classUri", f"{uri}{sep}{cls}" if cls else "")
         prop = c.get("property", "")
@@ -546,14 +628,19 @@ class SHACLService:
         val = c.get("hasValue", "")
         return self.create_shape(
             category="conformance",
-            target_class=cls, target_class_uri=cls_uri,
-            property_path=prop, property_uri=prop_uri,
-            shacl_type="sh:hasValue", parameters={"sh:hasValue": val},
+            target_class=cls,
+            target_class_uri=cls_uri,
+            property_path=prop,
+            property_uri=prop_uri,
+            shacl_type="sh:hasValue",
+            parameters={"sh:hasValue": val},
             message=f"{cls}.{prop} must have value '{val}'",
             shape_id=stable_id,
         )
 
-    def _migrate_global_rule(self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = "") -> Optional[Dict]:
+    def _migrate_global_rule(
+        self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = ""
+    ) -> Optional[Dict]:
         rule = c.get("ruleName", "")
         if rule == "noOrphans":
             query = (
@@ -565,18 +652,22 @@ class SHACLService:
             )
             return self.create_shape(
                 category="structural",
-                target_class="", target_class_uri="",
-                shacl_type="sh:sparql", parameters={"sh:select": query},
+                target_class="",
+                target_class_uri="",
+                shacl_type="sh:sparql",
+                parameters={"sh:select": query},
                 message="Every entity must have at least one relationship (no orphans)",
                 shape_id=stable_id,
             )
         if rule == "requireLabels":
             return self.create_shape(
                 category="structural",
-                target_class="", target_class_uri="",
+                target_class="",
+                target_class_uri="",
                 property_path="label",
                 property_uri="http://www.w3.org/2000/01/rdf-schema#label",
-                shacl_type="sh:minCount", parameters={"sh:minCount": 1},
+                shacl_type="sh:minCount",
+                parameters={"sh:minCount": 1},
                 message="Every entity must have an rdfs:label",
                 shape_id=stable_id,
             )
@@ -588,14 +679,18 @@ class SHACLService:
             )
             return self.create_shape(
                 category="structural",
-                target_class="", target_class_uri="",
-                shacl_type="sh:sparql", parameters={"sh:select": query},
+                target_class="",
+                target_class_uri="",
+                shacl_type="sh:sparql",
+                parameters={"sh:select": query},
                 message="All entity identifiers must be unique",
                 shape_id=stable_id,
             )
         return None
 
-    def _migrate_noop(self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = "") -> Optional[Dict]:
+    def _migrate_noop(
+        self, c: Dict, uri: str, sep: str, data_ns: str, stable_id: str = ""
+    ) -> Optional[Dict]:
         """Skip property characteristics that are handled by the reasoning engine, not DQ."""
         return None
 
@@ -678,7 +773,9 @@ class SHACLService:
                     continue
                 if uri_local_name(pred).lower() == target_local:
                     logger.info(
-                        "URI fallback (local-name): '%s' → '%s'", prop_uri, pred,
+                        "URI fallback (local-name): '%s' → '%s'",
+                        prop_uri,
+                        pred,
                     )
                     return pred
 
@@ -691,8 +788,11 @@ class SHACLService:
 
     @staticmethod
     def _mem_cardinality(
-        cls_uri: str, prop_uri: str, params: Dict,
-        class_instances_fn, subj_by_pred: Dict,
+        cls_uri: str,
+        prop_uri: str,
+        params: Dict,
+        class_instances_fn,
+        subj_by_pred: Dict,
     ) -> List[Dict]:
         min_count = params.get("sh:minCount")
         max_count = params.get("sh:maxCount")
@@ -717,7 +817,9 @@ class SHACLService:
             logger.warning(
                 "Cardinality check: predicate '%s' has NO values for ANY of %d "
                 "instances of '%s' — possible URI mismatch between shape and graph",
-                prop_uri, len(instances), cls_uri,
+                prop_uri,
+                len(instances),
+                cls_uri,
             )
 
         for s in instances:
@@ -730,7 +832,12 @@ class SHACLService:
 
     @staticmethod
     def _sql_cardinality(
-        table: str, cls_uri: str, prop_uri: str, params: Dict, rdf_type: str, esc,
+        table: str,
+        cls_uri: str,
+        prop_uri: str,
+        params: Dict,
+        rdf_type: str,
+        esc,
     ) -> Optional[str]:
         min_count = params.get("sh:minCount")
         max_count = params.get("sh:maxCount")
@@ -770,7 +877,12 @@ class SHACLService:
 
     @staticmethod
     def _sql_datatype(
-        table: str, cls_uri: str, prop_uri: str, params: Dict, rdf_type: str, esc,
+        table: str,
+        cls_uri: str,
+        prop_uri: str,
+        params: Dict,
+        rdf_type: str,
+        esc,
     ) -> Optional[str]:
         """Generate SQL to find values that don't match the expected XSD datatype.
 
@@ -795,7 +907,10 @@ class SHACLService:
 
     @staticmethod
     def _sql_sparql_wellknown(
-        table: str, params: Dict, rdf_type: str, esc,
+        table: str,
+        params: Dict,
+        rdf_type: str,
+        esc,
     ) -> Optional[str]:
         """Translate well-known sh:sparql patterns to native SQL.
 
@@ -865,7 +980,9 @@ class SHACLService:
         if shacl_type in ("sh:minCount", "sh:maxCount") or (
             "sh:minCount" in params or "sh:maxCount" in params
         ):
-            return SHACLService._sql_cardinality(table, cls_uri, prop_uri, params, RDF_TYPE, esc)
+            return SHACLService._sql_cardinality(
+                table, cls_uri, prop_uri, params, RDF_TYPE, esc
+            )
 
         if shacl_type == "sh:pattern":
             pattern = params.get("sh:pattern", "")
@@ -907,7 +1024,9 @@ class SHACLService:
             )
 
         if shacl_type == "sh:datatype":
-            return SHACLService._sql_datatype(table, cls_uri, prop_uri, params, RDF_TYPE, esc)
+            return SHACLService._sql_datatype(
+                table, cls_uri, prop_uri, params, RDF_TYPE, esc
+            )
 
         if shacl_type == "sh:closed":
             return None
@@ -917,10 +1036,10 @@ class SHACLService:
 
         return None
 
-
     @staticmethod
     def evaluate_shape_in_memory(
-        shape: Dict, triples: List[Dict[str, str]],
+        shape: Dict,
+        triples: List[Dict[str, str]],
     ) -> List[Dict[str, str]]:
         """Evaluate a single SHACL shape against an in-memory list of triples.
 
@@ -952,10 +1071,13 @@ class SHACLService:
         if shacl_type in ("sh:minCount", "sh:maxCount") or (
             "sh:minCount" in params or "sh:maxCount" in params
         ):
-            return SHACLService._mem_cardinality(cls_uri, prop_uri, params, _class_instances, subj_by_pred)
+            return SHACLService._mem_cardinality(
+                cls_uri, prop_uri, params, _class_instances, subj_by_pred
+            )
 
         if shacl_type == "sh:pattern":
             import re as _re
+
             pattern = params.get("sh:pattern", "")
             if not pattern or not cls_uri or not prop_uri:
                 return []
@@ -963,7 +1085,9 @@ class SHACLService:
             prop_vals = subj_by_pred.get(prop_uri, {})
             violations = []
             try:
-                regex = _re.compile(pattern, _re.IGNORECASE if params.get("sh:flags", "") == "i" else 0)
+                regex = _re.compile(
+                    pattern, _re.IGNORECASE if params.get("sh:flags", "") == "i" else 0
+                )
             except _re.error:
                 return []
             for s in instances:

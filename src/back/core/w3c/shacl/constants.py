@@ -1,4 +1,5 @@
 """SHACL-related constants shared by parser, generator, and service."""
+
 from typing import Dict
 
 from rdflib import Namespace

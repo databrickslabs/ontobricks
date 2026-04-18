@@ -1,4 +1,5 @@
 """Tests for SPARQL translation and execution service."""
+
 import pytest
 
 from back.core.errors import ValidationError
@@ -63,25 +64,25 @@ class TestExtractR2RMLMappings:
         entities, rels = extract_r2rml_mappings(SAMPLE_R2RML)
         assert len(entities) >= 1
         key = list(entities.keys())[0]
-        assert 'Customer' in key
+        assert "Customer" in key
         mapping = entities[key]
-        assert mapping['id_column'] == 'customer_id'
-        assert mapping['sql_query'] is not None
+        assert mapping["id_column"] == "customer_id"
+        assert mapping["sql_query"] is not None
 
 
 class TestExecuteLocalQuery:
     def test_select_query(self):
         query = "SELECT ?s ?label WHERE { ?s <http://www.w3.org/2000/01/rdf-schema#label> ?label }"
         result = execute_local_query(query, SAMPLE_TURTLE_DATA, limit=100)
-        assert result['success'] is True
-        assert result['count'] >= 2
-        assert 's' in result['columns']
-        assert 'label' in result['columns']
+        assert result["success"] is True
+        assert result["count"] >= 2
+        assert "s" in result["columns"]
+        assert "label" in result["columns"]
 
     def test_select_with_limit(self):
         query = "SELECT ?s WHERE { ?s a ?type }"
         result = execute_local_query(query, SAMPLE_TURTLE_DATA, limit=1)
-        assert result['count'] <= 1
+        assert result["count"] <= 1
 
 
 class TestTranslateSparqlToSpark:
@@ -90,11 +91,14 @@ class TestTranslateSparqlToSpark:
         with pytest.raises(ValidationError):
             translate_sparql_to_spark(
                 "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }",
-                entities, limit=100,
+                entities,
+                limit=100,
             )
 
     def test_basic_select(self):
         entities, rels = extract_r2rml_mappings(SAMPLE_R2RML)
         sparql = "SELECT ?s ?p ?o WHERE { ?s ?p ?o }"
-        result = translate_sparql_to_spark(sparql, entities, limit=100, relationship_mappings=rels)
-        assert 'success' in result
+        result = translate_sparql_to_spark(
+            sparql, entities, limit=100, relationship_mappings=rels
+        )
+        assert "success" in result

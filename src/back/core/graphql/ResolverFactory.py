@@ -1,4 +1,5 @@
 """GraphQL resolver factory functions."""
+
 from typing import Callable, List, Optional
 
 import strawberry
@@ -30,7 +31,9 @@ class ResolverFactory:
             store = info.context["triplestore"]
             table = info.context["table_name"]
             depth = info.context.get("depth")
-            return metadata.resolve_list(store, table, type_name, limit, offset, search, depth=depth)
+            return metadata.resolve_list(
+                store, table, type_name, limit, offset, search, depth=depth
+            )
 
         resolver.__name__ = f"resolve_{type_name}_list"
         return resolver
@@ -50,7 +53,9 @@ class ResolverFactory:
             store = info.context["triplestore"]
             table = info.context["table_name"]
             depth = info.context.get("depth")
-            return metadata.resolve_single(store, table, type_name, str(id), depth=depth)
+            return metadata.resolve_single(
+                store, table, type_name, str(id), depth=depth
+            )
 
         resolver.__name__ = f"resolve_{type_name}_single"
         return resolver

@@ -53,7 +53,9 @@ def setup_tracing(experiment_name: Optional[str] = None) -> bool:
         logger.info("MLflow tracing enabled — experiment='%s'", name)
         return True
     except Exception as exc:
-        logger.warning("MLflow tracing setup failed (agents will run without tracing): %s", exc)
+        logger.warning(
+            "MLflow tracing setup failed (agents will run without tracing): %s", exc
+        )
         _TRACING_READY = False
         return False
 
@@ -64,6 +66,7 @@ def is_tracing_ready() -> bool:
 
 def trace_agent(name: Optional[str] = None):
     """Decorator: wrap an agent ``run_agent`` function with an AGENT span."""
+
     def decorator(fn):
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
@@ -71,17 +74,23 @@ def trace_agent(name: Optional[str] = None):
                 return fn(*args, **kwargs)
             import mlflow
             from mlflow.entities import SpanType
-            with mlflow.start_span(name=name or fn.__name__, span_type=SpanType.AGENT) as span:
+
+            with mlflow.start_span(
+                name=name or fn.__name__, span_type=SpanType.AGENT
+            ) as span:
                 span.set_inputs(_safe_inputs(kwargs))
                 result = fn(*args, **kwargs)
                 span.set_outputs(_safe_result(result))
                 return result
+
         return wrapper
+
     return decorator
 
 
 def trace_llm(name: Optional[str] = None):
     """Decorator: wrap an LLM call function with an LLM span."""
+
     def decorator(fn):
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
@@ -89,26 +98,41 @@ def trace_llm(name: Optional[str] = None):
                 return fn(*args, **kwargs)
             import mlflow
             from mlflow.entities import SpanType
-            with mlflow.start_span(name=name or fn.__name__, span_type=SpanType.LLM) as span:
-                span.set_inputs({
-                    "endpoint": kwargs.get("endpoint_name") or (args[2] if len(args) > 2 else "?"),
-                    "message_count": len(kwargs.get("messages") or (args[3] if len(args) > 3 else [])),
-                })
+
+            with mlflow.start_span(
+                name=name or fn.__name__, span_type=SpanType.LLM
+            ) as span:
+                span.set_inputs(
+                    {
+                        "endpoint": kwargs.get("endpoint_name")
+                        or (args[2] if len(args) > 2 else "?"),
+                        "message_count": len(
+                            kwargs.get("messages") or (args[3] if len(args) > 3 else [])
+                        ),
+                    }
+                )
                 result = fn(*args, **kwargs)
                 if isinstance(result, dict):
                     usage = result.get("usage", {})
-                    span.set_outputs({
-                        "finish_reason": result.get("choices", [{}])[0].get("finish_reason"),
-                        "prompt_tokens": usage.get("prompt_tokens"),
-                        "completion_tokens": usage.get("completion_tokens"),
-                    })
+                    span.set_outputs(
+                        {
+                            "finish_reason": result.get("choices", [{}])[0].get(
+                                "finish_reason"
+                            ),
+                            "prompt_tokens": usage.get("prompt_tokens"),
+                            "completion_tokens": usage.get("completion_tokens"),
+                        }
+                    )
                 return result
+
         return wrapper
+
     return decorator
 
 
 def trace_tool(name: Optional[str] = None):
     """Decorator: wrap a tool-dispatch function with a TOOL span."""
+
     def decorator(fn):
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
@@ -116,14 +140,26 @@ def trace_tool(name: Optional[str] = None):
                 return fn(*args, **kwargs)
             import mlflow
             from mlflow.entities import SpanType
+
             tool_name = kwargs.get("tool_name") or (args[1] if len(args) > 1 else "?")
             tool_args = kwargs.get("arguments") or (args[2] if len(args) > 2 else {})
-            with mlflow.start_span(name=f"tool:{tool_name}", span_type=SpanType.TOOL) as span:
-                span.set_inputs({"tool_name": tool_name, "arguments": _truncate(str(tool_args), 500)})
+            with mlflow.start_span(
+                name=f"tool:{tool_name}", span_type=SpanType.TOOL
+            ) as span:
+                span.set_inputs(
+                    {
+                        "tool_name": tool_name,
+                        "arguments": _truncate(str(tool_args), 500),
+                    }
+                )
                 result = fn(*args, **kwargs)
-                span.set_outputs({"result_length": len(result) if isinstance(result, str) else None})
+                span.set_outputs(
+                    {"result_length": len(result) if isinstance(result, str) else None}
+                )
                 return result
+
         return wrapper
+
     return decorator
 
 

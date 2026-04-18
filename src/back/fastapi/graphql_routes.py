@@ -21,7 +21,12 @@ from shared.config.settings import get_settings, Settings
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from back.core.graphql import DEFAULT_DEPTH, MAX_DEPTH
 from back.core.logging import get_logger
-from back.core.errors import OntoBricksError, ValidationError, NotFoundError, InfrastructureError
+from back.core.errors import (
+    OntoBricksError,
+    ValidationError,
+    NotFoundError,
+    InfrastructureError,
+)
 from back.objects.registry import RegistryService
 from back.core.triplestore import get_triplestore
 from shared.config.constants import DEFAULT_BASE_URI
@@ -51,7 +56,9 @@ class GraphQLRequest(BaseModel):
     query: str = Field(..., description="GraphQL query string")
     variables: Optional[Dict[str, Any]] = Field(None, description="Query variables")
     operationName: Optional[str] = Field(None, description="Operation name")
-    depth: Optional[int] = Field(None, description="Relationship traversal depth (1–5, default 2)")
+    depth: Optional[int] = Field(
+        None, description="Relationship traversal depth (1–5, default 2)"
+    )
 
 
 class GraphQLDomainInfo(BaseModel):
@@ -122,7 +129,8 @@ def _load_domain_from_registry(domain_name, session_mgr, settings):
 
     logger.info(
         "GraphQL: loaded domain '%s' version %s from registry",
-        domain_name, version,
+        domain_name,
+        version,
     )
 
     _ensure_ladybug_synced(domain, svc.uc)
@@ -138,7 +146,10 @@ def _ensure_ladybug_synced(domain, uc_service):
     """
     try:
         import os
-        from back.core.helpers import effective_uc_version_path, resolve_ladybug_local_path
+        from back.core.helpers import (
+            effective_uc_version_path,
+            resolve_ladybug_local_path,
+        )
         from back.core.graphdb.ladybugdb import sync_from_volume
 
         uc_path = effective_uc_version_path(domain)
@@ -148,7 +159,9 @@ def _ensure_ladybug_synced(domain, uc_service):
         db_name = effective_graph_name(domain)
         local = resolve_ladybug_local_path(domain, db_name)
         if os.path.exists(local):
-            logger.debug("GraphQL LadybugDB: local file exists (%s) — skipping sync", local)
+            logger.debug(
+                "GraphQL LadybugDB: local file exists (%s) — skipping sync", local
+            )
             return
         ok, msg = sync_from_volume(uc_service, uc_path, db_name)
         if ok:
@@ -171,19 +184,25 @@ def _get_schema_and_context(domain, settings):
 
     result = build_schema_for_domain(classes, properties_list, base_uri, display_name)
     if not result:
-        raise ValidationError("Could not generate GraphQL schema — ontology may be empty.")
+        raise ValidationError(
+            "Could not generate GraphQL schema — ontology may be empty."
+        )
 
     schema, metadata = result
 
     store = get_triplestore(domain, settings, backend="graph")
     if not store:
-        raise InfrastructureError("Graph backend (LadybugDB) not configured or unreachable.")
+        raise InfrastructureError(
+            "Graph backend (LadybugDB) not configured or unreachable."
+        )
 
     table = effective_graph_name(domain)
 
     logger.info(
         "GraphQL context: table=%s, store=%s, classes=%d",
-        table, type(store).__name__, len(classes),
+        table,
+        type(store).__name__,
+        len(classes),
     )
 
     context = {
@@ -214,16 +233,17 @@ async def graphql_list_domains(
     domain = get_domain(session_mgr)
     svc = RegistryService.from_context(domain, settings)
     if not svc.cfg.is_configured:
-        return GraphQLDomainsResponse(
-            success=False, message="Registry not configured"
-        )
+        return GraphQLDomainsResponse(success=False, message="Registry not configured")
 
     ok, items, msg = svc.list_mcp_domains(require_ontology=True)
     if not ok:
         return GraphQLDomainsResponse(success=False, message=msg)
     return GraphQLDomainsResponse(
         success=True,
-        domains=[GraphQLDomainInfo(name=p["name"], description=p["description"]) for p in items],
+        domains=[
+            GraphQLDomainInfo(name=p["name"], description=p["description"])
+            for p in items
+        ],
     )
 
 
@@ -233,10 +253,12 @@ async def graphql_list_domains(
     description="Returns the default and maximum relationship traversal depth.",
 )
 async def graphql_depth_settings():
-    return JSONResponse(content={
-        "default": DEFAULT_DEPTH,
-        "max": MAX_DEPTH,
-    })
+    return JSONResponse(
+        content={
+            "default": DEFAULT_DEPTH,
+            "max": MAX_DEPTH,
+        }
+    )
 
 
 @router.get(
@@ -283,7 +305,9 @@ async def graphql_execute(
 
     logger.debug(
         "GraphQL query for '%s' (depth=%s): %s",
-        domain_name, context.get("depth", DEFAULT_DEPTH), body.query[:200],
+        domain_name,
+        context.get("depth", DEFAULT_DEPTH),
+        body.query[:200],
     )
 
     result = schema.execute_sync(
@@ -298,7 +322,10 @@ async def graphql_execute(
         response["data"] = result.data
     if result.errors:
         response["errors"] = [
-            {"message": _graphql_safe_error_message(e), "path": getattr(e, "path", None)}
+            {
+                "message": _graphql_safe_error_message(e),
+                "path": getattr(e, "path", None),
+            }
             for e in result.errors
         ]
 
@@ -348,7 +375,9 @@ async def graphql_debug(
     base_uri = ontology.get("base_uri", "")
 
     result = build_schema_for_domain(
-        classes, ontology.get("properties", []), base_uri,
+        classes,
+        ontology.get("properties", []),
+        base_uri,
         (domain.info or {}).get("name", ""),
     )
     if not result:
@@ -358,7 +387,11 @@ async def graphql_debug(
     store = context["triplestore"]
     table = context["table_name"]
 
-    debug_info: dict = {"_backend": "graph", "_table": table, "_store": type(store).__name__}
+    debug_info: dict = {
+        "_backend": "graph",
+        "_table": table,
+        "_store": type(store).__name__,
+    }
 
     for tname, tinfo in metadata.types.items():
         if type_name and tname.lower() != type_name.lower():
@@ -375,7 +408,9 @@ async def graphql_debug(
         }
 
         try:
-            all_uris = store.find_subjects_by_type(table, tinfo.cls_uri, limit=5, offset=0)
+            all_uris = store.find_subjects_by_type(
+                table, tinfo.cls_uri, limit=5, offset=0
+            )
             entry["subject_count_sample"] = len(all_uris)
             entry["sample_subjects"] = all_uris[:3]
         except Exception as e:
@@ -383,7 +418,9 @@ async def graphql_debug(
 
         if search:
             try:
-                found = store.find_subjects_by_type(table, tinfo.cls_uri, limit=5, offset=0, search=search)
+                found = store.find_subjects_by_type(
+                    table, tinfo.cls_uri, limit=5, offset=0, search=search
+                )
                 entry["search_results"] = found
             except Exception as e:
                 entry["search_results"] = f"ERROR: {e}"

@@ -1,4 +1,5 @@
 """Caller lacks permission (403)."""
+
 from __future__ import annotations
 
 from back.core.errors.OntoBricksError import OntoBricksError

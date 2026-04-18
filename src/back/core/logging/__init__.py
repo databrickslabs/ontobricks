@@ -5,6 +5,7 @@ Usage:
     setup_logging()
     logger = get_logger(__name__)
 """
+
 import logging
 from typing import Optional
 

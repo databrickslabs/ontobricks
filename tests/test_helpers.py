@@ -1,4 +1,5 @@
 """Tests for back.core.helpers — Databricks client/credentials helpers."""
+
 import pytest
 from unittest.mock import patch, MagicMock, PropertyMock
 

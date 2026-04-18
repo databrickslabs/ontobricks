@@ -4,6 +4,7 @@ Centralises OAuth (Databricks Apps) and PAT (local dev) authentication
 so that every service class in this package can share a single
 ``DatabricksAuth`` instance instead of duplicating credential logic.
 """
+
 import os
 import time
 from typing import Optional
@@ -91,7 +92,9 @@ class DatabricksAuth:
         self.client_secret = os.getenv("DATABRICKS_CLIENT_SECRET", "")
         self.is_app_mode = self.is_databricks_app()
 
-        self.host = DatabricksAuth.normalize_host(host) if host else self.get_workspace_host()
+        self.host = (
+            DatabricksAuth.normalize_host(host) if host else self.get_workspace_host()
+        )
 
         logger.info(
             "DatabricksAuth init — host=%s, app_mode=%s, warehouse=%s",
@@ -141,9 +144,15 @@ class DatabricksAuth:
         """Return ``Authorization`` + ``Content-Type`` headers for REST calls."""
         if self.is_app_mode and self.client_id and self.client_secret:
             token = self.get_oauth_token()
-            return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+            return {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            }
         if self.token:
-            return {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+            return {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+            }
         return {}
 
     def get_sql_connection_params(self) -> dict:

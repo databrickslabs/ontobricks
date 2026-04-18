@@ -1,7 +1,13 @@
 """W3C standards — OWL, RDFS, R2RML, SPARQL, SHACL utilities."""
+
 from back.core.w3c.owl import OntologyGenerator, OntologyParser
 from back.core.w3c.rdfs import RDFSParser
-from back.core.w3c.r2rml import R2RMLGenerator, generate_r2rml_from_config, R2RMLParser, parse_r2rml_content
+from back.core.w3c.r2rml import (
+    R2RMLGenerator,
+    generate_r2rml_from_config,
+    R2RMLParser,
+    parse_r2rml_content,
+)
 from back.core.w3c.sparql import (
     DIALECT_SPARK,
     execute_local_query,

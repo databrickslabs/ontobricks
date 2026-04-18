@@ -1,4 +1,5 @@
 """SHACL — Shapes Constraint Language utilities for data quality."""
+
 from back.core.w3c.shacl.constants import QUALITY_CATEGORIES
 from back.core.w3c.shacl.SHACLGenerator import SHACLGenerator
 from back.core.w3c.shacl.SHACLParser import SHACLParser

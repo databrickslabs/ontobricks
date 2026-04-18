@@ -3,6 +3,7 @@ FastAPI Dependencies - Shared across all routers
 
 These dependencies handle common concerns like session, templates, and configuration.
 """
+
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
@@ -30,7 +31,10 @@ if not os.path.isdir(_template_dir):
 templates = Jinja2Templates(directory=_template_dir)
 
 _partials_dir = os.path.join(_template_dir, "partials")
-if os.path.isdir(_partials_dir) and _partials_dir not in templates.env.loader.searchpath:
+if (
+    os.path.isdir(_partials_dir)
+    and _partials_dir not in templates.env.loader.searchpath
+):
     templates.env.loader.searchpath.append(_partials_dir)
     for _sub in ("layout", "ontology", "mapping", "dtwin", "domain", "registry"):
         _sub_dir = os.path.join(_partials_dir, _sub)
@@ -42,21 +46,22 @@ if os.path.isdir(_partials_dir) and _partials_dir not in templates.env.loader.se
 # Custom Jinja2 Functions
 # ===========================================
 
+
 @pass_context
 def url_for(context: dict, endpoint: str, **values) -> str:
     """
     Jinja2 url_for function for templates.
-    
+
     Supports:
     - url_for('static', filename='css/main.css') -> /static/css/main.css
     - url_for('home.home_page') -> /
     """
     request: Request = context.get("request")
-    
-    if endpoint == 'static':
-        filename = values.get('filename', '')
+
+    if endpoint == "static":
+        filename = values.get("filename", "")
         return f"/static/{filename}"
-    
+
     # For other endpoints, try to use request.url_for
     try:
         return str(request.url_for(endpoint, **values))
@@ -81,7 +86,7 @@ def random_filter(seq):
 def get_user_email(context: dict) -> str:
     """Return current user email from request.state (set by PermissionMiddleware)."""
     request: Request = context.get("request")
-    if request and hasattr(request.state, 'user_email'):
+    if request and hasattr(request.state, "user_email"):
         return request.state.user_email
     return ""
 
@@ -90,7 +95,7 @@ def get_user_email(context: dict) -> str:
 def get_user_role(context: dict) -> str:
     """Return current user role from request.state (set by PermissionMiddleware)."""
     request: Request = context.get("request")
-    if request and hasattr(request.state, 'user_role'):
+    if request and hasattr(request.state, "user_role"):
         return request.state.user_role
     return ""
 
@@ -99,36 +104,39 @@ def get_user_role(context: dict) -> str:
 def get_user_domain_role(context: dict) -> str:
     """Return the effective domain role from request.state (set by PermissionMiddleware)."""
     request: Request = context.get("request")
-    if request and hasattr(request.state, 'user_domain_role'):
+    if request and hasattr(request.state, "user_domain_role"):
         return request.state.user_domain_role
     return ""
 
 
 # Add custom globals to Jinja2 environment
-templates.env.globals['url_for'] = url_for
-templates.env.globals['range'] = range_filter
-templates.env.globals['get_user_email'] = get_user_email
-templates.env.globals['get_user_role'] = get_user_role
-templates.env.globals['get_user_domain_role'] = get_user_domain_role
+templates.env.globals["url_for"] = url_for
+templates.env.globals["range"] = range_filter
+templates.env.globals["get_user_email"] = get_user_email
+templates.env.globals["get_user_role"] = get_user_role
+templates.env.globals["get_user_domain_role"] = get_user_domain_role
 
 # Menu configuration available in all templates as {{ menu_config }}
 from front.config import get_menu_config, get_menu_by_id
-templates.env.globals['menu_config'] = get_menu_config()
-templates.env.globals['get_menu'] = get_menu_by_id
+
+templates.env.globals["menu_config"] = get_menu_config()
+templates.env.globals["get_menu"] = get_menu_by_id
 
 # App version from pyproject.toml (single source of truth) as {{ app_version }}
 from shared.config.constants import MAX_NOTIFICATIONS
-templates.env.globals['app_version'] = APP_VERSION
-templates.env.globals['asset_version'] = _asset_version
-templates.env.globals['max_notifications'] = MAX_NOTIFICATIONS
+
+templates.env.globals["app_version"] = APP_VERSION
+templates.env.globals["asset_version"] = _asset_version
+templates.env.globals["max_notifications"] = MAX_NOTIFICATIONS
 
 # Add custom filters
-templates.env.filters['random'] = random_filter
+templates.env.filters["random"] = random_filter
 
 
 # ===========================================
 # Shared template-context helpers
 # ===========================================
+
 
 def triplestore_page_context(domain_session) -> dict:
     """Build the triplestore-related template context shared by dtwin and domain pages.

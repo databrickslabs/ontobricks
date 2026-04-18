@@ -1,5 +1,6 @@
 """Reasoning service — orchestrates T-Box, SWRL, Graph, Constraint,
 Decision Table, SPARQL CONSTRUCT, and Aggregate rule phases."""
+
 import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -49,6 +50,7 @@ class ReasoningService:
     def _local_name(uri: str) -> str:
         """Extract the local name from a URI (fragment or last path segment)."""
         from back.core.helpers import extract_local_name
+
         return extract_local_name(uri)
 
     @staticmethod
@@ -94,7 +96,8 @@ class ReasoningService:
             result.inferred_triples.extend(phase_result.inferred_triples)
             result.stats[f"{phase_name}_duration_seconds"] = round(time.time() - t1, 3)
             result.stats[f"{phase_name}_inferred_count"] = ps.get(
-                "inferred_count", len(phase_result.inferred_triples),
+                "inferred_count",
+                len(phase_result.inferred_triples),
             )
             for src_key, dst_key in (extra_stat_keys or {}).items():
                 if src_key in ps:
@@ -106,8 +109,9 @@ class ReasoningService:
             logger.error("%s reasoning failed: %s", phase_name, e)
             result.stats[f"{phase_name}_error"] = str(e)
 
-    def run_full_reasoning(self, options: Optional[Dict] = None,
-                           progress_callback: Optional[Any] = None) -> ReasoningResult:
+    def run_full_reasoning(
+        self, options: Optional[Dict] = None, progress_callback: Optional[Any] = None
+    ) -> ReasoningResult:
         """Run all enabled reasoning phases and merge results."""
         opts = options or {}
         t0 = time.time()
@@ -117,26 +121,60 @@ class ReasoningService:
 
         phases = [
             ("tbox", "tbox", True, lambda: self.run_tbox_reasoning(), True, {}),
-            ("swrl", "swrl", True, lambda: self.run_swrl_rules(
-                materialize=mat, inference_limit=inf_limit,
-                progress_callback=progress_callback,
-            ), True, {"rules_count": "swrl_rules_count"}),
+            (
+                "swrl",
+                "swrl",
+                True,
+                lambda: self.run_swrl_rules(
+                    materialize=mat,
+                    inference_limit=inf_limit,
+                    progress_callback=progress_callback,
+                ),
+                True,
+                {"rules_count": "swrl_rules_count"},
+            ),
             ("graph", "graph", True, lambda: self.run_graph_reasoning(opts), False, {}),
-            ("decision_tables", "decision_tables", False, lambda: self.run_decision_tables(materialize=mat), False, {"tables_count": "decision_tables_count"}),
-            ("sparql_rules", "sparql_rules", False, lambda: self.run_sparql_rules(materialize=mat), True, {"rules_count": "sparql_rules_count"}),
-            ("aggregate_rules", "aggregate_rules", False, lambda: self.run_aggregate_rules(materialize=mat), False, {"rules_count": "aggregate_rules_count"}),
+            (
+                "decision_tables",
+                "decision_tables",
+                False,
+                lambda: self.run_decision_tables(materialize=mat),
+                False,
+                {"tables_count": "decision_tables_count"},
+            ),
+            (
+                "sparql_rules",
+                "sparql_rules",
+                False,
+                lambda: self.run_sparql_rules(materialize=mat),
+                True,
+                {"rules_count": "sparql_rules_count"},
+            ),
+            (
+                "aggregate_rules",
+                "aggregate_rules",
+                False,
+                lambda: self.run_aggregate_rules(materialize=mat),
+                False,
+                {"rules_count": "aggregate_rules_count"},
+            ),
         ]
 
         for opt_key, phase_name, default_on, runner, merge, extra in phases:
             if opts.get(opt_key, default_on):
-                self._run_phase(result, phase_name, runner, merge=merge, extra_stat_keys=extra)
+                self._run_phase(
+                    result, phase_name, runner, merge=merge, extra_stat_keys=extra
+                )
             else:
                 result.stats[f"{phase_name}_skipped"] = True
                 result.stats[f"{phase_name}_reason"] = "Disabled by user"
 
         duplicates_removed = result.deduplicate()
         if duplicates_removed:
-            logger.info("Deduplication removed %d cross-phase duplicate triples", duplicates_removed)
+            logger.info(
+                "Deduplication removed %d cross-phase duplicate triples",
+                duplicates_removed,
+            )
 
         result.stats["total_duration_seconds"] = round(time.time() - t0, 3)
         result.stats["total_inferred"] = len(result.inferred_triples)
@@ -148,85 +186,135 @@ class ReasoningService:
         owl_content = self._get_owl_content()
         if not owl_content:
             logger.warning("No OWL content available for T-Box reasoning")
-            return ReasoningResult(stats={"phase": "tbox", "skipped": True, "reason": "No OWL content generated yet"})
+            return ReasoningResult(
+                stats={
+                    "phase": "tbox",
+                    "skipped": True,
+                    "reason": "No OWL content generated yet",
+                }
+            )
 
         try:
             import owlrl as _owlrl  # noqa: F401
         except (ImportError, ModuleNotFoundError):
-            logger.warning("owlrl package is not installed — T-Box reasoning unavailable")
-            return ReasoningResult(stats={
-                "phase": "tbox", "skipped": True,
-                "reason": "owlrl package not installed (pip install owlrl)",
-            })
+            logger.warning(
+                "owlrl package is not installed — T-Box reasoning unavailable"
+            )
+            return ReasoningResult(
+                stats={
+                    "phase": "tbox",
+                    "skipped": True,
+                    "reason": "owlrl package not installed (pip install owlrl)",
+                }
+            )
 
         from back.core.reasoning.OWLRLReasoner import OWLRLReasoner
+
         reasoner = OWLRLReasoner()
         return reasoner.compute_closure(owl_content)
 
-    def run_swrl_rules(self, materialize: bool = False,
-                       inference_limit: Optional[int] = None,
-                       progress_callback: Optional[Any] = None) -> ReasoningResult:
+    def run_swrl_rules(
+        self,
+        materialize: bool = False,
+        inference_limit: Optional[int] = None,
+        progress_callback: Optional[Any] = None,
+    ) -> ReasoningResult:
         """Execute SWRL rules against the triple store."""
         rules = self._get_swrl_rules()
         if not rules:
-            return ReasoningResult(stats={"phase": "swrl", "skipped": True, "reason": "No SWRL rules defined in ontology"})
+            return ReasoningResult(
+                stats={
+                    "phase": "swrl",
+                    "skipped": True,
+                    "reason": "No SWRL rules defined in ontology",
+                }
+            )
 
         if self._store is None:
             logger.warning("No triple-store backend for SWRL execution")
-            return ReasoningResult(stats={"phase": "swrl", "skipped": True, "reason": "No triple-store backend available"})
+            return ReasoningResult(
+                stats={
+                    "phase": "swrl",
+                    "skipped": True,
+                    "reason": "No triple-store backend available",
+                }
+            )
 
         from back.core.reasoning.SWRLEngine import SWRLEngine
+
         ontology = self._get_ontology_dict()
         engine = SWRLEngine(ontology=ontology)
         table_name = self._get_graph_name()
         return engine.execute_rules(
-            rules, self._store, table_name, materialize=materialize,
-            inference_limit=inference_limit, progress_callback=progress_callback,
+            rules,
+            self._store,
+            table_name,
+            materialize=materialize,
+            inference_limit=inference_limit,
+            progress_callback=progress_callback,
         )
 
     def run_graph_reasoning(self, options: Optional[Dict] = None) -> ReasoningResult:
         """Run graph-structural reasoning (transitive closure, etc.)."""
         if self._store is None:
-            return ReasoningResult(stats={"phase": "graph", "skipped": True, "reason": "No triple-store backend available"})
+            return ReasoningResult(
+                stats={
+                    "phase": "graph",
+                    "skipped": True,
+                    "reason": "No triple-store backend available",
+                }
+            )
 
         t0 = time.time()
         result = ReasoningResult()
         table_name = self._get_graph_name()
         ontology = self._get_ontology_dict()
 
-        transitive_props = self._find_properties_by_characteristic(ontology, "transitive")
-        logger.info("Graph reasoning: %d transitive properties found%s",
-                     len(transitive_props),
-                     f" ({', '.join(transitive_props)})" if transitive_props else "")
+        transitive_props = self._find_properties_by_characteristic(
+            ontology, "transitive"
+        )
+        logger.info(
+            "Graph reasoning: %d transitive properties found%s",
+            len(transitive_props),
+            f" ({', '.join(transitive_props)})" if transitive_props else "",
+        )
         for prop_uri in transitive_props:
             try:
                 rows = self._store.transitive_closure(table_name, prop_uri)
-                logger.info("Transitive closure for %s: %d inferred", prop_uri, len(rows))
+                logger.info(
+                    "Transitive closure for %s: %d inferred", prop_uri, len(rows)
+                )
                 for row in rows:
-                    result.inferred_triples.append(InferredTriple(
-                        subject=row.get("subject", ""),
-                        predicate=row.get("predicate", prop_uri),
-                        object=row.get("object", ""),
-                        provenance="graph:transitive",
-                    ))
+                    result.inferred_triples.append(
+                        InferredTriple(
+                            subject=row.get("subject", ""),
+                            predicate=row.get("predicate", prop_uri),
+                            object=row.get("object", ""),
+                            provenance="graph:transitive",
+                        )
+                    )
             except Exception as e:
                 logger.warning("Transitive closure for %s failed: %s", prop_uri, e)
 
         symmetric_props = self._find_properties_by_characteristic(ontology, "symmetric")
-        logger.info("Graph reasoning: %d symmetric properties found%s",
-                     len(symmetric_props),
-                     f" ({', '.join(symmetric_props)})" if symmetric_props else "")
+        logger.info(
+            "Graph reasoning: %d symmetric properties found%s",
+            len(symmetric_props),
+            f" ({', '.join(symmetric_props)})" if symmetric_props else "",
+        )
         for prop_uri in symmetric_props:
             try:
                 rows = self._store.symmetric_expand(table_name, prop_uri)
                 logger.info("Symmetric expand for %s: %d inferred", prop_uri, len(rows))
                 for row in rows:
-                    result.inferred_triples.append(InferredTriple(
-                        subject=row.get("subject", ""),
-                        predicate=row.get("predicate", prop_uri),
-                        object=row.get("object", ""),
-                        provenance="graph:symmetric",
-                    ))
+                    result.inferred_triples.append(
+                        InferredTriple(
+                            subject=row.get("subject", ""),
+                            predicate=row.get("predicate", prop_uri),
+                            object=row.get("object", ""),
+                            provenance="graph:symmetric",
+                        )
+                    )
             except Exception as e:
                 logger.warning("Symmetric expand for %s failed: %s", prop_uri, e)
 
@@ -235,8 +323,11 @@ class ReasoningService:
             "inferred_count": len(result.inferred_triples),
             "duration_seconds": round(time.time() - t0, 3),
         }
-        logger.info("Graph reasoning complete: %d inferred triples (%.3fs)",
-                     len(result.inferred_triples), time.time() - t0)
+        logger.info(
+            "Graph reasoning complete: %d inferred triples (%.3fs)",
+            len(result.inferred_triples),
+            time.time() - t0,
+        )
         return result
 
     def run_constraint_checks(self) -> ReasoningResult:
@@ -255,29 +346,43 @@ class ReasoningService:
         if shacl_shapes and not constraints:
             try:
                 from back.core.w3c.shacl import SHACLService
+
                 svc = SHACLService(base_uri=ontology.get("base_uri", ""))
                 constraints = svc.migrate_legacy_constraints([])
-                logger.info("Using %d SHACL shapes for constraint checking (via migration path)", len(shacl_shapes))
+                logger.info(
+                    "Using %d SHACL shapes for constraint checking (via migration path)",
+                    len(shacl_shapes),
+                )
             except Exception as e:
                 logger.warning("Could not migrate SHACL shapes for reasoning: %s", e)
 
         if not constraints and not shacl_shapes:
-            return ReasoningResult(stats={
-                "phase": "constraints", "skipped": True,
-                "reason": "No constraints or SHACL shapes defined in ontology",
-            })
+            return ReasoningResult(
+                stats={
+                    "phase": "constraints",
+                    "skipped": True,
+                    "reason": "No constraints or SHACL shapes defined in ontology",
+                }
+            )
         if self._store is None:
-            return ReasoningResult(stats={
-                "phase": "constraints", "skipped": True,
-                "reason": "No triple-store backend available",
-            })
+            return ReasoningResult(
+                stats={
+                    "phase": "constraints",
+                    "skipped": True,
+                    "reason": "No triple-store backend available",
+                }
+            )
 
         from back.core.graphdb.GraphDBBackend import GraphDBBackend
+
         if not GraphDBBackend.is_cypher_backend(self._store):
-            return ReasoningResult(stats={
-                "phase": "constraints", "skipped": True,
-                "reason": "Constraint checks require a Cypher-capable graph backend",
-            })
+            return ReasoningResult(
+                stats={
+                    "phase": "constraints",
+                    "skipped": True,
+                    "reason": "Constraint checks require a Cypher-capable graph backend",
+                }
+            )
 
         t0 = time.time()
         result = ReasoningResult()
@@ -294,7 +399,13 @@ class ReasoningService:
                 continue
             try:
                 violations = self._check_one_constraint(
-                    c, ctype, conn, node, data_ns, base_uri, sep,
+                    c,
+                    ctype,
+                    conn,
+                    node,
+                    data_ns,
+                    base_uri,
+                    sep,
                 )
                 result.violations.extend(violations)
                 checked += 1
@@ -308,8 +419,12 @@ class ReasoningService:
             "constraints_total": len(constraints),
             "duration_seconds": round(time.time() - t0, 3),
         }
-        logger.info("Constraint checks: %d checked, %d violations (%.3fs)",
-                     checked, len(result.violations), time.time() - t0)
+        logger.info(
+            "Constraint checks: %d checked, %d violations (%.3fs)",
+            checked,
+            len(result.violations),
+            time.time() - t0,
+        )
         return result
 
     def _check_one_constraint(
@@ -325,7 +440,9 @@ class ReasoningService:
         """Dispatch a single constraint to the appropriate checker."""
         cardinality_types = {"minCardinality", "maxCardinality", "exactCardinality"}
         if ctype in cardinality_types:
-            return self._check_cardinality(c, ctype, conn, node, data_ns, base_uri, sep, RDF_TYPE)
+            return self._check_cardinality(
+                c, ctype, conn, node, data_ns, base_uri, sep, RDF_TYPE
+            )
         if ctype == "functional":
             return self._check_functional(c, conn, node, data_ns, base_uri, sep)
         if ctype == "inverseFunctional":
@@ -343,13 +460,22 @@ class ReasoningService:
     # -- Cardinality -------------------------------------------------------
 
     def _check_cardinality(
-        self, c: Dict, ctype: str, conn: Any, node: str,
-        data_ns: str, base_uri: str, sep: str, rdf_type: str,
+        self,
+        c: Dict,
+        ctype: str,
+        conn: Any,
+        node: str,
+        data_ns: str,
+        base_uri: str,
+        sep: str,
+        rdf_type: str,
     ) -> List[RuleViolation]:
         class_uri = c.get("className", "")
         prop_name = c.get("property", "")
         card_val = int(c.get("cardinalityValue", 0))
-        prop_uri = self._normalize_property_uri(prop_name, data_ns, base_uri, sep, prop_name)
+        prop_uri = self._normalize_property_uri(
+            prop_name, data_ns, base_uri, sep, prop_name
+        )
         if not class_uri or not prop_uri:
             return []
 
@@ -380,22 +506,31 @@ class ReasoningService:
             if violated:
                 local_subj = self._local_name(subj)
                 local_prop = self._local_name(prop_uri)
-                violations.append(RuleViolation(
-                    rule_name=f"{ctype}({local_prop}={card_val})",
-                    subject=subj,
-                    message=f"{local_subj} has {cnt} {local_prop} (expected {ctype.replace('Cardinality', '')} {card_val})",
-                    check_type="cardinality",
-                ))
+                violations.append(
+                    RuleViolation(
+                        rule_name=f"{ctype}({local_prop}={card_val})",
+                        subject=subj,
+                        message=f"{local_subj} has {cnt} {local_prop} (expected {ctype.replace('Cardinality', '')} {card_val})",
+                        check_type="cardinality",
+                    )
+                )
         return violations
 
     # -- Functional / Inverse Functional -----------------------------------
 
     def _check_functional(
-        self, c: Dict, conn: Any, node: str,
-        data_ns: str, base_uri: str, sep: str,
+        self,
+        c: Dict,
+        conn: Any,
+        node: str,
+        data_ns: str,
+        base_uri: str,
+        sep: str,
     ) -> List[RuleViolation]:
         prop_name = c.get("property", "")
-        prop_uri = self._normalize_property_uri(prop_name, data_ns, base_uri, sep, prop_name)
+        prop_uri = self._normalize_property_uri(
+            prop_name, data_ns, base_uri, sep, prop_name
+        )
         if not prop_uri:
             return []
         rows = conn.execute(
@@ -408,20 +543,29 @@ class ReasoningService:
         local = self._local_name(prop_uri)
         for subj, cnt in rows:
             if cnt > 1:
-                violations.append(RuleViolation(
-                    rule_name=f"functional({local})",
-                    subject=subj,
-                    message=f"Functional property {local} has {cnt} distinct values",
-                    check_type="functional",
-                ))
+                violations.append(
+                    RuleViolation(
+                        rule_name=f"functional({local})",
+                        subject=subj,
+                        message=f"Functional property {local} has {cnt} distinct values",
+                        check_type="functional",
+                    )
+                )
         return violations
 
     def _check_inverse_functional(
-        self, c: Dict, conn: Any, node: str,
-        data_ns: str, base_uri: str, sep: str,
+        self,
+        c: Dict,
+        conn: Any,
+        node: str,
+        data_ns: str,
+        base_uri: str,
+        sep: str,
     ) -> List[RuleViolation]:
         prop_name = c.get("property", "")
-        prop_uri = self._normalize_property_uri(prop_name, data_ns, base_uri, sep, prop_name)
+        prop_uri = self._normalize_property_uri(
+            prop_name, data_ns, base_uri, sep, prop_name
+        )
         if not prop_uri:
             return []
         rows = conn.execute(
@@ -434,19 +578,27 @@ class ReasoningService:
         local = self._local_name(prop_uri)
         for obj, cnt in rows:
             if cnt > 1:
-                violations.append(RuleViolation(
-                    rule_name=f"inverseFunctional({local})",
-                    subject=obj,
-                    message=f"Inverse-functional property {local}: value mapped by {cnt} subjects",
-                    check_type="inverseFunctional",
-                ))
+                violations.append(
+                    RuleViolation(
+                        rule_name=f"inverseFunctional({local})",
+                        subject=obj,
+                        message=f"Inverse-functional property {local}: value mapped by {cnt} subjects",
+                        check_type="inverseFunctional",
+                    )
+                )
         return violations
 
     # -- Value checks ------------------------------------------------------
 
     def _check_value(
-        self, c: Dict, conn: Any, node: str,
-        data_ns: str, base_uri: str, sep: str, rdf_type: str,
+        self,
+        c: Dict,
+        conn: Any,
+        node: str,
+        data_ns: str,
+        base_uri: str,
+        sep: str,
+        rdf_type: str,
     ) -> List[RuleViolation]:
         class_uri = c.get("className", "")
         attr_name = c.get("attributeName", "")
@@ -454,7 +606,9 @@ class ReasoningService:
         check_value = c.get("checkValue", "")
         if not class_uri or not attr_name:
             return []
-        attr_uri = self._normalize_property_uri(attr_name, data_ns, base_uri, sep, attr_name)
+        attr_uri = self._normalize_property_uri(
+            attr_name, data_ns, base_uri, sep, attr_name
+        )
 
         subjects_result = conn.execute(
             f"MATCH (t:{node}) WHERE t.predicate = $p AND t.object = $cls "
@@ -479,12 +633,14 @@ class ReasoningService:
 
             if check_type == "notNull":
                 if not values or all(not v for v in values):
-                    violations.append(RuleViolation(
-                        rule_name=f"notNull({local_attr})",
-                        subject=subj,
-                        message=f"{local_subj} has no value for {local_attr}",
-                        check_type="value",
-                    ))
+                    violations.append(
+                        RuleViolation(
+                            rule_name=f"notNull({local_attr})",
+                            subject=subj,
+                            message=f"{local_subj} has no value for {local_attr}",
+                            check_type="value",
+                        )
+                    )
                 continue
 
             for val in values:
@@ -504,18 +660,23 @@ class ReasoningService:
                         failed = True
 
                 if failed:
-                    violations.append(RuleViolation(
-                        rule_name=f"{check_type}({local_attr})",
-                        subject=subj,
-                        message=f"{local_subj}.{local_attr} = '{val}' fails {check_type} '{check_value}'",
-                        check_type="value",
-                    ))
+                    violations.append(
+                        RuleViolation(
+                            rule_name=f"{check_type}({local_attr})",
+                            subject=subj,
+                            message=f"{local_subj}.{local_attr} = '{val}' fails {check_type} '{check_value}'",
+                            check_type="value",
+                        )
+                    )
         return violations
 
     # -- Global rules ------------------------------------------------------
 
     def _check_no_orphans(
-        self, conn: Any, node: str, rdf_type: str,
+        self,
+        conn: Any,
+        node: str,
+        rdf_type: str,
     ) -> List[RuleViolation]:
         """Find subjects that appear as subject but have no rdf:type."""
         rows = conn.execute(
@@ -537,7 +698,11 @@ class ReasoningService:
         ]
 
     def _check_require_labels(
-        self, conn: Any, node: str, rdf_type: str, rdfs_label: str,
+        self,
+        conn: Any,
+        node: str,
+        rdf_type: str,
+        rdfs_label: str,
     ) -> List[RuleViolation]:
         """Find typed subjects that have no rdfs:label."""
         rows = conn.execute(
@@ -563,21 +728,31 @@ class ReasoningService:
         ontology = self._get_ontology_dict()
         tables = ontology.get("decision_tables", [])
         if not tables:
-            return ReasoningResult(stats={
-                "phase": "decision_tables", "skipped": True,
-                "reason": "No decision tables defined",
-            })
+            return ReasoningResult(
+                stats={
+                    "phase": "decision_tables",
+                    "skipped": True,
+                    "reason": "No decision tables defined",
+                }
+            )
         if self._store is None:
-            return ReasoningResult(stats={
-                "phase": "decision_tables", "skipped": True,
-                "reason": "No triple-store backend available",
-            })
+            return ReasoningResult(
+                stats={
+                    "phase": "decision_tables",
+                    "skipped": True,
+                    "reason": "No triple-store backend available",
+                }
+            )
 
         from back.core.reasoning.DecisionTableEngine import DecisionTableEngine
+
         engine = DecisionTableEngine()
         table_name = self._get_graph_name()
         return engine.execute_tables(
-            tables, self._store, table_name, ontology,
+            tables,
+            self._store,
+            table_name,
+            ontology,
             materialize=materialize,
         )
 
@@ -586,21 +761,31 @@ class ReasoningService:
         ontology = self._get_ontology_dict()
         rules = ontology.get("sparql_rules", [])
         if not rules:
-            return ReasoningResult(stats={
-                "phase": "sparql_rules", "skipped": True,
-                "reason": "No SPARQL rules defined",
-            })
+            return ReasoningResult(
+                stats={
+                    "phase": "sparql_rules",
+                    "skipped": True,
+                    "reason": "No SPARQL rules defined",
+                }
+            )
         if self._store is None:
-            return ReasoningResult(stats={
-                "phase": "sparql_rules", "skipped": True,
-                "reason": "No triple-store backend available",
-            })
+            return ReasoningResult(
+                stats={
+                    "phase": "sparql_rules",
+                    "skipped": True,
+                    "reason": "No triple-store backend available",
+                }
+            )
 
         from back.core.reasoning.SPARQLRuleEngine import SPARQLRuleEngine
+
         engine = SPARQLRuleEngine()
         table_name = self._get_graph_name()
         return engine.execute_rules(
-            rules, self._store, table_name, ontology,
+            rules,
+            self._store,
+            table_name,
+            ontology,
             materialize=materialize,
         )
 
@@ -609,21 +794,31 @@ class ReasoningService:
         ontology = self._get_ontology_dict()
         rules = ontology.get("aggregate_rules", [])
         if not rules:
-            return ReasoningResult(stats={
-                "phase": "aggregate_rules", "skipped": True,
-                "reason": "No aggregate rules defined",
-            })
+            return ReasoningResult(
+                stats={
+                    "phase": "aggregate_rules",
+                    "skipped": True,
+                    "reason": "No aggregate rules defined",
+                }
+            )
         if self._store is None:
-            return ReasoningResult(stats={
-                "phase": "aggregate_rules", "skipped": True,
-                "reason": "No triple-store backend available",
-            })
+            return ReasoningResult(
+                stats={
+                    "phase": "aggregate_rules",
+                    "skipped": True,
+                    "reason": "No triple-store backend available",
+                }
+            )
 
         from back.core.reasoning.AggregateRuleEngine import AggregateRuleEngine
+
         engine = AggregateRuleEngine()
         table_name = self._get_graph_name()
         return engine.execute_rules(
-            rules, self._store, table_name, ontology,
+            rules,
+            self._store,
+            table_name,
+            ontology,
             materialize=materialize,
         )
 
@@ -675,9 +870,15 @@ class ReasoningService:
         logger.info("Materialise to Delta: clearing existing rows in %s", table_name)
         client.execute_statement(f"DELETE FROM {table_name}")
 
-        logger.info("Materialise to Delta: inserting %d triples into %s", len(triples), table_name)
+        logger.info(
+            "Materialise to Delta: inserting %d triples into %s",
+            len(triples),
+            table_name,
+        )
         count = store.insert_triples(table_name, triples)
-        logger.info("Materialise to Delta: done — %d triples written to %s", count, table_name)
+        logger.info(
+            "Materialise to Delta: done — %d triples written to %s", count, table_name
+        )
         return count
 
     # -- Internal helpers -------------------------------------------------
@@ -707,12 +908,18 @@ class ReasoningService:
 
     def _get_graph_name(self) -> str:
         info = getattr(self._domain, "info", None)
-        name = info.get("name", DEFAULT_GRAPH_NAME) if isinstance(info, dict) else DEFAULT_GRAPH_NAME
+        name = (
+            info.get("name", DEFAULT_GRAPH_NAME)
+            if isinstance(info, dict)
+            else DEFAULT_GRAPH_NAME
+        )
         version = getattr(self._domain, "current_version", "1") or "1"
         return f"{name}_V{version}"
 
     @staticmethod
-    def _normalize_property_uri(uri: str, data_ns: str, base_uri: str, sep: str, name: str) -> str:
+    def _normalize_property_uri(
+        uri: str, data_ns: str, base_uri: str, sep: str, name: str
+    ) -> str:
         """Normalize a property URI to the data namespace used by R2RML.
 
         Mirrors the logic in ``SWRLEngine._build_uri_map`` so that
@@ -725,7 +932,9 @@ class ReasoningService:
         return uri
 
     @staticmethod
-    def _find_properties_by_characteristic(ontology: Dict, characteristic: str) -> List[str]:
+    def _find_properties_by_characteristic(
+        ontology: Dict, characteristic: str
+    ) -> List[str]:
         """Extract property URIs with *characteristic* (normalized to data namespace)."""
         base_uri = ontology.get("base_uri", "")
         data_ns, sep = ReasoningService._namespace_parts(base_uri)
@@ -733,10 +942,16 @@ class ReasoningService:
         target = characteristic.lower()
         for prop in ontology.get("properties", []):
             chars = prop.get("characteristics", [])
-            if isinstance(chars, list) and target in [c.lower() for c in chars if isinstance(c, str)]:
+            if isinstance(chars, list) and target in [
+                c.lower() for c in chars if isinstance(c, str)
+            ]:
                 name = prop.get("name", "") or prop.get("localName", "")
                 uri = ReasoningService._normalize_property_uri(
-                    prop.get("uri", ""), data_ns, base_uri, sep, name,
+                    prop.get("uri", ""),
+                    data_ns,
+                    base_uri,
+                    sep,
+                    name,
                 )
                 if uri:
                     result.append(uri)

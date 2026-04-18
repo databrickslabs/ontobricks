@@ -17,6 +17,7 @@ Jobs are restored at startup from env-var credentials when available.
 If registry config is session-only, jobs are lazily registered when a
 user opens the Schedule tab (``get_all_schedules``).
 """
+
 from __future__ import annotations
 
 import json
@@ -89,15 +90,20 @@ class BuildScheduler:
 
         self._sched.add_listener(
             self._on_job_event,
-            EVENT_JOB_ADDED | EVENT_JOB_REMOVED | EVENT_JOB_SUBMITTED
-            | EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED,
+            EVENT_JOB_ADDED
+            | EVENT_JOB_REMOVED
+            | EVENT_JOB_SUBMITTED
+            | EVENT_JOB_EXECUTED
+            | EVENT_JOB_ERROR
+            | EVENT_JOB_MISSED,
         )
 
         self._sched.start()
         self._started = True
         logger.info(
             "BuildScheduler started (running=%s, misfire_grace=%ds)",
-            self._sched.running, self._MISFIRE_GRACE,
+            self._sched.running,
+            self._MISFIRE_GRACE,
         )
         try:
             self._restore_jobs(settings)
@@ -112,16 +118,25 @@ class BuildScheduler:
             if event.exception:
                 logger.error(
                     "APScheduler EVENT_JOB_ERROR  job=%s  exception=%s",
-                    job_id, event.exception,
+                    job_id,
+                    event.exception,
                 )
                 if event.traceback:
                     logger.error("APScheduler traceback:\n%s", event.traceback)
             else:
-                logger.info("APScheduler EVENT_JOB_EXECUTED  job=%s  retval=%s", job_id, event.retval)
+                logger.info(
+                    "APScheduler EVENT_JOB_EXECUTED  job=%s  retval=%s",
+                    job_id,
+                    event.retval,
+                )
         elif event.code == EVENT_JOB_SUBMITTED:
             logger.info("APScheduler EVENT_JOB_SUBMITTED  job=%s", job_id)
         elif event.code == EVENT_JOB_MISSED:
-            logger.warning("APScheduler EVENT_JOB_MISSED  job=%s  scheduled_run_time=%s", job_id, getattr(event, "scheduled_run_time", "?"))
+            logger.warning(
+                "APScheduler EVENT_JOB_MISSED  job=%s  scheduled_run_time=%s",
+                job_id,
+                getattr(event, "scheduled_run_time", "?"),
+            )
         elif event.code == EVENT_JOB_ADDED:
             logger.info("APScheduler EVENT_JOB_ADDED  job=%s", job_id)
         elif event.code == EVENT_JOB_REMOVED:
@@ -138,13 +153,17 @@ class BuildScheduler:
         """Return a diagnostic snapshot of the scheduler's internal state."""
         jobs_info = []
         for job in self._sched.get_jobs():
-            jobs_info.append({
-                "id": job.id,
-                "name": job.name,
-                "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
-                "trigger": str(job.trigger),
-                "pending": job.pending,
-            })
+            jobs_info.append(
+                {
+                    "id": job.id,
+                    "name": job.name,
+                    "next_run_time": (
+                        job.next_run_time.isoformat() if job.next_run_time else None
+                    ),
+                    "trigger": str(job.trigger),
+                    "pending": job.pending,
+                }
+            )
         return {
             "started": self._started,
             "running": self._sched.running,
@@ -157,7 +176,10 @@ class BuildScheduler:
     # ------------------------------------------------------------------
 
     def get_all_schedules(
-        self, host: str, token: str, registry_cfg: Dict[str, str],
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
     ) -> List[Dict[str, Any]]:
         """Return every schedule definition enriched with next-run info.
 
@@ -171,7 +193,8 @@ class BuildScheduler:
             job = self._sched.get_job(self._job_id(name))
             if not job and cfg.get("enabled") and self._started:
                 self._add_or_update_job(
-                    self._settings, name,
+                    self._settings,
+                    name,
                     cfg.get("interval_minutes", 60),
                     cfg.get("drop_existing", True),
                     registry_cfg,
@@ -189,7 +212,10 @@ class BuildScheduler:
         return result
 
     def get_schedule_history(
-        self, host: str, token: str, registry_cfg: Dict[str, str],
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
         domain_name: str,
     ) -> List[Dict[str, Any]]:
         """Return the run history for a single domain, newest first."""
@@ -229,15 +255,31 @@ class BuildScheduler:
             return False, msg
 
         if enabled and self._started:
-            self._add_or_update_job(settings, domain_name, interval_minutes, drop_existing, registry_cfg, version)
+            self._add_or_update_job(
+                settings,
+                domain_name,
+                interval_minutes,
+                drop_existing,
+                registry_cfg,
+                version,
+            )
         else:
             self._remove_job(domain_name)
 
-        logger.info("Schedule saved for '%s': every %d min, version=%s, enabled=%s", domain_name, interval_minutes, version, enabled)
+        logger.info(
+            "Schedule saved for '%s': every %d min, version=%s, enabled=%s",
+            domain_name,
+            interval_minutes,
+            version,
+            enabled,
+        )
         return True, f"Schedule for '{domain_name}' saved"
 
     def remove_schedule(
-        self, host: str, token: str, registry_cfg: Dict[str, str],
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
         domain_name: str,
     ) -> Tuple[bool, str]:
         """Delete a schedule for *domain_name*."""
@@ -258,30 +300,41 @@ class BuildScheduler:
     # Persistence helpers
     # ------------------------------------------------------------------
 
-    def _load_schedules(self, host: str, token: str, registry_cfg: Dict[str, str]) -> Dict[str, Any]:
+    def _load_schedules(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> Dict[str, Any]:
         if not host or not registry_cfg.get("catalog"):
             return {}
         cfg = global_config_service.load(host, token, registry_cfg, force=True)
         return dict(cfg.get(_SCHEDULES_KEY) or {})
 
-    def _persist_schedules(self, host: str, token: str, registry_cfg: Dict[str, str], schedules: Dict) -> Tuple[bool, str]:
+    def _persist_schedules(
+        self, host: str, token: str, registry_cfg: Dict[str, str], schedules: Dict
+    ) -> Tuple[bool, str]:
         if not host or not registry_cfg.get("catalog"):
             return False, "Databricks credentials or registry not configured"
-        return global_config_service._save(host, token, registry_cfg, {_SCHEDULES_KEY: schedules})
+        return global_config_service._save(
+            host, token, registry_cfg, {_SCHEDULES_KEY: schedules}
+        )
 
     @staticmethod
     def _history_path(registry_cfg: Dict[str, str], domain_name: str) -> str:
         from back.objects.registry.service import RegistryCfg, _DOMAINS_FOLDER
+
         c = RegistryCfg.from_dict(registry_cfg)
         return f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/{_DOMAINS_FOLDER}/{domain_name}/{_HISTORY_FILENAME}"
 
     def _load_domain_history(
-        self, host: str, token: str, registry_cfg: Dict[str, str],
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
         domain_name: str,
     ) -> List[Dict[str, Any]]:
         if not host or not registry_cfg.get("catalog"):
             return []
         from back.core.databricks.VolumeFileService import VolumeFileService
+
         path = self._history_path(registry_cfg, domain_name)
         try:
             uc = VolumeFileService(host=host, token=token)
@@ -293,14 +346,19 @@ class BuildScheduler:
         return []
 
     def _append_history(
-        self, host: str, token: str, registry_cfg: Dict[str, str],
-        domain_name: str, entry: Dict[str, Any],
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        domain_name: str,
+        entry: Dict[str, Any],
     ) -> None:
         entries = self._load_domain_history(host, token, registry_cfg, domain_name)
         entries.append(entry)
         if len(entries) > _MAX_HISTORY:
             entries = entries[-_MAX_HISTORY:]
         from back.core.databricks.VolumeFileService import VolumeFileService
+
         path = self._history_path(registry_cfg, domain_name)
         try:
             uc = VolumeFileService(host=host, token=token)
@@ -321,6 +379,7 @@ class BuildScheduler:
 
             class _Stub:
                 databricks = {}
+
             host, token = get_databricks_host_and_token(_Stub(), settings)
 
         cfg = RegistryCfg(
@@ -338,8 +397,12 @@ class BuildScheduler:
         return f"{_JOB_PREFIX}{domain_name}"
 
     def _add_or_update_job(
-        self, settings, domain_name: str, interval_minutes: int,
-        drop_existing: bool, registry_cfg: Optional[Dict[str, str]] = None,
+        self,
+        settings,
+        domain_name: str,
+        interval_minutes: int,
+        drop_existing: bool,
+        registry_cfg: Optional[Dict[str, str]] = None,
         version: str = "latest",
     ):
         job_id = self._job_id(domain_name)
@@ -362,7 +425,10 @@ class BuildScheduler:
         next_run = job.next_run_time.isoformat() if job.next_run_time else "unknown"
         logger.info(
             "APScheduler job added/updated: %s (every %d min, next_run=%s, misfire_grace=%ds)",
-            job_id, interval_minutes, next_run, self._MISFIRE_GRACE,
+            job_id,
+            interval_minutes,
+            next_run,
+            self._MISFIRE_GRACE,
         )
 
     def _remove_job(self, domain_name: str):
@@ -385,7 +451,8 @@ class BuildScheduler:
         for name, cfg in schedules.items():
             if cfg.get("enabled"):
                 self._add_or_update_job(
-                    settings, name,
+                    settings,
+                    name,
                     cfg.get("interval_minutes", 60),
                     cfg.get("drop_existing", True),
                     reg,
@@ -399,8 +466,14 @@ class BuildScheduler:
 # Build execution (runs in APScheduler's thread pool)
 # ======================================================================
 
+
 def _load_domain_for_build(
-    svc, domain_name: str, version: str, host: str, token: str, reg: dict,
+    svc,
+    domain_name: str,
+    version: str,
+    host: str,
+    token: str,
+    reg: dict,
 ):
     """Load a domain from the registry into a headless DomainSession.
 
@@ -412,7 +485,9 @@ def _load_domain_for_build(
         ok, data, err = svc.read_version(domain_name, version)
         loaded_version = version
         if not ok:
-            raise NotFoundError(err or f"Version '{version}' not found for domain '{domain_name}'")
+            raise NotFoundError(
+                err or f"Version '{version}' not found for domain '{domain_name}'"
+            )
     else:
         ok, data, loaded_version, err = svc.load_latest_domain_data(domain_name)
         if not ok:
@@ -420,10 +495,15 @@ def _load_domain_for_build(
 
     class _FakeSessionMgr:
         """Minimal stand-in so DomainSession can load without a real session."""
+
         def __init__(self):
             self._store: Dict = {}
-        def get(self, key, default=None): return self._store.get(key, default)
-        def set(self, key, value): self._store[key] = value
+
+        def get(self, key, default=None):
+            return self._store.get(key, default)
+
+        def set(self, key, value):
+            self._store[key] = value
 
     domain = DomainSession(_FakeSessionMgr())
     domain.import_from_file(data, version=loaded_version)
@@ -443,7 +523,10 @@ def _generate_sql_from_r2rml(domain, domain_name: str):
     Returns ``(sql_text, view_table, graph_name, base_uri)``.
     """
     from back.core.w3c import sparql
-    from back.objects.digitaltwin import augment_mappings_from_config, augment_relationships_from_config
+    from back.objects.digitaltwin import (
+        augment_mappings_from_config,
+        augment_relationships_from_config,
+    )
 
     r2rml = domain.get_r2rml()
     if not r2rml:
@@ -467,7 +550,9 @@ def _generate_sql_from_r2rml(domain, domain_name: str):
     logger.info("Scheduled build [%s]: generating SQL from R2RML", domain_name)
     ent, rels = sparql.extract_r2rml_mappings(r2rml)
     ent = augment_mappings_from_config(ent, mapping_config, base_uri, ontology_config)
-    rels = augment_relationships_from_config(rels, mapping_config, base_uri, ontology_config)
+    rels = augment_relationships_from_config(
+        rels, mapping_config, base_uri, ontology_config
+    )
     if not ent and not rels:
         raise ValidationError("No valid mappings found")
 
@@ -484,35 +569,55 @@ def _generate_sql_from_r2rml(domain, domain_name: str):
 
 
 def _write_graph_triples(
-    store, src, graph_name: str, view_table: str, actual_mode: str,
-    to_add: list, to_remove: list, incr_svc, domain_name: str,
+    store,
+    src,
+    graph_name: str,
+    view_table: str,
+    actual_mode: str,
+    to_add: list,
+    to_remove: list,
+    incr_svc,
+    domain_name: str,
 ) -> int:
     """Write triples to the graph store. Returns the triple count."""
     if actual_mode == "full":
         logger.info("Scheduled build [%s]: reading triples from VIEW", domain_name)
         triples = src.execute_query(f"SELECT * FROM {view_table}")
         triple_count = len(triples)
-        logger.info("Scheduled build [%s]: %d triples from VIEW", domain_name, triple_count)
+        logger.info(
+            "Scheduled build [%s]: %d triples from VIEW", domain_name, triple_count
+        )
 
         if triple_count > 0:
             store.drop_table(graph_name)
             store.create_table(graph_name)
             store.insert_triples(graph_name, triples, batch_size=500)
             store.optimize_table(graph_name)
-            logger.info("Scheduled build [%s]: graph '%s' populated with %d triples", domain_name, graph_name, triple_count)
+            logger.info(
+                "Scheduled build [%s]: graph '%s' populated with %d triples",
+                domain_name,
+                graph_name,
+                triple_count,
+            )
     else:
         triple_count = incr_svc.count_view_triples(view_table)
         if to_remove:
             store.delete_triples(graph_name, to_remove, batch_size=500)
-            logger.info("Scheduled build [%s]: removed %d triples", domain_name, len(to_remove))
+            logger.info(
+                "Scheduled build [%s]: removed %d triples", domain_name, len(to_remove)
+            )
         if to_add:
             store.insert_triples(graph_name, to_add, batch_size=500)
-            logger.info("Scheduled build [%s]: added %d triples", domain_name, len(to_add))
+            logger.info(
+                "Scheduled build [%s]: added %d triples", domain_name, len(to_add)
+            )
         store.optimize_table(graph_name)
     return triple_count
 
 
-def _persist_domain_metadata(uc, domain, domain_path: str, latest: str, build_ts: str, domain_name: str):
+def _persist_domain_metadata(
+    uc, domain, domain_path: str, latest: str, build_ts: str, domain_name: str
+):
     """Stamp last_build and write domain JSON back to the registry."""
     domain.last_build = build_ts
     try:
@@ -523,15 +628,29 @@ def _persist_domain_metadata(uc, domain, domain_path: str, latest: str, build_ts
             overwrite=True,
         )
         if w_ok:
-            logger.info("Scheduled build [%s]: stamped last_build=%s in registry", domain_name, build_ts)
+            logger.info(
+                "Scheduled build [%s]: stamped last_build=%s in registry",
+                domain_name,
+                build_ts,
+            )
         else:
-            logger.error("Scheduled build [%s]: write_file returned failure: %s", domain_name, w_msg)
+            logger.error(
+                "Scheduled build [%s]: write_file returned failure: %s",
+                domain_name,
+                w_msg,
+            )
     except Exception as save_exc:
-        logger.warning("Scheduled build [%s]: could not stamp last_build: %s", domain_name, save_exc)
+        logger.warning(
+            "Scheduled build [%s]: could not stamp last_build: %s",
+            domain_name,
+            save_exc,
+        )
 
 
 def _run_scheduled_build(
-    domain_name: str, drop_existing: bool, settings,
+    domain_name: str,
+    drop_existing: bool,
+    settings,
     registry_cfg: Optional[Dict[str, str]] = None,
     version: str = "latest",
 ) -> None:
@@ -546,7 +665,12 @@ def _run_scheduled_build(
     The entire function is wrapped in a fail-safe try/except so that
     no exception can silently escape to APScheduler's executor.
     """
-    logger.info("Scheduled build FIRED for '%s' version=%s (thread=%s)", domain_name, version, threading.current_thread().name)
+    logger.info(
+        "Scheduled build FIRED for '%s' version=%s (thread=%s)",
+        domain_name,
+        version,
+        threading.current_thread().name,
+    )
     start = time.time()
     build_ts = datetime.now(timezone.utc).isoformat()
 
@@ -563,13 +687,17 @@ def _run_scheduled_build(
         scheduler = get_scheduler()
 
         from back.core.task_manager import get_task_manager
+
         tm = get_task_manager()
         task = tm.create_task(
             name=f"Scheduled Build — {domain_name}",
             task_type="scheduled_build",
             steps=[
                 {"name": "prepare", "description": "Loading domain and generating SQL"},
-                {"name": "view", "description": "Creating Triple-Store VIEW in Unity Catalog"},
+                {
+                    "name": "view",
+                    "description": "Creating Triple-Store VIEW in Unity Catalog",
+                },
                 {"name": "graph", "description": "Populating LadybugDB graph"},
             ],
         )
@@ -579,13 +707,16 @@ def _run_scheduled_build(
         reg = registry_cfg or env_reg
         logger.info(
             "Scheduled build [%s]: creds resolved host=%s reg_catalog=%s",
-            domain_name, bool(host), reg.get("catalog", ""),
+            domain_name,
+            bool(host),
+            reg.get("catalog", ""),
         )
 
         if not host or not token:
             raise InfrastructureError("Databricks host/token not available")
 
         from back.objects.registry.service import RegistryCfg, RegistryService
+
         cfg = RegistryCfg.from_dict(reg)
         if not cfg.catalog or not cfg.schema:
             raise ValidationError("Registry not configured")
@@ -599,7 +730,12 @@ def _run_scheduled_build(
         uc = VolumeFileService(host=host, token=token)
         svc = RegistryService(cfg, uc)
         domain, version, domain_path, latest = _load_domain_for_build(
-            svc, domain_name, version, host, token, reg,
+            svc,
+            domain_name,
+            version,
+            host,
+            token,
+            reg,
         )
 
         warehouse_id = resolve_warehouse_id(domain, settings)
@@ -607,8 +743,11 @@ def _run_scheduled_build(
             raise InfrastructureError("No SQL warehouse configured")
 
         tm.update_progress(task.id, 10, "Generating SQL from R2RML mappings...")
-        sql_text, view_table, graph_name, base_uri, ent_mappings, rel_mappings = _generate_sql_from_r2rml(
-            domain, domain_name,
+        sql_text, view_table, graph_name, base_uri, ent_mappings, rel_mappings = (
+            _generate_sql_from_r2rml(
+                domain,
+                domain_name,
+            )
         )
 
         # --- Step 2: Create VIEW ---
@@ -620,13 +759,19 @@ def _run_scheduled_build(
         view_ok, view_msg = src.create_or_replace_view(cat, sch, vname, sql_text)
         if not view_ok:
             from back.objects.digitaltwin import DigitalTwin
-            detail = DigitalTwin.diagnose_view_error(view_msg, ent_mappings, rel_mappings)
-            logger.error("Scheduled build [%s]: VIEW creation failed:\n%s", domain_name, detail)
+
+            detail = DigitalTwin.diagnose_view_error(
+                view_msg, ent_mappings, rel_mappings
+            )
+            logger.error(
+                "Scheduled build [%s]: VIEW creation failed:\n%s", domain_name, detail
+            )
             raise InfrastructureError(f"Failed to create VIEW: {detail}")
         tm.update_progress(task.id, 40, "VIEW created")
 
         # --- Incremental logic ---
         from back.core.triplestore import IncrementalBuildService
+
         incr_svc = IncrementalBuildService(src)
 
         snapshot_table = incr_svc.snapshot_table_name(
@@ -644,22 +789,37 @@ def _run_scheduled_build(
             try:
                 to_add, to_remove = incr_svc.compute_diff(view_table, snapshot_table)
                 view_count = incr_svc.count_view_triples(view_table)
-                if incr_svc.should_fallback_to_full(len(to_add), len(to_remove), view_count):
+                if incr_svc.should_fallback_to_full(
+                    len(to_add), len(to_remove), view_count
+                ):
                     actual_mode = "full"
                 elif len(to_add) == 0 and len(to_remove) == 0:
                     triple_count = view_count
-                    logger.info("Scheduled build [%s]: no changes, skipping graph write", domain_name)
+                    logger.info(
+                        "Scheduled build [%s]: no changes, skipping graph write",
+                        domain_name,
+                    )
                     tm.update_progress(task.id, 90, "No changes detected")
                     try:
                         incr_svc.refresh_snapshot(view_table, snapshot_table)
                     except Exception as snap_e:
-                        logger.warning("Scheduled build [%s]: snapshot refresh failed: %s", domain_name, snap_e)
+                        logger.warning(
+                            "Scheduled build [%s]: snapshot refresh failed: %s",
+                            domain_name,
+                            snap_e,
+                        )
                     status = "success"
                     message = f"No changes — {triple_count} triples unchanged"
-                    _persist_domain_metadata(uc, domain, domain_path, latest, build_ts, domain_name)
+                    _persist_domain_metadata(
+                        uc, domain, domain_path, latest, build_ts, domain_name
+                    )
                     return
             except Exception as e:
-                logger.warning("Scheduled build [%s]: incremental diff failed, falling back to full: %s", domain_name, e)
+                logger.warning(
+                    "Scheduled build [%s]: incremental diff failed, falling back to full: %s",
+                    domain_name,
+                    e,
+                )
                 actual_mode = "full"
         else:
             actual_mode = "full"
@@ -676,15 +836,24 @@ def _run_scheduled_build(
             raise InfrastructureError("Could not initialize LadybugDB backend")
 
         triple_count = _write_graph_triples(
-            store, src, graph_name, view_table, actual_mode,
-            to_add, to_remove, incr_svc, domain_name,
+            store,
+            src,
+            graph_name,
+            view_table,
+            actual_mode,
+            to_add,
+            to_remove,
+            incr_svc,
+            domain_name,
         )
 
         try:
             incr_svc.refresh_snapshot(view_table, snapshot_table)
             logger.info("Scheduled build [%s]: snapshot refreshed", domain_name)
         except Exception as snap_e:
-            logger.warning("Scheduled build [%s]: snapshot refresh failed: %s", domain_name, snap_e)
+            logger.warning(
+                "Scheduled build [%s]: snapshot refresh failed: %s", domain_name, snap_e
+            )
 
         tm.update_progress(task.id, 95, "Saving domain metadata...")
         _persist_domain_metadata(uc, domain, domain_path, latest, build_ts, domain_name)
@@ -695,7 +864,12 @@ def _run_scheduled_build(
     except Exception as exc:
         status = "error"
         message = str(exc)
-        logger.exception("Scheduled build [%s] failed after %.1fs: %s", domain_name, time.time() - start, exc)
+        logger.exception(
+            "Scheduled build [%s] failed after %.1fs: %s",
+            domain_name,
+            time.time() - start,
+            exc,
+        )
 
     finally:
         duration = time.time() - start
@@ -703,39 +877,64 @@ def _run_scheduled_build(
         try:
             if tm and task:
                 if status == "success":
-                    tm.complete_task(task.id, result={
-                        "triple_count": triple_count,
-                        "duration_seconds": duration,
-                    }, message=message)
+                    tm.complete_task(
+                        task.id,
+                        result={
+                            "triple_count": triple_count,
+                            "duration_seconds": duration,
+                        },
+                        message=message,
+                    )
                 else:
                     tm.fail_task(task.id, message)
         except Exception as tm_exc:
-            logger.error("Scheduled build [%s]: task-manager update failed: %s", domain_name, tm_exc)
+            logger.error(
+                "Scheduled build [%s]: task-manager update failed: %s",
+                domain_name,
+                tm_exc,
+            )
 
         if host and reg.get("catalog"):
             try:
                 _update_schedule_status(
-                    host, token, reg, domain_name, status, message,
-                    duration_s=duration, triple_count=triple_count,
+                    host,
+                    token,
+                    reg,
+                    domain_name,
+                    status,
+                    message,
+                    duration_s=duration,
+                    triple_count=triple_count,
                     run_ts=build_ts,
                 )
             except Exception as status_exc:
                 logger.error(
                     "Scheduled build [%s]: failed to update status: %s",
-                    domain_name, status_exc,
+                    domain_name,
+                    status_exc,
                 )
         else:
             logger.error(
                 "Scheduled build [%s]: cannot update status — no host or registry config",
                 domain_name,
             )
-        logger.info("Scheduled build [%s]: finished with status=%s in %.1fs", domain_name, status, duration)
+        logger.info(
+            "Scheduled build [%s]: finished with status=%s in %.1fs",
+            domain_name,
+            status,
+            duration,
+        )
 
 
 def _update_schedule_status(
-    host: str, token: str, registry_cfg: Dict[str, str],
-    domain_name: str, status: str, message: str,
-    duration_s: float = 0.0, triple_count: int = 0,
+    host: str,
+    token: str,
+    registry_cfg: Dict[str, str],
+    domain_name: str,
+    status: str,
+    message: str,
+    duration_s: float = 0.0,
+    triple_count: int = 0,
     run_ts: str = "",
 ):
     """Update last_run / last_status / last_message and append to run history.

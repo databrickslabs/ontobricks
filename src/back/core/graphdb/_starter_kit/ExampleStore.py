@@ -10,6 +10,7 @@ speaks SQL, the inherited named-query defaults from ``TripleStoreBackend``
 will work out of the box.  If not (Cypher, Gremlin, …), you must override
 every named-query method — see ``LadybugFlatStore`` for a complete example.
 """
+
 import os
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
@@ -132,14 +133,18 @@ class ExampleStore(GraphDBBackend):
     # ======================================================================
 
     def sync_to_remote(
-        self, uc_path: str, volume_service: Any,
+        self,
+        uc_path: str,
+        volume_service: Any,
     ) -> Tuple[bool, str]:
         """Archive local DB and upload to the registry UC Volume."""
         # TODO: archive local files, call volume_service.write_file(...)
         return False, "sync_to_remote not yet implemented"
 
     def sync_from_remote(
-        self, uc_path: str, volume_service: Any,
+        self,
+        uc_path: str,
+        volume_service: Any,
     ) -> Tuple[bool, str]:
         """Download DB from the registry UC Volume and restore locally."""
         # TODO: call volume_service.read_file(...), extract to local path

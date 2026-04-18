@@ -6,6 +6,7 @@ them to OntoBricks ontology structures via the existing OWL parser.
 
 Reference: https://spec.edmcouncil.org/fibo/
 """
+
 import time
 from typing import Dict, List, Any, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -137,7 +138,7 @@ class FiboImportService:
     }
 
     _REQUEST_TIMEOUT = 20  # seconds per module
-    _MAX_WORKERS = 5       # concurrent download threads
+    _MAX_WORKERS = 5  # concurrent download threads
 
     @staticmethod
     def get_fibo_catalog() -> List[Dict[str, Any]]:
@@ -149,18 +150,22 @@ class FiboImportService:
         """
         catalog = []
         for key, domain in FiboImportService.FIBO_DOMAINS.items():
-            catalog.append({
-                "key": key,
-                "name": domain["name"],
-                "description": domain["description"],
-                "icon": domain["icon"],
-                "color": domain["color"],
-                "module_count": len(domain["modules"]),
-            })
+            catalog.append(
+                {
+                    "key": key,
+                    "name": domain["name"],
+                    "description": domain["description"],
+                    "icon": domain["icon"],
+                    "color": domain["color"],
+                    "module_count": len(domain["modules"]),
+                }
+            )
         return catalog
 
     @staticmethod
-    def _fetch_single_module(module_path: str) -> Tuple[str, Optional[str], Optional[str]]:
+    def _fetch_single_module(
+        module_path: str,
+    ) -> Tuple[str, Optional[str], Optional[str]]:
         """Fetch a single FIBO module, trying multiple URL patterns.
 
         Args:
@@ -248,7 +253,9 @@ class FiboImportService:
         if not module_paths:
             raise ValidationError("No valid FIBO domains selected.")
 
-        logger.info("Fetching %d modules for domains: %s", len(module_paths), domain_keys)
+        logger.info(
+            "Fetching %d modules for domains: %s", len(module_paths), domain_keys
+        )
 
         # Fetch modules concurrently
         merged_graph = Graph()
@@ -277,7 +284,9 @@ class FiboImportService:
                     logger.warning("FAIL %s: %s", mod_path, error)
 
         elapsed = time.time() - start
-        logger.info("Fetched %d/%d modules in %.1fs", fetched_count, len(module_paths), elapsed)
+        logger.info(
+            "Fetched %d/%d modules in %.1fs", fetched_count, len(module_paths), elapsed
+        )
 
         if fetched_count == 0:
             hint = (
@@ -295,7 +304,16 @@ class FiboImportService:
         from back.objects.ontology import Ontology
 
         result = Ontology.parse_owl(turtle_content, extract_advanced=True)
-        ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions, _groups = result
+        (
+            ontology_info,
+            classes,
+            properties,
+            constraints,
+            swrl_rules,
+            axioms,
+            expressions,
+            _groups,
+        ) = result
 
         stats = {
             "classes": len(classes),
@@ -306,7 +324,9 @@ class FiboImportService:
         }
 
         domain_names = ", ".join(
-            FiboImportService.FIBO_DOMAINS[k]["name"] for k in domain_keys if k in FiboImportService.FIBO_DOMAINS
+            FiboImportService.FIBO_DOMAINS[k]["name"]
+            for k in domain_keys
+            if k in FiboImportService.FIBO_DOMAINS
         )
         msg = (
             f"FIBO imported: {stats['classes']} classes, {stats['properties']} "

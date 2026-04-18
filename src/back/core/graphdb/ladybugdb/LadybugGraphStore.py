@@ -4,6 +4,7 @@ Uses typed node tables and relationship tables derived from the domain
 ontology.  Falls back to the flat-model base class for operations that
 do not have a graph-specific implementation.
 """
+
 import csv
 import os
 import tempfile
@@ -38,8 +39,10 @@ class LadybugGraphStore(LadybugFlatStore):
         auto_restore: Optional[Callable] = None,
     ) -> None:
         super().__init__(
-            db_path=db_path, db_name=db_name,
-            ontology=ontology, auto_restore=auto_restore,
+            db_path=db_path,
+            db_name=db_name,
+            ontology=ontology,
+            auto_restore=auto_restore,
         )
         self._init_graph_schema()
 
@@ -57,7 +60,10 @@ class LadybugGraphStore(LadybugFlatStore):
             self._graph_schema_checked = True
             return
         try:
-            from back.core.graphdb.ladybugdb.GraphSchemaBuilder import GraphSchemaBuilder
+            from back.core.graphdb.ladybugdb.GraphSchemaBuilder import (
+                GraphSchemaBuilder,
+            )
+
             classes = self._ontology.get("classes", [])
             properties = self._ontology.get("properties", [])
             base_uri = self._ontology.get("base_uri", "")
@@ -112,6 +118,7 @@ class LadybugGraphStore(LadybugFlatStore):
     def get_query_translator(self, table_name: str = "") -> Any:
         if self.use_graph_model:
             from back.core.reasoning.SWRLCypherTranslator import SWRLCypherTranslator
+
             return SWRLCypherTranslator(graph_schema=self._graph_schema)
         return super().get_query_translator(table_name)
 
@@ -121,16 +128,25 @@ class LadybugGraphStore(LadybugFlatStore):
         validate_table_name(table_name)
         conn = self._get_connection()
         if self.use_graph_model:
-            from back.core.graphdb.ladybugdb.GraphSchemaBuilder import GraphSchemaBuilder
+            from back.core.graphdb.ladybugdb.GraphSchemaBuilder import (
+                GraphSchemaBuilder,
+            )
+
             stmts = GraphSchemaBuilder.generate_ddl(self._graph_schema)
             for stmt in stmts:
                 try:
                     conn.execute(stmt)
                 except Exception as e:
-                    logger.warning("DDL statement failed (may already exist): %s — %s", stmt[:80], e)
+                    logger.warning(
+                        "DDL statement failed (may already exist): %s — %s",
+                        stmt[:80],
+                        e,
+                    )
             for tbl in self._graph_schema.node_tables:
                 self._table_registry[tbl] = True
-            logger.info("Created LadybugDB graph schema (%d DDL statements)", len(stmts))
+            logger.info(
+                "Created LadybugDB graph schema (%d DDL statements)", len(stmts)
+            )
         else:
             super().create_table(table_name)
 
@@ -165,7 +181,8 @@ class LadybugGraphStore(LadybugFlatStore):
         conn = self._get_connection()
 
         node_inserts, rel_inserts, attr_updates = GraphSchemaBuilder.classify_triples(
-            triples, schema,
+            triples,
+            schema,
         )
 
         total_node_count = sum(len(nodes) for nodes in node_inserts.values())
@@ -174,17 +191,29 @@ class LadybugGraphStore(LadybugFlatStore):
         if use_bulk:
             try:
                 return self._bulk_insert_graph(
-                    schema, conn, node_inserts, rel_inserts, attr_updates,
-                    len(triples), on_progress,
+                    schema,
+                    conn,
+                    node_inserts,
+                    rel_inserts,
+                    attr_updates,
+                    len(triples),
+                    on_progress,
                 )
             except Exception as exc:
                 logger.warning(
-                    "Bulk graph COPY FROM failed, falling back to row-by-row: %s", exc,
+                    "Bulk graph COPY FROM failed, falling back to row-by-row: %s",
+                    exc,
                 )
 
         return self._row_insert_graph(
-            schema, conn, node_inserts, rel_inserts, attr_updates,
-            batch_size, len(triples), on_progress,
+            schema,
+            conn,
+            node_inserts,
+            rel_inserts,
+            attr_updates,
+            batch_size,
+            len(triples),
+            on_progress,
         )
 
     def _bulk_insert_graph(
@@ -199,16 +228,21 @@ class LadybugGraphStore(LadybugFlatStore):
     ) -> int:
         """Bulk load nodes and relationships via COPY FROM CSV files."""
         import time
+
         t0 = time.monotonic()
 
         tmp_files: List[str] = []
         try:
             all_node_uris = self._collect_all_node_uris(
-                node_inserts, rel_inserts, schema,
+                node_inserts,
+                rel_inserts,
+                schema,
             )
 
             steps_done = 0
-            total_steps = len(node_inserts) + len(set(r["rel_table"] for r in rel_inserts))
+            total_steps = len(node_inserts) + len(
+                set(r["rel_table"] for r in rel_inserts)
+            )
             if total_steps == 0:
                 total_steps = 1
 
@@ -249,7 +283,8 @@ class LadybugGraphStore(LadybugFlatStore):
                 steps_done += 1
                 if on_progress:
                     on_progress(
-                        int(steps_done / total_steps * 80), 100,
+                        int(steps_done / total_steps * 80),
+                        100,
                     )
 
             rels_by_table: Dict[str, List[Dict[str, Any]]] = {}
@@ -269,16 +304,22 @@ class LadybugGraphStore(LadybugFlatStore):
                     conn.execute(f'COPY {rel_tbl} FROM "{csv_path}" (header=false)')
                 except Exception as exc:
                     logger.warning(
-                        "Bulk COPY for relationship table %s failed: %s", rel_tbl, exc,
+                        "Bulk COPY for relationship table %s failed: %s",
+                        rel_tbl,
+                        exc,
                     )
                 steps_done += 1
                 if on_progress:
                     on_progress(
-                        int(steps_done / total_steps * 80), 100,
+                        int(steps_done / total_steps * 80),
+                        100,
                     )
 
             attr_applied = self._apply_attr_updates(
-                schema, conn, node_inserts, attr_updates,
+                schema,
+                conn,
+                node_inserts,
+                attr_updates,
             )
 
             if on_progress:
@@ -286,12 +327,14 @@ class LadybugGraphStore(LadybugFlatStore):
 
             elapsed = time.monotonic() - t0
             total_nodes = sum(
-                len(set(n["uri"] for n in nodes))
-                for nodes in node_inserts.values()
+                len(set(n["uri"] for n in nodes)) for nodes in node_inserts.values()
             )
             logger.info(
                 "Bulk graph insert: %d nodes, %d relationships, %d attributes in %.1fs",
-                total_nodes, len(rel_inserts), attr_applied, elapsed,
+                total_nodes,
+                len(rel_inserts),
+                attr_applied,
+                elapsed,
             )
             return total_triples
         finally:
@@ -356,9 +399,8 @@ class LadybugGraphStore(LadybugFlatStore):
         on_progress: Optional[Callable[[int, int], None]],
     ) -> int:
         """Row-by-row insert fallback for small batches or COPY FROM failures."""
-        total_ops = (
-            sum(len(nodes) for nodes in node_inserts.values())
-            + len(rel_inserts)
+        total_ops = sum(len(nodes) for nodes in node_inserts.values()) + len(
+            rel_inserts
         )
         completed = 0
         created_uris: Set[str] = set()
@@ -402,9 +444,7 @@ class LadybugGraphStore(LadybugFlatStore):
                     pass
             if rel["to_uri"] not in created_uris:
                 try:
-                    conn.execute(
-                        f"CREATE (:{to_tbl} {{uri: '{to_uri}', label: ''}})"
-                    )
+                    conn.execute(f"CREATE (:{to_tbl} {{uri: '{to_uri}', label: ''}})")
                     created_uris.add(rel["to_uri"])
                 except Exception:
                     pass
@@ -422,7 +462,10 @@ class LadybugGraphStore(LadybugFlatStore):
                 on_progress(completed, total_ops)
 
         attr_applied = self._apply_attr_updates(
-            schema, conn, node_inserts, attr_updates,
+            schema,
+            conn,
+            node_inserts,
+            attr_updates,
         )
 
         if on_progress:
@@ -430,7 +473,9 @@ class LadybugGraphStore(LadybugFlatStore):
 
         logger.info(
             "Graph insert (row-by-row): %d nodes, %d relationships, %d attributes",
-            len(created_uris), len(rel_inserts), attr_applied,
+            len(created_uris),
+            len(rel_inserts),
+            attr_applied,
         )
         return total_triples
 
@@ -505,7 +550,8 @@ class LadybugGraphStore(LadybugFlatStore):
         conn = self._get_connection()
 
         node_inserts, rel_inserts, attr_updates = GraphSchemaBuilder.classify_triples(
-            triples, schema,
+            triples,
+            schema,
         )
 
         deleted = 0
@@ -560,7 +606,9 @@ class LadybugGraphStore(LadybugFlatStore):
                     )
                     deleted += len(set_parts)
                 except Exception as e:
-                    logger.debug("Graph attr delete failed for %s: %s", subj_uri[:60], e)
+                    logger.debug(
+                        "Graph attr delete failed for %s: %s", subj_uri[:60], e
+                    )
 
         nodes_to_delete: Set[str] = set()
         for tbl_name, nodes in node_inserts.items():
@@ -630,7 +678,9 @@ class LadybugGraphStore(LadybugFlatStore):
     ) -> List[str]:
         if self.use_graph_model:
             return self._find_subjects_by_type_graph(type_uri, limit, offset, search)
-        return super().find_subjects_by_type(table_name, type_uri, limit, offset, search)
+        return super().find_subjects_by_type(
+            table_name, type_uri, limit, offset, search
+        )
 
     def get_entity_metadata(
         self, table_name: str, subjects: List[str]
@@ -688,22 +738,26 @@ class LadybugGraphStore(LadybugFlatStore):
                 return rows
         return super().get_triples_for_subjects(table_name, subjects)
 
-    def get_predicates_for_type(
-        self, table_name: str, type_uri: str
-    ) -> List[str]:
+    def get_predicates_for_type(self, table_name: str, type_uri: str) -> List[str]:
         if self.use_graph_model:
             return self._get_predicates_for_type_graph(type_uri)
         return super().get_predicates_for_type(table_name, type_uri)
 
     def bfs_traversal(
-        self, table_name: str, seed_where: str, depth: int,
-        search: str = "", entity_type: str = "",
+        self,
+        table_name: str,
+        seed_where: str,
+        depth: int,
+        search: str = "",
+        entity_type: str = "",
     ) -> List[Dict[str, Any]]:
         if self.use_graph_model:
-            return self._bfs_traversal_graph(seed_where, depth,
-                                             search=search, entity_type=entity_type)
-        return super().bfs_traversal(table_name, seed_where, depth,
-                                     search=search, entity_type=entity_type)
+            return self._bfs_traversal_graph(
+                seed_where, depth, search=search, entity_type=entity_type
+            )
+        return super().bfs_traversal(
+            table_name, seed_where, depth, search=search, entity_type=entity_type
+        )
 
     # -- Reasoning methods ------------------------------------------------
 
@@ -716,13 +770,19 @@ class LadybugGraphStore(LadybugFlatStore):
     ) -> List[Dict[str, Any]]:
         """Compute transitive closure using variable-length Cypher paths."""
         if not self.use_graph_model:
-            logger.debug("transitive_closure: graph model not active, delegating to flat model")
-            return super().transitive_closure(table_name, predicate_uri, start_uri, max_depth)
+            logger.debug(
+                "transitive_closure: graph model not active, delegating to flat model"
+            )
+            return super().transitive_closure(
+                table_name, predicate_uri, start_uri, max_depth
+            )
 
         schema = self._graph_schema
         rel_table = schema.property_uri_to_table.get(predicate_uri)
         if not rel_table:
-            logger.debug("transitive_closure: no rel table for %s, skipping", predicate_uri)
+            logger.debug(
+                "transitive_closure: no rel table for %s, skipping", predicate_uri
+            )
             return []
 
         rel_def = schema.rel_tables.get(rel_table)
@@ -753,12 +813,18 @@ class LadybugGraphStore(LadybugFlatStore):
             r = conn.execute(cypher)
             results = []
             for row in r:
-                results.append({
-                    "subject": row[0],
-                    "predicate": predicate_uri,
-                    "object": row[1],
-                })
-            logger.info("Transitive closure via Cypher: %d inferred triples for %s", len(results), rel_table)
+                results.append(
+                    {
+                        "subject": row[0],
+                        "predicate": predicate_uri,
+                        "object": row[1],
+                    }
+                )
+            logger.info(
+                "Transitive closure via Cypher: %d inferred triples for %s",
+                len(results),
+                rel_table,
+            )
             return results
         except Exception as e:
             logger.warning("Cypher transitive closure failed: %s", e)
@@ -771,13 +837,17 @@ class LadybugGraphStore(LadybugFlatStore):
     ) -> List[Dict[str, Any]]:
         """Find missing symmetric counterparts using Cypher."""
         if not self.use_graph_model:
-            logger.debug("symmetric_expand: graph model not active, delegating to flat model")
+            logger.debug(
+                "symmetric_expand: graph model not active, delegating to flat model"
+            )
             return super().symmetric_expand(table_name, predicate_uri)
 
         schema = self._graph_schema
         rel_table = schema.property_uri_to_table.get(predicate_uri)
         if not rel_table:
-            logger.debug("symmetric_expand: no rel table for %s, skipping", predicate_uri)
+            logger.debug(
+                "symmetric_expand: no rel table for %s, skipping", predicate_uri
+            )
             return []
 
         rel_def = schema.rel_tables.get(rel_table)
@@ -798,12 +868,18 @@ class LadybugGraphStore(LadybugFlatStore):
             r = conn.execute(cypher)
             results = []
             for row in r:
-                results.append({
-                    "subject": row[0],
-                    "predicate": predicate_uri,
-                    "object": row[1],
-                })
-            logger.info("Symmetric expand via Cypher: %d missing triples for %s", len(results), rel_table)
+                results.append(
+                    {
+                        "subject": row[0],
+                        "predicate": predicate_uri,
+                        "object": row[1],
+                    }
+                )
+            logger.info(
+                "Symmetric expand via Cypher: %d missing triples for %s",
+                len(results),
+                rel_table,
+            )
             return results
         except Exception as e:
             logger.warning("Cypher symmetric expand failed: %s", e)
@@ -833,12 +909,14 @@ class LadybugGraphStore(LadybugFlatStore):
             r = conn.execute(cypher)
             results = []
             for row in r:
-                results.append({
-                    "source": source_uri,
-                    "target": target_uri,
-                    "hops": row[0],
-                    "path": row[1] if len(row) > 1 else [],
-                })
+                results.append(
+                    {
+                        "source": source_uri,
+                        "target": target_uri,
+                        "hops": row[0],
+                        "path": row[1] if len(row) > 1 else [],
+                    }
+                )
             return results
         except Exception as e:
             logger.debug("Cypher shortest path failed: %s", e)
@@ -872,21 +950,33 @@ class LadybugGraphStore(LadybugFlatStore):
 
     @staticmethod
     def _rows_to_node_triples(
-        rows, node_def, prop_cols: List[str],
+        rows,
+        node_def,
+        prop_cols: List[str],
     ) -> List[Dict[str, str]]:
         """Convert query rows into (s, p, o) triple dicts for a node table."""
         triples: List[Dict[str, str]] = []
         for row in rows:
             uri = row[0]
-            triples.append({"subject": uri, "predicate": RDF_TYPE, "object": node_def.class_uri})
+            triples.append(
+                {"subject": uri, "predicate": RDF_TYPE, "object": node_def.class_uri}
+            )
             if row[1]:
-                triples.append({"subject": uri, "predicate": RDFS_LABEL, "object": row[1]})
+                triples.append(
+                    {"subject": uri, "predicate": RDFS_LABEL, "object": row[1]}
+                )
             for idx, col in enumerate(prop_cols):
                 val_idx = idx + 2
                 if val_idx < len(row) and row[val_idx]:
                     pred_uri = node_def.property_uris.get(col, "")
                     if pred_uri:
-                        triples.append({"subject": uri, "predicate": pred_uri, "object": str(row[val_idx])})
+                        triples.append(
+                            {
+                                "subject": uri,
+                                "predicate": pred_uri,
+                                "object": str(row[val_idx]),
+                            }
+                        )
         return triples
 
     def _materialize_all_triples(self) -> List[Dict[str, str]]:
@@ -916,16 +1006,27 @@ class LadybugGraphStore(LadybugFlatStore):
                 )
                 count = 0
                 for row in r:
-                    triples.append({"subject": row[0], "predicate": rel_def.property_uri, "object": row[1]})
+                    triples.append(
+                        {
+                            "subject": row[0],
+                            "predicate": rel_def.property_uri,
+                            "object": row[1],
+                        }
+                    )
                     count += 1
                 logger.debug(
                     "Materialized %d triples for relationship '%s' (predicate='%s')",
-                    count, rel_name, rel_def.property_uri,
+                    count,
+                    rel_name,
+                    rel_def.property_uri,
                 )
             except Exception as exc:
                 logger.warning(
                     "Materialize relationship '%s' (%s→%s) failed: %s",
-                    rel_name, rel_def.from_table, rel_def.to_table, exc,
+                    rel_name,
+                    rel_def.from_table,
+                    rel_def.to_table,
+                    exc,
                 )
 
         return triples
@@ -981,7 +1082,12 @@ class LadybugGraphStore(LadybugFlatStore):
             return []
         conn = self._get_connection()
         node_def = schema.node_tables.get(tbl)
-        logger.info("LadybugDB graph search: table=%s, type_uri=%s, search=%s", tbl, type_uri, search)
+        logger.info(
+            "LadybugDB graph search: table=%s, type_uri=%s, search=%s",
+            tbl,
+            type_uri,
+            search,
+        )
 
         if search:
             search_lower = search.lower()
@@ -1037,7 +1143,13 @@ class LadybugGraphStore(LadybugFlatStore):
                     parameters={"subjects": subjects},
                 )
                 for row in r:
-                    triples.append({"subject": row[0], "predicate": rel_def.property_uri, "object": row[1]})
+                    triples.append(
+                        {
+                            "subject": row[0],
+                            "predicate": rel_def.property_uri,
+                            "object": row[1],
+                        }
+                    )
             except Exception:
                 pass
 
@@ -1061,8 +1173,11 @@ class LadybugGraphStore(LadybugFlatStore):
         return predicates
 
     def _bfs_traversal_graph(
-        self, seed_where: str, depth: int,
-        search: str = "", entity_type: str = "",
+        self,
+        seed_where: str,
+        depth: int,
+        search: str = "",
+        entity_type: str = "",
     ) -> List[Dict[str, Any]]:
         """BFS traversal using native graph relationships."""
         schema = self._graph_schema
@@ -1139,7 +1254,4 @@ class LadybugGraphStore(LadybugFlatStore):
 
             current_level = new_level
 
-        return [
-            {"entity": e, "min_lvl": l}
-            for e, l in entity_levels.items()
-        ]
+        return [{"entity": e, "min_lvl": l} for e, l in entity_levels.items()]
