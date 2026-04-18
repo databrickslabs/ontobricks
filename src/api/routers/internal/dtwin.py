@@ -9,7 +9,6 @@ from back.core.errors import (
     AuthorizationError,
     InfrastructureError,
     NotFoundError,
-    OntoBricksError,
     ValidationError,
 )
 from back.objects.registry import ROLE_BUILDER, role_level
@@ -213,331 +212,28 @@ async def start_triplestore_sync(
     )
 
     def run_sync():
-        import time
-        start_time = time.time()
-        phase_times = {}
-        actual_mode = 'full' if force_full or config_changed else 'incremental'
-
-        def _log_phase(name, t0):
-            elapsed = time.time() - t0
-            phase_times[name] = elapsed
-            logger.info("Build phase [%s]: %.1fs", name, elapsed)
-
-        try:
-            t_phase = time.time()
-            tm.start_task(task.id, "Preparing mappings...")
-            source_client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
-
-            entity_mappings, relationship_mappings = sparql.extract_r2rml_mappings(r2rml_content)
-            entity_mappings = DigitalTwin.augment_mappings_from_config(
-                entity_mappings, mapping_config, base_uri, ontology_config
-            )
-            relationship_mappings = DigitalTwin.augment_relationships_from_config(
-                relationship_mappings, mapping_config, base_uri, ontology_config
-            )
-
-            if not entity_mappings and not relationship_mappings:
-                tm.fail_task(task.id, "No valid mappings found")
-                return
-
-            all_data_sparql = (
-                f"PREFIX : <{base_uri}>\n"
-                "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n"
-                "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n\n"
-                "SELECT ?subject ?predicate ?object\n"
-                "WHERE {\n"
-                "    ?subject ?predicate ?object .\n"
-                "}"
-            )
-
-            try:
-                result = sparql.translate_sparql_to_spark(
-                    all_data_sparql, entity_mappings, None, relationship_mappings, dialect='spark'
-                )
-            except OntoBricksError as exc:
-                tm.fail_task(task.id, exc.message)
-                return
-
-            spark_sql = result['sql']
-            _log_phase("prepare", t_phase)
-            tm.update_progress(task.id, 10, "SQL generated")
-
-            # --- Phase 1: Version gate (incremental only) ---
-            from back.core.triplestore import IncrementalBuildService
-            incr_svc = IncrementalBuildService(source_client)
-
-            new_source_versions = {}
-            if actual_mode == 'incremental':
-                tm.advance_step(task.id, "Checking source tables for changes...")
-                source_tables = incr_svc.extract_source_tables(mapping_config)
-                logger.info("Incremental gate: checking %d source tables", len(source_tables))
-
-                changed, new_source_versions = incr_svc.check_source_versions(
-                    source_tables, stored_source_versions
-                )
-                if not changed:
-                    duration = time.time() - start_time
-                    logger.info("Incremental gate: no source changes detected — skipping build")
-                    tm.complete_task(task.id, result={
-                        'triple_count': 0,
-                        'view_table': view_table,
-                        'graph_name': graph_name,
-                        'build_mode': 'skipped',
-                        'skipped_reason': 'No source table changes detected',
-                        'duration_seconds': duration,
-                    }, message='No source data changes — build skipped')
-                    return
-
-                tm.update_progress(task.id, 15, "Source changes detected")
-
-            # --- Phase 2: Refresh VIEW ---
-            t_phase = time.time()
-            tm.advance_step(task.id, f"Creating VIEW {view_table}...")
-            try:
-                catalog, schema, vname = parts
-                view_ok, view_msg = source_client.create_or_replace_view(catalog, schema, vname, spark_sql)
-                if not view_ok:
-                    detail = DigitalTwin.diagnose_view_error(view_msg, entity_mappings, relationship_mappings)
-                    logger.error("Failed to create VIEW %s:\n%s", view_table, detail)
-                    tm.fail_task(task.id, f'Failed to create VIEW: {detail}')
-                    return
-                logger.info("Created VIEW %s", view_table)
-            except Exception as e:
-                detail = DigitalTwin.diagnose_view_error(str(e), entity_mappings, relationship_mappings)
-                logger.exception("Failed to create VIEW %s:\n%s", view_table, detail)
-                tm.fail_task(task.id, f'Failed to create VIEW: {detail}')
-                return
-            _log_phase("create_view", t_phase)
-            tm.update_progress(task.id, 25, f"VIEW {view_table} created")
-
-            # --- Phase 3: Diff or full load ---
-            snapshot_table = incr_svc.snapshot_table_name(
-                (domain.info or {}).get('name', DEFAULT_GRAPH_NAME), delta_cfg,
-                version=domain.current_version,
-            )
-
-            to_add = []
-            to_remove = []
-            total_triple_count = 0
-
-            if actual_mode == 'incremental' and incr_svc.snapshot_exists(snapshot_table):
-                tm.advance_step(task.id, "Computing incremental diff...")
-                try:
-                    to_add, to_remove = incr_svc.compute_diff(view_table, snapshot_table)
-                    total_triple_count = incr_svc.count_view_triples(view_table)
-
-                    if incr_svc.should_fallback_to_full(len(to_add), len(to_remove), total_triple_count):
-                        logger.info("Diff too large — falling back to full rebuild")
-                        actual_mode = 'full'
-                    else:
-                        tm.update_progress(
-                            task.id, 40,
-                            f"Diff: +{len(to_add)} / -{len(to_remove)} triples"
-                        )
-                except Exception as e:
-                    logger.warning("Incremental diff failed, falling back to full: %s", e)
-                    actual_mode = 'full'
-            else:
-                if actual_mode == 'incremental':
-                    logger.info("No snapshot table — first build will be full + create snapshot")
-                actual_mode = 'full'
-
-            # --- Phase 4: Apply to graph ---
-            t_phase = time.time()
-            tm.advance_step(task.id, "Applying changes to LadybugDB graph...")
-
-            from back.core.triplestore import get_triplestore as _get_ts
-            store = _get_ts(domain_snap, settings, backend="graph")
-            if not store:
-                tm.fail_task(task.id, 'Could not initialize LadybugDB backend')
-                return
-
-            if actual_mode == 'full':
-                t_fetch = time.time()
-                tm.update_progress(task.id, 40, "Reading all triples from VIEW...")
-                try:
-                    triples = source_client.execute_query(f"SELECT * FROM {view_table}")
-                except Exception as e:
-                    logger.exception("Failed to read from VIEW %s: %s", view_table, e)
-                    tm.fail_task(task.id, "Query execution on VIEW failed")
-                    return
-                _log_phase("fetch_triples", t_fetch)
-
-                triple_count = len(triples)
-                if triple_count == 0:
-                    tm.complete_task(task.id, result={
-                        'triple_count': 0,
-                        'view_table': view_table,
-                        'graph_name': graph_name,
-                        'build_mode': 'full',
-                        'duration_seconds': time.time() - start_time
-                    }, message='VIEW created but no triples generated (check your mappings)')
-                    return
-
-                t_insert = time.time()
-                tm.update_progress(task.id, 50, f"Full rebuild: writing {triple_count} triples...")
-                store.drop_table(graph_name)
-                store.create_table(graph_name)
-
-                def _on_progress_full(written, total):
-                    progress = 50 + int(written / total * 40)
-                    tm.update_progress(task.id, min(progress, 90), f"Written {written}/{total} triples...")
-
-                store.insert_triples(graph_name, triples, batch_size=500, on_progress=_on_progress_full)
-                store.optimize_table(graph_name)
-                _log_phase("graph_insert", t_insert)
-                total_triple_count = triple_count
-
-            else:
-                triple_count = len(to_add) + len(to_remove)
-                if triple_count == 0:
-                    duration = time.time() - start_time
-                    tm.complete_task(task.id, result={
-                        'triple_count': total_triple_count,
-                        'view_table': view_table,
-                        'graph_name': graph_name,
-                        'build_mode': 'incremental',
-                        'diff': {'added': 0, 'removed': 0},
-                        'duration_seconds': duration,
-                    }, message=f'No changes to apply ({total_triple_count} triples unchanged)')
-                    return
-
-                progress_base = 45
-
-                if to_remove:
-                    tm.update_progress(task.id, progress_base, f"Removing {len(to_remove)} triples...")
-                    def _on_del_progress(done, total):
-                        p = progress_base + int(done / total * 20)
-                        tm.update_progress(task.id, min(p, progress_base + 20), f"Removed {done}/{total} triples...")
-                    store.delete_triples(graph_name, to_remove, batch_size=500, on_progress=_on_del_progress)
-
-                if to_add:
-                    add_base = progress_base + 25
-                    tm.update_progress(task.id, add_base, f"Inserting {len(to_add)} triples...")
-                    def _on_add_progress(done, total):
-                        p = add_base + int(done / total * 20)
-                        tm.update_progress(task.id, min(p, add_base + 20), f"Inserted {done}/{total} triples...")
-                    store.insert_triples(graph_name, to_add, batch_size=500, on_progress=_on_add_progress)
-
-                store.optimize_table(graph_name)
-
-            _log_phase("apply_graph", t_phase)
-
-            # --- Phase 5: Refresh snapshot ---
-            t_phase = time.time()
-            tm.advance_step(task.id, "Refreshing snapshot table...")
-            try:
-                incr_svc.refresh_snapshot(view_table, snapshot_table)
-                logger.info("Snapshot table %s refreshed", snapshot_table)
-            except Exception as e:
-                logger.warning("Failed to refresh snapshot (non-fatal): %s", e)
-            _log_phase("snapshot", t_phase)
-
-            try:
-                if new_source_versions:
-                    domain.source_versions = new_source_versions
-                    domain.save()
-            except Exception as e:
-                logger.warning("Could not persist source versions: %s", e)
-
-            # Populate DT session cache so subsequent page loads avoid live I/O
-            try:
-                import os
-                from back.core.helpers import effective_uc_version_path, resolve_ladybug_local_path
-                from back.core.graphdb import graph_volume_path
-
-                final_count = total_triple_count or triple_count
-                build_stamp = domain.triplestore.get('build_last_update')
-
-                status_cache = {
-                    'success': True,
-                    'has_data': final_count > 0,
-                    'count': final_count,
-                    'view_table': view_table,
-                    'graph_name': graph_name,
-                }
-                if build_stamp and final_count > 0:
-                    status_cache['last_modified'] = build_stamp
-
-                db_name = graph_name or DEFAULT_GRAPH_NAME
-                local_path = resolve_ladybug_local_path(db_name=db_name, domain=domain)
-                uc_path = effective_uc_version_path(domain)
-                registry_lbug_path = graph_volume_path(uc_path, db_name) if uc_path else ''
-
-                dt = DigitalTwin(domain)
-                prev_existence = dt.get_ts_cache('dt_existence') or {}
-
-                existence_cache = {
-                    'view_exists': True,
-                    'snapshot_exists': True,
-                    'snapshot_table': snapshot_table,
-                    'view_table': view_table,
-                    'graph_name': graph_name,
-                    'local_lbug_exists': os.path.exists(local_path),
-                    'local_lbug_path': local_path,
-                    'registry_lbug_exists': prev_existence.get('registry_lbug_exists'),
-                    'registry_lbug_path': registry_lbug_path,
-                    'last_built': domain.last_build,
-                    'last_update': domain.last_update,
-                }
-
-                dt.set_ts_cache('status', status_cache)
-                dt.set_ts_cache('dt_existence', existence_cache)
-                logger.debug("Build cache populated: count=%d", final_count)
-            except Exception as e:
-                logger.warning("Could not populate DT session cache: %s", e)
-
-            # --- Phase 6: Archive LadybugDB to registry ---
-            t_phase = time.time()
-            tm.advance_step(task.id, "Archiving graph to registry...")
-            try:
-                from back.objects.domain import Domain
-
-                uc_svc = make_volume_file_service(domain, settings)
-                archive_warning = Domain(domain).sync_ladybug_to_volume(uc_svc)
-                if archive_warning:
-                    logger.warning("Post-build graph archive warning: %s", archive_warning)
-                else:
-                    logger.info("Post-build graph archived to registry")
-                    try:
-                        dt_obj = DigitalTwin(domain)
-                        ex = dt_obj.get_ts_cache('dt_existence')
-                        if ex:
-                            ex['registry_lbug_exists'] = True
-                            dt_obj.set_ts_cache('dt_existence', ex)
-                    except Exception:
-                        pass
-            except Exception as e:
-                logger.warning("Post-build graph archive failed (non-fatal): %s", e)
-            _log_phase("archive", t_phase)
-
-            duration = time.time() - start_time
-            logger.info(
-                "Build complete in %.1fs — phase breakdown: %s",
-                duration,
-                ", ".join(f"{k}={v:.1f}s" for k, v in phase_times.items()),
-            )
-
-            result_data = {
-                'triple_count': total_triple_count or triple_count,
-                'view_table': view_table,
-                'graph_name': graph_name,
-                'build_mode': actual_mode,
-                'snapshot_table': snapshot_table,
-                'duration_seconds': duration,
-                'phase_times': phase_times,
-            }
-            if actual_mode == 'incremental':
-                result_data['diff'] = {'added': len(to_add), 'removed': len(to_remove)}
-                msg = f"Incremental: +{len(to_add)} / -{len(to_remove)} triples in {duration:.1f}s"
-            else:
-                msg = f"Full rebuild: {total_triple_count or triple_count} triples in {duration:.1f}s"
-
-            tm.complete_task(task.id, result=result_data, message=msg)
-
-        except Exception as e:
-            logger.exception("Triple store sync failed: %s", e)
-            tm.fail_task(task.id, "Triple store sync failed")
+        DigitalTwin.run_build_task(
+            tm,
+            task.id,
+            domain,
+            settings,
+            domain_snap,
+            host,
+            token,
+            warehouse_id,
+            view_table,
+            graph_name,
+            r2rml_content,
+            base_uri,
+            mapping_config,
+            ontology_config,
+            stored_source_versions,
+            delta_cfg,
+            force_full,
+            config_changed=config_changed,
+            snapshot_version=getattr(domain, "current_version", "1") or "1",
+            build_kind="session",
+        )
 
     thread = threading.Thread(target=run_sync, daemon=True)
     thread.start()
@@ -884,7 +580,7 @@ async def sync_info(
     """
     import asyncio
     import time as _t
-    from back.objects.domain.home_service import HomeService as home_service
+    from back.objects.domain.HomeService import HomeService as home_service
     from back.objects.domain import Domain
 
     t0 = _t.monotonic()
@@ -1205,39 +901,21 @@ async def start_dataquality_checks(
     )
 
     def run_checks():
-        import time
-        from back.core.triplestore import get_triplestore as _get_ts
-
-        t0 = time.time()
-        try:
-            backend = requested_backend or "view"
-            tm.start_task(task.id, f"Running {total} data quality checks ({backend})...")
-
-            store = _get_ts(domain_snap, settings, backend=backend)
-            if not store:
-                tm.fail_task(task.id, f"Could not initialize {backend} backend")
-                return
-
-            if backend == "graph":
-                DigitalTwin.run_graph_checks(
-                    tm, task, shapes, store, triplestore_table, domain_snap, t0, total,
-                    swrl_rules=swrl_rules, ontology=ontology_dict,
-                    decision_tables=decision_tables,
-                    aggregate_rules=aggregate_rules,
-                    violation_limit=violation_limit,
-                )
-            else:
-                DigitalTwin.run_sql_checks(
-                    tm, task, shapes, triplestore_table, store, t0, total,
-                    swrl_rules=swrl_rules, ontology=ontology_dict,
-                    decision_tables=decision_tables,
-                    aggregate_rules=aggregate_rules,
-                    violation_limit=violation_limit,
-                )
-
-        except Exception as exc:
-            logger.exception("Data quality checks failed: %s", exc)
-            tm.fail_task(task.id, "Data quality checks failed")
+        DigitalTwin.run_data_quality_task(
+            tm,
+            task.id,
+            settings,
+            domain_snap,
+            shapes,
+            triplestore_table,
+            requested_backend,
+            total,
+            swrl_rules=swrl_rules,
+            ontology_dict=ontology_dict,
+            decision_tables=decision_tables,
+            aggregate_rules=aggregate_rules,
+            violation_limit=violation_limit,
+        )
 
     thread = threading.Thread(target=run_checks, daemon=True)
     thread.start()
@@ -1464,55 +1142,14 @@ async def start_reasoning(
     )
 
     def run_reasoning():
-        try:
-            logger.info("Reasoning task %s: starting", task.id)
-            tm.start_task(task.id)
-            tm.update_progress(task.id, 10, "Initialising triple store")
-
-            store = get_triplestore(domain_snap, settings, backend="graph")
-            if store is None:
-                logger.info("Reasoning task %s: graph store unavailable, falling back to view", task.id)
-                store = get_triplestore(domain_snap, settings, backend="view")
-            logger.info("Reasoning task %s: store=%s", task.id, type(store).__name__ if store else "None")
-
-            from back.core.reasoning import ReasoningService
-            svc = ReasoningService(domain_snap, store)
-            tm.update_progress(task.id, 30, "Running inference phases")
-
-            logger.info(
-                "Reasoning task %s: running phases (tbox=%s, swrl=%s, graph=%s, "
-                "decision_tables=%s, sparql_rules=%s, aggregate_rules=%s)",
-                task.id, options.get("tbox"), options.get("swrl"),
-                options.get("graph"),
-                options.get("decision_tables"),
-                options.get("sparql_rules"), options.get("aggregate_rules"),
-            )
-
-            def _swrl_progress(idx, total, rule_name):
-                pct = 30 + int((idx / max(total, 1)) * 50)
-                tm.update_progress(task.id, pct, f"SWRL {idx + 1}/{total}: {rule_name}")
-
-            result = svc.run_full_reasoning(options, progress_callback=_swrl_progress)
-            logger.info("Reasoning task %s: phases done — %d inferred",
-                        task.id, len(result.inferred_triples))
-
-            tm.update_progress(task.id, 90, "Finalising")
-
-            result_dict = result.to_dict()
-            result_dict.pop("violations", None)
-            import datetime as _dt
-            result_dict["last_run"] = _dt.datetime.utcnow().isoformat()
-            result_dict["inferred_count"] = len(result.inferred_triples)
-
-            tm.complete_task(
-                task.id,
-                result=result_dict,
-                message=f"Inference complete: {len(result.inferred_triples)} inferred",
-            )
-            logger.info("Reasoning task %s: completed successfully", task.id)
-        except Exception as e:
-            logger.exception("Reasoning task %s failed: %s", task.id, e)
-            tm.fail_task(task.id, "Inference failed")
+        DigitalTwin.run_inference_task(
+            tm,
+            task.id,
+            settings,
+            domain_snap,
+            options,
+            build_kind="session",
+        )
 
     thread = threading.Thread(target=run_reasoning, daemon=True)
     thread.start()

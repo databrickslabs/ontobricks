@@ -11,7 +11,7 @@ from shared.config.settings import get_settings, Settings
 from back.core.databricks import DatabricksClient
 from back.objects.session import get_domain
 from back.core.helpers import get_databricks_client, resolve_warehouse_id
-from back.objects.domain.home_service import HomeService as home_service
+from back.objects.domain.HomeService import HomeService as home_service
 
 router = APIRouter(tags=["Home"])
 

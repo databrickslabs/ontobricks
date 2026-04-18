@@ -47,14 +47,18 @@ class TripleStoreFactory:
         if backend == "graph":
             from back.core.graphdb import get_graphdb
             engine = self._resolve_graph_engine(domain, settings)
-            return get_graphdb(domain, settings, engine=engine)
+            engine_config = self._resolve_graph_engine_config(domain, settings)
+            return get_graphdb(domain, settings, engine=engine, engine_config=engine_config)
 
         logger.warning("Unknown triplestore backend: %s", backend)
         return None
 
     @staticmethod
-    def _resolve_graph_engine(domain: Any, settings: Optional[Any]) -> Optional[str]:
-        """Read the configured graph engine from ``GlobalConfigService``."""
+    def _read_global_config(domain: Any, settings: Optional[Any], accessor):
+        """Call *accessor(global_config_service, host, token, registry_cfg)*.
+
+        Returns ``None`` on any error (registry not configured, etc.).
+        """
         try:
             from back.objects.session.GlobalConfigService import global_config_service
             if settings is not None:
@@ -65,10 +69,26 @@ class TripleStoreFactory:
                 token = db.get('token', '')
             from back.objects.registry import RegistryCfg
             registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
-            return global_config_service.get_graph_engine(host, token, registry_cfg)
+            return accessor(global_config_service, host, token, registry_cfg)
         except Exception as exc:
-            logger.debug("Could not resolve graph engine from global config: %s", exc)
+            logger.debug("Could not read global config: %s", exc)
             return None
+
+    @staticmethod
+    def _resolve_graph_engine(domain: Any, settings: Optional[Any]) -> Optional[str]:
+        """Read the configured graph engine from ``GlobalConfigService``."""
+        return TripleStoreFactory._read_global_config(
+            domain, settings,
+            lambda gcs, h, t, r: gcs.get_graph_engine(h, t, r),
+        )
+
+    @staticmethod
+    def _resolve_graph_engine_config(domain: Any, settings: Optional[Any]) -> Optional[dict]:
+        """Read the engine-specific JSON config from ``GlobalConfigService``."""
+        return TripleStoreFactory._read_global_config(
+            domain, settings,
+            lambda gcs, h, t, r: gcs.get_graph_engine_config(h, t, r),
+        )
 
     def _create_delta(self, domain: Any, settings: Optional[Any]) -> Optional[Any]:
         """Instantiate a DeltaTripleStore backed by a Databricks SQL warehouse."""

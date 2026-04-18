@@ -1,6 +1,6 @@
 """Centralized session management — middleware, managers, domain state."""
 
-from .middleware import (
+from .FileSessionMiddleware import (
     FileSessionMiddleware,
     get_session,
 )

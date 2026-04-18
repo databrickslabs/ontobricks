@@ -380,8 +380,7 @@ async function loadWizardMetadata() {
                     <tr>
                         <td class="text-center">
                             <input type="checkbox" class="form-check-input wizard-table-checkbox" 
-                                   data-table="${tableName}" id="wizardTable${index}" checked
-                                   onchange="updateWizardTableSelection(this)">
+                                   data-table="${tableName}" id="wizardTable${index}" checked>
                         </td>
                         <td>
                             <label for="wizardTable${index}" class="mb-0 cursor-pointer">
@@ -822,17 +821,16 @@ function renderWizardDocsList() {
         const iconCls = iconMap[ext] || 'bi-file-earmark text-muted';
         const checked = wizardSelectedDocs.has(file.name) ? 'checked' : '';
         const size = file.size != null ? formatDocSize(file.size) : '';
-        const safeName = file.name.replace(/'/g, "\\'");
+        const docNameAttr = encodeURIComponent(file.name);
         html += `
             <div class="list-group-item list-group-item-action d-flex align-items-center py-2">
                 <input type="checkbox" class="form-check-input me-3 wizard-doc-checkbox"
-                       value="${file.name}" ${checked}
-                       onchange="updateWizardDocSelection(this)">
+                       value="${file.name}" ${checked}>
                 <i class="bi ${iconCls} me-2"></i>
                 <span class="text-truncate flex-grow-1">${file.name}</span>
                 ${size ? `<span class="small text-muted ms-2">${size}</span>` : ''}
                 <button class="btn btn-sm btn-outline-primary py-0 px-1 ms-2" type="button"
-                        onclick="event.stopPropagation(); DocumentPreview.open('${safeName}')" title="Preview">
+                        data-action="wizard-doc-preview" data-doc-name="${docNameAttr}" title="Preview">
                     <i class="bi bi-eye"></i>
                 </button>
             </div>`;
@@ -936,3 +934,80 @@ window.updateWizardTableSelection = updateWizardTableSelection;
 window.selectAllWizardTables = selectAllWizardTables;
 window.updateWizardDocSelection = updateWizardDocSelection;
 window.selectAllWizardDocs = selectAllWizardDocs;
+
+/**
+ * Wizard UI: data-action click delegation and checkbox change handling (no inline handlers).
+ */
+(function initWizardActionDelegation() {
+    function bind() {
+        const root = document.getElementById('wizard-section');
+        if (!root || root.dataset.wizardActionsBound === '1') return;
+        root.dataset.wizardActionsBound = '1';
+
+        root.addEventListener('click', function (e) {
+            const el = e.target.closest('[data-action]');
+            if (!el || !root.contains(el)) return;
+            const action = el.dataset.action;
+            switch (action) {
+                case 'wizard-generate':
+                    generateOntologyFromWizard();
+                    break;
+                case 'wizard-tables-bulk':
+                    selectAllWizardTables(el.dataset.selectAll === 'true');
+                    break;
+                case 'wizard-docs-bulk':
+                    selectAllWizardDocs(el.dataset.selectAll === 'true');
+                    break;
+                case 'wizard-copy-owl':
+                    copyWizardOWL();
+                    break;
+                case 'wizard-download-owl':
+                    downloadWizardOWL();
+                    break;
+                case 'wizard-discard-preview':
+                    clearWizardPreview();
+                    break;
+                case 'wizard-apply-ontology':
+                    applyWizardOntology();
+                    break;
+                case 'wizard-doc-preview': {
+                    e.stopPropagation();
+                    const raw = el.getAttribute('data-doc-name') || '';
+                    let name = '';
+                    try {
+                        name = decodeURIComponent(raw);
+                    } catch (err) {
+                        name = raw;
+                    }
+                    if (name && typeof DocumentPreview !== 'undefined' && DocumentPreview.open) {
+                        DocumentPreview.open(name);
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+        });
+
+        root.addEventListener('change', function (e) {
+            const t = e.target;
+            if (t.id === 'wizardSelectAllCheckbox') {
+                selectAllWizardTables(!!t.checked);
+                return;
+            }
+            if (t.classList && t.classList.contains('wizard-table-checkbox')) {
+                updateWizardTableSelection(t);
+                return;
+            }
+            if (t.classList && t.classList.contains('wizard-doc-checkbox')) {
+                updateWizardDocSelection(t);
+            }
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bind);
+    } else {
+        bind();
+    }
+})();

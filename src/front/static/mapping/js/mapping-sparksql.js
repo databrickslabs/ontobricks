@@ -85,6 +85,22 @@ function copyMappingSql() {
         }
     }
 
+    function _bindToolbarDelegation() {
+        const root = document.getElementById('sparksql-section');
+        if (!root || root.dataset.sparksqlActionsBound === '1') return;
+        root.dataset.sparksqlActionsBound = '1';
+        root.addEventListener('click', function (e) {
+            const el = e.target.closest('[data-action]');
+            if (!el || !root.contains(el)) return;
+            const action = el.dataset.action;
+            if (action === 'sparksql-copy-sql') {
+                copyMappingSql();
+            } else if (action === 'sparksql-refresh-sql') {
+                refreshMappingSql();
+            }
+        });
+    }
+
     document.addEventListener('sectionChange', function(e) {
         if (e.detail && e.detail.section === 'sparksql') {
             _sparksqlLoaded = false;
@@ -95,9 +111,11 @@ function copyMappingSql() {
     // Handle initial page load when sparksql is the default/deep-linked section
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function() {
+            _bindToolbarDelegation();
             setTimeout(_triggerIfReady, 500);
         });
     } else {
+        _bindToolbarDelegation();
         setTimeout(_triggerIfReady, 500);
     }
 })();

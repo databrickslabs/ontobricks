@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 
 from shared.config.settings import get_settings, Settings
 from back.core.databricks import is_databricks_app
-from back.core.errors import ValidationError, InfrastructureError, NotFoundError
+from back.core.errors import InfrastructureError, NotFoundError, OntoBricksError, ValidationError
 from back.core.helpers import get_databricks_client, make_volume_file_service, resolve_warehouse_id
 from back.core.logging import get_logger
 from back.objects.session import SessionManager, get_domain, get_session_manager, sanitize_domain_folder
@@ -92,8 +92,13 @@ async def check_domain_name(
         already_ours = domain.domain_folder == folder
         exists = svc.domain_exists(folder)
         return {'success': True, 'available': not exists or already_ours, 'folder': folder}
-    except Exception:
-        return {'success': True, 'available': True}
+    except OntoBricksError:
+        raise
+    except Exception as exc:
+        logger.exception("check_domain_name: registry lookup failed for '%s'", name)
+        raise InfrastructureError(
+            "Could not verify domain name availability",
+        ) from exc
 
 
 # ===========================================

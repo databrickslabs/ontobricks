@@ -2,7 +2,7 @@
 
 from back.objects.digitaltwin.constants import RDF_TYPE, RDFS_LABEL
 from back.objects.digitaltwin.models import DomainSnapshot
-from back.objects.digitaltwin.digitaltwin import DigitalTwin
+from back.objects.digitaltwin.DigitalTwin import DigitalTwin
 
 __all__ = [
     "DigitalTwin",
@@ -18,7 +18,10 @@ __all__ = [
     "execute_spark_query",
     "get_ts_cache",
     "is_owlrl_available",
+    "run_build_task",
+    "run_data_quality_task",
     "run_graph_checks",
+    "run_inference_task",
     "run_sql_checks",
     "set_ts_cache",
 ]
@@ -55,8 +58,17 @@ def get_ts_cache(domain, section):
 def is_owlrl_available():
     return DigitalTwin.is_owlrl_available()
 
+def run_build_task(*a, **kw):
+    return DigitalTwin.run_build_task(*a, **kw)
+
+def run_data_quality_task(*a, **kw):
+    return DigitalTwin.run_data_quality_task(*a, **kw)
+
 def run_graph_checks(*a, **kw):
     return DigitalTwin.run_graph_checks(*a, **kw)
+
+def run_inference_task(*a, **kw):
+    return DigitalTwin.run_inference_task(*a, **kw)
 
 def run_sql_checks(*a, **kw):
     return DigitalTwin.run_sql_checks(*a, **kw)

@@ -25,7 +25,7 @@ from api.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
 from back.core.triplestore import get_triplestore
-from back.core.helpers import get_databricks_credentials, sql_escape, effective_view_table, effective_graph_name, is_uri
+from back.core.helpers import get_databricks_credentials, sql_escape, effective_view_table, effective_graph_name
 from back.objects.digitaltwin import DigitalTwin, DomainSnapshot
 
 # Tests may patch ``api.routers.digitaltwin`` for registry resolution helpers.
@@ -355,8 +355,6 @@ async def dt_build(
 ):
     import threading
     from back.core.task_manager import get_task_manager
-    from back.core.w3c import sparql
-    from back.core.databricks import DatabricksClient
 
     domain = DigitalTwin.resolve_domain(domain_name, session_mgr, settings, registry_catalog, registry_schema, registry_volume, domain_version)
     view_table = effective_view_table(domain, settings).strip()
@@ -398,126 +396,27 @@ async def dt_build(
                                  {'name': 'snapshot', 'description': 'Refreshing snapshot'}])
 
     def _run():
-        import time
-        t0 = time.time()
-        actual_mode = 'full' if force_full else 'incremental'
-        try:
-            tm.start_task(task.id, "Preparing mappings...")
-            src = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
-            ent, rels = sparql.extract_r2rml_mappings(r2rml)
-            ent = DigitalTwin.augment_mappings_from_config(ent, mapping_config, base_uri, ontology_config)
-            rels = DigitalTwin.augment_relationships_from_config(rels, mapping_config, base_uri, ontology_config)
-            if not ent and not rels:
-                tm.fail_task(task.id, 'No valid mappings found'); return
-            sparql_q = (f"PREFIX : <{base_uri}>\nPREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n"
-                        f"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n\n"
-                        f"SELECT ?subject ?predicate ?object\nWHERE {{\n    ?subject ?predicate ?object .\n}}")
-            res = sparql.translate_sparql_to_spark(sparql_q, ent, None, rels, dialect='spark')
-            if not res['success']:
-                tm.fail_task(task.id, res.get('message', 'Translation failed')); return
-            tm.update_progress(task.id, 10, "SQL generated")
-
-            from back.core.triplestore import IncrementalBuildService
-            incr_svc = IncrementalBuildService(src)
-            snapshot_table = incr_svc.snapshot_table_name(
-                (domain.info or {}).get('name', DEFAULT_GRAPH_NAME), delta_cfg,
-                version=snap.current_version,
-            )
-
-            new_source_versions = {}
-            if actual_mode == 'incremental':
-                tm.advance_step(task.id, "Checking source tables...")
-                source_tables = incr_svc.extract_source_tables(mapping_config)
-                changed, new_source_versions = incr_svc.check_source_versions(source_tables, stored_source_versions)
-                if not changed:
-                    tm.complete_task(task.id, result={
-                        'triple_count': 0, 'view_table': view_table, 'graph_name': graph_name,
-                        'build_mode': 'skipped', 'skipped_reason': 'No source table changes detected',
-                        'duration_seconds': time.time() - t0,
-                    }, message='No source data changes — build skipped'); return
-
-            tm.advance_step(task.id, f"Creating VIEW {view_table}...")
-            catalog, schema, vname = parts
-            view_ok, view_msg = src.create_or_replace_view(catalog, schema, vname, res['sql'])
-            if not view_ok:
-                logger.error("API build: failed to create VIEW %s: %s", view_table, view_msg)
-                tm.fail_task(task.id, f'Failed to create VIEW: {view_msg}'); return
-            logger.info("API build: created VIEW %s", view_table)
-            tm.update_progress(task.id, 25, "VIEW created")
-
-            to_add = []
-            to_remove = []
-            total_cnt = 0
-
-            if actual_mode == 'incremental' and incr_svc.snapshot_exists(snapshot_table):
-                tm.advance_step(task.id, "Computing incremental diff...")
-                try:
-                    to_add, to_remove = incr_svc.compute_diff(view_table, snapshot_table)
-                    total_cnt = incr_svc.count_view_triples(view_table)
-                    if incr_svc.should_fallback_to_full(len(to_add), len(to_remove), total_cnt):
-                        actual_mode = 'full'
-                except Exception:
-                    actual_mode = 'full'
-            else:
-                actual_mode = 'full'
-
-            tm.advance_step(task.id, "Applying changes to graph...")
-            from back.core.triplestore import get_triplestore as _ts
-            store = _ts(snap, settings, backend="graph")
-            if not store:
-                tm.fail_task(task.id, 'Could not initialize LadybugDB backend'); return
-
-            if actual_mode == 'full':
-                triples = src.execute_query(f"SELECT * FROM {view_table}")
-                cnt = len(triples)
-                if cnt == 0:
-                    tm.complete_task(task.id, result={
-                        'triple_count': 0, 'view_table': view_table, 'graph_name': graph_name,
-                        'build_mode': 'full', 'duration_seconds': time.time() - t0,
-                    }, message='VIEW created but no triples generated'); return
-                store.drop_table(graph_name)
-                store.create_table(graph_name)
-                def _prog(w, t_):
-                    tm.update_progress(task.id, 50 + int(w / t_ * 40), f"Written {w}/{t_}...")
-                store.insert_triples(graph_name, triples, batch_size=500, on_progress=_prog)
-                store.optimize_table(graph_name)
-                total_cnt = cnt
-            else:
-                cnt = len(to_add) + len(to_remove)
-                if to_remove:
-                    store.delete_triples(graph_name, to_remove, batch_size=500)
-                if to_add:
-                    store.insert_triples(graph_name, to_add, batch_size=500)
-                if cnt > 0:
-                    store.optimize_table(graph_name)
-
-            tm.advance_step(task.id, "Refreshing snapshot...")
-            try:
-                incr_svc.refresh_snapshot(view_table, snapshot_table)
-            except Exception as snap_e:
-                logger.warning("API build: snapshot refresh failed: %s", snap_e)
-
-            try:
-                if new_source_versions:
-                    domain.source_versions = new_source_versions
-                    domain.save()
-            except Exception:
-                pass
-
-            result_data = {
-                'triple_count': total_cnt, 'view_table': view_table, 'graph_name': graph_name,
-                'build_mode': actual_mode, 'snapshot_table': snapshot_table,
-                'duration_seconds': time.time() - t0,
-            }
-            if actual_mode == 'incremental':
-                result_data['diff'] = {'added': len(to_add), 'removed': len(to_remove)}
-                msg = f"Incremental: +{len(to_add)} / -{len(to_remove)} in {time.time()-t0:.1f}s"
-            else:
-                msg = f"Full rebuild: {total_cnt} triples in {time.time()-t0:.1f}s"
-            tm.complete_task(task.id, result=result_data, message=msg)
-        except Exception as exc:
-            logger.exception("API build failed: %s", exc)
-            tm.fail_task(task.id, str(exc))
+        DigitalTwin.run_build_task(
+            tm,
+            task.id,
+            domain,
+            settings,
+            snap,
+            host,
+            token,
+            warehouse_id,
+            view_table,
+            graph_name,
+            r2rml,
+            base_uri,
+            mapping_config,
+            ontology_config,
+            stored_source_versions,
+            delta_cfg,
+            force_full,
+            snapshot_version=snap.current_version,
+            build_kind="api",
+        )
 
     threading.Thread(target=_run, daemon=True).start()
     return BuildStartedResponse(success=True, task_id=task.id, message='Build started')
@@ -819,31 +718,19 @@ async def dt_dataquality_start(
     requested_backend = body.backend
 
     def _run():
-        import time
-        from back.core.triplestore import get_triplestore as _get_ts
-
-        t0 = time.time()
-        try:
-            tm.start_task(task.id, f"Running {total} data quality checks ({requested_backend})...")
-
-            store = _get_ts(domain_snap, settings, backend=requested_backend)
-            if not store:
-                tm.fail_task(task.id, f"Could not initialize {requested_backend} backend")
-                return
-
-            if requested_backend == "graph":
-                DigitalTwin.run_graph_checks(
-                    tm, task, shapes, store, triplestore_table, domain_snap, t0, total,
-                    swrl_rules=swrl_rules, ontology=ontology_dict,
-                )
-            else:
-                DigitalTwin.run_sql_checks(
-                    tm, task, shapes, triplestore_table, store, t0, total,
-                    swrl_rules=swrl_rules, ontology=ontology_dict,
-                )
-        except Exception as exc:
-            logger.exception("API data quality checks failed: %s", exc)
-            tm.fail_task(task.id, str(exc))
+        DigitalTwin.run_data_quality_task(
+            tm,
+            task.id,
+            settings,
+            domain_snap,
+            shapes,
+            triplestore_table,
+            requested_backend,
+            total,
+            swrl_rules=swrl_rules,
+            ontology_dict=ontology_dict,
+            use_exception_message_on_failure=True,
+        )
 
     threading.Thread(target=_run, daemon=True).start()
 
@@ -905,7 +792,6 @@ async def dt_inference_start(
 ):
     import threading
     from back.core.task_manager import get_task_manager
-    from back.core.helpers import get_databricks_client
 
     domain = DigitalTwin.resolve_domain(
         domain_name, session_mgr, settings,
@@ -935,100 +821,14 @@ async def dt_inference_start(
     )
 
     def _run():
-        try:
-            logger.info("API inference task %s: starting", task.id)
-            tm.start_task(task.id)
-            tm.update_progress(task.id, 10, "Initialising triple store")
-
-            store = get_triplestore(domain_snap, settings, backend="graph")
-            if store is None:
-                logger.info("API inference task %s: graph store unavailable, falling back to view", task.id)
-                store = get_triplestore(domain_snap, settings, backend="view")
-
-            from back.core.reasoning import ReasoningService
-            svc = ReasoningService(domain_snap, store)
-            tm.update_progress(task.id, 30, "Running inference phases")
-
-            logger.info(
-                "API inference task %s: phases tbox=%s swrl=%s graph=%s constraints=%s "
-                "decision_tables=%s sparql_rules=%s aggregate_rules=%s",
-                task.id, options["tbox"], options["swrl"],
-                options["graph"], options["constraints"],
-                options["decision_tables"],
-                options["sparql_rules"], options["aggregate_rules"],
-            )
-
-            def _swrl_progress(idx, total, rule_name):
-                pct = 30 + int((idx / max(total, 1)) * 50)
-                tm.update_progress(task.id, pct, f"SWRL {idx + 1}/{total}: {rule_name}")
-
-            result = svc.run_full_reasoning(options, progress_callback=_swrl_progress)
-            logger.info(
-                "API inference task %s: done — %d inferred, %d violations",
-                task.id, len(result.inferred_triples), len(result.violations),
-            )
-
-            tm.update_progress(task.id, 90, "Finalising")
-
-            result_dict = result.to_dict()
-            import datetime as _dt
-            result_dict["last_run"] = _dt.datetime.utcnow().isoformat()
-            result_dict["inferred_count"] = len(result.inferred_triples)
-            result_dict["violations_count"] = len(result.violations)
-
-            if options.get("append_graph") and result.inferred_triples:
-                tm.update_progress(task.id, 92, "Appending inferred triples to graph...")
-                try:
-                    graph_store = get_triplestore(domain_snap, settings, backend="graph")
-                    if graph_store is None:
-                        logger.warning("API inference %s: cannot append to graph — store unavailable", task.id)
-                        result_dict["append_graph_error"] = "Graph store not available"
-                    else:
-                        from back.core.reasoning.models import ReasoningResult as _RR
-                        append_count = ReasoningService(domain_snap, graph_store).materialize_inferred(
-                            _RR(inferred_triples=result.inferred_triples)
-                        )
-                        result_dict["append_graph_count"] = append_count
-                        logger.info("API inference %s: appended %d triples to graph", task.id, append_count)
-                except Exception as ag_err:
-                    logger.exception("API inference %s: append to graph failed: %s", task.id, ag_err)
-                    result_dict["append_graph_error"] = str(ag_err)
-
-            mat_table = options.get("materialize_table", "")
-            if options.get("materialize") and mat_table and len(mat_table.split(".")) == 3:
-                tm.update_progress(task.id, 95, f"Materialising to {mat_table}...")
-
-                triples = [
-                    {"subject": t.subject, "predicate": t.predicate, "object": t.object}
-                    for t in result.inferred_triples
-                    if is_uri(t.subject) and is_uri(t.predicate) and is_uri(t.object)
-                ]
-                if triples:
-                    try:
-                        client = get_databricks_client(domain_snap, settings)
-                        if client is None:
-                            logger.warning("API inference %s: cannot materialise — no credentials", task.id)
-                        else:
-                            count = ReasoningService.materialize_to_delta(client, mat_table, triples)
-                            result_dict["materialize_count"] = count
-                            result_dict["materialize_table"] = mat_table
-                            logger.info("API inference %s: materialised %d triples to %s", task.id, count, mat_table)
-                    except Exception as mat_err:
-                        logger.exception("API inference %s: materialisation failed: %s", task.id, mat_err)
-                        result_dict["materialize_error"] = str(mat_err)
-
-            tm.complete_task(
-                task.id,
-                result=result_dict,
-                message=(
-                    f"Inference complete: {len(result.inferred_triples)} inferred, "
-                    f"{len(result.violations)} violations"
-                ),
-            )
-            logger.info("API inference task %s: completed", task.id)
-        except Exception as e:
-            logger.exception("API inference task %s failed: %s", task.id, e)
-            tm.fail_task(task.id, error=str(e))
+        DigitalTwin.run_inference_task(
+            tm,
+            task.id,
+            settings,
+            domain_snap,
+            options,
+            build_kind="api",
+        )
 
     threading.Thread(target=_run, daemon=True).start()
 

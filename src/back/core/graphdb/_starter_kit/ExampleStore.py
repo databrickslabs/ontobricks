@@ -39,12 +39,19 @@ class ExampleStore(GraphDBBackend):
         Directory where database files are stored on the local filesystem.
     db_name:
         Logical database name (used for file/directory naming).
+    engine_config:
+        Engine-specific JSON configuration set by the admin in
+        Settings > Graph DB > Engine Configuration.  The dict is
+        free-form — each engine defines its own keys.  For example
+        a remote engine might expect ``{"host": "…", "port": 7687}``.
+        An empty ``{}`` means "use defaults".
     """
 
     def __init__(
         self,
         db_path: str = "/tmp/ontobricks",
         db_name: str = DEFAULT_GRAPH_NAME,
+        engine_config: Optional[Dict[str, Any]] = None,
     ) -> None:
         if _engine is None:
             raise ImportError(
@@ -53,7 +60,12 @@ class ExampleStore(GraphDBBackend):
             )
         self.db_path = db_path
         self.db_name = db_name
+        self.engine_config: Dict[str, Any] = engine_config or {}
         self._conn: Optional[Any] = None
+
+        # TODO: read engine-specific keys from self.engine_config, e.g.:
+        #   self._remote_host = self.engine_config.get("host", "localhost")
+        #   self._remote_port = self.engine_config.get("port", 7687)
 
     # ======================================================================
     #  GraphDBBackend — capability flags

@@ -96,7 +96,18 @@
 
             <!-- Readiness tiles -->
             <div id="syncReadinessCard" class="mb-3">
-                <h6 class="mb-3 fw-semibold"><i class="bi bi-clipboard-check me-1"></i> Readiness Status</h6>
+                <h6 class="mb-2 fw-semibold"><i class="bi bi-clipboard-check me-1"></i> Readiness Status</h6>
+                <div id="syncReadinessStaleIndicators" class="d-flex flex-wrap align-items-center gap-2 mb-2 d-none">
+                    <span class="text-muted small">Out of sync with last build:</span>
+                    <span id="syncBadgeOntologyChanged" class="badge bg-warning bg-opacity-10 text-warning border border-warning d-none"
+                          title="Ontology was modified in this session; run Build to refresh the triple store.">
+                        <i class="bi bi-journal-bookmark me-1"></i>Ontology
+                    </span>
+                    <span id="syncBadgeAssignmentChanged" class="badge bg-primary bg-opacity-10 text-primary border border-primary d-none"
+                          title="Mapping assignments were modified in this session; run Build to refresh the triple store.">
+                        <i class="bi bi-diagram-2 me-1"></i>Mapping
+                    </span>
+                </div>
                 <div id="syncReadinessLoading" class="text-center py-3 d-none"></div>
                 <div id="syncReadinessContent" class="d-none">
                     <div class="row g-2 mb-2">

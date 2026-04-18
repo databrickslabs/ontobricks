@@ -210,7 +210,7 @@ class HomeService:
         Returns:
             dict: Comprehensive validation details
         """
-        from back.objects.domain.domain import Domain
+        from back.objects.domain.Domain import Domain
         from back.objects.digitaltwin import DigitalTwin
 
         dt = DigitalTwin(domain)
@@ -390,7 +390,7 @@ class HomeService:
         validation page (``/validate/detailed``) and the DT Sync
         page (``/dtwin/sync/info``).
         """
-        from back.objects.domain.domain import Domain
+        from back.objects.domain.Domain import Domain
 
         logger.debug("Building navbar state")
         domain_data = Domain(domain, settings).get_domain_info()

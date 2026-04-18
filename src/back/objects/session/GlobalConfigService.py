@@ -207,6 +207,26 @@ class GlobalConfigService:
             return False, f"Unknown graph engine '{engine}'. Allowed: {', '.join(self.ALLOWED_GRAPH_ENGINES)}"
         return self._save(host, token, registry_cfg, {"graph_engine": engine})
 
+    def get_graph_engine_config(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """Return the engine-specific configuration dict (free-form JSON)."""
+        data = self.load(host, token, registry_cfg)
+        cfg = data.get("graph_engine_config")
+        return cfg if isinstance(cfg, dict) else {}
+
+    def set_graph_engine_config(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        config: Dict[str, Any],
+    ) -> Tuple[bool, str]:
+        """Persist the engine-specific configuration dict."""
+        if not isinstance(config, dict):
+            return False, "graph_engine_config must be a JSON object"
+        return self._save(host, token, registry_cfg, {"graph_engine_config": config})
+
     def get_registry_cache_ttl(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> int:
@@ -242,6 +262,7 @@ class GlobalConfigService:
             "default_emoji": "",
             "registry_cache_ttl": 300,
             "graph_engine": "ladybug",
+            "graph_engine_config": {},
         }
 
 

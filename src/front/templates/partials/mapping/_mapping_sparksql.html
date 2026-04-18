@@ -34,10 +34,10 @@
         <p class="text-muted mb-0 small">View the Spark SQL generated from your SPARQL queries</p>
     </div>
     <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-outline-secondary" onclick="copyMappingSql()">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-action="sparksql-copy-sql">
             <i class="bi bi-clipboard me-1"></i> Copy SQL
         </button>
-        <button class="btn btn-sm btn-outline-primary" onclick="refreshMappingSql()">
+        <button type="button" class="btn btn-sm btn-outline-primary" data-action="sparksql-refresh-sql">
             <i class="bi bi-arrow-clockwise me-1"></i> Refresh
         </button>
     </div>

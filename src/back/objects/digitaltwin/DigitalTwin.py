@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import re
 import time
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Set
 
-from back.core.errors import InfrastructureError, NotFoundError, ValidationError
+from back.core.errors import InfrastructureError, NotFoundError, OntoBricksError, ValidationError
 from back.core.helpers import sql_escape as escape_sql_value, extract_local_name
 from back.core.logging import get_logger
 from back.objects.digitaltwin.constants import RDF_TYPE, RDFS_LABEL
@@ -1610,6 +1611,727 @@ class DigitalTwin:
             "duration_seconds": round(duration, 1),
         }, message=f"Data quality checks complete: {passed} passed, {failed} failed, {warnings} warnings")
 
+    # ------------------------------------------------------------------
+    # Background task orchestration (routers stay thin)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def run_build_task(
+        tm,
+        task_id: str,
+        domain,
+        settings,
+        domain_snap: DomainSnapshot,
+        host: str,
+        token: str,
+        warehouse_id: str,
+        view_table: str,
+        graph_name: str,
+        r2rml_content: str,
+        base_uri: str,
+        mapping_config,
+        ontology_config,
+        stored_source_versions: dict,
+        delta_cfg: dict,
+        force_full: bool,
+        *,
+        config_changed: bool = False,
+        snapshot_version: str,
+        build_kind: str = "session",
+    ) -> None:
+        """Execute Digital Twin build/sync in a worker thread (TaskManager progress).
+
+        ``build_kind``:
+          * ``"session"`` — UI/internal build (config-change full rebuild, diagnostics,
+            progress callbacks, session cache, volume archive, phase timings).
+          * ``"api"`` — external REST build (matches legacy ``digitaltwin.dt_build``).
+        """
+        import os
+        import time
+
+        from shared.config.constants import DEFAULT_GRAPH_NAME
+
+        from back.core.databricks import DatabricksClient
+        from back.core.helpers import (
+            effective_uc_version_path,
+            make_volume_file_service,
+            resolve_ladybug_local_path,
+        )
+        from back.core.graphdb import graph_volume_path
+        from back.core.triplestore import IncrementalBuildService
+        from back.core.triplestore import get_triplestore as _get_ts
+        from back.core.w3c import sparql
+        from back.objects.domain import Domain
+
+        is_api = build_kind == "api"
+        start_time = time.time()
+        phase_times: Dict[str, float] = {}
+        parts = view_table.split(".")
+
+        def _log_phase(name: str, t0_phase: float) -> None:
+            if is_api:
+                return
+            elapsed = time.time() - t0_phase
+            phase_times[name] = elapsed
+            logger.info("Build phase [%s]: %.1fs", name, elapsed)
+
+        cfg_forced_full = force_full or (config_changed if not is_api else False)
+        actual_mode = "full" if cfg_forced_full else "incremental"
+
+        try:
+            t_phase = time.time()
+            tm.start_task(task_id, "Preparing mappings...")
+            source_client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
+
+            entity_mappings, relationship_mappings = sparql.extract_r2rml_mappings(r2rml_content)
+            entity_mappings = DigitalTwin.augment_mappings_from_config(
+                entity_mappings, mapping_config, base_uri, ontology_config
+            )
+            relationship_mappings = DigitalTwin.augment_relationships_from_config(
+                relationship_mappings, mapping_config, base_uri, ontology_config
+            )
+
+            if not entity_mappings and not relationship_mappings:
+                tm.fail_task(task_id, "No valid mappings found")
+                return
+
+            all_data_sparql = (
+                f"PREFIX : <{base_uri}>\n"
+                "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n"
+                "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n\n"
+                "SELECT ?subject ?predicate ?object\n"
+                "WHERE {\n"
+                "    ?subject ?predicate ?object .\n"
+                "}"
+            )
+
+            try:
+                result = sparql.translate_sparql_to_spark(
+                    all_data_sparql, entity_mappings, None, relationship_mappings, dialect="spark"
+                )
+            except OntoBricksError as exc:
+                tm.fail_task(task_id, exc.message)
+                return
+
+            if is_api and not result.get("success"):
+                tm.fail_task(task_id, result.get("message", "Translation failed"))
+                return
+
+            spark_sql = result["sql"]
+            _log_phase("prepare", t_phase)
+            tm.update_progress(task_id, 10, "SQL generated")
+
+            incr_svc = IncrementalBuildService(source_client)
+
+            snapshot_table = ""
+            if is_api:
+                snapshot_table = incr_svc.snapshot_table_name(
+                    (domain.info or {}).get("name", DEFAULT_GRAPH_NAME),
+                    delta_cfg,
+                    version=snapshot_version,
+                )
+
+            new_source_versions: Dict[str, Any] = {}
+            if actual_mode == "incremental":
+                gate_msg = "Checking source tables..." if is_api else "Checking source tables for changes..."
+                tm.advance_step(task_id, gate_msg)
+                source_tables = incr_svc.extract_source_tables(mapping_config)
+                if not is_api:
+                    logger.info("Incremental gate: checking %d source tables", len(source_tables))
+
+                changed, new_source_versions = incr_svc.check_source_versions(
+                    source_tables, stored_source_versions
+                )
+                if not changed:
+                    duration = time.time() - start_time
+                    if not is_api:
+                        logger.info("Incremental gate: no source changes detected — skipping build")
+                    tm.complete_task(
+                        task_id,
+                        result={
+                            "triple_count": 0,
+                            "view_table": view_table,
+                            "graph_name": graph_name,
+                            "build_mode": "skipped",
+                            "skipped_reason": "No source table changes detected",
+                            "duration_seconds": duration,
+                        },
+                        message="No source data changes — build skipped",
+                    )
+                    return
+
+                if not is_api:
+                    tm.update_progress(task_id, 15, "Source changes detected")
+
+            t_phase = time.time()
+            tm.advance_step(task_id, f"Creating VIEW {view_table}...")
+            try:
+                catalog, schema, vname = parts
+                view_ok, view_msg = source_client.create_or_replace_view(catalog, schema, vname, spark_sql)
+                if not view_ok:
+                    if is_api:
+                        logger.error("API build: failed to create VIEW %s: %s", view_table, view_msg)
+                        tm.fail_task(task_id, f"Failed to create VIEW: {view_msg}")
+                    else:
+                        detail = DigitalTwin.diagnose_view_error(
+                            view_msg, entity_mappings, relationship_mappings
+                        )
+                        logger.error("Failed to create VIEW %s:\n%s", view_table, detail)
+                        tm.fail_task(task_id, f"Failed to create VIEW: {detail}")
+                    return
+                if is_api:
+                    logger.info("API build: created VIEW %s", view_table)
+                else:
+                    logger.info("Created VIEW %s", view_table)
+            except Exception as e:
+                if is_api:
+                    logger.exception("API build failed: %s", e)
+                    tm.fail_task(task_id, str(e))
+                    return
+                detail = DigitalTwin.diagnose_view_error(str(e), entity_mappings, relationship_mappings)
+                logger.exception("Failed to create VIEW %s:\n%s", view_table, detail)
+                tm.fail_task(task_id, f"Failed to create VIEW: {detail}")
+                return
+            _log_phase("create_view", t_phase)
+            if is_api:
+                tm.update_progress(task_id, 25, "VIEW created")
+            else:
+                tm.update_progress(task_id, 25, f"VIEW {view_table} created")
+
+            if not is_api:
+                snapshot_table = incr_svc.snapshot_table_name(
+                    (domain.info or {}).get("name", DEFAULT_GRAPH_NAME),
+                    delta_cfg,
+                    version=snapshot_version,
+                )
+
+            to_add: list = []
+            to_remove: list = []
+            total_triple_count = 0
+            triple_count = 0
+
+            if actual_mode == "incremental" and incr_svc.snapshot_exists(snapshot_table):
+                tm.advance_step(task_id, "Computing incremental diff...")
+                try:
+                    to_add, to_remove = incr_svc.compute_diff(view_table, snapshot_table)
+                    total_triple_count = incr_svc.count_view_triples(view_table)
+
+                    if incr_svc.should_fallback_to_full(len(to_add), len(to_remove), total_triple_count):
+                        if not is_api:
+                            logger.info("Diff too large — falling back to full rebuild")
+                        actual_mode = "full"
+                    elif not is_api:
+                        tm.update_progress(
+                            task_id,
+                            40,
+                            f"Diff: +{len(to_add)} / -{len(to_remove)} triples",
+                        )
+                except Exception as e:
+                    if is_api:
+                        actual_mode = "full"
+                    else:
+                        logger.warning("Incremental diff failed, falling back to full: %s", e)
+                        actual_mode = "full"
+            else:
+                if actual_mode == "incremental" and not is_api:
+                    logger.info("No snapshot table — first build will be full + create snapshot")
+                actual_mode = "full"
+
+            t_phase = time.time()
+            apply_msg = "Applying changes to graph..." if is_api else "Applying changes to LadybugDB graph..."
+            tm.advance_step(task_id, apply_msg)
+
+            store = _get_ts(domain_snap, settings, backend="graph")
+            if not store:
+                tm.fail_task(task_id, "Could not initialize LadybugDB backend")
+                return
+
+            if actual_mode == "full":
+                t_fetch = time.time()
+                if is_api:
+                    triples = source_client.execute_query(f"SELECT * FROM {view_table}")
+                else:
+                    tm.update_progress(task_id, 40, "Reading all triples from VIEW...")
+                    try:
+                        triples = source_client.execute_query(f"SELECT * FROM {view_table}")
+                    except Exception as e:
+                        logger.exception("Failed to read from VIEW %s: %s", view_table, e)
+                        tm.fail_task(task_id, "Query execution on VIEW failed")
+                        return
+                _log_phase("fetch_triples", t_fetch)
+
+                triple_count = len(triples)
+                if triple_count == 0:
+                    empty_msg = (
+                        "VIEW created but no triples generated (check your mappings)"
+                        if not is_api
+                        else "VIEW created but no triples generated"
+                    )
+                    tm.complete_task(
+                        task_id,
+                        result={
+                            "triple_count": 0,
+                            "view_table": view_table,
+                            "graph_name": graph_name,
+                            "build_mode": "full",
+                            "duration_seconds": time.time() - start_time,
+                        },
+                        message=empty_msg,
+                    )
+                    return
+
+                t_insert = time.time()
+                if not is_api:
+                    tm.update_progress(task_id, 50, f"Full rebuild: writing {triple_count} triples...")
+                store.drop_table(graph_name)
+                store.create_table(graph_name)
+
+                def _on_progress_full(written: int, total: int) -> None:
+                    progress = 50 + int(written / total * 40)
+                    if is_api:
+                        tm.update_progress(task_id, progress, f"Written {written}/{total}...")
+                    else:
+                        tm.update_progress(task_id, min(progress, 90), f"Written {written}/{total} triples...")
+
+                store.insert_triples(graph_name, triples, batch_size=500, on_progress=_on_progress_full)
+                store.optimize_table(graph_name)
+                _log_phase("graph_insert", t_insert)
+                total_triple_count = triple_count
+
+            else:
+                triple_count = len(to_add) + len(to_remove)
+                if triple_count == 0 and not is_api:
+                    duration = time.time() - start_time
+                    tm.complete_task(
+                        task_id,
+                        result={
+                            "triple_count": total_triple_count,
+                            "view_table": view_table,
+                            "graph_name": graph_name,
+                            "build_mode": "incremental",
+                            "diff": {"added": 0, "removed": 0},
+                            "duration_seconds": duration,
+                        },
+                        message=f"No changes to apply ({total_triple_count} triples unchanged)",
+                    )
+                    return
+
+                progress_base = 45
+
+                if to_remove:
+
+                    def _on_del_progress(done: int, total: int) -> None:
+                        if is_api:
+                            return
+                        p = progress_base + int(done / total * 20)
+                        tm.update_progress(
+                            task_id,
+                            min(p, progress_base + 20),
+                            f"Removed {done}/{total} triples...",
+                        )
+
+                    if not is_api:
+                        tm.update_progress(task_id, progress_base, f"Removing {len(to_remove)} triples...")
+                    store.delete_triples(
+                        graph_name,
+                        to_remove,
+                        batch_size=500,
+                        on_progress=None if is_api else _on_del_progress,
+                    )
+
+                if to_add:
+                    add_base = progress_base + 25
+
+                    def _on_add_progress(done: int, total: int) -> None:
+                        if is_api:
+                            return
+                        p = add_base + int(done / total * 20)
+                        tm.update_progress(
+                            task_id,
+                            min(p, add_base + 20),
+                            f"Inserted {done}/{total} triples...",
+                        )
+
+                    if not is_api:
+                        tm.update_progress(task_id, add_base, f"Inserting {len(to_add)} triples...")
+                    store.insert_triples(
+                        graph_name,
+                        to_add,
+                        batch_size=500,
+                        on_progress=None if is_api else _on_add_progress,
+                    )
+
+                if is_api:
+                    if triple_count > 0:
+                        store.optimize_table(graph_name)
+                else:
+                    store.optimize_table(graph_name)
+
+            _log_phase("apply_graph", t_phase)
+
+            t_phase = time.time()
+            snap_step = "Refreshing snapshot..." if is_api else "Refreshing snapshot table..."
+            tm.advance_step(task_id, snap_step)
+            try:
+                incr_svc.refresh_snapshot(view_table, snapshot_table)
+                if not is_api:
+                    logger.info("Snapshot table %s refreshed", snapshot_table)
+            except Exception as e:
+                if is_api:
+                    logger.warning("API build: snapshot refresh failed: %s", e)
+                else:
+                    logger.warning("Failed to refresh snapshot (non-fatal): %s", e)
+            _log_phase("snapshot", t_phase)
+
+            try:
+                if new_source_versions:
+                    domain.source_versions = new_source_versions
+                    domain.save()
+            except Exception as e:
+                if not is_api:
+                    logger.warning("Could not persist source versions: %s", e)
+
+            if not is_api:
+                try:
+                    final_count = total_triple_count or triple_count
+                    build_stamp = domain.triplestore.get("build_last_update")
+
+                    status_cache = {
+                        "success": True,
+                        "has_data": final_count > 0,
+                        "count": final_count,
+                        "view_table": view_table,
+                        "graph_name": graph_name,
+                    }
+                    if build_stamp and final_count > 0:
+                        status_cache["last_modified"] = build_stamp
+
+                    db_name = graph_name or DEFAULT_GRAPH_NAME
+                    local_path = resolve_ladybug_local_path(domain, db_name)
+                    uc_path = effective_uc_version_path(domain)
+                    registry_lbug_path = graph_volume_path(uc_path, db_name) if uc_path else ""
+
+                    dt = DigitalTwin(domain)
+                    prev_existence = dt.get_ts_cache("dt_existence") or {}
+
+                    existence_cache = {
+                        "view_exists": True,
+                        "snapshot_exists": True,
+                        "snapshot_table": snapshot_table,
+                        "view_table": view_table,
+                        "graph_name": graph_name,
+                        "local_lbug_exists": os.path.exists(local_path),
+                        "local_lbug_path": local_path,
+                        "registry_lbug_exists": prev_existence.get("registry_lbug_exists"),
+                        "registry_lbug_path": registry_lbug_path,
+                        "last_built": domain.last_build,
+                        "last_update": domain.last_update,
+                    }
+
+                    dt.set_ts_cache("status", status_cache)
+                    dt.set_ts_cache("dt_existence", existence_cache)
+                    logger.debug("Build cache populated: count=%d", final_count)
+                except Exception as e:
+                    logger.warning("Could not populate DT session cache: %s", e)
+
+                t_phase = time.time()
+                tm.advance_step(task_id, "Archiving graph to registry...")
+                try:
+                    uc_svc = make_volume_file_service(domain, settings)
+                    archive_warning = Domain(domain).sync_ladybug_to_volume(uc_svc)
+                    if archive_warning:
+                        logger.warning("Post-build graph archive warning: %s", archive_warning)
+                    else:
+                        logger.info("Post-build graph archived to registry")
+                        try:
+                            dt_obj = DigitalTwin(domain)
+                            ex = dt_obj.get_ts_cache("dt_existence")
+                            if ex:
+                                ex["registry_lbug_exists"] = True
+                                dt_obj.set_ts_cache("dt_existence", ex)
+                        except Exception:
+                            pass
+                except Exception as e:
+                    logger.warning("Post-build graph archive failed (non-fatal): %s", e)
+                _log_phase("archive", t_phase)
+
+            duration = time.time() - start_time
+            if not is_api:
+                logger.info(
+                    "Build complete in %.1fs — phase breakdown: %s",
+                    duration,
+                    ", ".join(f"{k}={v:.1f}s" for k, v in phase_times.items()),
+                )
+
+            result_data = {
+                "triple_count": total_triple_count or triple_count,
+                "view_table": view_table,
+                "graph_name": graph_name,
+                "build_mode": actual_mode,
+                "snapshot_table": snapshot_table,
+                "duration_seconds": duration,
+            }
+            if not is_api:
+                result_data["phase_times"] = phase_times
+            if actual_mode == "incremental":
+                result_data["diff"] = {"added": len(to_add), "removed": len(to_remove)}
+                msg = (
+                    f"Incremental: +{len(to_add)} / -{len(to_remove)} triples in {duration:.1f}s"
+                    if not is_api
+                    else f"Incremental: +{len(to_add)} / -{len(to_remove)} in {duration:.1f}s"
+                )
+            else:
+                msg = (
+                    f"Full rebuild: {total_triple_count or triple_count} triples in {duration:.1f}s"
+                )
+
+            tm.complete_task(task_id, result=result_data, message=msg)
+
+        except Exception as e:
+            if is_api:
+                logger.exception("API build failed: %s", e)
+            else:
+                logger.exception("Triple store sync failed: %s", e)
+            if is_api:
+                tm.fail_task(task_id, str(e))
+            else:
+                tm.fail_task(task_id, "Triple store sync failed")
+
+    @staticmethod
+    def run_data_quality_task(
+        tm,
+        task_id: str,
+        settings,
+        domain_snap: DomainSnapshot,
+        shapes: list,
+        triplestore_table: str,
+        requested_backend: str,
+        total: int,
+        *,
+        swrl_rules=None,
+        ontology_dict=None,
+        decision_tables=None,
+        aggregate_rules=None,
+        violation_limit=None,
+        failure_message: str = "Data quality checks failed",
+        use_exception_message_on_failure: bool = False,
+    ) -> None:
+        """Run SHACL / SWRL / DT / aggregate checks inside a worker thread."""
+        import time
+
+        from back.core.triplestore import get_triplestore as _get_ts
+
+        task_ref = SimpleNamespace(id=task_id)
+        t0 = time.time()
+        try:
+            backend = requested_backend or "view"
+            tm.start_task(task_id, f"Running {total} data quality checks ({backend})...")
+
+            store = _get_ts(domain_snap, settings, backend=backend)
+            if not store:
+                tm.fail_task(task_id, f"Could not initialize {backend} backend")
+                return
+
+            if backend == "graph":
+                DigitalTwin.run_graph_checks(
+                    tm,
+                    task_ref,
+                    shapes,
+                    store,
+                    triplestore_table,
+                    domain_snap,
+                    t0,
+                    total,
+                    swrl_rules=swrl_rules,
+                    ontology=ontology_dict,
+                    decision_tables=decision_tables,
+                    aggregate_rules=aggregate_rules,
+                    violation_limit=violation_limit,
+                )
+            else:
+                DigitalTwin.run_sql_checks(
+                    tm,
+                    task_ref,
+                    shapes,
+                    triplestore_table,
+                    store,
+                    t0,
+                    total,
+                    swrl_rules=swrl_rules,
+                    ontology=ontology_dict,
+                    decision_tables=decision_tables,
+                    aggregate_rules=aggregate_rules,
+                    violation_limit=violation_limit,
+                )
+
+        except Exception as exc:
+            logger.exception("Data quality checks failed: %s", exc)
+            if use_exception_message_on_failure:
+                tm.fail_task(task_id, str(exc))
+            else:
+                tm.fail_task(task_id, failure_message)
+
+    @staticmethod
+    def run_inference_task(
+        tm,
+        task_id: str,
+        settings,
+        domain_snap: DomainSnapshot,
+        options: Dict[str, Any],
+        *,
+        build_kind: str = "session",
+    ) -> None:
+        """Run ReasoningService phases; ``build_kind`` ``api`` enables append/materialize."""
+        import datetime as _dt
+
+        from back.core.helpers import get_databricks_client, is_uri
+        from back.core.reasoning import ReasoningService
+        from back.core.reasoning.models import ReasoningResult as _RR
+        from back.core.triplestore import get_triplestore
+
+        is_api = build_kind == "api"
+        try:
+            if is_api:
+                logger.info("API inference task %s: starting", task_id)
+            else:
+                logger.info("Reasoning task %s: starting", task_id)
+            tm.start_task(task_id)
+            tm.update_progress(task_id, 10, "Initialising triple store")
+
+            store = get_triplestore(domain_snap, settings, backend="graph")
+            if store is None:
+                if is_api:
+                    logger.info("API inference task %s: graph store unavailable, falling back to view", task_id)
+                else:
+                    logger.info("Reasoning task %s: graph store unavailable, falling back to view", task_id)
+                store = get_triplestore(domain_snap, settings, backend="view")
+            logger.info("Reasoning task %s: store=%s", task_id, type(store).__name__ if store else "None")
+
+            svc = ReasoningService(domain_snap, store)
+            tm.update_progress(task_id, 30, "Running inference phases")
+
+            if is_api:
+                logger.info(
+                    "API inference task %s: phases tbox=%s swrl=%s graph=%s constraints=%s "
+                    "decision_tables=%s sparql_rules=%s aggregate_rules=%s",
+                    task_id,
+                    options.get("tbox"),
+                    options.get("swrl"),
+                    options.get("graph"),
+                    options.get("constraints"),
+                    options.get("decision_tables"),
+                    options.get("sparql_rules"),
+                    options.get("aggregate_rules"),
+                )
+            else:
+                logger.info(
+                    "Reasoning task %s: running phases (tbox=%s, swrl=%s, graph=%s, "
+                    "decision_tables=%s, sparql_rules=%s, aggregate_rules=%s)",
+                    task_id,
+                    options.get("tbox"),
+                    options.get("swrl"),
+                    options.get("graph"),
+                    options.get("decision_tables"),
+                    options.get("sparql_rules"),
+                    options.get("aggregate_rules"),
+                )
+
+            def _swrl_progress(idx: int, total: int, rule_name: str) -> None:
+                pct = 30 + int((idx / max(total, 1)) * 50)
+                tm.update_progress(task_id, pct, f"SWRL {idx + 1}/{total}: {rule_name}")
+
+            result = svc.run_full_reasoning(options, progress_callback=_swrl_progress)
+            if is_api:
+                logger.info(
+                    "API inference task %s: done — %d inferred, %d violations",
+                    task_id,
+                    len(result.inferred_triples),
+                    len(result.violations),
+                )
+            else:
+                logger.info(
+                    "Reasoning task %s: phases done — %d inferred",
+                    task_id,
+                    len(result.inferred_triples),
+                )
+
+            tm.update_progress(task_id, 90, "Finalising")
+
+            result_dict = result.to_dict()
+            if not is_api:
+                result_dict.pop("violations", None)
+            result_dict["last_run"] = _dt.datetime.utcnow().isoformat()
+            result_dict["inferred_count"] = len(result.inferred_triples)
+            if is_api:
+                result_dict["violations_count"] = len(result.violations)
+
+            if is_api and options.get("append_graph") and result.inferred_triples:
+                tm.update_progress(task_id, 92, "Appending inferred triples to graph...")
+                try:
+                    graph_store = get_triplestore(domain_snap, settings, backend="graph")
+                    if graph_store is None:
+                        logger.warning("API inference %s: cannot append to graph — store unavailable", task_id)
+                        result_dict["append_graph_error"] = "Graph store not available"
+                    else:
+                        append_count = ReasoningService(domain_snap, graph_store).materialize_inferred(
+                            _RR(inferred_triples=result.inferred_triples)
+                        )
+                        result_dict["append_graph_count"] = append_count
+                        logger.info("API inference %s: appended %d triples to graph", task_id, append_count)
+                except Exception as ag_err:
+                    logger.exception("API inference %s: append to graph failed: %s", task_id, ag_err)
+                    result_dict["append_graph_error"] = str(ag_err)
+
+            mat_table = (options.get("materialize_table") or "").strip()
+            if is_api and options.get("materialize") and mat_table and len(mat_table.split(".")) == 3:
+                tm.update_progress(task_id, 95, f"Materialising to {mat_table}...")
+
+                triples = [
+                    {"subject": t.subject, "predicate": t.predicate, "object": t.object}
+                    for t in result.inferred_triples
+                    if is_uri(t.subject) and is_uri(t.predicate) and is_uri(t.object)
+                ]
+                if triples:
+                    try:
+                        client = get_databricks_client(domain_snap, settings)
+                        if client is None:
+                            logger.warning("API inference %s: cannot materialise — no credentials", task_id)
+                        else:
+                            count = ReasoningService.materialize_to_delta(client, mat_table, triples)
+                            result_dict["materialize_count"] = count
+                            result_dict["materialize_table"] = mat_table
+                            logger.info(
+                                "API inference %s: materialised %d triples to %s",
+                                task_id,
+                                count,
+                                mat_table,
+                            )
+                    except Exception as mat_err:
+                        logger.exception("API inference %s: materialisation failed: %s", task_id, mat_err)
+                        result_dict["materialize_error"] = str(mat_err)
+
+            if is_api:
+                msg = (
+                    f"Inference complete: {len(result.inferred_triples)} inferred, "
+                    f"{len(result.violations)} violations"
+                )
+            else:
+                msg = f"Inference complete: {len(result.inferred_triples)} inferred"
+
+            tm.complete_task(task_id, result=result_dict, message=msg)
+            if is_api:
+                logger.info("API inference task %s: completed", task_id)
+            else:
+                logger.info("Reasoning task %s: completed successfully", task_id)
+        except Exception as e:
+            if is_api:
+                logger.exception("API inference task %s failed: %s", task_id, e)
+            else:
+                logger.exception("Reasoning task %s failed: %s", task_id, e)
+            if is_api:
+                tm.fail_task(task_id, str(e))
+            else:
+                tm.fail_task(task_id, "Inference failed")
     # ------------------------------------------------------------------
     # Legacy quality SQL builders (static)
     # ------------------------------------------------------------------

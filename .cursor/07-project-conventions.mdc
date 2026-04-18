@@ -55,7 +55,7 @@ scope:
 - When to add here: persisting/loading domains from UC, permissions, scheduling.
 
 **`back/objects/session/`** — middleware + managers + domain state:
-- `middleware.py` — ASGI middleware + convenience helpers.
+- `FileSessionMiddleware.py` — ASGI middleware + `get_session` helper.
 - `SessionManager.py` — request-scoped (FastAPI dependency).
 - `DomainSession.py` — session-scoped in-memory domain data (ontology, mapping, triplestore metadata, caches).
 - `global_config.py` — instance-wide configuration in registry volume.

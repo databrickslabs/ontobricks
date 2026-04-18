@@ -663,3 +663,49 @@ document.addEventListener('sectionChange', function(e) {
         ManualModule.init();
     }
 });
+
+/**
+ * Toolbar / panel controls: data-action delegation (no inline onclick in templates).
+ */
+(function initManualActionDelegation() {
+    function bind() {
+        const root = document.getElementById('manual-section');
+        if (!root || root.dataset.manualActionsBound === '1') return;
+        root.dataset.manualActionsBound = '1';
+        root.addEventListener('click', function (e) {
+            const el = e.target.closest('[data-action]');
+            if (!el || !root.contains(el)) return;
+            const action = el.dataset.action;
+            switch (action) {
+                case 'manual-expand-all':
+                    ManualModule.expandAll();
+                    break;
+                case 'manual-collapse-all':
+                    ManualModule.collapseAll();
+                    break;
+                case 'manual-refresh':
+                    ManualModule.refresh();
+                    break;
+                case 'manual-reset-panel':
+                    ManualModule.resetPanel();
+                    break;
+                case 'manual-auto-map':
+                    ManualModule.autoMap();
+                    break;
+                case 'manual-close-panel':
+                    ManualModule.closePanel();
+                    break;
+                case 'manual-save-mapping':
+                    ManualModule.saveMapping();
+                    break;
+                default:
+                    break;
+            }
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bind);
+    } else {
+        bind();
+    }
+})();

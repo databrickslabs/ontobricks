@@ -22,7 +22,12 @@ to OntoBricks.
 
 4. **Fill in** every `TODO` marker with your engine's native API calls.
 
-5. **Follow the remaining steps** in `docs/graphdb-integration.md` (register
+5. **Use `engine_config`** — the constructor receives a free-form dict from
+   Settings > Graph DB > Engine Configuration.  Define the keys your engine
+   needs (e.g. `host`, `port`, `credentials_path`) and document them.  For
+   engines that need no configuration, an empty `{}` is fine.
+
+6. **Follow the remaining steps** in `docs/graphdb-integration.md` (register
    in factory, add to allowed engines, update UI, add tests).
 
 ## Files

@@ -1,4 +1,4 @@
-"""Tests for back.objects.session.middleware — file-based session middleware."""
+"""Tests for back.objects.session.FileSessionMiddleware — file-based session middleware."""
 import json
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
@@ -7,7 +7,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.testclient import TestClient
 
-from back.objects.session.middleware import (
+from back.objects.session.FileSessionMiddleware import (
     FileSessionMiddleware,
     get_session,
 )

@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import RedirectResponse
 
 from back.core.errors import ValidationError
-from back.objects.domain.domain import Domain
+from back.objects.domain.Domain import Domain
 from back.objects.registry import RegistryService
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import Settings, get_settings

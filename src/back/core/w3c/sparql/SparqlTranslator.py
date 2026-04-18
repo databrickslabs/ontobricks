@@ -1,5 +1,6 @@
 """SPARQL query translation to Spark SQL (via R2RML mappings)."""
 import re
+from typing import Optional
 
 from back.core.errors import ValidationError
 from back.core.logging import get_logger
@@ -599,6 +600,220 @@ class SparqlTranslator:
         logger.debug("Type-constrained pattern NOT matched (type_patterns=%s, generic=%s)", len(type_patterns), generic_pattern is not None)
         return None
 
+    @staticmethod
+    def _mapping_predicate_uri_to_column(mapping) -> dict:
+        """Map predicate URI and local-name keys to SQL column names for an entity mapping."""
+        pred_to_column = {}
+        label_column = mapping.get('label_column', '')
+        if label_column:
+            pred_to_column['http://www.w3.org/2000/01/rdf-schema#label'] = label_column
+        for pred_uri, pred_info in mapping.get('predicates', {}).items():
+            if pred_info.get('type') == 'column':
+                pred_to_column[pred_uri] = pred_info['column']
+                pred_to_column[SparqlTranslator._predicate_local_name_key(pred_uri)] = pred_info['column']
+        return pred_to_column
+
+    @staticmethod
+    def _sql_conditions_for_value_filters(pred_to_column, value_filters, column_qualifier: str, dialect: str):
+        """Build SQL WHERE fragments for ``value_filters`` (``column_qualifier`` e.g. ``\"\"`` or ``\"e.\"``)."""
+        where_conditions = []
+        for vf in value_filters:
+            pred_uri = vf['predicate_uri']
+            column = pred_to_column.get(pred_uri) or pred_to_column.get(
+                SparqlTranslator._predicate_local_name_key(pred_uri)
+            )
+            if not column:
+                continue
+            col_ref = f"{column_qualifier}{column}" if column_qualifier else column
+            operator = vf['operator']
+            value = vf['value'].replace("'", "''")
+            if operator == 'contains':
+                where_conditions.append(f"LOWER({col_ref}) LIKE '%{value}%'")
+            elif operator == 'equals':
+                where_conditions.append(f"{SparqlTranslator._cast_str(col_ref, dialect)} = '{value}'")
+            elif operator == 'starts':
+                where_conditions.append(f"LOWER({col_ref}) LIKE '{value}%'")
+            elif operator == 'ends':
+                where_conditions.append(f"LOWER({col_ref}) LIKE '%{value}'")
+            elif operator in ('gt', 'lt', 'gte', 'lte'):
+                op_map = {'gt': '>', 'lt': '<', 'gte': '>=', 'lte': '<='}
+                where_conditions.append(f"{col_ref} {op_map[operator]} {value}")
+        return where_conditions
+
+    @staticmethod
+    def _entity_class_key_from_uri_template(template: str) -> Optional[str]:
+        """Class key from a URI template (strip trailing ``{{id}}``); same rule as legacy path-only templates."""
+        if not template:
+            return None
+        clean = re.sub(r'\{[^}]+\}$', '', template).rstrip('/')
+        if not clean or '/' not in clean:
+            return None
+        key = SparqlTranslator._predicate_local_name_key(clean)
+        return key or None
+
+    @staticmethod
+    def _relationship_uri_matches(rel_pred: str, pred_uri: str) -> bool:
+        """True if relationship mapping predicate matches ``pred_uri`` (full URI or same local name)."""
+        if rel_pred == pred_uri:
+            return True
+        pl = SparqlTranslator._relationship_predicate_local_name(pred_uri)
+        rl = SparqlTranslator._relationship_predicate_local_name(rel_pred)
+        return bool(pl and pl == rl)
+
+    @staticmethod
+    def _include_class_for_uri_filter(class_uri, filter_class_uris, filter_local_names) -> bool:
+        if filter_class_uris is None:
+            return True
+        return (
+            class_uri in filter_class_uris
+            or SparqlTranslator._predicate_local_name_key(class_uri) in filter_local_names
+        )
+
+    @staticmethod
+    def _cte_fragment_for_source(alias: str, sql_text: str) -> str:
+        if "SELECT" in sql_text.upper():
+            return f"  {alias} AS (\n    {sql_text}\n  )"
+        return f"  {alias} AS (\n    SELECT * FROM {sql_text}\n  )"
+
+    @staticmethod
+    def _collect_entity_types_touched_by_value_filters(mappings, value_filters) -> set:
+        filtered_entity_types = set()
+        for vf in value_filters:
+            pred_uri = vf['predicate_uri']
+            for class_uri, mapping in (mappings or {}).items():
+                pred_to_column = SparqlTranslator._mapping_predicate_uri_to_column(mapping)
+                if pred_uri in pred_to_column or SparqlTranslator._predicate_local_name_key(pred_uri) in pred_to_column:
+                    filtered_entity_types.add(class_uri)
+        return filtered_entity_types
+
+    @staticmethod
+    def _filtered_query_build_seed_unions(
+        mappings,
+        filter_class_uris,
+        filter_local_names,
+        filtered_entity_types,
+        source_alias,
+        value_filters,
+        dialect,
+    ) -> list[str]:
+        seed_unions = []
+        for class_uri, mapping in (mappings or {}).items():
+            if not SparqlTranslator._include_class_for_uri_filter(class_uri, filter_class_uris, filter_local_names):
+                continue
+            if class_uri not in filtered_entity_types:
+                continue
+            table = mapping.get('table')
+            sql_query = (mapping.get('sql_query') or '').strip()
+            source_key = sql_query or table
+            if not source_key:
+                continue
+            from_clause = SparqlTranslator._source_from_alias(source_key, source_alias)
+            id_column = mapping.get('id_column', 'id')
+            uri_template = mapping.get('uri_template', '')
+            subject_expr = SparqlTranslator._subject_expr_from_template(uri_template, id_column, "e", dialect)
+            pred_to_column = SparqlTranslator._mapping_predicate_uri_to_column(mapping)
+            where_conditions = SparqlTranslator._sql_conditions_for_value_filters(
+                pred_to_column, value_filters, "e.", dialect
+            )
+            if where_conditions:
+                where_clause = f"WHERE {' AND '.join(where_conditions)}"
+                seed_unions.append(
+                    f"SELECT {subject_expr} AS entity_uri FROM {from_clause} AS e {where_clause}"
+                )
+                logger.debug("Seed query for %s: %s", class_uri, where_clause)
+        return seed_unions
+
+    @staticmethod
+    def _filtered_query_build_entity_unions(
+        mappings,
+        filter_class_uris,
+        filter_local_names,
+        filtered_entity_types,
+        source_alias,
+        dialect,
+    ) -> list[str]:
+        entity_queries = []
+        for class_uri, mapping in (mappings or {}).items():
+            if not SparqlTranslator._include_class_for_uri_filter(class_uri, filter_class_uris, filter_local_names):
+                continue
+            table = mapping.get('table')
+            sql_query = (mapping.get('sql_query') or '').strip()
+            source_key = sql_query or table
+            if not source_key:
+                continue
+            from_clause = SparqlTranslator._source_from_alias(source_key, source_alias)
+            id_column = mapping.get('id_column', 'id')
+            label_column = mapping.get('label_column', '')
+            uri_template = mapping.get('uri_template', '')
+            subject_expr = SparqlTranslator._subject_expr_from_template(uri_template, id_column, "e", dialect)
+            predicates = [('http://www.w3.org/1999/02/22-rdf-syntax-ns#type', f"'{class_uri}'")]
+            if label_column:
+                predicates.append(
+                    ('http://www.w3.org/2000/01/rdf-schema#label', SparqlTranslator._coalesce_cast_str(f"e.{label_column}", dialect))
+                )
+            for pred_uri, pred_info in mapping.get('predicates', {}).items():
+                if pred_info.get('type') == 'column':
+                    column = pred_info['column']
+                    if column != label_column:
+                        predicates.append((pred_uri, SparqlTranslator._coalesce_cast_str(f"e.{column}", dialect)))
+            if predicates:
+                if class_uri in filtered_entity_types:
+                    where_cl = f"\n                WHERE {subject_expr} IN (SELECT entity_uri FROM seed_entities)"
+                else:
+                    where_cl = ""
+                entity_queries.append(
+                    f"\n                    {SparqlTranslator._unpivot_select(subject_expr, predicates, f'{from_clause} AS e', where_cl, dialect)}"
+                )
+        return entity_queries
+
+    @staticmethod
+    def _filtered_query_build_relationship_unions(
+        relationship_mappings,
+        source_alias,
+        relationship_filter,
+        dialect,
+    ) -> list[str]:
+        rel_queries = []
+        for rel in (relationship_mappings or []):
+            predicate = rel.get('predicate', '')
+            if relationship_filter:
+                if not any(
+                    predicate == f
+                    or SparqlTranslator._predicate_local_name_key(predicate)
+                    == SparqlTranslator._predicate_local_name_key(f)
+                    for f in relationship_filter
+                ):
+                    continue
+            rel_sql = (rel.get('sql_query') or '').strip()
+            subject_template = rel.get('subject_template', '')
+            object_template = rel.get('object_template', '')
+            subject_column = rel.get('subject_column')
+            object_column = rel.get('object_column')
+            if not rel_sql or not subject_column or not object_column:
+                continue
+            rel_from = SparqlTranslator._source_from_alias(rel_sql, source_alias, "r")
+            subj_expr = SparqlTranslator._subject_expr_from_template(subject_template, subject_column, "r", dialect)
+            obj_expr = SparqlTranslator._subject_expr_from_template(object_template, object_column, "r", dialect)
+            rel_queries.append(f"""
+                SELECT {subj_expr} AS subject, '{predicate}' AS predicate, {obj_expr} AS object
+                FROM {rel_from}
+                WHERE {subj_expr} IN (SELECT entity_uri FROM seed_entities)
+                   OR {obj_expr} IN (SELECT entity_uri FROM seed_entities)""")
+        return rel_queries
+
+    @staticmethod
+    def _filtered_query_assemble_with_sql(cte_defs, seed_unions, entity_queries, rel_queries, limit) -> str:
+        limit_clause = f"LIMIT {limit}" if limit else ""
+        cte_parts = [SparqlTranslator._cte_fragment_for_source(alias, sql_text) for alias, sql_text in cte_defs]
+        seed_cte = (
+            f"  seed_entities AS (\n    {' UNION ALL '.join(seed_unions) if seed_unions else 'SELECT NULL AS entity_uri WHERE 1=0'}\n  )"
+        )
+        cte_parts.append(seed_cte)
+        return f"""WITH\n{','.join(cte_parts)}
+    SELECT subject, predicate, object FROM (
+        {' UNION ALL '.join(entity_queries + rel_queries)}
+    ) final_results
+    {limit_clause}"""
 
     @staticmethod
     def _build_filtered_with_relationships_query(mappings, select_vars, is_distinct, limit, relationship_mappings, filter_class_uris, predicate_filter, value_filters, relationship_filter, dialect=DIALECT_SPARK):
@@ -611,177 +826,40 @@ class SparqlTranslator:
         """
         logger.debug("Building CTE-based filtered query with relationships")
 
-        # Build filter set for classes
         filter_local_names = (
             set(SparqlTranslator._predicate_local_name_key(uri) for uri in filter_class_uris)
             if filter_class_uris
             else None
         )
-        
-        # Build helper to get subject expression from template
-        def get_subject_expr(uri_template, id_column, alias="e"):
-            return SparqlTranslator._subject_expr_from_template(uri_template, id_column, alias, dialect)
-        
-        # Identify which entity types have value filters applied
-        filtered_entity_types = set()
-        for vf in value_filters:
-            # The predicate_uri in a value filter tells us which entity type it applies to
-            # We need to find which entity has this predicate
-            pred_uri = vf['predicate_uri']
-            for class_uri, mapping in (mappings or {}).items():
-                pred_to_column = {}
-                label_column = mapping.get('label_column', '')
-                if label_column:
-                    pred_to_column['http://www.w3.org/2000/01/rdf-schema#label'] = label_column
-                for p_uri, p_info in mapping.get('predicates', {}).items():
-                    if p_info.get('type') == 'column':
-                        pred_to_column[p_uri] = p_info['column']
-                        pred_to_column[SparqlTranslator._predicate_local_name_key(p_uri)] = p_info['column']
-                if pred_uri in pred_to_column or SparqlTranslator._predicate_local_name_key(pred_uri) in pred_to_column:
-                    filtered_entity_types.add(class_uri)
-        
+        filtered_entity_types = SparqlTranslator._collect_entity_types_touched_by_value_filters(mappings, value_filters)
         logger.debug("Entity types with filters: %s", filtered_entity_types)
 
-        # Collect CTEs to deduplicate source table scans
         cte_defs, source_alias = SparqlTranslator._collect_source_ctes(mappings, relationship_mappings)
-        
-        # Step 1: Build seed_entities CTE (entities matching the value filter)
-        seed_unions = []
-        for class_uri, mapping in (mappings or {}).items():
-            if filter_class_uris is not None:
-                if class_uri not in filter_class_uris and SparqlTranslator._predicate_local_name_key(class_uri) not in filter_local_names:
-                    continue
-            
-            if class_uri not in filtered_entity_types:
-                continue
-            
-            table = mapping.get('table')
-            sql_query = (mapping.get('sql_query') or '').strip()
-            source_key = sql_query or table
-            if not source_key:
-                continue
-            from_clause = SparqlTranslator._source_from_alias(source_key, source_alias)
-            
-            id_column = mapping.get('id_column', 'id')
-            uri_template = mapping.get('uri_template', '')
-            subject_expr = get_subject_expr(uri_template, id_column, "e")
-            
-            # Build WHERE conditions from value filters
-            pred_to_column = {}
-            label_column = mapping.get('label_column', '')
-            if label_column:
-                pred_to_column['http://www.w3.org/2000/01/rdf-schema#label'] = label_column
-            for pred_uri, pred_info in mapping.get('predicates', {}).items():
-                if pred_info.get('type') == 'column':
-                    pred_to_column[pred_uri] = pred_info['column']
-                    pred_to_column[SparqlTranslator._predicate_local_name_key(pred_uri)] = pred_info['column']
-            
-            where_conditions = []
-            for vf in value_filters:
-                pred_uri = vf['predicate_uri']
-                column = pred_to_column.get(pred_uri) or pred_to_column.get(SparqlTranslator._predicate_local_name_key(pred_uri))
-                if column:
-                    operator = vf['operator']
-                    value = vf['value'].replace("'", "''")
-                    if operator == 'contains':
-                        where_conditions.append(f"LOWER(e.{column}) LIKE '%{value}%'")
-                    elif operator == 'equals':
-                        where_conditions.append(f"{SparqlTranslator._cast_str('e.' + column, dialect)} = '{value}'")
-                    elif operator == 'starts':
-                        where_conditions.append(f"LOWER(e.{column}) LIKE '{value}%'")
-                    elif operator == 'ends':
-                        where_conditions.append(f"LOWER(e.{column}) LIKE '%{value}'")
-                    elif operator in ('gt', 'lt', 'gte', 'lte'):
-                        op_map = {'gt': '>', 'lt': '<', 'gte': '>=', 'lte': '<='}
-                        where_conditions.append(f"e.{column} {op_map[operator]} {value}")
-            
-            if where_conditions:
-                where_clause = f"WHERE {' AND '.join(where_conditions)}"
-                seed_unions.append(f"SELECT {subject_expr} AS entity_uri FROM {from_clause} AS e {where_clause}")
-                logger.debug("Seed query for %s: %s", class_uri, where_clause)
-        
-        # Step 2: Build entity attribute queries
-        entity_queries = []
-        for class_uri, mapping in (mappings or {}).items():
-            if filter_class_uris is not None:
-                if class_uri not in filter_class_uris and SparqlTranslator._predicate_local_name_key(class_uri) not in filter_local_names:
-                    continue
-            
-            table = mapping.get('table')
-            sql_query = (mapping.get('sql_query') or '').strip()
-            source_key = sql_query or table
-            if not source_key:
-                continue
-            from_clause = SparqlTranslator._source_from_alias(source_key, source_alias)
-            
-            id_column = mapping.get('id_column', 'id')
-            label_column = mapping.get('label_column', '')
-            uri_template = mapping.get('uri_template', '')
-            subject_expr = get_subject_expr(uri_template, id_column, "e")
-            
-            predicates = []
-            predicates.append(('http://www.w3.org/1999/02/22-rdf-syntax-ns#type', f"'{class_uri}'"))
-            if label_column:
-                predicates.append(('http://www.w3.org/2000/01/rdf-schema#label', SparqlTranslator._coalesce_cast_str(f"e.{label_column}", dialect)))
-            for pred_uri, pred_info in mapping.get('predicates', {}).items():
-                if pred_info.get('type') == 'column':
-                    column = pred_info['column']
-                    if column != label_column:
-                        predicates.append((pred_uri, SparqlTranslator._coalesce_cast_str(f"e.{column}", dialect)))
-            
-            if predicates:
-                if class_uri in filtered_entity_types:
-                    where_cl = f"\n                WHERE {subject_expr} IN (SELECT entity_uri FROM seed_entities)"
-                else:
-                    where_cl = ""
-                entity_queries.append(f"""
-                    {SparqlTranslator._unpivot_select(subject_expr, predicates, f'{from_clause} AS e', where_cl, dialect)}""")
-        
-        # Step 3: Build relationship queries (only where at least one end is a filtered entity)
-        rel_queries = []
-        for rel in (relationship_mappings or []):
-            predicate = rel.get('predicate', '')
-            if relationship_filter:
-                if not any(predicate == f or SparqlTranslator._predicate_local_name_key(predicate) == SparqlTranslator._predicate_local_name_key(f) for f in relationship_filter):
-                    continue
-            
-            rel_sql = (rel.get('sql_query') or '').strip()
-            subject_template = rel.get('subject_template', '')
-            object_template = rel.get('object_template', '')
-            subject_column = rel.get('subject_column')
-            object_column = rel.get('object_column')
-            
-            if not rel_sql or not subject_column or not object_column:
-                continue
-            
-            rel_from = SparqlTranslator._source_from_alias(rel_sql, source_alias, "r")
-            subj_expr = get_subject_expr(subject_template, subject_column, "r")
-            obj_expr = get_subject_expr(object_template, object_column, "r")
-            
-            rel_queries.append(f"""
-                SELECT {subj_expr} AS subject, '{predicate}' AS predicate, {obj_expr} AS object
-                FROM {rel_from}
-                WHERE {subj_expr} IN (SELECT entity_uri FROM seed_entities)
-                   OR {obj_expr} IN (SELECT entity_uri FROM seed_entities)""")
-        
-        # Build final SQL merging source CTEs with seed_entities
-        limit_clause = f"LIMIT {limit}" if limit else ""
+        seed_unions = SparqlTranslator._filtered_query_build_seed_unions(
+            mappings,
+            filter_class_uris,
+            filter_local_names,
+            filtered_entity_types,
+            source_alias,
+            value_filters,
+            dialect,
+        )
+        entity_queries = SparqlTranslator._filtered_query_build_entity_unions(
+            mappings,
+            filter_class_uris,
+            filter_local_names,
+            filtered_entity_types,
+            source_alias,
+            dialect,
+        )
+        rel_queries = SparqlTranslator._filtered_query_build_relationship_unions(
+            relationship_mappings,
+            source_alias,
+            relationship_filter,
+            dialect,
+        )
+        sql = SparqlTranslator._filtered_query_assemble_with_sql(cte_defs, seed_unions, entity_queries, rel_queries, limit)
 
-        cte_parts = []
-        for alias, sql_text in cte_defs:
-            if "SELECT" in sql_text.upper():
-                cte_parts.append(f"  {alias} AS (\n    {sql_text}\n  )")
-            else:
-                cte_parts.append(f"  {alias} AS (\n    SELECT * FROM {sql_text}\n  )")
-        seed_cte = f"  seed_entities AS (\n    {' UNION ALL '.join(seed_unions) if seed_unions else 'SELECT NULL AS entity_uri WHERE 1=0'}\n  )"
-        cte_parts.append(seed_cte)
-
-        sql = f"""WITH\n{','.join(cte_parts)}
-    SELECT subject, predicate, object FROM (
-        {' UNION ALL '.join(entity_queries + rel_queries)}
-    ) final_results
-    {limit_clause}"""
-        
         logger.debug("Generated CTE-based SQL with %d source CTEs (%s chars)", len(cte_defs), len(sql))
         
         return {
@@ -791,6 +869,265 @@ class SparqlTranslator:
             'message': f'Query with value filters and relationships'
         }
 
+    @staticmethod
+    def _generic_triples_configure_predicate_filter(predicate_filter, value_filters):
+        """Return (predicate_filter_set, predicate_filter_local) honoring value_filters interaction."""
+        predicate_filter_set = None
+        predicate_filter_local = None
+        if predicate_filter and not value_filters:
+            predicate_filter_set = set(p.lower() for p in predicate_filter)
+            predicate_filter_local = set(SparqlTranslator._predicate_local_name_key(p) for p in predicate_filter)
+            logger.debug("Filtering by predicate URIs: %s", predicate_filter)
+            logger.debug("Predicate filter local names: %s", predicate_filter_local)
+        elif predicate_filter and value_filters:
+            logger.debug(
+                "IGNORING predicate filter because value_filters are present (user wants ALL attributes of filtered entities)"
+            )
+        return predicate_filter_set, predicate_filter_local
+
+    @staticmethod
+    def _generic_triples_predicate_output_allowed(pred_uri, predicate_filter_set, predicate_filter_local) -> bool:
+        if predicate_filter_set is None:
+            return True
+        if pred_uri.lower() in predicate_filter_set:
+            return True
+        return bool(
+            predicate_filter_local
+            and SparqlTranslator._predicate_local_name_key(pred_uri) in predicate_filter_local
+        )
+
+    @staticmethod
+    def _generic_triples_relationship_template_class_keys(relationship_filter, relationship_mappings) -> set:
+        relationship_class_names = set()
+        if not (relationship_filter and relationship_mappings):
+            return relationship_class_names
+        for rel in relationship_mappings:
+            predicate = rel.get('predicate', '')
+            if not any(
+                predicate == filter_uri
+                or SparqlTranslator._predicate_local_name_key(predicate)
+                == SparqlTranslator._predicate_local_name_key(filter_uri)
+                for filter_uri in relationship_filter
+            ):
+                continue
+            subj_class = SparqlTranslator._entity_class_key_from_uri_template(rel.get('subject_template', ''))
+            obj_class = SparqlTranslator._entity_class_key_from_uri_template(rel.get('object_template', ''))
+            if subj_class:
+                relationship_class_names.add(subj_class)
+            if obj_class:
+                relationship_class_names.add(obj_class)
+        if relationship_class_names:
+            logger.debug("Classes from included relationships: %s", relationship_class_names)
+        return relationship_class_names
+
+    @staticmethod
+    def _generic_triples_emit_entity_mapping(
+        class_uri, filter_class_uris, filter_local_names, relationship_class_names
+    ) -> bool:
+        if filter_class_uris is None:
+            return True
+        class_local = SparqlTranslator._predicate_local_name_key(class_uri)
+        if class_uri in filter_class_uris:
+            logger.debug("Including class (exact match): %s", class_uri)
+            return True
+        if filter_local_names and class_local in filter_local_names:
+            logger.debug("Including class (local name match): %s", class_uri)
+            return True
+        if relationship_class_names and class_local in relationship_class_names:
+            logger.debug("Including class (from relationship templates): %s", class_uri)
+            return True
+        logger.debug("SKIPPING class (no match): %s", class_uri)
+        return False
+
+    @staticmethod
+    def _generic_triples_stack_predicates_for_mapping(
+        mapping, class_uri, label_column, dialect, predicate_filter_set, predicate_filter_local
+    ) -> list:
+        predicates = []
+        rdf_type_uri = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+        if SparqlTranslator._generic_triples_predicate_output_allowed(
+            rdf_type_uri, predicate_filter_set, predicate_filter_local
+        ):
+            predicates.append((rdf_type_uri, f"'{class_uri}'"))
+        rdfs_label_uri = 'http://www.w3.org/2000/01/rdf-schema#label'
+        if label_column and SparqlTranslator._generic_triples_predicate_output_allowed(
+            rdfs_label_uri, predicate_filter_set, predicate_filter_local
+        ):
+            predicates.append((rdfs_label_uri, SparqlTranslator._coalesce_cast_str(label_column, dialect)))
+        for pred_uri, pred_info in mapping.get('predicates', {}).items():
+            if pred_info.get('type') == 'column':
+                column = pred_info['column']
+                if column != label_column and SparqlTranslator._generic_triples_predicate_output_allowed(
+                    pred_uri, predicate_filter_set, predicate_filter_local
+                ):
+                    predicates.append((pred_uri, SparqlTranslator._coalesce_cast_str(column, dialect)))
+        return predicates
+
+    @staticmethod
+    def _generic_triples_value_filter_where_clause(
+        mapping, label_column, value_filters, relationship_filter, class_uri, dialect
+    ) -> str:
+        where_conditions = []
+        if value_filters and not relationship_filter:
+            pred_to_column = SparqlTranslator._mapping_predicate_uri_to_column(mapping)
+            where_conditions = SparqlTranslator._sql_conditions_for_value_filters(
+                pred_to_column, value_filters, "", dialect
+            )
+            for vf in value_filters:
+                pred_uri = vf['predicate_uri']
+                column = pred_to_column.get(pred_uri) or pred_to_column.get(
+                    SparqlTranslator._predicate_local_name_key(pred_uri)
+                )
+                if column:
+                    logger.debug("Value filter condition: %s %s '%s'", column, vf['operator'], vf['value'])
+        elif value_filters and relationship_filter:
+            logger.debug(
+                "Skipping value filter for entity %s (relationships included - will get ALL entities for enrichment)",
+                class_uri,
+            )
+        if not where_conditions:
+            return ""
+        return f"\n                WHERE {' AND '.join(where_conditions)}"
+
+    @staticmethod
+    def _generic_triples_relationship_matches_filter(
+        rel_uri,
+        subject_template,
+        object_template,
+        relationship_filter,
+        filter_class_uris,
+        filter_local_names,
+    ) -> bool:
+        if relationship_filter is not None:
+            for filter_uri in relationship_filter:
+                if rel_uri == filter_uri:
+                    return True
+                if SparqlTranslator._predicate_local_name_key(rel_uri) == SparqlTranslator._predicate_local_name_key(
+                    filter_uri
+                ):
+                    return True
+            return False
+        if filter_class_uris is not None:
+            subj_class = SparqlTranslator._entity_class_key_from_uri_template(subject_template)
+            obj_class = SparqlTranslator._entity_class_key_from_uri_template(object_template)
+            subj_matches = subj_class and subj_class in filter_local_names
+            obj_matches = obj_class and obj_class in filter_local_names
+            if not subj_matches or not obj_matches:
+                logger.debug(
+                    "  Relationship connects %s -> %s, but only %s are filtered",
+                    subj_class,
+                    obj_class,
+                    filter_local_names,
+                )
+                return False
+            return True
+        return True
+
+    @staticmethod
+    def _generic_triples_append_entity_unions(
+        mappings,
+        source_alias,
+        filter_class_uris,
+        filter_local_names,
+        relationship_class_names,
+        predicate_filter_set,
+        predicate_filter_local,
+        value_filters,
+        relationship_filter,
+        dialect,
+        table_queries: list,
+    ) -> None:
+        for class_uri, mapping in (mappings or {}).items():
+            if not SparqlTranslator._generic_triples_emit_entity_mapping(
+                class_uri, filter_class_uris, filter_local_names, relationship_class_names
+            ):
+                continue
+            table = mapping.get('table')
+            sql_query = (mapping.get('sql_query') or '').strip()
+            source_key = sql_query or table
+            if not source_key:
+                continue
+            from_clause = SparqlTranslator._source_from_alias(source_key, source_alias)
+            uri_template = mapping.get('uri_template', '')
+            id_column = mapping.get('id_column', 'id')
+            label_column = mapping.get('label_column', '')
+            logger.debug("Entity URI template for %s: %s", class_uri, uri_template)
+            subject_expr = SparqlTranslator._subject_expr_from_template(uri_template, id_column, dialect=dialect)
+            predicates = SparqlTranslator._generic_triples_stack_predicates_for_mapping(
+                mapping, class_uri, label_column, dialect, predicate_filter_set, predicate_filter_local
+            )
+            where_clause = SparqlTranslator._generic_triples_value_filter_where_clause(
+                mapping, label_column, value_filters, relationship_filter, class_uri, dialect
+            )
+            if len(predicates) > 0:
+                table_queries.append(f"""
+                    {SparqlTranslator._unpivot_select(subject_expr, predicates, from_clause, where_clause, dialect)}
+                """)
+
+    @staticmethod
+    def _generic_triples_log_relationship_inclusion_scope(relationship_filter, filter_class_uris):
+        if relationship_filter:
+            logger.debug("Including relationships that match explicit filter: %s", relationship_filter)
+        elif filter_class_uris:
+            logger.debug("Including ONLY relationships connecting filtered entity types: %s", filter_class_uris)
+        else:
+            logger.debug("Including all relationships (no filter)")
+
+    @staticmethod
+    def _generic_triples_finalize_sql_payload(table_queries, is_distinct, limit, cte_defs) -> dict:
+        if not table_queries:
+            raise ValidationError('No tables found in R2RML mapping.')
+        distinct_str = "DISTINCT " if is_distinct else ""
+        limit_clause = f"\n    LIMIT {limit}" if limit else ""
+        with_clause = SparqlTranslator._build_with_clause(cte_defs)
+        sql = f"""{with_clause}SELECT {distinct_str}subject, predicate, object FROM (
+            {' UNION ALL '.join(table_queries)}
+        ) AS triples
+        WHERE object IS NOT NULL AND TRIM(object) != ''{limit_clause}"""
+        logger.debug("Generated SQL with %d CTEs (length: %s chars):", len(cte_defs), len(sql))
+        for i, tq in enumerate(table_queries):
+            logger.debug("Subquery %s: %s...", i, tq[:300])
+        return {'success': True, 'sql': sql, 'variables': ['subject', 'predicate', 'object']}
+
+    @staticmethod
+    def _generic_triples_append_relationship_unions(
+        relationship_mappings, source_alias, relationship_filter, filter_class_uris, filter_local_names, dialect, table_queries: list
+    ) -> None:
+        for rel in (relationship_mappings or []):
+            predicate = rel.get('predicate', '')
+            subject_template = rel.get('subject_template', '')
+            object_template = rel.get('object_template', '')
+            if not SparqlTranslator._generic_triples_relationship_matches_filter(
+                predicate, subject_template, object_template, relationship_filter, filter_class_uris, filter_local_names
+            ):
+                logger.debug("Skipping relationship (entities not in filter): %s", predicate)
+                continue
+            logger.debug("Including relationship: %s", predicate)
+            rel_sql_query = (rel.get('sql_query') or '').strip()
+            predicate = rel.get('predicate')
+            subject_template = rel.get('subject_template', '')
+            object_template = rel.get('object_template', '')
+            subject_column = rel.get('subject_column')
+            object_column = rel.get('object_column')
+            if not rel_sql_query or not predicate or not subject_column or not object_column:
+                continue
+            rel_from = SparqlTranslator._source_from_alias(rel_sql_query, source_alias, "rel_subquery")
+            subject_expr = SparqlTranslator._subject_expr_from_template(subject_template, subject_column, dialect=dialect)
+            object_expr = SparqlTranslator._subject_expr_from_template(object_template, object_column, dialect=dialect)
+            logger.debug("Relationship URI templates for %s:", predicate)
+            logger.debug("  subject_template: %s", subject_template)
+            logger.debug("  object_template: %s", object_template)
+            logger.debug("  subject_expr: %s", subject_expr)
+            logger.debug("  object_expr: %s", object_expr)
+            rel_query = f"""
+                SELECT 
+                    {subject_expr} AS subject,
+                    '{predicate}' AS predicate,
+                    {object_expr} AS object
+                FROM {rel_from}
+            """
+            table_queries.append(rel_query)
+            logger.debug("Added relationship query for %s", predicate)
 
     @staticmethod
     def _build_generic_triples_query(mappings, select_vars, is_distinct, limit, relationship_mappings=None, filter_class_uris=None, predicate_filter=None, value_filters=None, relationship_filter=None, dialect=DIALECT_SPARK):
@@ -818,285 +1155,47 @@ class SparqlTranslator:
         # and let the user see the complete graph with relationships
         
         table_queries = []
-
-        # Helper to extract class name from URI template (e.g., "http://example.org/Person/{id}" -> "person")
-        def get_class_from_template(template):
-            if not template:
-                return None
-            clean = re.sub(r'\{[^}]+\}$', '', template).rstrip('/')
-            # Get the last path segment (class name)
-            if '/' in clean:
-                return clean.split('/')[-1].lower()
-            return None
-        
-        # Build filter set with both full URIs and local names for classes
         filter_local_names = None
         if filter_class_uris:
             filter_local_names = set(SparqlTranslator._predicate_local_name_key(uri) for uri in filter_class_uris)
             logger.debug("Filtering by class URIs: %s", filter_class_uris)
             logger.debug("Filter local names: %s", filter_local_names)
-        
-        # When relationships are included, we need to also include entity classes used in those relationships
-        # This is crucial for recursive relationships (e.g., Person -> CollaborateWith -> Person)
-        # where the target entity might not be in the original filter but needs its attributes
-        relationship_class_names = set()
-        if relationship_filter and relationship_mappings:
-            for rel in relationship_mappings:
-                predicate = rel.get('predicate', '')
-                # Check if this relationship is in the filter
-                matches = False
-                for filter_uri in relationship_filter:
-                    if predicate == filter_uri or SparqlTranslator._predicate_local_name_key(predicate) == SparqlTranslator._predicate_local_name_key(filter_uri):
-                        matches = True
-                        break
-                if matches:
-                    # Extract class names from subject and object templates
-                    subj_class = get_class_from_template(rel.get('subject_template', ''))
-                    obj_class = get_class_from_template(rel.get('object_template', ''))
-                    if subj_class:
-                        relationship_class_names.add(subj_class)
-                    if obj_class:
-                        relationship_class_names.add(obj_class)
-            if relationship_class_names:
-                logger.debug("Classes from included relationships: %s", relationship_class_names)
-        
-        # Build predicate filter set with both full URIs and local names
-        # IMPORTANT: When value_filters are present, ignore predicate_filter
-        # because the user wants to filter BY an attribute, not restrict OUTPUT to that attribute
-        predicate_filter_set = None
-        predicate_filter_local = None
-        if predicate_filter and not value_filters:
-            predicate_filter_set = set(p.lower() for p in predicate_filter)
-            predicate_filter_local = set(SparqlTranslator._predicate_local_name_key(p) for p in predicate_filter)
-            logger.debug("Filtering by predicate URIs: %s", predicate_filter)
-            logger.debug("Predicate filter local names: %s", predicate_filter_local)
-        elif predicate_filter and value_filters:
-            logger.debug("IGNORING predicate filter because value_filters are present (user wants ALL attributes of filtered entities)")
-        
-        def predicate_matches_filter(pred_uri):
-            """Check if a predicate URI matches the filter."""
-            if predicate_filter_set is None:
-                return True  # No filter, include all
-            # Check exact match (case-insensitive)
-            if pred_uri.lower() in predicate_filter_set:
-                return True
-            # Check local name match
-            if predicate_filter_local and SparqlTranslator._predicate_local_name_key(pred_uri) in predicate_filter_local:
-                return True
-            return False
-        
-        # Collect CTEs to deduplicate source table scans
+
+        relationship_class_names = SparqlTranslator._generic_triples_relationship_template_class_keys(
+            relationship_filter, relationship_mappings
+        )
+        predicate_filter_set, predicate_filter_local = SparqlTranslator._generic_triples_configure_predicate_filter(
+            predicate_filter, value_filters
+        )
         cte_defs, source_alias = SparqlTranslator._collect_source_ctes(mappings, relationship_mappings)
 
-        # Entity mappings (rdf:type, rdfs:label, and all attributes)
-        for class_uri, mapping in (mappings or {}).items():
-            # If filter_class_uris is specified, only include matching classes
-            if filter_class_uris is not None:
-                class_local = SparqlTranslator._predicate_local_name_key(class_uri)
-                # Check exact URI match
-                if class_uri in filter_class_uris:
-                    logger.debug("Including class (exact match): %s", class_uri)
-                # Check local name match (more flexible)
-                elif filter_local_names and class_local in filter_local_names:
-                    logger.debug("Including class (local name match): %s", class_uri)
-                # IMPORTANT: Also include classes used in relationships (for recursive relationships)
-                elif relationship_class_names and class_local in relationship_class_names:
-                    logger.debug("Including class (from relationship templates): %s", class_uri)
-                else:
-                    logger.debug("SKIPPING class (no match): %s", class_uri)
-                    continue
-            table = mapping.get('table')
-            sql_query = (mapping.get('sql_query') or '').strip()
-            source_key = sql_query or table
-            if not source_key:
-                continue
-            from_clause = SparqlTranslator._source_from_alias(source_key, source_alias)
-            
-            uri_template = mapping.get('uri_template', '')
-            id_column = mapping.get('id_column', 'id')
-            label_column = mapping.get('label_column', '')
-            
-            logger.debug("Entity URI template for %s: %s", class_uri, uri_template)
-            
-            subject_expr = SparqlTranslator._subject_expr_from_template(uri_template, id_column, dialect=dialect)
-            
-            predicates = []
-            
-            rdf_type_uri = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
-            if predicate_matches_filter(rdf_type_uri):
-                predicates.append((rdf_type_uri, f"'{class_uri}'"))
-            
-            rdfs_label_uri = 'http://www.w3.org/2000/01/rdf-schema#label'
-            if label_column and predicate_matches_filter(rdfs_label_uri):
-                predicates.append((rdfs_label_uri, SparqlTranslator._coalesce_cast_str(label_column, dialect)))
-            
-            for pred_uri, pred_info in mapping.get('predicates', {}).items():
-                if pred_info.get('type') == 'column':
-                    column = pred_info['column']
-                    if column != label_column and predicate_matches_filter(pred_uri):
-                        predicates.append((pred_uri, SparqlTranslator._coalesce_cast_str(column, dialect)))
-            
-            # Build WHERE conditions from value filters
-            # IMPORTANT: When relationships are included, we want ALL entities to have attributes
-            # (so related entities are also enriched), not just filtered ones.
-            # The filtering is done via relationships connecting to filtered entities.
-            where_conditions = []
-            should_apply_value_filter = value_filters and not relationship_filter
-            
-            if value_filters and should_apply_value_filter:
-                # Build mapping from predicate URI to column for this entity
-                pred_to_column = {}
-                if label_column:
-                    pred_to_column['http://www.w3.org/2000/01/rdf-schema#label'] = label_column
-                for pred_uri, pred_info in mapping.get('predicates', {}).items():
-                    if pred_info.get('type') == 'column':
-                        pred_to_column[pred_uri] = pred_info['column']
-                        # Also map by local name
-                        local_name = SparqlTranslator._predicate_local_name_key(pred_uri)
-                        pred_to_column[local_name] = pred_info['column']
-                
-                # Generate WHERE conditions for each value filter
-                for vf in value_filters:
-                    pred_uri = vf['predicate_uri']
-                    column = pred_to_column.get(pred_uri) or pred_to_column.get(SparqlTranslator._predicate_local_name_key(pred_uri))
-                    
-                    if column:
-                        operator = vf['operator']
-                        value = vf['value'].replace("'", "''")  # Escape single quotes
-                        
-                        if operator == 'contains':
-                            where_conditions.append(f"LOWER({column}) LIKE '%{value}%'")
-                        elif operator == 'equals':
-                            where_conditions.append(f"{SparqlTranslator._cast_str(column, dialect)} = '{value}'")
-                        elif operator == 'starts':
-                            where_conditions.append(f"LOWER({column}) LIKE '{value}%'")
-                        elif operator == 'ends':
-                            where_conditions.append(f"LOWER({column}) LIKE '%{value}'")
-                        elif operator == 'gt':
-                            where_conditions.append(f"{column} > {value}")
-                        elif operator == 'lt':
-                            where_conditions.append(f"{column} < {value}")
-                        elif operator == 'gte':
-                            where_conditions.append(f"{column} >= {value}")
-                        elif operator == 'lte':
-                            where_conditions.append(f"{column} <= {value}")
-                        
-                        logger.debug("Value filter condition: %s %s '%s'", column, operator, value)
-            elif value_filters and relationship_filter:
-                logger.debug("Skipping value filter for entity %s (relationships included - will get ALL entities for enrichment)", class_uri)
-            
-            where_clause = ""
-            if where_conditions:
-                where_clause = f"\n                WHERE {' AND '.join(where_conditions)}"
-            
-            if len(predicates) > 0:
-                table_queries.append(f"""
-                    {SparqlTranslator._unpivot_select(subject_expr, predicates, from_clause, where_clause, dialect)}
-                """)
-        
-        # Relationship mappings - include relationships that connect the filtered entity types
-        # When filter_class_uris is set, include ONLY relationships where BOTH subject and object match filtered types
-        if relationship_filter:
-            logger.debug("Including relationships that match explicit filter: %s", relationship_filter)
-        elif filter_class_uris:
-            logger.debug("Including ONLY relationships connecting filtered entity types: %s", filter_class_uris)
-        else:
-            logger.debug("Including all relationships (no filter)")
-        
-        # Helper to check if a relationship matches the filter
-        def relationship_matches_filter(rel_uri, subject_template, object_template):
-            # If explicit relationship filter is set, use it
-            if relationship_filter is not None:
-                for filter_uri in relationship_filter:
-                    if rel_uri == filter_uri:
-                        return True
-                    if SparqlTranslator._predicate_local_name_key(rel_uri) == SparqlTranslator._predicate_local_name_key(filter_uri):
-                        return True
-                return False
-            
-            # When filtering by entity types, only include relationships where
-            # BOTH subject and object entity types are in the filtered set
-            if filter_class_uris is not None:
-                # Extract entity type from templates
-                subj_class = get_class_from_template(subject_template)
-                obj_class = get_class_from_template(object_template)
-                
-                # Check if both subject and object classes are in the filter
-                subj_matches = subj_class and subj_class in filter_local_names
-                obj_matches = obj_class and obj_class in filter_local_names
-                
-                if not subj_matches or not obj_matches:
-                    logger.debug("  Relationship connects %s -> %s, but only %s are filtered", subj_class, obj_class, filter_local_names)
-                    return False
-                return True
-            
-            # No filter - include all relationships
-            return True
-        
-        for rel in (relationship_mappings or []):
-            predicate = rel.get('predicate', '')
-            subject_template = rel.get('subject_template', '')
-            object_template = rel.get('object_template', '')
-            
-            # Skip relationships that don't match the filter
-            if not relationship_matches_filter(predicate, subject_template, object_template):
-                logger.debug("Skipping relationship (entities not in filter): %s", predicate)
-                continue
-            
-            logger.debug("Including relationship: %s", predicate)
-            rel_sql_query = (rel.get('sql_query') or '').strip()
-            predicate = rel.get('predicate')
-            subject_template = rel.get('subject_template', '')
-            object_template = rel.get('object_template', '')
-            subject_column = rel.get('subject_column')
-            object_column = rel.get('object_column')
-            
-            if not rel_sql_query or not predicate or not subject_column or not object_column:
-                continue
-            
-            rel_from = SparqlTranslator._source_from_alias(rel_sql_query, source_alias, "rel_subquery")
+        SparqlTranslator._generic_triples_append_entity_unions(
+            mappings,
+            source_alias,
+            filter_class_uris,
+            filter_local_names,
+            relationship_class_names,
+            predicate_filter_set,
+            predicate_filter_local,
+            value_filters,
+            relationship_filter,
+            dialect,
+            table_queries,
+        )
 
-            subject_expr = SparqlTranslator._subject_expr_from_template(subject_template, subject_column, dialect=dialect)
-            object_expr = SparqlTranslator._subject_expr_from_template(object_template, object_column, dialect=dialect)
-            
-            logger.debug("Relationship URI templates for %s:", predicate)
-            logger.debug("  subject_template: %s", subject_template)
-            logger.debug("  object_template: %s", object_template)
-            logger.debug("  subject_expr: %s", subject_expr)
-            logger.debug("  object_expr: %s", object_expr)
-            
-            rel_query = f"""
-                SELECT 
-                    {subject_expr} AS subject,
-                    '{predicate}' AS predicate,
-                    {object_expr} AS object
-                FROM {rel_from}
-            """
-            table_queries.append(rel_query)
-            logger.debug("Added relationship query for %s", predicate)
-        
+        SparqlTranslator._generic_triples_log_relationship_inclusion_scope(relationship_filter, filter_class_uris)
+        SparqlTranslator._generic_triples_append_relationship_unions(
+            relationship_mappings,
+            source_alias,
+            relationship_filter,
+            filter_class_uris,
+            filter_local_names,
+            dialect,
+            table_queries,
+        )
+
         logger.debug("Total table_queries: %s", len(table_queries))
-        
-        if not table_queries:
-            raise ValidationError('No tables found in R2RML mapping.')
-        
-        distinct_str = "DISTINCT " if is_distinct else ""
-        limit_clause = f"\n    LIMIT {limit}" if limit else ""
-        with_clause = SparqlTranslator._build_with_clause(cte_defs)
-        sql = f"""{with_clause}SELECT {distinct_str}subject, predicate, object FROM (
-            {' UNION ALL '.join(table_queries)}
-        ) AS triples
-        WHERE object IS NOT NULL AND TRIM(object) != ''{limit_clause}"""
-        
-        logger.debug("Generated SQL with %d CTEs (length: %s chars):", len(cte_defs), len(sql))
-        for i, tq in enumerate(table_queries):
-            logger.debug("Subquery %s: %s...", i, tq[:300])
-        
-        return {
-            'success': True,
-            'sql': sql,
-            'variables': ['subject', 'predicate', 'object']
-        }
+        return SparqlTranslator._generic_triples_finalize_sql_payload(table_queries, is_distinct, limit, cte_defs)
 
 
     @staticmethod
@@ -1117,77 +1216,38 @@ class SparqlTranslator:
         else:
             return None
 
+    @staticmethod
+    def _find_relationship_mapping_by_predicate(relationship_mappings, pred_uri):
+        for rel in relationship_mappings or []:
+            if SparqlTranslator._relationship_uri_matches(rel.get('predicate', ''), pred_uri):
+                return rel
+        return None
 
     @staticmethod
-    def _build_spark_sql(patterns, optional_patterns, mappings, select_vars, is_distinct, limit, relationship_mappings=None, bind_values=None, predicate_filter=None, value_filters=None, relationship_filter=None, dialect=DIALECT_SPARK):
-        """Build SQL from parsed patterns using R2RML mappings."""
-        
-        logger.debug("_build_spark_sql called with %s patterns, select_vars=%s", len(patterns), select_vars)
-        if predicate_filter:
-            logger.debug("Predicate filter: %s", predicate_filter)
-        if value_filters:
-            logger.debug("Value filters: %s", len(value_filters))
-        if relationship_filter:
-            logger.debug("Relationship filter: %s", relationship_filter)
-        
-        # Check for pure generic triple pattern: SELECT ?s ?p ?o WHERE { ?s ?p ?o }
-        if SparqlTranslator._is_generic_triple_pattern(patterns, select_vars):
-            logger.debug("Using generic triple pattern")
-            # If we have BOTH value filters AND relationships, use the CTE-based query
-            # This ensures filtered entities AND their related entities are returned (not ALL entities)
-            if value_filters and relationship_filter:
-                logger.debug("Using CTE-based filtered query with relationships")
-                return SparqlTranslator._build_filtered_with_relationships_query(
-                    mappings, select_vars, is_distinct, limit, relationship_mappings,
-                    None, predicate_filter, value_filters, relationship_filter, dialect=dialect
-                )
-            return SparqlTranslator._build_generic_triples_query(mappings, select_vars, is_distinct, limit, relationship_mappings, None, predicate_filter, value_filters, relationship_filter, dialect=dialect)
-        
-        # Check for type-constrained triple pattern: SELECT ?s ?p ?o WHERE { ?s rdf:type <Entity> . ?s ?p ?o }
-        logger.debug("Checking for type-constrained pattern...")
-        filter_class_uris = SparqlTranslator._is_type_constrained_triple_pattern(patterns)
-        if filter_class_uris:
-            logger.debug("Detected type-constrained triple pattern for classes: %s", filter_class_uris)
-            # If we have BOTH value filters AND relationships, use the CTE-based query
-            if value_filters and relationship_filter:
-                logger.debug("Using CTE-based filtered query with relationships (type-constrained)")
-                return SparqlTranslator._build_filtered_with_relationships_query(
-                    mappings, select_vars, is_distinct, limit, relationship_mappings,
-                    filter_class_uris, predicate_filter, value_filters, relationship_filter, dialect=dialect
-                )
-            return SparqlTranslator._build_generic_triples_query(mappings, select_vars, is_distinct, limit, relationship_mappings, filter_class_uris, predicate_filter, value_filters, relationship_filter, dialect=dialect)
-        
-        logger.debug("Falling through to standard SQL builder")
-        
+    def _spark_populate_var_mappings_from_patterns(patterns, mappings, bind_values):
+        """Resolve SPARQL variables to R2RML entity mappings (rdf:type or predicate match)."""
         var_to_class = {}
         var_to_table = {}
         var_to_table_alias = {}
         var_to_mapping = {}
-        
-        # Initialize bind_values if None
         if bind_values is None:
             bind_values = {}
-        
         rdf_type = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
-        
         for pattern in patterns:
             if pattern['predicate'] == rdf_type and not pattern['object_is_var']:
                 class_uri = pattern['object']
                 var_name = pattern['subject_var']
-                
                 if class_uri in mappings:
                     mapping = mappings[class_uri]
                     var_to_class[var_name] = class_uri
                     var_to_mapping[var_name] = mapping
                     var_to_table[var_name] = SparqlTranslator._get_table_source(mapping, f"t_{var_name}")
                     var_to_table_alias[var_name] = f"t_{var_name}" if mapping.get('sql_query') else mapping.get('table')
-        
         if not var_to_class:
             for pattern in patterns:
                 if not pattern['predicate_is_var'] and pattern['subject_is_var']:
                     pred_uri = pattern['predicate']
                     var_name = pattern['subject_var']
-                    
                     for class_uri, mapping in mappings.items():
                         if pred_uri in mapping.get('predicates', {}):
                             if var_name not in var_to_class:
@@ -1196,403 +1256,318 @@ class SparqlTranslator:
                                 var_to_table[var_name] = SparqlTranslator._get_table_source(mapping, f"t_{var_name}")
                                 var_to_table_alias[var_name] = f"t_{var_name}" if mapping.get('sql_query') else mapping.get('table')
                             break
-        
         if not var_to_table or all(v is None for v in var_to_table.values()):
             raise ValidationError(
                 'Could not determine which tables to query. Ensure your mapping has table or sql_query defined.'
             )
-        
-        # Build SELECT columns
-        select_columns = []
-        all_vars = set()
-        
-        for pattern in patterns + optional_patterns:
-            if pattern['subject_is_var']:
-                all_vars.add(pattern['subject_var'])
-            if pattern['predicate_is_var']:
-                all_vars.add(pattern['predicate_var'])
-            if pattern['object_is_var']:
-                all_vars.add(pattern['object_var'])
-        
-        if select_vars is None:
-            select_vars = list(all_vars)
-        
-        var_to_column = {}
-        from_tables = []  # Changed to list to preserve order and handle subqueries
-        where_conditions = []
-        
-        # Add BIND values as literal columns
-        for var_name, value in bind_values.items():
-            var_to_column[var_name] = f"'{value}'"
-            logger.debug("Added BIND value to var_to_column: %s = '%s'", var_name, value)
-        
-        # Collect relationship info to determine which entities should be joined vs primary
-        relationship_patterns = []
-        for pattern in patterns + optional_patterns:
-            if (pattern['subject_is_var'] and pattern['object_is_var'] and
-                pattern['subject_var'] in var_to_mapping and pattern['object_var'] in var_to_mapping and
-                not pattern['predicate_is_var'] and pattern['predicate'] != rdf_type):
-                relationship_patterns.append(pattern)
-        
-        # Determine which entities are "joined" (object of a relationship)
-        joined_entity_vars = set()
-        for rp in relationship_patterns:
-            # The object entity of a relationship should be joined, not in main FROM
-            joined_entity_vars.add(rp['object_var'])
-        
-        # Add entity tables to FROM - but only primary entities (not those joined via relationships)
-        for var_name, mapping in var_to_mapping.items():
-            table_source = var_to_table.get(var_name)
-            table_alias = var_to_table_alias.get(var_name)
-            
-            # Only add to FROM if this is NOT a joined entity (or if no relationships exist)
-            if table_source and table_source not in from_tables:
-                if var_name not in joined_entity_vars or len(relationship_patterns) == 0:
-                    from_tables.append(table_source)
+        return var_to_class, var_to_table, var_to_table_alias, var_to_mapping, bind_values, rdf_type
+
+    @staticmethod
+    def _spark_mandatory_entity_to_entity_relationship_join(
+        pattern, relationship_mappings, var_to_mapping, var_to_table_alias, joined_entity_vars, from_tables
+    ) -> bool:
+        if not (
+            pattern['subject_is_var']
+            and pattern['object_is_var']
+            and pattern['subject_var'] in var_to_mapping
+            and pattern['object_var'] in var_to_mapping
+            and not pattern['predicate_is_var']
+        ):
+            return False
+        pred_uri = pattern['predicate']
+        subject_alias = var_to_table_alias.get(pattern['subject_var'])
+        object_alias = var_to_table_alias.get(pattern['object_var'])
+        subject_mapping = var_to_mapping[pattern['subject_var']]
+        object_mapping = var_to_mapping[pattern['object_var']]
+        logger.debug(
+            "Detected entity-to-entity relationship pattern: %s --%s--> %s",
+            pattern['subject_var'],
+            pred_uri,
+            pattern['object_var'],
+        )
+        rel = SparqlTranslator._find_relationship_mapping_by_predicate(relationship_mappings, pred_uri)
+        if not rel:
+            return True
+        rel_sql = rel.get('sql_query', '').strip()
+        source_col = rel.get('subject_column')
+        target_col = rel.get('object_column')
+        logger.debug("Found relationship mapping: sql=%s...", rel_sql[:50] if rel_sql else 'N/A')
+        if rel_sql and source_col and target_col:
+            rel_alias = f"rel_{pattern['subject_var']}_{pattern['object_var']}"
+            subject_id = subject_mapping.get('id_column', 'id')
+            object_id = object_mapping.get('id_column', 'id')
+            if pattern['object_var'] in joined_entity_vars:
+                rel_join = (
+                    f"INNER JOIN ({rel_sql}) AS {rel_alias} ON {subject_alias}.{subject_id} = {rel_alias}.{source_col}"
+                )
+                from_tables.append(rel_join)
+                object_sql = object_mapping.get('sql_query', '').strip()
+                if object_sql:
+                    entity_join = f"INNER JOIN ({object_sql}) AS {object_alias} ON {rel_alias}.{target_col} = {object_alias}.{object_id}"
                 else:
-                    logger.debug("Entity %s will be joined via relationship, not adding to main FROM", var_name)
-                
-            if table_alias:
-                if mapping.get('uri_template'):
-                    template = mapping['uri_template']
-                    id_col = mapping.get('id_column', 'id')
-                    var_to_column[var_name] = f"CONCAT('{template.split('{')[0]}', {table_alias}.{id_col})"
-                elif mapping.get('id_column'):
-                    var_to_column[var_name] = f"{table_alias}.{mapping['id_column']}"
-        
-        # Process property patterns
-        for pattern in patterns:
-            if pattern['predicate'] == rdf_type:
-                continue
-            
-            # Check if this is a relationship join pattern (both subject and object are entity variables)
-            if (pattern['subject_is_var'] and pattern['object_is_var'] and
-                pattern['subject_var'] in var_to_mapping and pattern['object_var'] in var_to_mapping and
-                not pattern['predicate_is_var']):
-                
-                pred_uri = pattern['predicate']
-                subject_alias = var_to_table_alias.get(pattern['subject_var'])
-                object_alias = var_to_table_alias.get(pattern['object_var'])
-                subject_mapping = var_to_mapping[pattern['subject_var']]
-                object_mapping = var_to_mapping[pattern['object_var']]
-                
-                logger.debug("Detected entity-to-entity relationship pattern: %s --%s--> %s", pattern['subject_var'], pred_uri, pattern['object_var'])
-                
-                # Look for this relationship in relationship_mappings
-                if relationship_mappings:
-                    for rel in relationship_mappings:
-                        rel_pred = rel.get('predicate', '')
-                        # Match by full URI or local name
-                        pred_local = SparqlTranslator._relationship_predicate_local_name(pred_uri)
-                        rel_local = SparqlTranslator._relationship_predicate_local_name(rel_pred)
+                    entity_join = f"INNER JOIN {object_mapping.get('table')} AS {object_alias} ON {rel_alias}.{target_col} = {object_alias}.{object_id}"
+                from_tables.append(entity_join)
+                logger.debug("Added relationship + entity join: %s -> %s", rel_alias, object_alias)
+            else:
+                join_clause = (
+                    f"INNER JOIN ({rel_sql}) AS {rel_alias} ON {subject_alias}.{subject_id} = {rel_alias}.{source_col} "
+                    f"AND {object_alias}.{object_id} = {rel_alias}.{target_col}"
+                )
+                from_tables.append(join_clause)
+                logger.debug("Added relationship join: %s...", join_clause[:100])
+        return True
 
-                        if rel_pred == pred_uri or (pred_local and pred_local == rel_local):
-                            rel_sql = rel.get('sql_query', '').strip()
-                            source_col = rel.get('subject_column')
-                            target_col = rel.get('object_column')
-                            
-                            logger.debug("Found relationship mapping: sql=%s...", rel_sql[:50] if rel_sql else 'N/A')
-                            
-                            if rel_sql and source_col and target_col:
-                                rel_alias = f"rel_{pattern['subject_var']}_{pattern['object_var']}"
-                                subject_id = subject_mapping.get('id_column', 'id')
-                                object_id = object_mapping.get('id_column', 'id')
-                                
-                                # Check if object entity is "joined" (not in main FROM)
-                                if pattern['object_var'] in joined_entity_vars:
-                                    # First: Join relationship table to subject
-                                    rel_join = f"INNER JOIN ({rel_sql}) AS {rel_alias} ON {subject_alias}.{subject_id} = {rel_alias}.{source_col}"
-                                    from_tables.append(rel_join)
-                                    
-                                    # Second: Join target entity table via relationship
-                                    object_sql = object_mapping.get('sql_query', '').strip()
-                                    if object_sql:
-                                        entity_join = f"INNER JOIN ({object_sql}) AS {object_alias} ON {rel_alias}.{target_col} = {object_alias}.{object_id}"
-                                    else:
-                                        entity_join = f"INNER JOIN {object_mapping.get('table')} AS {object_alias} ON {rel_alias}.{target_col} = {object_alias}.{object_id}"
-                                    from_tables.append(entity_join)
-                                    logger.debug("Added relationship + entity join: %s -> %s", rel_alias, object_alias)
-                                else:
-                                    # Both entities in FROM, just add relationship constraint
-                                    join_clause = f"INNER JOIN ({rel_sql}) AS {rel_alias} ON {subject_alias}.{subject_id} = {rel_alias}.{source_col} AND {object_alias}.{object_id} = {rel_alias}.{target_col}"
-                                    from_tables.append(join_clause)
-                                    logger.debug("Added relationship join: %s...", join_clause[:100])
-                            break
-                continue  # Skip normal property processing for this pattern
-            
-            if pattern['subject_is_var'] and pattern['subject_var'] in var_to_mapping:
-                mapping = var_to_mapping[pattern['subject_var']]
-                table_alias = var_to_table_alias.get(pattern['subject_var'])
-                
-                if not pattern['predicate_is_var'] and table_alias:
-                    pred_uri = pattern['predicate']
-                    pred_info = mapping.get('predicates', {}).get(pred_uri)
-                    
-                    if pred_info:
-                        if pred_info.get('type') == 'column':
-                            column = pred_info['column']
-                            
-                            if pattern['object_is_var']:
-                                var_to_column[pattern['object_var']] = f"{table_alias}.{column}"
-                            else:
-                                obj_value = pattern['object'].strip('"')
-                                where_conditions.append(f"{table_alias}.{column} = '{_escape_sql(obj_value)}'")
-                        
-                        elif pred_info.get('type') == 'reference':
-                            child_col = pred_info.get('child_column')
-                            parent_col = pred_info.get('parent_column')
-                            
-                            for class_uri, m in mappings.items():
-                                if pattern['object_is_var']:
-                                    obj_var = pattern['object_var']
-                                    if obj_var in var_to_mapping:
-                                        parent_table_source = var_to_table.get(obj_var)
-                                        parent_table_alias = var_to_table_alias.get(obj_var)
-                                        if parent_table_source and parent_table_alias and child_col and parent_col:
-                                            if parent_table_source not in from_tables:
-                                                from_tables.append(parent_table_source)
-                                            where_conditions.append(f"{table_alias}.{child_col} = {parent_table_alias}.{parent_col}")
-                    
-                    # Check if this is a relationship predicate (object is NOT an entity variable)
-                    elif relationship_mappings and pattern['object_is_var'] and pattern['object_var'] not in var_to_mapping:
-                        logger.debug("Main pattern: Looking for relationship predicate: %s", pred_uri)
-                        
-                        matched_rel = None
-                        for rel in relationship_mappings:
-                            rel_pred = rel.get('predicate', '')
-                            if rel_pred == pred_uri:
-                                matched_rel = rel
-                                break
-                            pred_local = SparqlTranslator._relationship_predicate_local_name(pred_uri)
-                            rel_local = SparqlTranslator._relationship_predicate_local_name(rel_pred)
-                            if pred_local and pred_local == rel_local:
-                                matched_rel = rel
-                                break
-                        
-                        if matched_rel:
-                            rel_sql = matched_rel.get('sql_query', '').strip()
-                            subject_col = matched_rel.get('subject_column')
-                            object_col = matched_rel.get('object_column')
-                            
-                            logger.debug("Found relationship for main pattern: sql=%s...", rel_sql[:50] if rel_sql else 'N/A')
-                            
-                            if rel_sql and subject_col and object_col:
-                                obj_var = pattern['object_var']
-                                rel_alias = f"rel_{obj_var.lstrip('?')}"
-                                
-                                # INNER JOIN for mandatory relationship pattern
-                                join_clause = f"INNER JOIN ({rel_sql}) AS {rel_alias} ON {table_alias}.{mapping.get('id_column', 'id')} = {rel_alias}.{subject_col}"
-                                from_tables.append(join_clause)
-                                
-                                target_mapping = var_to_mapping.get(obj_var)
-                                if target_mapping and target_mapping.get('uri_template'):
-                                    template = target_mapping['uri_template']
-                                    uri_base = template.split('{')[0]
-                                    var_to_column[obj_var] = f"CONCAT('{uri_base}', {SparqlTranslator._cast_str(f'{rel_alias}.{object_col}', dialect)})"
-                                    logger.debug("Mapped %s to URI: CONCAT('%s', %s.%s)", obj_var, uri_base, rel_alias, object_col)
-                                else:
-                                    var_to_column[obj_var] = f"{rel_alias}.{object_col}"
-                                    logger.debug("Mapped %s to raw column: %s.%s", obj_var, rel_alias, object_col)
-                                
-                                # Join the target entity table to get the label
-                                # For self-referencing relationships, the target is the same entity type
-                                target_entity_mapping = None
-                                
-                                # First check: if this is a self-referencing relationship, use the same mapping
-                                if mapping == var_to_mapping.get(pattern['subject_var']):
-                                    # Could be self-referencing - check if object column references same entity
-                                    # Strip trailing numbers and underscores from object_col
-                                    base_obj_col = re.sub(r'[_\d]+$', '', object_col)
-                                    id_col = mapping.get('id_column', '')
-                                    base_id_col = re.sub(r'[_\d]+$', '', id_col)
-                                    
-                                    if base_obj_col and base_id_col and base_obj_col == base_id_col:
-                                        target_entity_mapping = mapping
-                                        logger.debug("Self-referencing relationship detected, using same entity mapping")
-                                
-                                # Second check: match by id column similarity
-                                if not target_entity_mapping:
-                                    for class_uri, class_mapping in mappings.items():
-                                        id_col = class_mapping.get('id_column', '')
-                                        if id_col:
-                                            # Strip trailing numbers for comparison
-                                            base_id = re.sub(r'[_\d]+$', '', id_col)
-                                            base_obj = re.sub(r'[_\d]+$', '', object_col)
-                                            if base_id and base_obj and base_id == base_obj:
-                                                target_entity_mapping = class_mapping
-                                                break
-                                
-                                if target_entity_mapping:
-                                    target_sql = target_entity_mapping.get('sql_query', '').strip()
-                                    target_label_col = target_entity_mapping.get('label_column')
-                                    target_id_col = target_entity_mapping.get('id_column', 'id')
-                                    
-                                    if target_sql and target_label_col:
-                                        target_alias = f"target_{obj_var.lstrip('?')}"
-                                        target_join = f"LEFT JOIN ({target_sql}) AS {target_alias} ON {rel_alias}.{object_col} = {target_alias}.{target_id_col}"
-                                        from_tables.append(target_join)
-                                        
-                                        # Map the label variable
-                                        label_var = f"{obj_var}_label"
-                                        var_to_column[label_var] = f"{target_alias}.{target_label_col}"
-                                        logger.debug("Added target entity join for main pattern: %s, label mapped to %s", target_alias, label_var)
-        
-        # Track optional relationship conditions for OR filter
-        optional_rel_conditions = []
-        
-        # Process OPTIONAL patterns
-        for pattern in optional_patterns:
-            # Check if this is an OPTIONAL entity-to-entity relationship
-            if (pattern['subject_is_var'] and pattern['object_is_var'] and
-                pattern['subject_var'] in var_to_mapping and pattern['object_var'] in var_to_mapping and
-                not pattern['predicate_is_var']):
-                
-                pred_uri = pattern['predicate']
-                subject_alias = var_to_table_alias.get(pattern['subject_var'])
-                object_alias = var_to_table_alias.get(pattern['object_var'])
-                subject_mapping = var_to_mapping[pattern['subject_var']]
-                object_mapping = var_to_mapping[pattern['object_var']]
-                
-                logger.debug("Detected OPTIONAL entity-to-entity relationship: %s --%s--> %s", pattern['subject_var'], pred_uri, pattern['object_var'])
-                
-                # Look for this relationship in relationship_mappings
-                if relationship_mappings:
-                    for rel in relationship_mappings:
-                        rel_pred = rel.get('predicate', '')
-                        pred_local = SparqlTranslator._relationship_predicate_local_name(pred_uri)
-                        rel_local = SparqlTranslator._relationship_predicate_local_name(rel_pred)
+    @staticmethod
+    def _spark_resolve_target_entity_mapping_main_rel(mappings, mapping, pattern, object_col, var_to_mapping):
+        target_entity_mapping = None
+        if mapping == var_to_mapping.get(pattern['subject_var']):
+            base_obj_col = re.sub(r'[_\d]+$', '', object_col)
+            id_col = mapping.get('id_column', '')
+            base_id_col = re.sub(r'[_\d]+$', '', id_col)
+            if base_obj_col and base_id_col and base_obj_col == base_id_col:
+                target_entity_mapping = mapping
+                logger.debug("Self-referencing relationship detected, using same entity mapping")
+        if not target_entity_mapping:
+            for class_uri, class_mapping in mappings.items():
+                id_col = class_mapping.get('id_column', '')
+                if id_col:
+                    base_id = re.sub(r'[_\d]+$', '', id_col)
+                    base_obj = re.sub(r'[_\d]+$', '', object_col)
+                    if base_id and base_obj and base_id == base_obj:
+                        target_entity_mapping = class_mapping
+                        break
+        return target_entity_mapping
 
-                        if rel_pred == pred_uri or (pred_local and pred_local == rel_local):
-                            rel_sql = rel.get('sql_query', '').strip()
-                            source_col = rel.get('subject_column')
-                            target_col = rel.get('object_column')
-                            
-                            if rel_sql and source_col and target_col:
-                                rel_alias = f"optrel_{pattern['subject_var']}_{len(optional_rel_conditions)}"
-                                subject_id = subject_mapping.get('id_column', 'id')
-                                object_id = object_mapping.get('id_column', 'id')
-                                
-                                # Check if object entity is "joined" (not in main FROM)
-                                if pattern['object_var'] in joined_entity_vars:
-                                    # LEFT JOIN relationship table, then LEFT JOIN entity table
-                                    rel_join = f"LEFT JOIN ({rel_sql}) AS {rel_alias} ON {subject_alias}.{subject_id} = {rel_alias}.{source_col}"
-                                    from_tables.append(rel_join)
-                                    
-                                    # LEFT JOIN target entity table
-                                    object_sql = object_mapping.get('sql_query', '').strip()
-                                    if object_sql:
-                                        entity_join = f"LEFT JOIN ({object_sql}) AS {object_alias} ON {rel_alias}.{target_col} = {object_alias}.{object_id}"
-                                    else:
-                                        entity_join = f"LEFT JOIN {object_mapping.get('table')} AS {object_alias} ON {rel_alias}.{target_col} = {object_alias}.{object_id}"
-                                    from_tables.append(entity_join)
-                                    logger.debug("Added optional relationship + entity LEFT JOIN: %s -> %s", rel_alias, object_alias)
-                                else:
-                                    # Both in FROM - add relationship join with both conditions
-                                    join_clause = f"LEFT JOIN ({rel_sql}) AS {rel_alias} ON {subject_alias}.{subject_id} = {rel_alias}.{source_col} AND {object_alias}.{object_id} = {rel_alias}.{target_col}"
-                                    from_tables.append(join_clause)
-                                    logger.debug("Added optional relationship LEFT JOIN: %s", rel_alias)
-                                
-                                # Track for OR condition
-                                optional_rel_conditions.append(f"{rel_alias}.{source_col} IS NOT NULL")
-                            break
-                continue
-            
-            if pattern['subject_is_var'] and pattern['subject_var'] in var_to_mapping:
-                mapping = var_to_mapping[pattern['subject_var']]
-                table_alias = var_to_table_alias.get(pattern['subject_var'])
-                
-                if not pattern['predicate_is_var'] and table_alias:
-                    pred_uri = pattern['predicate']
-                    pred_info = mapping.get('predicates', {}).get(pred_uri)
-                    
-                    if pred_info and pred_info.get('type') == 'column':
-                        column = pred_info['column']
-                        if pattern['object_is_var']:
-                            var_to_column[pattern['object_var']] = f"{table_alias}.{column}"
-                    
-                    # Check if this is a relationship predicate
-                    elif relationship_mappings and pattern['object_is_var']:
-                        logger.debug("Looking for relationship predicate: %s", pred_uri)
-                        logger.debug("Available relationship predicates: %s", [r.get('predicate') for r in relationship_mappings])
-                        
-                        # Try exact match first, then try matching just the local name
-                        matched_rel = None
-                        for rel in relationship_mappings:
-                            rel_pred = rel.get('predicate', '')
-                            if rel_pred == pred_uri:
-                                matched_rel = rel
-                                break
-                            # Try matching just the local name (after # or last /)
-                            pred_local = SparqlTranslator._relationship_predicate_local_name(pred_uri)
-                            rel_local = SparqlTranslator._relationship_predicate_local_name(rel_pred)
-                            if pred_local and pred_local == rel_local:
-                                logger.debug("Matched by local name: %s", pred_local)
-                                matched_rel = rel
-                                break
-                        
-                        if matched_rel:
-                            # Found a relationship mapping
-                            rel_sql = matched_rel.get('sql_query', '').strip()
-                            subject_col = matched_rel.get('subject_column')
-                            object_col = matched_rel.get('object_column')
-                            
-                            logger.debug("Found relationship: sql=%s..., subject_col=%s, object_col=%s", rel_sql[:50] if rel_sql else 'N/A', subject_col, object_col)
-                            
-                            if rel_sql and subject_col and object_col:
-                                obj_var = pattern['object_var']
-                                rel_alias = f"rel_{obj_var.lstrip('?')}"
-                                join_clause = f"LEFT JOIN ({rel_sql}) AS {rel_alias} ON {table_alias}.{mapping.get('id_column', 'id')} = {rel_alias}.{subject_col}"
-                                
-                                target_mapping = var_to_mapping.get(obj_var)
-                                if target_mapping and target_mapping.get('uri_template'):
-                                    template = target_mapping['uri_template']
-                                    uri_base = template.split('{')[0]
-                                    var_to_column[obj_var] = f"CONCAT('{uri_base}', {SparqlTranslator._cast_str(f'{rel_alias}.{object_col}', dialect)})"
-                                    logger.debug("Mapped %s to URI: CONCAT('%s', %s.%s)", obj_var, uri_base, rel_alias, object_col)
-                                else:
-                                    var_to_column[obj_var] = f"{rel_alias}.{object_col}"
-                                    logger.debug("Mapped %s to raw column: %s.%s", obj_var, rel_alias, object_col)
-                                
-                                # Store the join
-                                from_tables.append(join_clause)
-                                
-                                # Add to optional relationship conditions for OR filter
-                                optional_rel_conditions.append(f"{rel_alias}.{subject_col} IS NOT NULL")
-                                logger.debug("Added relationship to OR conditions: %s", rel_alias)
-                                
-                                # Try to find the target entity mapping to get the label
-                                # Look for the target entity based on the object column name
-                                target_entity_mapping = None
-                                for class_uri, class_mapping in mappings.items():
-                                    # Check if this mapping's id_column matches the relationship's object_column
-                                    if class_mapping.get('id_column') == object_col or object_col.endswith('_id'):
-                                        # This might be the target entity
-                                        target_entity_mapping = class_mapping
-                                        break
-                                
-                                if target_entity_mapping:
-                                    # Join to the target entity table to get the label
-                                    target_sql = target_entity_mapping.get('sql_query', '').strip()
-                                    target_label_col = target_entity_mapping.get('label_column')
-                                    target_id_col = target_entity_mapping.get('id_column', 'id')
-                                    
-                                    if target_sql and target_label_col:
-                                        target_alias = f"target_{obj_var.lstrip('?')}"
-                                        target_join = f"LEFT JOIN ({target_sql}) AS {target_alias} ON {rel_alias}.{object_col} = {target_alias}.{target_id_col}"
-                                        from_tables.append(target_join)
-                                        
-                                        # Map the label variable
-                                        label_var = f"{obj_var}_label"
-                                        var_to_column[label_var] = f"{target_alias}.{target_label_col}"
-                                        logger.debug("Added target entity join and mapped %s to %s.%s", label_var, target_alias, target_label_col)
-                            else:
-                                logger.debug("Relationship mapping incomplete: sql=%s, subject_col=%s, object_col=%s", bool(rel_sql), subject_col, object_col)
-        
-        # Build SELECT clause
-        # Note: select_vars has variable names without '?', var_to_column uses '?' prefix
+    @staticmethod
+    def _spark_append_target_label_join_main(
+        target_entity_mapping, rel_alias, object_col, obj_var, from_tables, var_to_column
+    ) -> None:
+        target_sql = target_entity_mapping.get('sql_query', '').strip()
+        target_label_col = target_entity_mapping.get('label_column')
+        target_id_col = target_entity_mapping.get('id_column', 'id')
+        if target_sql and target_label_col:
+            target_alias = f"target_{obj_var.lstrip('?')}"
+            target_join = f"LEFT JOIN ({target_sql}) AS {target_alias} ON {rel_alias}.{object_col} = {target_alias}.{target_id_col}"
+            from_tables.append(target_join)
+            label_var = f"{obj_var}_label"
+            var_to_column[label_var] = f"{target_alias}.{target_label_col}"
+            logger.debug("Added target entity join for main pattern: %s, label mapped to %s", target_alias, label_var)
+
+    @staticmethod
+    def _spark_main_pattern_relationship_object_join(
+        pattern,
+        mapping,
+        table_alias,
+        relationship_mappings,
+        var_to_mapping,
+        from_tables,
+        var_to_column,
+        mappings,
+        dialect,
+    ) -> None:
+        pred_uri = pattern['predicate']
+        if not (relationship_mappings and pattern['object_is_var'] and pattern['object_var'] not in var_to_mapping):
+            return
+        logger.debug("Main pattern: Looking for relationship predicate: %s", pred_uri)
+        matched_rel = SparqlTranslator._find_relationship_mapping_by_predicate(relationship_mappings, pred_uri)
+        if not matched_rel:
+            return
+        rel_sql = matched_rel.get('sql_query', '').strip()
+        subject_col = matched_rel.get('subject_column')
+        object_col = matched_rel.get('object_column')
+        logger.debug("Found relationship for main pattern: sql=%s...", rel_sql[:50] if rel_sql else 'N/A')
+        if not (rel_sql and subject_col and object_col):
+            return
+        obj_var = pattern['object_var']
+        rel_alias = f"rel_{obj_var.lstrip('?')}"
+        join_clause = f"INNER JOIN ({rel_sql}) AS {rel_alias} ON {table_alias}.{mapping.get('id_column', 'id')} = {rel_alias}.{subject_col}"
+        from_tables.append(join_clause)
+        target_mapping = var_to_mapping.get(obj_var)
+        if target_mapping and target_mapping.get('uri_template'):
+            template = target_mapping['uri_template']
+            uri_base = template.split('{')[0]
+            var_to_column[obj_var] = f"CONCAT('{uri_base}', {SparqlTranslator._cast_str(f'{rel_alias}.{object_col}', dialect)})"
+            logger.debug("Mapped %s to URI: CONCAT('%s', %s.%s)", obj_var, uri_base, rel_alias, object_col)
+        else:
+            var_to_column[obj_var] = f"{rel_alias}.{object_col}"
+            logger.debug("Mapped %s to raw column: %s.%s", obj_var, rel_alias, object_col)
+        target_entity_mapping = SparqlTranslator._spark_resolve_target_entity_mapping_main_rel(
+            mappings, mapping, pattern, object_col, var_to_mapping
+        )
+        if target_entity_mapping:
+            SparqlTranslator._spark_append_target_label_join_main(
+                target_entity_mapping, rel_alias, object_col, obj_var, from_tables, var_to_column
+            )
+
+    @staticmethod
+    def _spark_main_pattern_pred_info_column_reference(
+        pattern, pred_info, mapping, table_alias, var_to_column, where_conditions, from_tables, mappings, var_to_mapping, var_to_table, var_to_table_alias
+    ) -> bool:
+        if not pred_info:
+            return False
+        if pred_info.get('type') == 'column':
+            column = pred_info['column']
+            if pattern['object_is_var']:
+                var_to_column[pattern['object_var']] = f"{table_alias}.{column}"
+            else:
+                obj_value = pattern['object'].strip('"')
+                where_conditions.append(f"{table_alias}.{column} = '{_escape_sql(obj_value)}'")
+            return True
+        if pred_info.get('type') == 'reference':
+            child_col = pred_info.get('child_column')
+            parent_col = pred_info.get('parent_column')
+            for class_uri, m in mappings.items():
+                if pattern['object_is_var']:
+                    obj_var = pattern['object_var']
+                    if obj_var in var_to_mapping:
+                        parent_table_source = var_to_table.get(obj_var)
+                        parent_table_alias = var_to_table_alias.get(obj_var)
+                        if parent_table_source and parent_table_alias and child_col and parent_col:
+                            if parent_table_source not in from_tables:
+                                from_tables.append(parent_table_source)
+                            where_conditions.append(f"{table_alias}.{child_col} = {parent_table_alias}.{parent_col}")
+            return True
+        return False
+
+    @staticmethod
+    def _spark_optional_entity_to_entity_left_joins(
+        pattern,
+        relationship_mappings,
+        var_to_mapping,
+        var_to_table_alias,
+        joined_entity_vars,
+        from_tables,
+        optional_rel_conditions,
+    ) -> bool:
+        if not (
+            pattern['subject_is_var']
+            and pattern['object_is_var']
+            and pattern['subject_var'] in var_to_mapping
+            and pattern['object_var'] in var_to_mapping
+            and not pattern['predicate_is_var']
+        ):
+            return False
+        pred_uri = pattern['predicate']
+        subject_alias = var_to_table_alias.get(pattern['subject_var'])
+        object_alias = var_to_table_alias.get(pattern['object_var'])
+        subject_mapping = var_to_mapping[pattern['subject_var']]
+        object_mapping = var_to_mapping[pattern['object_var']]
+        logger.debug(
+            "Detected OPTIONAL entity-to-entity relationship: %s --%s--> %s",
+            pattern['subject_var'],
+            pred_uri,
+            pattern['object_var'],
+        )
+        rel = SparqlTranslator._find_relationship_mapping_by_predicate(relationship_mappings, pred_uri)
+        if not rel:
+            return True
+        rel_sql = rel.get('sql_query', '').strip()
+        source_col = rel.get('subject_column')
+        target_col = rel.get('object_column')
+        if rel_sql and source_col and target_col:
+            rel_alias = f"optrel_{pattern['subject_var']}_{len(optional_rel_conditions)}"
+            subject_id = subject_mapping.get('id_column', 'id')
+            object_id = object_mapping.get('id_column', 'id')
+            if pattern['object_var'] in joined_entity_vars:
+                rel_join = f"LEFT JOIN ({rel_sql}) AS {rel_alias} ON {subject_alias}.{subject_id} = {rel_alias}.{source_col}"
+                from_tables.append(rel_join)
+                object_sql = object_mapping.get('sql_query', '').strip()
+                if object_sql:
+                    entity_join = f"LEFT JOIN ({object_sql}) AS {object_alias} ON {rel_alias}.{target_col} = {object_alias}.{object_id}"
+                else:
+                    entity_join = f"LEFT JOIN {object_mapping.get('table')} AS {object_alias} ON {rel_alias}.{target_col} = {object_alias}.{object_id}"
+                from_tables.append(entity_join)
+                logger.debug("Added optional relationship + entity LEFT JOIN: %s -> %s", rel_alias, object_alias)
+            else:
+                join_clause = (
+                    f"LEFT JOIN ({rel_sql}) AS {rel_alias} ON {subject_alias}.{subject_id} = {rel_alias}.{source_col} "
+                    f"AND {object_alias}.{object_id} = {rel_alias}.{target_col}"
+                )
+                from_tables.append(join_clause)
+                logger.debug("Added optional relationship LEFT JOIN: %s", rel_alias)
+            optional_rel_conditions.append(f"{rel_alias}.{source_col} IS NOT NULL")
+        return True
+
+    @staticmethod
+    def _spark_optional_relationship_object_property(
+        pattern,
+        mapping,
+        table_alias,
+        relationship_mappings,
+        var_to_mapping,
+        from_tables,
+        var_to_column,
+        mappings,
+        dialect,
+        optional_rel_conditions,
+    ) -> None:
+        pred_uri = pattern['predicate']
+        if not (relationship_mappings and pattern['object_is_var']):
+            return
+        logger.debug("Looking for relationship predicate: %s", pred_uri)
+        logger.debug("Available relationship predicates: %s", [r.get('predicate') for r in relationship_mappings])
+        matched_rel = SparqlTranslator._find_relationship_mapping_by_predicate(relationship_mappings, pred_uri)
+        if not matched_rel:
+            return
+        if matched_rel.get('predicate', '') != pred_uri:
+            logger.debug(
+                "Matched by local name: %s",
+                SparqlTranslator._relationship_predicate_local_name(pred_uri),
+            )
+        rel_sql = matched_rel.get('sql_query', '').strip()
+        subject_col = matched_rel.get('subject_column')
+        object_col = matched_rel.get('object_column')
+        logger.debug(
+            "Found relationship: sql=%s..., subject_col=%s, object_col=%s",
+            rel_sql[:50] if rel_sql else 'N/A',
+            subject_col,
+            object_col,
+        )
+        if rel_sql and subject_col and object_col:
+            obj_var = pattern['object_var']
+            rel_alias = f"rel_{obj_var.lstrip('?')}"
+            join_clause = f"LEFT JOIN ({rel_sql}) AS {rel_alias} ON {table_alias}.{mapping.get('id_column', 'id')} = {rel_alias}.{subject_col}"
+            target_mapping = var_to_mapping.get(obj_var)
+            if target_mapping and target_mapping.get('uri_template'):
+                template = target_mapping['uri_template']
+                uri_base = template.split('{')[0]
+                var_to_column[obj_var] = f"CONCAT('{uri_base}', {SparqlTranslator._cast_str(f'{rel_alias}.{object_col}', dialect)})"
+                logger.debug("Mapped %s to URI: CONCAT('%s', %s.%s)", obj_var, uri_base, rel_alias, object_col)
+            else:
+                var_to_column[obj_var] = f"{rel_alias}.{object_col}"
+                logger.debug("Mapped %s to raw column: %s.%s", obj_var, rel_alias, object_col)
+            from_tables.append(join_clause)
+            optional_rel_conditions.append(f"{rel_alias}.{subject_col} IS NOT NULL")
+            logger.debug("Added relationship to OR conditions: %s", rel_alias)
+            target_entity_mapping = None
+            for class_uri, class_mapping in mappings.items():
+                if class_mapping.get('id_column') == object_col or object_col.endswith('_id'):
+                    target_entity_mapping = class_mapping
+                    break
+            if target_entity_mapping:
+                target_sql = target_entity_mapping.get('sql_query', '').strip()
+                target_label_col = target_entity_mapping.get('label_column')
+                target_id_col = target_entity_mapping.get('id_column', 'id')
+                if target_sql and target_label_col:
+                    target_alias = f"target_{obj_var.lstrip('?')}"
+                    target_join = f"LEFT JOIN ({target_sql}) AS {target_alias} ON {rel_alias}.{object_col} = {target_alias}.{target_id_col}"
+                    from_tables.append(target_join)
+                    label_var = f"{obj_var}_label"
+                    var_to_column[label_var] = f"{target_alias}.{target_label_col}"
+                    logger.debug("Added target entity join and mapped %s to %s.%s", label_var, target_alias, target_label_col)
+        else:
+            logger.debug(
+                "Relationship mapping incomplete: sql=%s, subject_col=%s, object_col=%s",
+                bool(rel_sql),
+                subject_col,
+                object_col,
+            )
+
+    @staticmethod
+    def _spark_build_select_columns_list(select_vars, var_to_column, var_to_mapping, var_to_table_alias) -> list[str]:
+        select_columns = []
         logger.debug("Building SELECT clause. select_vars=%s", select_vars)
         logger.debug("var_to_column keys=%s", list(var_to_column.keys()))
-        
         for var in select_vars:
             var_with_prefix = f"?{var}"
             if var_with_prefix in var_to_column:
@@ -1611,16 +1586,16 @@ class SparqlTranslator:
                                 select_columns.append(f"{table_alias}.{mapping['id_column']} AS {var}")
                                 logger.debug("Added %s from entity mapping", var)
                                 found = True
-                            break
+                        break
                 if not found:
                     logger.debug("Could not find mapping for %s", var)
-        
+        return select_columns
+
+    @staticmethod
+    def _spark_finalize_query_sql(select_columns, is_distinct, from_tables, where_conditions, optional_rel_conditions, limit) -> str:
         if not select_columns:
             raise ValidationError('Could not map any SELECT variables to table columns.')
-        
         distinct_str = "DISTINCT " if is_distinct else ""
-        
-        # Separate main tables from JOINs (LEFT JOIN, INNER JOIN, etc.)
         main_tables = []
         join_clauses = []
         for table in from_tables:
@@ -1628,29 +1603,331 @@ class SparqlTranslator:
                 join_clauses.append(table)
             else:
                 main_tables.append(table)
-        
-        # Build FROM clause with JOINs
         from_clause = ", ".join(main_tables)
         if join_clauses:
             from_clause += " " + " ".join(join_clauses)
-        
-        # Add optional relationship OR condition if we have multiple optional relationships
         if optional_rel_conditions:
             or_condition = "(" + " OR ".join(optional_rel_conditions) + ")"
             where_conditions.append(or_condition)
             logger.debug("Added OR condition for optional relationships: %s", or_condition)
-        
         where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
         limit_clause = f"\nLIMIT {limit}" if limit else ""
-        
-        sql = f"""SELECT {distinct_str}{', '.join(select_columns)}
+        return f"""SELECT {distinct_str}{', '.join(select_columns)}
     FROM {from_clause}
     WHERE {where_clause}{limit_clause}"""
+
+
+    @staticmethod
+    def _build_spark_sql_maybe_triple_pattern_dispatch(
+        patterns,
+        select_vars,
+        mappings,
+        is_distinct,
+        limit,
+        relationship_mappings,
+        predicate_filter,
+        value_filters,
+        relationship_filter,
+        dialect,
+    ):
+        """If the query is generic or type-constrained ``?s ?p ?o``, return its translation; else ``None``."""
+        if SparqlTranslator._is_generic_triple_pattern(patterns, select_vars):
+            logger.debug("Using generic triple pattern")
+            if value_filters and relationship_filter:
+                logger.debug("Using CTE-based filtered query with relationships")
+                return SparqlTranslator._build_filtered_with_relationships_query(
+                    mappings,
+                    select_vars,
+                    is_distinct,
+                    limit,
+                    relationship_mappings,
+                    None,
+                    predicate_filter,
+                    value_filters,
+                    relationship_filter,
+                    dialect=dialect,
+                )
+            return SparqlTranslator._build_generic_triples_query(
+                mappings,
+                select_vars,
+                is_distinct,
+                limit,
+                relationship_mappings,
+                None,
+                predicate_filter,
+                value_filters,
+                relationship_filter,
+                dialect=dialect,
+            )
+        logger.debug("Checking for type-constrained pattern...")
+        filter_class_uris = SparqlTranslator._is_type_constrained_triple_pattern(patterns)
+        if not filter_class_uris:
+            return None
+        logger.debug("Detected type-constrained triple pattern for classes: %s", filter_class_uris)
+        if value_filters and relationship_filter:
+            logger.debug("Using CTE-based filtered query with relationships (type-constrained)")
+            return SparqlTranslator._build_filtered_with_relationships_query(
+                mappings,
+                select_vars,
+                is_distinct,
+                limit,
+                relationship_mappings,
+                filter_class_uris,
+                predicate_filter,
+                value_filters,
+                relationship_filter,
+                dialect=dialect,
+            )
+        return SparqlTranslator._build_generic_triples_query(
+            mappings,
+            select_vars,
+            is_distinct,
+            limit,
+            relationship_mappings,
+            filter_class_uris,
+            predicate_filter,
+            value_filters,
+            relationship_filter,
+            dialect=dialect,
+        )
+
+    @staticmethod
+    def _spark_standard_init_graph_state(patterns, optional_patterns, mappings, bind_values, select_vars):
+        """Populate FROM list, subject columns, relationship join plan, and resolved ``select_vars``."""
+        _, var_to_table, var_to_table_alias, var_to_mapping, bind_values, rdf_type = (
+            SparqlTranslator._spark_populate_var_mappings_from_patterns(patterns, mappings, bind_values)
+        )
+        all_vars = set()
+        for pattern in patterns + optional_patterns:
+            if pattern['subject_is_var']:
+                all_vars.add(pattern['subject_var'])
+            if pattern['predicate_is_var']:
+                all_vars.add(pattern['predicate_var'])
+            if pattern['object_is_var']:
+                all_vars.add(pattern['object_var'])
+        if select_vars is None:
+            select_vars = list(all_vars)
+        var_to_column = {}
+        from_tables = []
+        where_conditions = []
+        for var_name, value in bind_values.items():
+            var_to_column[var_name] = f"'{value}'"
+            logger.debug("Added BIND value to var_to_column: %s = '%s'", var_name, value)
+        relationship_patterns = []
+        for pattern in patterns + optional_patterns:
+            if (
+                pattern['subject_is_var']
+                and pattern['object_is_var']
+                and pattern['subject_var'] in var_to_mapping
+                and pattern['object_var'] in var_to_mapping
+                and not pattern['predicate_is_var']
+                and pattern['predicate'] != rdf_type
+            ):
+                relationship_patterns.append(pattern)
+        joined_entity_vars = {rp['object_var'] for rp in relationship_patterns}
+        for var_name, mapping in var_to_mapping.items():
+            table_source = var_to_table.get(var_name)
+            table_alias = var_to_table_alias.get(var_name)
+            if table_source and table_source not in from_tables:
+                if var_name not in joined_entity_vars or len(relationship_patterns) == 0:
+                    from_tables.append(table_source)
+                else:
+                    logger.debug("Entity %s will be joined via relationship, not adding to main FROM", var_name)
+            if table_alias:
+                if mapping.get('uri_template'):
+                    template = mapping['uri_template']
+                    id_col = mapping.get('id_column', 'id')
+                    var_to_column[var_name] = f"CONCAT('{template.split('{')[0]}', {table_alias}.{id_col})"
+                elif mapping.get('id_column'):
+                    var_to_column[var_name] = f"{table_alias}.{mapping['id_column']}"
+        return (
+            var_to_table,
+            var_to_table_alias,
+            var_to_mapping,
+            rdf_type,
+            select_vars,
+            var_to_column,
+            from_tables,
+            where_conditions,
+            joined_entity_vars,
+        )
+
+    @staticmethod
+    def _spark_standard_apply_main_pattern_joins(
+        patterns,
+        relationship_mappings,
+        mappings,
+        dialect,
+        var_to_mapping,
+        var_to_table,
+        var_to_table_alias,
+        joined_entity_vars,
+        from_tables,
+        var_to_column,
+        where_conditions,
+        rdf_type,
+    ) -> None:
+        for pattern in patterns:
+            if pattern['predicate'] == rdf_type:
+                continue
+            if SparqlTranslator._spark_mandatory_entity_to_entity_relationship_join(
+                pattern,
+                relationship_mappings,
+                var_to_mapping,
+                var_to_table_alias,
+                joined_entity_vars,
+                from_tables,
+            ):
+                continue
+            if pattern['subject_is_var'] and pattern['subject_var'] in var_to_mapping:
+                mapping = var_to_mapping[pattern['subject_var']]
+                table_alias = var_to_table_alias.get(pattern['subject_var'])
+                if not pattern['predicate_is_var'] and table_alias:
+                    pred_info = mapping.get('predicates', {}).get(pattern['predicate'])
+                    if not SparqlTranslator._spark_main_pattern_pred_info_column_reference(
+                        pattern,
+                        pred_info,
+                        mapping,
+                        table_alias,
+                        var_to_column,
+                        where_conditions,
+                        from_tables,
+                        mappings,
+                        var_to_mapping,
+                        var_to_table,
+                        var_to_table_alias,
+                    ):
+                        SparqlTranslator._spark_main_pattern_relationship_object_join(
+                            pattern,
+                            mapping,
+                            table_alias,
+                            relationship_mappings,
+                            var_to_mapping,
+                            from_tables,
+                            var_to_column,
+                            mappings,
+                            dialect,
+                        )
+
+    @staticmethod
+    def _spark_standard_apply_optional_pattern_joins(
+        optional_patterns,
+        relationship_mappings,
+        mappings,
+        dialect,
+        var_to_mapping,
+        var_to_table_alias,
+        joined_entity_vars,
+        from_tables,
+        var_to_column,
+    ) -> list:
+        optional_rel_conditions = []
+        for pattern in optional_patterns:
+            if SparqlTranslator._spark_optional_entity_to_entity_left_joins(
+                pattern,
+                relationship_mappings,
+                var_to_mapping,
+                var_to_table_alias,
+                joined_entity_vars,
+                from_tables,
+                optional_rel_conditions,
+            ):
+                continue
+            if pattern['subject_is_var'] and pattern['subject_var'] in var_to_mapping:
+                mapping = var_to_mapping[pattern['subject_var']]
+                table_alias = var_to_table_alias.get(pattern['subject_var'])
+                if not pattern['predicate_is_var'] and table_alias:
+                    pred_info = mapping.get('predicates', {}).get(pattern['predicate'])
+                    if pred_info and pred_info.get('type') == 'column':
+                        column = pred_info['column']
+                        if pattern['object_is_var']:
+                            var_to_column[pattern['object_var']] = f"{table_alias}.{column}"
+                    elif relationship_mappings and pattern['object_is_var']:
+                        SparqlTranslator._spark_optional_relationship_object_property(
+                            pattern,
+                            mapping,
+                            table_alias,
+                            relationship_mappings,
+                            var_to_mapping,
+                            from_tables,
+                            var_to_column,
+                            mappings,
+                            dialect,
+                            optional_rel_conditions,
+                        )
+        return optional_rel_conditions
+
+    @staticmethod
+    def _build_spark_sql(patterns, optional_patterns, mappings, select_vars, is_distinct, limit, relationship_mappings=None, bind_values=None, predicate_filter=None, value_filters=None, relationship_filter=None, dialect=DIALECT_SPARK):
+        """Build SQL from parsed patterns using R2RML mappings."""
         
-        return {
-            'success': True,
-            'sql': sql,
-            'variables': select_vars
-        }
+        logger.debug("_build_spark_sql called with %s patterns, select_vars=%s", len(patterns), select_vars)
+        if predicate_filter:
+            logger.debug("Predicate filter: %s", predicate_filter)
+        if value_filters:
+            logger.debug("Value filters: %s", len(value_filters))
+        if relationship_filter:
+            logger.debug("Relationship filter: %s", relationship_filter)
+
+        triple_result = SparqlTranslator._build_spark_sql_maybe_triple_pattern_dispatch(
+            patterns,
+            select_vars,
+            mappings,
+            is_distinct,
+            limit,
+            relationship_mappings,
+            predicate_filter,
+            value_filters,
+            relationship_filter,
+            dialect,
+        )
+        if triple_result is not None:
+            return triple_result
+
+        logger.debug("Falling through to standard SQL builder")
+        (
+            var_to_table,
+            var_to_table_alias,
+            var_to_mapping,
+            rdf_type,
+            select_vars,
+            var_to_column,
+            from_tables,
+            where_conditions,
+            joined_entity_vars,
+        ) = SparqlTranslator._spark_standard_init_graph_state(patterns, optional_patterns, mappings, bind_values, select_vars)
+        SparqlTranslator._spark_standard_apply_main_pattern_joins(
+            patterns,
+            relationship_mappings,
+            mappings,
+            dialect,
+            var_to_mapping,
+            var_to_table,
+            var_to_table_alias,
+            joined_entity_vars,
+            from_tables,
+            var_to_column,
+            where_conditions,
+            rdf_type,
+        )
+        optional_rel_conditions = SparqlTranslator._spark_standard_apply_optional_pattern_joins(
+            optional_patterns,
+            relationship_mappings,
+            mappings,
+            dialect,
+            var_to_mapping,
+            var_to_table_alias,
+            joined_entity_vars,
+            from_tables,
+            var_to_column,
+        )
+
+        select_columns = SparqlTranslator._spark_build_select_columns_list(
+            select_vars, var_to_column, var_to_mapping, var_to_table_alias
+        )
+        sql = SparqlTranslator._spark_finalize_query_sql(
+            select_columns, is_distinct, from_tables, where_conditions, optional_rel_conditions, limit
+        )
+        return {'success': True, 'sql': sql, 'variables': select_vars}
 
 

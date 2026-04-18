@@ -37,17 +37,8 @@ async function loadSyncInfo() {
         console.log('[Sync] Consolidated triplestore status -> hasData:', tripleStoreHasData);
         renderTripleStoreStatus(tsStatus);
 
-        // --- Changes / rebuild warning ---
-        var warning = document.getElementById('syncRebuildWarning');
-        if (warning) {
-            if (payload.changes && payload.changes.needs_rebuild) {
-                warning.classList.remove('d-none');
-                warning.classList.add('d-flex');
-            } else {
-                warning.classList.remove('d-flex');
-                warning.classList.add('d-none');
-            }
-        }
+        // --- Rebuild warning (timestamps and/or session change flags from readiness) ---
+        _updateSyncRebuildWarningFromPayload(payload);
 
         updateDataMenus();
         updateInsightsTab();
@@ -59,11 +50,32 @@ async function loadSyncInfo() {
 }
 
 /**
+ * Show the top rebuild banner when timestamps indicate drift or when the
+ * session reports ontology / mapping edits since load (readiness flags).
+ */
+function _updateSyncRebuildWarningFromPayload(payload) {
+    var warning = document.getElementById('syncRebuildWarning');
+    if (!warning) return;
+    var ch = (payload && payload.changes) || {};
+    var r = (payload && payload.readiness) || {};
+    var show = !!(ch.needs_rebuild || r.ontology_changed || r.assignment_changed);
+    if (show) {
+        warning.classList.remove('d-none');
+        warning.classList.add('d-flex');
+    } else {
+        warning.classList.remove('d-flex');
+        warning.classList.add('d-none');
+    }
+}
+
+/**
  * Apply readiness data obtained from the consolidated endpoint.
  */
 function _applyReadiness(data) {
     var ontologyReady = !!data.ontology_valid;
     var assignmentReady = !!data.mapping_valid;
+    var ontologyChanged = !!data.ontology_changed;
+    var assignmentChanged = !!data.assignment_changed;
     var ontologyStats = data.ontology_stats || {};
     var assignmentStats = data.mapping_stats || {};
 
@@ -98,6 +110,22 @@ function _applyReadiness(data) {
     var contentEl = document.getElementById('syncReadinessContent');
     if (loadingEl) loadingEl.classList.add('d-none');
     if (contentEl) contentEl.classList.remove('d-none');
+
+    var staleRow = document.getElementById('syncReadinessStaleIndicators');
+    var ontBadge = document.getElementById('syncBadgeOntologyChanged');
+    var mapBadge = document.getElementById('syncBadgeAssignmentChanged');
+    if (ontBadge) {
+        if (ontologyChanged) ontBadge.classList.remove('d-none');
+        else ontBadge.classList.add('d-none');
+    }
+    if (mapBadge) {
+        if (assignmentChanged) mapBadge.classList.remove('d-none');
+        else mapBadge.classList.add('d-none');
+    }
+    if (staleRow) {
+        if (ontologyChanged || assignmentChanged) staleRow.classList.remove('d-none');
+        else staleRow.classList.add('d-none');
+    }
 }
 
 function _setSyncTile(tileId, value, state) {
@@ -380,7 +408,7 @@ function renderTripleStoreStatus(data) {
         } else if (reason.toLowerCase().includes('not configured')) {
             msg = 'Digital Twin is not configured. Set it in <a href="/domain/#information">Domain Settings</a>.';
         } else {
-            msg = entity + ' is empty. Run <strong>Synchronize</strong> to generate triples.';
+            msg = 'Graph is empty. Run <strong>Synchronize</strong> to generate triples.';
         }
         area.innerHTML =
             '<div class="alert alert-warning small mb-0 py-1 px-2">' +

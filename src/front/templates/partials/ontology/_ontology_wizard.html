@@ -6,7 +6,7 @@
         <h4 class="mb-1"><i class="bi bi-magic me-2"></i>Generate Ontology</h4>
         <p class="text-muted mb-0 small">Auto-generate an ontology from your data sources using AI</p>
     </div>
-    <button type="button" class="btn btn-sm btn-outline-primary" id="wizardTopGenerateBtn" onclick="generateOntologyFromWizard()">
+    <button type="button" class="btn btn-sm btn-outline-primary" id="wizardTopGenerateBtn" data-action="wizard-generate">
         <i class="bi bi-magic me-1"></i> Generate Ontology
     </button>
 </div>
@@ -58,10 +58,10 @@
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="small text-muted">Select tables to include in ontology generation:</span>
                         <div class="btn-group btn-group-sm">
-                            <button type="button" class="btn btn-outline-secondary" onclick="selectAllWizardTables(true)">
+                            <button type="button" class="btn btn-outline-secondary" data-action="wizard-tables-bulk" data-select-all="true">
                                 <i class="bi bi-check-all me-1"></i>Select All
                             </button>
-                            <button type="button" class="btn btn-outline-secondary" onclick="selectAllWizardTables(false)">
+                            <button type="button" class="btn btn-outline-secondary" data-action="wizard-tables-bulk" data-select-all="false">
                                 <i class="bi bi-x me-1"></i>Select None
                             </button>
                         </div>
@@ -72,8 +72,7 @@
                                 <tr>
                                     <th style="width: 40px;" class="text-center">
                                         <input type="checkbox" class="form-check-input" id="wizardSelectAllCheckbox"
-                                               checked title="Select / deselect all tables"
-                                               onchange="selectAllWizardTables(this.checked)">
+                                               checked title="Select / deselect all tables">
                                     </th>
                                     <th>Table</th>
                                     <th style="width: 80px;" class="text-center">Columns</th>
@@ -108,10 +107,10 @@
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="small text-muted">Select documents to include as context for ontology generation:</span>
                         <div class="btn-group btn-group-sm">
-                            <button type="button" class="btn btn-outline-secondary" onclick="selectAllWizardDocs(true)">
+                            <button type="button" class="btn btn-outline-secondary" data-action="wizard-docs-bulk" data-select-all="true">
                                 <i class="bi bi-check-all me-1"></i>Select All
                             </button>
-                            <button type="button" class="btn btn-outline-secondary" onclick="selectAllWizardDocs(false)">
+                            <button type="button" class="btn btn-outline-secondary" data-action="wizard-docs-bulk" data-select-all="false">
                                 <i class="bi bi-x me-1"></i>Select None
                             </button>
                         </div>
@@ -208,10 +207,10 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-eye me-2"></i>Generated Ontology Preview</span>
                 <div class="btn-group btn-group-sm">
-                    <button type="button" class="btn btn-outline-secondary" onclick="copyWizardOWL()">
+                    <button type="button" class="btn btn-outline-secondary" data-action="wizard-copy-owl">
                         <i class="bi bi-clipboard"></i> Copy
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="downloadWizardOWL()">
+                    <button type="button" class="btn btn-outline-secondary" data-action="wizard-download-owl">
                         <i class="bi bi-download"></i> Download
                     </button>
                 </div>
@@ -225,10 +224,10 @@
                 </div>
             </div>
             <div class="card-footer d-flex justify-content-end gap-2">
-                <button type="button" class="btn btn-secondary" onclick="clearWizardPreview()">
+                <button type="button" class="btn btn-secondary" data-action="wizard-discard-preview">
                     <i class="bi bi-x-lg me-1"></i>Discard
                 </button>
-                <button type="button" class="btn btn-success" onclick="applyWizardOntology()" title="Retry if auto-apply failed">
+                <button type="button" class="btn btn-success" data-action="wizard-apply-ontology" title="Retry if auto-apply failed">
                     <i class="bi bi-check-lg me-1"></i>Apply to Ontology
                 </button>
             </div>

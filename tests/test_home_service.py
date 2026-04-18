@@ -3,7 +3,7 @@ import asyncio
 import concurrent.futures
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from back.objects.domain.home_service import HomeService
+from back.objects.domain.HomeService import HomeService
 from back.core.helpers import DatabricksHelpers
 from back.objects.digitaltwin import DigitalTwin
 from back.objects.domain import Domain as DomainOps

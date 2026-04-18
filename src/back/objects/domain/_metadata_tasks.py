@@ -77,7 +77,7 @@ def run_metadata_update_task(
         tm.advance_step(task_id, f"Updating 0/{len(tables_to_update)} tables...")
         updated_count = 0
         errors: List[str] = []
-        from back.objects.domain.domain import merge_table_metadata
+        from back.objects.domain.Domain import merge_table_metadata
 
         for i, table_name in enumerate(tables_to_update):
             try:

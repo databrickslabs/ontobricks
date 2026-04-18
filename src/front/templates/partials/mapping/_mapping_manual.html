@@ -8,14 +8,14 @@
     </div>
     <div class="d-flex gap-2">
         <div class="btn-group btn-group-sm">
-            <button type="button" class="btn btn-outline-secondary" onclick="ManualModule.expandAll()" title="Expand All">
+            <button type="button" class="btn btn-outline-secondary" data-action="manual-expand-all" title="Expand All">
                 <i class="bi bi-arrows-expand"></i>
             </button>
-            <button type="button" class="btn btn-outline-secondary" onclick="ManualModule.collapseAll()" title="Collapse All">
+            <button type="button" class="btn btn-outline-secondary" data-action="manual-collapse-all" title="Collapse All">
                 <i class="bi bi-arrows-collapse"></i>
             </button>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-primary" onclick="ManualModule.refresh()" title="Refresh">
+        <button type="button" class="btn btn-sm btn-outline-primary" data-action="manual-refresh" title="Refresh">
             <i class="bi bi-arrow-clockwise"></i> Refresh
             </button>
         </div>
@@ -44,17 +44,17 @@
                 <div class="panel-footer" id="manualPanelFooter">
                     <div class="d-flex flex-column justify-content-between h-100">
                         <div class="d-flex flex-column gap-2">
-                            <button type="button" class="btn btn-outline-secondary btn-sm panel-action-btn" id="manualResetBtn" onclick="ManualModule.resetPanel()" title="Remove mapping">
+                            <button type="button" class="btn btn-outline-secondary btn-sm panel-action-btn" id="manualResetBtn" data-action="manual-reset-panel" title="Remove mapping">
                                 <i class="bi bi-arrow-counterclockwise"></i> Unmap
                             </button>
-                            <button type="button" class="btn btn-outline-primary btn-sm panel-action-btn" id="manualAutoMapBtn" onclick="ManualModule.autoMap()" title="Generate SQL, execute, and auto-map columns">
+                            <button type="button" class="btn btn-outline-primary btn-sm panel-action-btn" id="manualAutoMapBtn" data-action="manual-auto-map" title="Generate SQL, execute, and auto-map columns">
                                 <span class="spinner-border spinner-border-sm d-none me-1" role="status"></span>
                                 <i class="bi bi-lightning-charge"></i> Auto-Map
                             </button>
                         </div>
                         <div class="d-flex flex-column gap-2">
-                            <button type="button" class="btn btn-secondary btn-sm panel-action-btn" onclick="ManualModule.closePanel()">Cancel</button>
-                            <button type="button" class="btn btn-dark btn-sm panel-action-btn" id="manualSavePanelBtn" onclick="ManualModule.saveMapping()" disabled>
+                            <button type="button" class="btn btn-secondary btn-sm panel-action-btn" data-action="manual-close-panel">Cancel</button>
+                            <button type="button" class="btn btn-dark btn-sm panel-action-btn" id="manualSavePanelBtn" data-action="manual-save-mapping" disabled>
                                 <i class="bi bi-check-circle"></i> Save
                             </button>
                         </div>

@@ -4,7 +4,7 @@
 Ontology class
 --------------
 
-.. automodule:: back.objects.ontology.ontology
+.. automodule:: back.objects.ontology.Ontology
    :members:
    :undoc-members:
    :show-inheritance:

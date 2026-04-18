@@ -4,7 +4,7 @@
 Middleware
 ----------
 
-.. automodule:: back.objects.session.middleware
+.. automodule:: back.objects.session.FileSessionMiddleware
    :members:
    :undoc-members:
    :show-inheritance:

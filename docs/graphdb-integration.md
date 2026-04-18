@@ -80,6 +80,11 @@ if your engine does not speak SQL:
 
 ### 2.2 `GraphDBBackend` (graph-specific)
 
+**Constructor parameter** — every engine receives `engine_config: Dict[str, Any]`
+(default `{}`) from the factory.  This is a free-form JSON dict set by the
+admin in **Settings > Graph DB > Engine Configuration**.  Each engine defines
+its own keys.  For LadybugDB, an empty `{}` is sufficient.
+
 These abstract methods **must** be implemented:
 
 | Method | Signature | Description |
@@ -163,20 +168,22 @@ __all__ = ["KuzuStore"]
 Edit `src/back/core/graphdb/GraphDBFactory.py`:
 
 ```python
-def create(self, domain, settings=None, engine=None):
+def create(self, domain, settings=None, engine=None, engine_config=None):
     if engine is None:
         engine = "ladybug"
+    if engine_config is None:
+        engine_config = {}
 
     if engine == "ladybug":
-        return self._create_ladybug(domain, settings)
+        return self._create_ladybug(domain, settings, engine_config=engine_config)
 
     if engine == "kuzu":                      # ← NEW
-        return self._create_kuzu(domain, settings)
+        return self._create_kuzu(domain, settings, engine_config=engine_config)
 
     logger.warning("Unknown graph DB engine: %s", engine)
     return None
 
-def _create_kuzu(self, domain, settings=None):   # ← NEW
+def _create_kuzu(self, domain, settings=None, *, engine_config=None):   # ← NEW
     """Instantiate a KuzuDB store."""
     try:
         from back.core.graphdb.kuzu.KuzuStore import KuzuStore
@@ -184,7 +191,7 @@ def _create_kuzu(self, domain, settings=None):   # ← NEW
         base_name = (domain.info or {}).get("name", DEFAULT_GRAPH_NAME)
         version = getattr(domain, 'current_version', '1') or '1'
         db_name = f"{base_name}_V{version}"
-        return KuzuStore(db_path=db_path, db_name=db_name)
+        return KuzuStore(db_path=db_path, db_name=db_name, engine_config=engine_config)
     except ImportError as e:
         logger.warning("KuzuDB requires kuzu: %s", e)
         return None
@@ -192,6 +199,12 @@ def _create_kuzu(self, domain, settings=None):   # ← NEW
         logger.exception("Failed to create KuzuStore: %s", e)
         return None
 ```
+
+> **`engine_config`** is a free-form JSON dict set by the admin in
+> **Settings > Graph DB > Engine Configuration**.  The factory reads it
+> from `GlobalConfigService` and passes it to every engine constructor.
+> Each engine defines its own keys (e.g. `host`, `port`, `credentials_path`).
+> For LadybugDB an empty `{}` is sufficient.
 
 Then update the availability check at the bottom of the file:
 

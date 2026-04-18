@@ -2,9 +2,10 @@
 
 Supports multiple engine types (currently only ``"ladybug"``).  The *engine*
 parameter is the extension point for future graph DB engines (Neo4j,
-KuzuDB, etc.).
+KuzuDB, etc.).  The *engine_config* parameter carries engine-specific
+JSON configuration set by the admin in Settings > Graph DB.
 """
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from back.core.databricks import is_databricks_app
 from back.core.helpers import (
@@ -27,6 +28,7 @@ class GraphDBFactory:
         domain: Any,
         settings: Optional[Any] = None,
         engine: Optional[str] = None,
+        engine_config: Optional[Dict[str, Any]] = None,
     ) -> Optional[Any]:
         """Create a graph DB backend.
 
@@ -35,15 +37,19 @@ class GraphDBFactory:
             settings: Optional application settings.
             engine: ``"ladybug"`` (default).  Future values: ``"neo4j"``,
                      ``"kuzu"``, etc.
+            engine_config: Engine-specific JSON configuration set by the
+                           admin in Settings > Graph DB.
 
         Returns:
             GraphDBBackend instance or *None* if configuration is incomplete.
         """
         if engine is None:
             engine = "ladybug"
+        if engine_config is None:
+            engine_config = {}
 
         if engine == "ladybug":
-            return self._create_ladybug(domain, settings)
+            return self._create_ladybug(domain, settings, engine_config=engine_config)
 
         logger.warning("Unknown graph DB engine: %s", engine)
         return None
@@ -87,7 +93,11 @@ class GraphDBFactory:
         return _restore
 
     def _create_ladybug(
-        self, domain: Any, settings: Optional[Any] = None,
+        self,
+        domain: Any,
+        settings: Optional[Any] = None,
+        *,
+        engine_config: Optional[Dict[str, Any]] = None,
     ) -> Optional[Any]:
         """Instantiate a LadybugDB store, choosing graph or flat model."""
         try:
@@ -128,10 +138,12 @@ class GraphDBFactory:
         domain: Any,
         settings: Optional[Any] = None,
         engine: Optional[str] = None,
+        engine_config: Optional[Dict[str, Any]] = None,
     ) -> Optional[Any]:
         """Convenience wrapper using the package singleton factory instance."""
         return _get_factory_singleton().create(
             domain, settings=settings, engine=engine,
+            engine_config=engine_config,
         )
 
 

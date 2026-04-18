@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const hostDisplay = document.getElementById('currentHostDisplay');
             if (data.host) {
-                hostDisplay.innerHTML = `<i class="bi bi-cloud text-success"></i> ${data.host}`;
+                hostDisplay.innerHTML = '<i class="bi bi-cloud text-success"></i> ' + escapeHtmlSettings(data.host);
             } else {
                 hostDisplay.innerHTML = '<i class="bi bi-exclamation-circle text-warning"></i> Not configured';
             }
@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     select.appendChild(opt);
                 });
             } else if (data.error) {
-                select.innerHTML = `<option value="">Error: ${data.error}</option>`;
+                select.innerHTML = '<option value="">Error: ' + escapeHtmlSettings(data.error) + '</option>';
             } else {
                 select.innerHTML = '<option value="">No warehouses available</option>';
             }
@@ -277,6 +277,70 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // =====================================================================
+    //  LADYBUGDB TAB – Graph Engine Config (JSON textarea)
+    // =====================================================================
+
+    let graphEngineConfigLoaded = false;
+
+    async function loadGraphEngineConfig() {
+        try {
+            const resp = await fetch('/settings/graph-engine-config', { credentials: 'same-origin' });
+            const data = await resp.json();
+            if (data.success) {
+                const ta = document.getElementById('graphEngineConfig');
+                if (ta) ta.value = JSON.stringify(data.graph_engine_config || {}, null, 2);
+            }
+            graphEngineConfigLoaded = true;
+        } catch (e) {
+            console.log('Using default graph engine config');
+        }
+    }
+
+    document.getElementById('btnSaveGraphEngineConfig')?.addEventListener('click', async function () {
+        const btn = this;
+        const ta = document.getElementById('graphEngineConfig');
+        const errDiv = document.getElementById('graphEngineConfigError');
+        if (!ta) return;
+
+        let parsed;
+        try {
+            parsed = JSON.parse(ta.value);
+        } catch (parseErr) {
+            if (errDiv) { errDiv.textContent = 'Invalid JSON: ' + parseErr.message; errDiv.style.display = 'block'; }
+            return;
+        }
+        if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+            if (errDiv) { errDiv.textContent = 'Configuration must be a JSON object (not an array or primitive)'; errDiv.style.display = 'block'; }
+            return;
+        }
+        if (errDiv) errDiv.style.display = 'none';
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+        try {
+            const resp = await fetch('/settings/graph-engine-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ graph_engine_config: parsed })
+            });
+            const result = await resp.json();
+            if (result.success) {
+                ta.value = JSON.stringify(result.graph_engine_config || parsed, null, 2);
+                showNotification('Engine configuration saved', 'success', 2000);
+            } else {
+                showNotification('Error: ' + (result.message || 'Unknown error'), 'error');
+            }
+        } catch (e) {
+            showNotification('Error saving engine config: ' + e.message, 'error');
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save';
+    });
+
+    // =====================================================================
     //  LADYBUGDB TAB – Local files
     // =====================================================================
 
@@ -284,6 +348,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('tab-ladybugdb')?.addEventListener('shown.bs.tab', () => {
         if (!graphEngineLoaded) loadGraphEngine();
+        if (!graphEngineConfigLoaded) loadGraphEngineConfig();
         if (!ladybugFilesLoaded) loadLadybugFiles();
     });
 

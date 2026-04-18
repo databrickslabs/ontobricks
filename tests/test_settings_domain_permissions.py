@@ -3,11 +3,15 @@
 Covers: list, add/update, delete domain permissions, role validation,
 and app-level builder role acceptance.
 """
+import importlib
+
 import pytest
 from unittest.mock import patch, MagicMock
 
 from back.core.errors import ValidationError, InfrastructureError
-from back.objects.domain.settings_service import SettingsService
+from back.objects.domain.SettingsService import SettingsService
+
+_svc_module = importlib.import_module("back.objects.domain.SettingsService")
 
 
 REGISTRY_CFG = {"catalog": "cat", "schema": "sch", "volume": "vol"}
@@ -24,9 +28,9 @@ class TestListDomainPermissions:
         session_mgr, settings = _mock_context()
         entries = [{"principal": "a@b.com", "role": "viewer"}]
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
-             patch("back.objects.domain.settings_service.permission_service") as ps:
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
+             patch.object(_svc_module, "permission_service") as ps:
             ps.list_domain_entries.return_value = entries
             result = SettingsService.list_domain_permissions_result("my_domain", session_mgr, settings)
 
@@ -42,9 +46,9 @@ class TestAddDomainPermission:
         data = {"principal": "a@b.com", "principal_type": "user",
                 "display_name": "Alice", "role": "builder"}
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
-             patch("back.objects.domain.settings_service.permission_service") as ps:
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
+             patch.object(_svc_module, "permission_service") as ps:
             ps.add_or_update_domain_entry.return_value = (True, "ok")
             result = SettingsService.add_domain_permission_result("my_domain", data, session_mgr, settings)
 
@@ -77,9 +81,9 @@ class TestAddDomainPermission:
         data = {"principal": "a@b.com", "principal_type": "user",
                 "display_name": "A", "role": role}
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
-             patch("back.objects.domain.settings_service.permission_service") as ps:
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
+             patch.object(_svc_module, "permission_service") as ps:
             ps.add_or_update_domain_entry.return_value = (True, "ok")
             result = SettingsService.add_domain_permission_result("my_domain", data, session_mgr, settings)
 
@@ -90,8 +94,8 @@ class TestAddDomainPermission:
         data = {"principal": "a@b.com", "principal_type": "user",
                 "display_name": "A", "role": "viewer"}
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", EMPTY_REGISTRY)), \
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", EMPTY_REGISTRY)), \
              pytest.raises(ValidationError, match="Registry not configured"):
             SettingsService.add_domain_permission_result("my_domain", data, session_mgr, settings)
 
@@ -100,9 +104,9 @@ class TestAddDomainPermission:
         data = {"principal": "a@b.com", "principal_type": "user",
                 "display_name": "A", "role": "viewer"}
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
-             patch("back.objects.domain.settings_service.permission_service") as ps:
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
+             patch.object(_svc_module, "permission_service") as ps:
             ps.add_or_update_domain_entry.return_value = (False, "disk full")
             with pytest.raises(InfrastructureError):
                 SettingsService.add_domain_permission_result("my_domain", data, session_mgr, settings)
@@ -112,9 +116,9 @@ class TestDeleteDomainPermission:
     def test_delete_success(self):
         session_mgr, settings = _mock_context()
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
-             patch("back.objects.domain.settings_service.permission_service") as ps:
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
+             patch.object(_svc_module, "permission_service") as ps:
             ps.remove_domain_entry.return_value = (True, "ok")
             result = SettingsService.delete_domain_permission_result("my_domain", "a@b.com", session_mgr, settings)
 
@@ -123,9 +127,9 @@ class TestDeleteDomainPermission:
     def test_delete_not_found_raises(self):
         session_mgr, settings = _mock_context()
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
-             patch("back.objects.domain.settings_service.permission_service") as ps:
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
+             patch.object(_svc_module, "permission_service") as ps:
             ps.remove_domain_entry.return_value = (False, "not found")
             with pytest.raises(InfrastructureError):
                 SettingsService.delete_domain_permission_result("my_domain", "a@b.com", session_mgr, settings)
@@ -133,8 +137,8 @@ class TestDeleteDomainPermission:
     def test_delete_no_registry_raises(self):
         session_mgr, settings = _mock_context()
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", EMPTY_REGISTRY)), \
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", EMPTY_REGISTRY)), \
              pytest.raises(ValidationError, match="Registry not configured"):
             SettingsService.delete_domain_permission_result("my_domain", "a@b.com", session_mgr, settings)
 
@@ -148,9 +152,9 @@ class TestAppLevelRoleValidation:
         data = {"principal": "a@b.com", "principal_type": "user",
                 "display_name": "A", "role": role}
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
-             patch("back.objects.domain.settings_service.permission_service") as ps:
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
+             patch.object(_svc_module, "permission_service") as ps:
             ps.add_or_update_entry.return_value = (True, "ok")
             result = SettingsService.add_permission_result(data, session_mgr, settings)
 
@@ -188,9 +192,9 @@ class TestSearchWorkspacePrincipals:
             "groups": [],
         }
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
-             patch("back.objects.domain.settings_service.permission_service") as ps:
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
+             patch.object(_svc_module, "permission_service") as ps:
             ps.list_app_principals.return_value = principals
             result = SettingsService.search_workspace_principals("alice", "user", session_mgr, settings)
 
@@ -210,9 +214,9 @@ class TestSearchWorkspacePrincipals:
             "groups": [],
         }
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
-             patch("back.objects.domain.settings_service.permission_service") as ps:
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
+             patch.object(_svc_module, "permission_service") as ps:
             ps.list_app_principals.return_value = principals
             result = SettingsService.search_workspace_principals("jones", "user", session_mgr, settings)
 
@@ -228,9 +232,9 @@ class TestSearchWorkspacePrincipals:
             "groups": [],
         }
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
-             patch("back.objects.domain.settings_service.permission_service") as ps:
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
+             patch.object(_svc_module, "permission_service") as ps:
             ps.list_app_principals.return_value = principals
             result = SettingsService.search_workspace_principals("alice", "user", session_mgr, settings)
 
@@ -249,9 +253,9 @@ class TestSearchWorkspacePrincipals:
             ],
         }
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
-             patch("back.objects.domain.settings_service.permission_service") as ps:
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
+             patch.object(_svc_module, "permission_service") as ps:
             ps.list_app_principals.return_value = principals
             result = SettingsService.search_workspace_principals("data", "group", session_mgr, settings)
 
@@ -269,9 +273,9 @@ class TestSearchWorkspacePrincipals:
             "groups": [],
         }
 
-        with patch("back.objects.domain.settings_service.SettingsService._resolve_context",
-                    return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
-             patch("back.objects.domain.settings_service.permission_service") as ps:
+        with patch.object(SettingsService, "_resolve_context",
+                          return_value=(MagicMock(), "h", "t", REGISTRY_CFG)), \
+             patch.object(_svc_module, "permission_service") as ps:
             ps.list_app_principals.return_value = principals
             result = SettingsService.search_workspace_principals("zzz", "user", session_mgr, settings)
 

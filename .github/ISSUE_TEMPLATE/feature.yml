@@ -1,0 +1,51 @@
+name: Feature Request
+description: Suggest a new feature or improvement for OntoBricks
+title: '[FEATURE]: '
+labels: feature,needs-triage
+body:
+  - type: checkboxes
+    attributes:
+      label: Is there an existing issue for this?
+      description: Please search to see if an issue already exists for the feature you're requesting.
+      options:
+      - label: I have searched the existing issues
+        required: true
+
+  - type: textarea
+    attributes:
+      label: Problem Statement
+      description: A clear and concise description of the problem. Ex. "I'm always frustrated when [...]"
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Proposed Solution
+      description: A clear and concise description of what you want to happen.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which area of OntoBricks does this relate to?
+      options:
+        - Ontology Management
+        - Mapping (Manual / SparkSQL)
+        - SPARQL / Query
+        - Digital Twin
+        - Settings / Configuration
+        - API / MCP Server
+        - UI / UX
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Additional Context
+      description: Add any other context, references, or screenshots about the feature request here.
+    validations:
+      required: false

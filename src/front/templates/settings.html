@@ -296,6 +296,28 @@
                     <small class="text-muted">Selects the graph database engine used for building and querying knowledge graphs.</small>
                 </div>
 
+                <!-- Graph DB Engine Configuration -->
+                <div class="mb-4">
+                    <label for="graphEngineConfig" class="form-label fw-semibold">
+                        Engine Configuration
+                        <span class="badge bg-warning-subtle text-warning-emphasis border ms-2" style="font-size:0.65rem;">
+                            <i class="bi bi-shield-lock me-1"></i>Admin only
+                        </span>
+                    </label>
+                    <textarea class="form-control font-monospace" id="graphEngineConfig"
+                              rows="6" placeholder="{}" spellcheck="false">{}</textarea>
+                    <div class="d-flex justify-content-between align-items-start mt-2">
+                        <small class="text-muted">
+                            Engine-specific configuration as JSON. Passed to the graph DB wrapper on init.
+                            For LadybugDB an empty <code>{}</code> is sufficient.
+                        </small>
+                        <button type="button" class="btn btn-sm btn-primary ms-2" id="btnSaveGraphEngineConfig">
+                            <i class="bi bi-check-circle me-1"></i> Save
+                        </button>
+                    </div>
+                    <div id="graphEngineConfigError" class="text-danger small mt-1" style="display:none;"></div>
+                </div>
+
                 <hr class="my-3">
 
                 <p class="text-muted small mb-3">

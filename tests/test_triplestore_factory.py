@@ -32,10 +32,11 @@ class TestGetTriplestore:
         """When backend is None, default to graph (GraphDBFactory)."""
         domain = _mock_domain()
         with patch("back.core.graphdb.get_graphdb") as mock_gdb, \
-             patch.object(TripleStoreFactory, "_resolve_graph_engine", return_value="ladybug"):
+             patch.object(TripleStoreFactory, "_resolve_graph_engine", return_value="ladybug"), \
+             patch.object(TripleStoreFactory, "_resolve_graph_engine_config", return_value={}):
             mock_gdb.return_value = MagicMock()
             result = get_triplestore(domain)
-            mock_gdb.assert_called_once_with(domain, None, engine="ladybug")
+            mock_gdb.assert_called_once_with(domain, None, engine="ladybug", engine_config={})
 
     @patch.object(_triple_store_factory_mod, 'get_databricks_host_and_token', return_value=('', ''))
     def test_view_missing_host_returns_none(self, mock_get):

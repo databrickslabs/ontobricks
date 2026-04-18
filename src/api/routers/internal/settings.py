@@ -12,9 +12,19 @@ from back.objects.session import SessionManager, get_session_manager
 from back.core.helpers import resolve_default_base_uri, resolve_default_emoji
 from back.objects.session import get_domain
 
-from back.objects.domain.settings_service import SettingsService as config_service
+from back.objects.domain.SettingsService import SettingsService as config_service
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
+
+
+def _settings_request_identity(request: Request) -> tuple[str, str, str, str, str]:
+    """Extract user identity primitives for :class:`SettingsService` (no FastAPI types in domain layer)."""
+    email = getattr(request.state, "user_email", "") or request.headers.get("x-forwarded-email", "")
+    display_name = request.headers.get("x-forwarded-preferred-username", email) or ""
+    user_token = request.headers.get("x-forwarded-access-token", "") or ""
+    user_role = getattr(request.state, "user_role", "") or ""
+    user_domain_role = getattr(request.state, "user_domain_role", "") or ""
+    return email, display_name, user_token, user_role, user_domain_role
 
 
 # ===========================================
@@ -39,7 +49,8 @@ async def save_config(
     Catalog/schema are NOT stored -- they are selected dynamically when needed.
     """
     data = await request.json()
-    return config_service.apply_config_save(data, request, session_mgr, settings)
+    email, _display_name, user_token, _user_role, _user_domain_role = _settings_request_identity(request)
+    return config_service.apply_config_save(data, email, user_token, session_mgr, settings)
 
 
 @router.post("/test-connection")
@@ -72,8 +83,9 @@ async def select_warehouse(
     can immediately browse catalogs and set up the registry.
     """
     data = await request.json()
+    email, _display_name, user_token, _user_role, _user_domain_role = _settings_request_identity(request)
     return config_service.select_warehouse(
-        data.get('warehouse_id'), request, session_mgr, settings,
+        data.get('warehouse_id'), email, user_token, session_mgr, settings,
     )
 
 
@@ -228,7 +240,8 @@ async def set_default_emoji(
     """Set default emoji (admin only, stored globally)."""
     data = await request.json()
     emoji = data.get('emoji', '📦')
-    return config_service.set_default_emoji_result(emoji, request, session_mgr, settings)
+    email, _display_name, user_token, _user_role, _user_domain_role = _settings_request_identity(request)
+    return config_service.set_default_emoji_result(emoji, email, user_token, session_mgr, settings)
 
 
 @router.get("/get-base-uri")
@@ -250,7 +263,8 @@ async def save_base_uri(
     """Save default base URI domain (admin only, stored globally)."""
     data = await request.json()
     base_uri = data.get('base_uri', DEFAULT_BASE_URI.rstrip('/'))
-    return config_service.save_base_uri_result(base_uri, request, session_mgr, settings)
+    email, _display_name, user_token, _user_role, _user_domain_role = _settings_request_identity(request)
+    return config_service.save_base_uri_result(base_uri, email, user_token, session_mgr, settings)
 
 
 @router.get("/get-registry-cache-ttl")
@@ -271,7 +285,8 @@ async def save_registry_cache_ttl(
     """Save registry cache TTL in seconds (admin only, stored globally)."""
     data = await request.json()
     ttl = int(data.get('registry_cache_ttl', 300))
-    return config_service.save_registry_cache_ttl_result(ttl, request, session_mgr, settings)
+    email, _display_name, user_token, _user_role, _user_domain_role = _settings_request_identity(request)
+    return config_service.save_registry_cache_ttl_result(ttl, email, user_token, session_mgr, settings)
 
 
 # ===========================================
@@ -286,7 +301,10 @@ async def permissions_me(
     settings: Settings = Depends(get_settings),
 ):
     """Return the current user's identity and resolved role."""
-    return config_service.build_permissions_me(request, session_mgr, settings)
+    email, display_name, user_token, user_role, user_domain_role = _settings_request_identity(request)
+    return config_service.build_permissions_me(
+        email, display_name, user_token, user_role, user_domain_role, session_mgr, settings,
+    )
 
 
 @router.get("/permissions/diag")
@@ -295,7 +313,11 @@ async def permissions_diag(
     settings: Settings = Depends(get_settings),
 ):
     """Diagnostic: run the admin check in detail and return raw results."""
-    return config_service.build_permissions_diag(request, settings)
+    email = request.headers.get("x-forwarded-email", "")
+    _, display_name, user_token, user_role, user_domain_role = _settings_request_identity(request)
+    return config_service.build_permissions_diag(
+        email, display_name, user_token, user_role, user_domain_role, settings,
+    )
 
 
 @router.get("/permissions")
@@ -419,7 +441,30 @@ async def set_graph_engine(
     """Set the graph DB engine (admin only, stored globally)."""
     data = await request.json()
     engine = data.get('graph_engine', 'ladybug')
-    return config_service.set_graph_engine_result(engine, request, session_mgr, settings)
+    email, _display_name, user_token, _user_role, _user_domain_role = _settings_request_identity(request)
+    return config_service.set_graph_engine_result(engine, email, user_token, session_mgr, settings)
+
+
+@router.get("/graph-engine-config")
+async def get_graph_engine_config(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the engine-specific JSON configuration."""
+    return config_service.get_graph_engine_config_result(session_mgr, settings)
+
+
+@router.post("/graph-engine-config")
+async def set_graph_engine_config(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Set the engine-specific JSON configuration (admin only, stored globally)."""
+    data = await request.json()
+    config = data.get('graph_engine_config', {})
+    email, _dn, user_token, _ur, _udr = _settings_request_identity(request)
+    return config_service.set_graph_engine_config_result(config, email, user_token, session_mgr, settings)
 
 
 # ===========================================

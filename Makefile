@@ -52,15 +52,15 @@ test:
 
 test-cov:
 	@echo "Running tests with coverage..."
-	. .venv/bin/activate && pytest --cov=src/app --cov-report=html --cov-report=term
+	. .venv/bin/activate && pytest --cov=src --cov-report=html --cov-report=term
 
 format:
 	@echo "Formatting code..."
-	. .venv/bin/activate && black src/app/ src/api/ src/agents/ tests/
+	. .venv/bin/activate && black src/ tests/
 
 lint:
 	@echo "Linting code..."
-	. .venv/bin/activate && flake8 src/app/ src/api/ src/agents/ tests/ --max-line-length=100
+	. .venv/bin/activate && flake8 src/ tests/ --max-line-length=100
 
 clean:
 	@echo "Cleaning up..."

@@ -13,7 +13,6 @@ from back.core.helpers import (
     get_databricks_credentials,
     run_blocking,
 )
-from agents.serialization import serialize_agent_steps
 from back.core.logging import get_logger
 from back.objects.session import SessionManager, get_domain, get_session_manager
 from back.core.task_manager import get_task_manager
@@ -506,12 +505,6 @@ async def validate_sql(
 # Auto-Map Async
 # ===========================================
 
-def _chunk_pct(chunk_idx: int, num_chunks: int, inner_pct: int) -> int:
-    """Map a per-chunk progress percentage to an overall 1-95 range."""
-    chunk_span = 94.0 / max(num_chunks, 1)
-    return min(1 + int(chunk_idx * chunk_span + (inner_pct / 100.0) * chunk_span), 95)
-
-
 @router.post("/auto-assign/start")
 async def start_auto_assign(
     request: Request,
@@ -596,7 +589,6 @@ async def start_auto_assign(
     )
     logger.info("Auto-assign: task created — id=%s", task.id)
 
-    # Get current mappings to update
     entity_mappings = list(domain.get_entity_mappings())
     relationship_mappings = list(domain.get_relationship_mappings())
     logger.info(
@@ -604,210 +596,26 @@ async def start_auto_assign(
         len(entity_mappings), len(relationship_mappings),
     )
 
-    # Capture session file info for direct writes from the background thread
     session_id = getattr(request.state, 'session_id', None)
     session_ref = getattr(request.state, 'session', None)
+    mapping_svc = Mapping(domain)
 
     def run_auto_assign():
-        import time as _time
-        from shared.config.constants import AUTO_ASSIGN_CHUNK_SIZE, AUTO_ASSIGN_CHUNK_COOLDOWN
+        mapping_svc.run_auto_assign_task(
+            task,
+            entities=entities,
+            relationships=relationships,
+            host=host,
+            token=token,
+            client=client,
+            llm_endpoint=llm_endpoint,
+            schema_context=schema_context,
+            session_id=session_id,
+            session_ref=session_ref,
+            entity_mappings=entity_mappings,
+            relationship_mappings=relationship_mappings,
+        )
 
-        try:
-            tm.start_task(task.id, "Starting auto-mapping agent…")
-            task.result = {
-                "live_stats": True,
-                "entities_assigned": 0,
-                "entities_total": len(entities),
-                "relationships_assigned": 0,
-                "relationships_total": len(relationships),
-            }
-            logger.info("Auto-assign agent thread started — task=%s", task.id)
-
-            # Fetch documents once at agent start
-            documents = Mapping.fetch_documents_for_agent(domain, host, token)
-
-            # Split items into chunks to avoid rate-limit exhaustion
-            all_items = [("entity", e) for e in entities] + [("rel", r) for r in relationships]
-            chunk_size = max(AUTO_ASSIGN_CHUNK_SIZE, 1)
-            chunks = [all_items[i:i + chunk_size] for i in range(0, len(all_items), chunk_size)]
-            num_chunks = len(chunks)
-
-            logger.info(
-                "Auto-assign: splitting %d items into %d chunk(s) of ≤%d",
-                len(all_items), num_chunks, chunk_size,
-            )
-
-            # Accumulators across all chunks — keyed by URI to prevent duplicates
-            entity_mapping_by_uri = {}
-            rel_mapping_by_uri = {}
-            # URIs that this chunk was asked to map (only accept results for these)
-            all_steps = []
-            total_iterations = 0
-            total_usage = {"prompt_tokens": 0, "completion_tokens": 0}
-            chunk_errors = []
-
-            for chunk_idx, chunk in enumerate(chunks):
-                chunk_num = chunk_idx + 1
-                chunk_entities = [item for kind, item in chunk if kind == "entity"]
-                chunk_rels = [item for kind, item in chunk if kind == "rel"]
-                chunk_total = len(chunk_entities) + len(chunk_rels)
-
-                # Track which URIs this chunk is responsible for
-                chunk_entity_uris = {e.get("uri", "") for e in chunk_entities}
-                chunk_rel_uris = {r.get("uri", "") for r in chunk_rels}
-
-                logger.info(
-                    "----- Chunk %d/%d: %d entities, %d relationships -----",
-                    chunk_num, num_chunks, len(chunk_entities), len(chunk_rels),
-                )
-
-                # Cooldown between chunks (skip before the first)
-                if chunk_idx > 0:
-                    logger.info("Auto-assign: cooling down %ds before chunk %d/%d", AUTO_ASSIGN_CHUNK_COOLDOWN, chunk_num, num_chunks)
-                    tm.update_progress(task.id, _chunk_pct(chunk_idx, num_chunks, 0),
-                                       f"Cooling down before chunk {chunk_num}/{num_chunks}…")
-                    _time.sleep(AUTO_ASSIGN_CHUNK_COOLDOWN)
-
-                def on_step(msg: str, progress_pct: int = 0):
-                    overall_pct = _chunk_pct(chunk_idx, num_chunks, progress_pct)
-                    tm.update_progress(task.id, overall_pct, f"[{chunk_num}/{num_chunks}] {msg}")
-
-                # Pass existing + already-accumulated as read-only context
-                context_entity_mappings = entity_mappings + list(entity_mapping_by_uri.values())
-                context_rel_mappings = relationship_mappings + list(rel_mapping_by_uri.values())
-
-                try:
-                    agent_result = Mapping(domain).auto_assign_with_agent(
-                        host=host,
-                        token=token,
-                        endpoint_name=llm_endpoint,
-                        client=client,
-                        metadata=schema_context,
-                        ontology={"entities": chunk_entities, "relationships": chunk_rels},
-                        entity_mappings=context_entity_mappings,
-                        relationship_mappings=context_rel_mappings,
-                        documents=documents,
-                        on_step=on_step,
-                    )
-                except Exception as chunk_exc:
-                    logger.exception("Auto-assign chunk %d/%d crashed: %s", chunk_num, num_chunks, chunk_exc)
-                    chunk_errors.append(f"Chunk {chunk_num}: {chunk_exc}")
-                    continue
-
-                if agent_result.error and not agent_result.success:
-                    logger.warning("Auto-assign chunk %d/%d failed: %s", chunk_num, num_chunks, agent_result.error)
-                    chunk_errors.append(f"Chunk {chunk_num}: {agent_result.error}")
-                    continue
-
-                # Only accept mappings for URIs this chunk was asked to process
-                for em in agent_result.entity_mappings:
-                    uri = em.get("ontology_class") or em.get("class_uri", "")
-                    if uri and uri in chunk_entity_uris:
-                        entity_mapping_by_uri[uri] = em
-                for rm in agent_result.relationship_mappings:
-                    uri = rm.get("property", "")
-                    if uri and uri in chunk_rel_uris:
-                        rel_mapping_by_uri[uri] = rm
-
-                all_steps.extend(agent_result.steps)
-                total_iterations += agent_result.iterations
-                for k in total_usage:
-                    total_usage[k] += agent_result.usage.get(k, 0)
-
-                e_done = len(entity_mapping_by_uri)
-                r_done = len(rel_mapping_by_uri)
-
-                tm.update_progress(
-                    task.id,
-                    _chunk_pct(chunk_idx, num_chunks, 100),
-                    f"[{chunk_num}/{num_chunks}] Entities: {e_done}/{len(entities)}, Relationships: {r_done}/{len(relationships)}",
-                )
-                task.result = {
-                    "live_stats": True,
-                    "entities_assigned": e_done,
-                    "entities_total": len(entities),
-                    "relationships_assigned": r_done,
-                    "relationships_total": len(relationships),
-                }
-
-                logger.info(
-                    "Chunk %d/%d done: +%d entities, +%d rels (cumulative: %d entities, %d rels)",
-                    chunk_num, num_chunks,
-                    agent_result.stats.get("entities", 0),
-                    agent_result.stats.get("relationships", 0),
-                    e_done, r_done,
-                )
-
-            # --- All chunks processed ---
-            all_entity_mappings = list(entity_mapping_by_uri.values())
-            all_relationship_mappings = list(rel_mapping_by_uri.values())
-            e_count = len(all_entity_mappings)
-            r_count = len(all_relationship_mappings)
-
-            logger.info(
-                "===== AUTO-ASSIGN AGENT DONE ===== entities=%d, relationships=%d, iterations=%d, chunks=%d, errors=%d",
-                e_count, r_count, total_iterations, num_chunks, len(chunk_errors),
-            )
-            logger.info(
-                "Auto-assign: usage — prompt_tokens=%d, completion_tokens=%d",
-                total_usage.get("prompt_tokens", 0), total_usage.get("completion_tokens", 0),
-            )
-            for em in all_entity_mappings:
-                logger.info(
-                    "Auto-assign: entity mapping — class=%s, id=%s, label=%s, attrs=%d",
-                    em.get("class_name", "?"), em.get("id_column", "?"),
-                    em.get("label_column", "?"), len(em.get("attribute_mappings", {})),
-                )
-            for rm in all_relationship_mappings:
-                logger.info(
-                    "Auto-assign: relationship mapping — prop=%s, src=%s, tgt=%s",
-                    rm.get("property_name", "?"), rm.get("source_id_column", "?"),
-                    rm.get("target_id_column", "?"),
-                )
-
-            if e_count == 0 and r_count == 0:
-                error_detail = "; ".join(chunk_errors) if chunk_errors else "No mappings produced"
-                logger.error("Auto-assign: no mappings produced — %s", error_detail)
-                tm.fail_task(task.id, error_detail)
-                return
-
-            per_item_results = Mapping.build_per_item_results(
-                entities, relationships,
-                all_entity_mappings,
-                all_relationship_mappings,
-            )
-
-            Mapping.save_mappings_to_session(
-                session_id, session_ref,
-                all_entity_mappings,
-                all_relationship_mappings,
-                existing_entity_mappings=entity_mappings,
-                existing_relationship_mappings=relationship_mappings,
-            )
-
-            message = f"Completed: {e_count} entities, {r_count} relationships mapped"
-            if chunk_errors:
-                message += f" ({len(chunk_errors)} chunk(s) had errors)"
-
-            tm.complete_task(task.id, result={
-                'results': per_item_results,
-                'stats': {
-                    'total': total_items,
-                    'success': e_count + r_count,
-                    'failed': total_items - e_count - r_count,
-                },
-                'entity_mappings': all_entity_mappings,
-                'relationship_mappings': all_relationship_mappings,
-                'agent_steps': serialize_agent_steps(all_steps),
-                'agent_iterations': total_iterations,
-                'agent_usage': total_usage,
-            }, message=message)
-
-        except Exception as e:
-            logger.exception("===== AUTO-ASSIGN AGENT FAILED ===== %s", e)
-            tm.fail_task(task.id, "Auto-assign failed unexpectedly")
-
-    # Start thread
     thread = threading.Thread(target=run_auto_assign, daemon=True)
     thread.start()
     logger.info("Auto-assign: background thread started — task=%s", task.id)
@@ -822,8 +630,6 @@ async def start_auto_assign(
 # ===========================================
 # Single-item Auto-Map (async task)
 # ===========================================
-
-SINGLE_ITEM_MAX_ITERATIONS = 15
 
 @router.post("/auto-assign/single")
 async def single_auto_assign(
@@ -865,9 +671,6 @@ async def single_auto_assign(
     client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
 
     item_name = item.get("name", "?")
-    entities = [item] if item_type == "entity" else []
-    relationships = [item] if item_type == "relationship" else []
-    ontology_payload = {"entities": entities, "relationships": relationships}
 
     logger.info(
         "Single auto-assign: type=%s, name=%s, endpoint=%s",
@@ -890,81 +693,23 @@ async def single_auto_assign(
     session_ref = getattr(request.state, 'session', None)
     existing_entity_mappings = list(domain.get_entity_mappings())
     existing_relationship_mappings = list(domain.get_relationship_mappings())
+    mapping_svc = Mapping(domain)
 
     def _run():
-        try:
-            tm.start_task(task.id, f"Auto-mapping {item_type}: {item_name}…")
-
-            documents = Mapping.fetch_documents_for_agent(domain, host, token)
-
-            def on_step(msg: str, progress_pct: int = 0):
-                tm.update_progress(task.id, progress_pct, msg)
-
-            agent_result = Mapping(domain).auto_assign_with_agent(
-                host=host,
-                token=token,
-                endpoint_name=llm_endpoint,
-                client=client,
-                metadata=schema_context,
-                ontology=ontology_payload,
-                documents=documents,
-                max_iterations=SINGLE_ITEM_MAX_ITERATIONS,
-                on_step=on_step,
-            )
-
-            if not agent_result.success:
-                logger.warning("Single auto-assign agent failed: %s", agent_result.error)
-                tm.fail_task(task.id, agent_result.error or "Agent failed")
-                return
-
-            mapping = None
-            if item_type == "entity" and agent_result.entity_mappings:
-                mapping = agent_result.entity_mappings[0]
-                logger.info(
-                    "Single auto-assign entity result: class=%s, id=%s, label=%s, attrs=%d",
-                    mapping.get("class_name", "?"),
-                    mapping.get("id_column", "?"),
-                    mapping.get("label_column", "?"),
-                    len(mapping.get("attribute_mappings", {})),
-                )
-            elif item_type == "relationship" and agent_result.relationship_mappings:
-                mapping = agent_result.relationship_mappings[0]
-                logger.info(
-                    "Single auto-assign rel result: prop=%s, src=%s, tgt=%s",
-                    mapping.get("property_name", "?"),
-                    mapping.get("source_id_column", "?"),
-                    mapping.get("target_id_column", "?"),
-                )
-
-            if not mapping:
-                tm.fail_task(task.id, "Agent completed but produced no mapping")
-                return
-
-            # Persist the single mapping result to the session
-            if item_type == "entity":
-                Mapping.save_mappings_to_session(
-                    session_id, session_ref,
-                    agent_result.entity_mappings,
-                    None,
-                    existing_entity_mappings=existing_entity_mappings,
-                )
-            else:
-                Mapping.save_mappings_to_session(
-                    session_id, session_ref,
-                    None,
-                    agent_result.relationship_mappings,
-                    existing_relationship_mappings=existing_relationship_mappings,
-                )
-
-            tm.complete_task(task.id, result={
-                "item_type": item_type,
-                "mapping": mapping,
-                "iterations": agent_result.iterations,
-            }, message=f"Assigned {item_type}: {item_name}")
-
-        except Exception as exc:
-            logger.exception("Single auto-assign thread error: %s", exc)
-            tm.fail_task(task.id, "Single auto-assign failed unexpectedly")
+        mapping_svc.run_single_auto_assign_task(
+            task,
+            item_type=item_type,
+            item=item,
+            host=host,
+            token=token,
+            client=client,
+            llm_endpoint=llm_endpoint,
+            schema_context=schema_context,
+            session_id=session_id,
+            session_ref=session_ref,
+            existing_entity_mappings=existing_entity_mappings,
+            existing_relationship_mappings=existing_relationship_mappings,
+        )
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()

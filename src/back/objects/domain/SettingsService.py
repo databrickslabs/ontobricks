@@ -8,8 +8,6 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import Request
-
 from back.core.errors import (
     AuthorizationError,
     InfrastructureError,
@@ -70,7 +68,8 @@ class SettingsService:
 
     @staticmethod
     def require_admin_error(
-        request: Request,
+        email: str,
+        user_token: str,
         session_mgr: SessionManager,
         settings: Settings,
     ) -> None:
@@ -78,9 +77,7 @@ class SettingsService:
         if not is_databricks_app():
             return
 
-        email = getattr(request.state, 'user_email', '') or request.headers.get('x-forwarded-email', '')
         _, host, token, _ = SettingsService._resolve_context(session_mgr, settings)
-        user_token = request.headers.get('x-forwarded-access-token', '')
         if not permission_service.is_admin(
             email, host, token, settings.ontobricks_app_name, user_token=user_token,
         ):
@@ -124,7 +121,8 @@ class SettingsService:
     @staticmethod
     def apply_config_save(
         data: Dict[str, Any],
-        request: Request,
+        email: str,
+        user_token: str,
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
@@ -142,7 +140,7 @@ class SettingsService:
                     'SQL Warehouse is configured via Databricks App resources and cannot be changed here.',
                 )
 
-            SettingsService.require_admin_error(request, session_mgr, settings)
+            SettingsService.require_admin_error(email, user_token, session_mgr, settings)
             domain.databricks['warehouse_id'] = data['warehouse_id']
 
             _, host, token, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
@@ -208,7 +206,8 @@ class SettingsService:
     @staticmethod
     def select_warehouse(
         warehouse_id: Optional[str],
-        request: Request,
+        email: str,
+        user_token: str,
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
@@ -221,7 +220,7 @@ class SettingsService:
         if not warehouse_id:
             raise ValidationError('No warehouse ID provided')
 
-        SettingsService.require_admin_error(request, session_mgr, settings)
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
 
         domain, host, token, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
         domain.databricks['warehouse_id'] = warehouse_id
@@ -490,11 +489,12 @@ class SettingsService:
     @staticmethod
     def set_default_emoji_result(
         emoji: str,
-        request: Request,
+        email: str,
+        user_token: str,
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        SettingsService.require_admin_error(request, session_mgr, settings)
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
 
         _, host, token, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
         ok, msg = global_config_service.set_default_emoji(host, token, registry_cfg, emoji)
@@ -505,11 +505,12 @@ class SettingsService:
     @staticmethod
     def save_base_uri_result(
         base_uri: str,
-        request: Request,
+        email: str,
+        user_token: str,
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        SettingsService.require_admin_error(request, session_mgr, settings)
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
 
         _, host, token, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
         ok, msg = global_config_service.set_default_base_uri(host, token, registry_cfg, base_uri)
@@ -529,11 +530,12 @@ class SettingsService:
     @staticmethod
     def save_registry_cache_ttl_result(
         ttl: int,
-        request: Request,
+        email: str,
+        user_token: str,
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        SettingsService.require_admin_error(request, session_mgr, settings)
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
 
         _, host, token, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
         ok, msg = global_config_service.set_registry_cache_ttl(host, token, registry_cfg, ttl)
@@ -558,11 +560,12 @@ class SettingsService:
     @staticmethod
     def set_graph_engine_result(
         engine: str,
-        request: Request,
+        email: str,
+        user_token: str,
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        SettingsService.require_admin_error(request, session_mgr, settings)
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
 
         _, host, token, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
         ok, msg = global_config_service.set_graph_engine(host, token, registry_cfg, engine)
@@ -571,10 +574,42 @@ class SettingsService:
         return {'success': True, 'graph_engine': engine}
 
     @staticmethod
-    def build_permissions_me(request: Request, session_mgr: SessionManager, settings: Settings) -> Dict[str, Any]:
-        email = getattr(request.state, 'user_email', '') or request.headers.get('x-forwarded-email', '')
-        display_name = request.headers.get('x-forwarded-preferred-username', email)
+    def get_graph_engine_config_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return the engine-specific JSON configuration."""
+        _, host, token, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
+        cfg = global_config_service.get_graph_engine_config(host, token, registry_cfg)
+        return {'success': True, 'graph_engine_config': cfg}
 
+    @staticmethod
+    def set_graph_engine_config_result(
+        config: Dict[str, Any],
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Persist the engine-specific JSON configuration (admin only)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
+        ok, msg = global_config_service.set_graph_engine_config(host, token, registry_cfg, config)
+        if not ok:
+            raise ValidationError(msg)
+        return {'success': True, 'graph_engine_config': config}
+
+    @staticmethod
+    def build_permissions_me(
+        email: str,
+        display_name: str,
+        user_token: str,
+        user_role: str,
+        user_domain_role: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
         if not is_databricks_app():
             return {
                 'email': email or 'local-user',
@@ -587,7 +622,6 @@ class SettingsService:
         is_app_admin = False
         try:
             _, host, token, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
-            user_token = request.headers.get('x-forwarded-access-token', '')
 
             permission_service.clear_admin_cache(email)
             is_app_admin = permission_service.is_admin(
@@ -599,7 +633,11 @@ class SettingsService:
                 user_token=user_token,
             )
         except Exception as e:
-            logger.error("permissions/me: error resolving role for %s: %s", email, e, exc_info=True)
+            logger.error(
+                "permissions/me: error resolving role for %s (middleware app/domain role=%r/%r): %s",
+                email, user_role, user_domain_role, e,
+                exc_info=True,
+            )
 
         return {
             'email': email,
@@ -610,18 +648,26 @@ class SettingsService:
         }
 
     @staticmethod
-    def build_permissions_diag(request: Request, settings: Settings) -> Dict[str, Any]:
+    def build_permissions_diag(
+        email: str,
+        display_name: str,
+        user_token: str,
+        user_role: str,
+        user_domain_role: str,
+        settings: Settings,
+    ) -> Dict[str, Any]:
         from databricks.sdk import WorkspaceClient
         import requests as _req
 
-        email = request.headers.get("x-forwarded-email", "")
-        user_token = request.headers.get("x-forwarded-access-token", "")
         app_name = settings.ontobricks_app_name
         diag: dict = {
             "email": email,
             "app_name": app_name,
             "is_app_mode": is_databricks_app(),
             "user_token_present": bool(user_token),
+            "display_name": display_name,
+            "state_user_role": user_role,
+            "state_user_domain_role": user_domain_role,
         }
 
         # ── SDK path (SP token) ──
