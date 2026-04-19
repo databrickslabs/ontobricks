@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
-    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
@@ -73,6 +73,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -112,6 +113,7 @@
 
 <span class="sd">Moved from app/frontend/home/routes.py during the front/back split.</span>
 <span class="sd">&quot;&quot;&quot;</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Request</span><span class="p">,</span> <span class="n">Depends</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span><span class="p">,</span> <span class="n">InfrastructureError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">get_session_manager</span>
@@ -120,7 +122,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksClient</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_domain</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_databricks_client</span><span class="p">,</span> <span class="n">resolve_warehouse_id</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.services</span><span class="w"> </span><span class="kn">import</span> <span class="n">home</span> <span class="k">as</span> <span class="n">home_service</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.domain.HomeService</span><span class="w"> </span><span class="kn">import</span> <span class="n">HomeService</span> <span class="k">as</span> <span class="n">home_service</span>
 
 <span class="n">router</span> <span class="o">=</span> <span class="n">APIRouter</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Home&quot;</span><span class="p">])</span>
 
@@ -128,6 +130,7 @@
 <span class="c1"># ===========================================</span>
 <span class="c1"># Session Status APIs</span>
 <span class="c1"># ===========================================</span>
+
 
 <div class="viewcode-block" id="navbar_state">
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.home.navbar_state">[docs]</a>
@@ -166,7 +169,7 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Reset entire session.&quot;&quot;&quot;</span>
     <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     <span class="n">domain</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
-    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Session reset&#39;</span><span class="p">}</span></div>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Session reset&quot;</span><span class="p">}</span></div>
 
 
 
@@ -174,10 +177,13 @@
 <span class="c1"># Validation APIs</span>
 <span class="c1"># ===========================================</span>
 
+
 <div class="viewcode-block" id="validate_ontology_endpoint">
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.home.validate_ontology_endpoint">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/validate/ontology&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">validate_ontology_endpoint</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">validate_ontology_endpoint</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+<span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate current ontology.&quot;&quot;&quot;</span>
     <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">home_service</span><span class="o">.</span><span class="n">validate_ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span></div>
@@ -187,7 +193,6 @@
 <div class="viewcode-block" id="validate_detailed">
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.home.validate_detailed">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/validate/detailed&quot;</span><span class="p">)</span>
-<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/validate/detailed-status&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">validate_detailed</span><span class="p">(</span>
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
     <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
@@ -205,22 +210,23 @@
 <span class="c1"># Unity Catalog File Operations</span>
 <span class="c1"># ===========================================</span>
 
+
 <div class="viewcode-block" id="browse_volume">
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.home.browse_volume">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/browse-volume&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">browse_volume</span><span class="p">(</span>
     <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Browse files in a Unity Catalog volume.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="n">catalog</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;catalog&#39;</span><span class="p">)</span>
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;schema&#39;</span><span class="p">)</span>
-    <span class="n">volume</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;volume&#39;</span><span class="p">)</span>
-    <span class="n">path</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;path&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-    <span class="n">extensions</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;extensions&#39;</span><span class="p">,</span> <span class="p">[])</span>
-    
+    <span class="n">catalog</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">)</span>
+    <span class="n">volume</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;volume&quot;</span><span class="p">)</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;path&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="n">extensions</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;extensions&quot;</span><span class="p">,</span> <span class="p">[])</span>
+
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">([</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">volume</span><span class="p">]):</span>
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Missing required parameters: catalog, schema, volume&quot;</span><span class="p">)</span>
 
@@ -235,9 +241,14 @@
     <span class="n">files</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_volume_files</span><span class="p">(</span><span class="n">volume_path</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">extensions</span><span class="p">:</span>
-        <span class="n">files</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span> <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="n">ext</span><span class="p">)</span> <span class="k">for</span> <span class="n">ext</span> <span class="ow">in</span> <span class="n">extensions</span><span class="p">)</span> <span class="ow">or</span> <span class="n">f</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;is_directory&#39;</span><span class="p">)]</span>
+        <span class="n">files</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">f</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span>
+            <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="n">ext</span><span class="p">)</span> <span class="k">for</span> <span class="n">ext</span> <span class="ow">in</span> <span class="n">extensions</span><span class="p">)</span>
+            <span class="ow">or</span> <span class="n">f</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;is_directory&quot;</span><span class="p">)</span>
+        <span class="p">]</span>
 
-    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;files&#39;</span><span class="p">:</span> <span class="n">files</span><span class="p">,</span> <span class="s1">&#39;path&#39;</span><span class="p">:</span> <span class="n">volume_path</span><span class="p">}</span></div>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;files&quot;</span><span class="p">:</span> <span class="n">files</span><span class="p">,</span> <span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="n">volume_path</span><span class="p">}</span></div>
 
 
 
@@ -247,20 +258,21 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">read_volume_file</span><span class="p">(</span>
     <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Read a file from Unity Catalog volume.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
     <span class="c1"># Accept both &#39;path&#39; and &#39;file_path&#39; for compatibility</span>
-    <span class="n">path</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;path&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;file_path&#39;</span><span class="p">)</span>
-    
+    <span class="n">path</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;path&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;file_path&quot;</span><span class="p">)</span>
+
     <span class="k">if</span> <span class="ow">not</span> <span class="n">path</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;File path is required&quot;</span><span class="p">)</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
+
     <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">host</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;host&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
-    <span class="n">token</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;token&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
+    <span class="n">host</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
+    <span class="n">token</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
 
     <span class="n">uc_service</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
     <span class="n">success</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">message</span> <span class="o">=</span> <span class="n">uc_service</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
@@ -268,7 +280,7 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="n">success</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="n">message</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;Could not read file: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
-    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;content&#39;</span><span class="p">:</span> <span class="n">content</span><span class="p">}</span></div>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">content</span><span class="p">}</span></div>
 
 
 
@@ -278,21 +290,22 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">write_volume_file</span><span class="p">(</span>
     <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Write a file to Unity Catalog volume.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
     <span class="c1"># Accept both &#39;path&#39; and &#39;file_path&#39; for compatibility</span>
-    <span class="n">path</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;path&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;file_path&#39;</span><span class="p">)</span>
-    <span class="n">content</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;content&#39;</span><span class="p">)</span>
-    
+    <span class="n">path</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;path&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;file_path&quot;</span><span class="p">)</span>
+    <span class="n">content</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;content&quot;</span><span class="p">)</span>
+
     <span class="k">if</span> <span class="ow">not</span> <span class="n">path</span> <span class="ow">or</span> <span class="n">content</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Path and content are required&quot;</span><span class="p">)</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
+
     <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">host</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;host&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
-    <span class="n">token</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;token&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
+    <span class="n">host</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
+    <span class="n">token</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
 
     <span class="n">uc_service</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
     <span class="n">success</span><span class="p">,</span> <span class="n">message</span> <span class="o">=</span> <span class="n">uc_service</span><span class="o">.</span><span class="n">write_file</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span>
@@ -300,13 +313,14 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="n">success</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="n">message</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;Could not write file: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
-    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">}</span></div>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">message</span><span class="p">}</span></div>
 
 
 
 <span class="c1"># ===========================================</span>
 <span class="c1"># Ontology/Mapping Clear</span>
 <span class="c1"># ===========================================</span>
+
 
 <div class="viewcode-block" id="clear_ontology">
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.home.clear_ontology">[docs]</a>
@@ -315,59 +329,14 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Clear ontology, associated mappings, and design layout from session.&quot;&quot;&quot;</span>
     <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     <span class="n">domain</span><span class="o">.</span><span class="n">reset_ontology</span><span class="p">()</span>
-    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="s1">&#39;Ontology, mappings, and layout cleared&#39;</span><span class="p">}</span></div>
-
-
-
-<div class="viewcode-block" id="parse_ontology">
-<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.home.parse_ontology">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/parse-ontology&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">parse_ontology</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Parse OWL content and store in session.&quot;&quot;&quot;</span>
-    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="n">owl_content</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;content&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-    
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">owl_content</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No OWL content provided&quot;</span><span class="p">)</span>
-
-    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.ontology</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ontology</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="n">Ontology</span><span class="o">.</span><span class="n">parse_owl</span><span class="p">(</span><span class="n">owl_content</span><span class="p">,</span> <span class="n">extract_advanced</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">ontology_info</span><span class="p">,</span> <span class="n">classes</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">swrl_rules</span><span class="p">,</span> <span class="n">axioms</span><span class="p">,</span> <span class="n">expressions</span><span class="p">,</span> <span class="n">groups</span> <span class="o">=</span> <span class="n">result</span>
-
-    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
-        <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">ontology_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span>
-        <span class="s1">&#39;base_uri&#39;</span><span class="p">:</span> <span class="n">ontology_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;base_uri&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span>
-        <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="n">ontology_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;description&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span>
-        <span class="s1">&#39;classes&#39;</span><span class="p">:</span> <span class="n">classes</span><span class="p">,</span>
-        <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="n">properties</span><span class="p">,</span>
-    <span class="p">})</span>
-    <span class="n">domain</span><span class="o">.</span><span class="n">constraints</span> <span class="o">=</span> <span class="n">constraints</span>
-    <span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">swrl_rules</span>
-    <span class="n">domain</span><span class="o">.</span><span class="n">axioms</span> <span class="o">=</span> <span class="n">axioms</span>
-    <span class="n">domain</span><span class="o">.</span><span class="n">expressions</span> <span class="o">=</span> <span class="n">expressions</span>
-    <span class="n">domain</span><span class="o">.</span><span class="n">groups</span> <span class="o">=</span> <span class="n">groups</span>
-    <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
-
-    <span class="k">return</span> <span class="p">{</span>
-        <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-        <span class="s1">&#39;config&#39;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s1">&#39;ontology&#39;</span><span class="p">:</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span><span class="p">,</span>
-            <span class="s1">&#39;classes&#39;</span><span class="p">:</span> <span class="n">classes</span><span class="p">,</span>
-            <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="n">properties</span><span class="p">,</span>
-        <span class="p">},</span>
-        <span class="s1">&#39;stats&#39;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s1">&#39;classes&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">classes</span><span class="p">),</span>
-            <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">properties</span><span class="p">),</span>
-            <span class="s1">&#39;constraints&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">constraints</span><span class="p">),</span>
-        <span class="p">},</span>
-    <span class="p">}</span></div>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Ontology, mappings, and layout cleared&quot;</span><span class="p">}</span></div>
 
 
 
 <span class="c1"># ===========================================</span>
 <span class="c1"># Helper Functions</span>
 <span class="c1"># ===========================================</span>
+
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_client</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DatabricksClient</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Databricks client using centralized helper.&quot;&quot;&quot;</span>

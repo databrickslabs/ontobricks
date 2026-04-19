@@ -185,6 +185,13 @@ document.addEventListener('click', function(e) {
 });
 
 
+// ========== CSRF UTILITY ==========
+
+function _getCSRFToken() {
+    const m = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+    return m ? m[1] : '';
+}
+
 // ========== API UTILITIES ==========
 
 /**
@@ -195,12 +202,16 @@ document.addEventListener('click', function(e) {
  */
 async function apiRequest(url, options = {}) {
     try {
+        const csrfToken = _getCSRFToken();
         const defaultOptions = {
             headers: {
                 'Content-Type': 'application/json'
             },
-            credentials: 'same-origin'  // Ensure cookies are sent with requests
+            credentials: 'same-origin'
         };
+        if (csrfToken) {
+            defaultOptions.headers['X-CSRF-Token'] = csrfToken;
+        }
         
         const mergedOptions = {
             ...defaultOptions,
@@ -645,6 +656,25 @@ function fetchCachedInvalidate(url) {
     fetchOnceInvalidate(url);
 }
 
+
+// Automatically attach CSRF token to state-changing fetch requests
+const _origFetch = window.fetch;
+window.fetch = function(input, init) {
+    init = init || {};
+    const method = (init.method || 'GET').toUpperCase();
+    if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+        const token = _getCSRFToken();
+        if (token) {
+            init.headers = init.headers instanceof Headers
+                ? init.headers
+                : new Headers(init.headers || {});
+            if (!init.headers.has('X-CSRF-Token')) {
+                init.headers.set('X-CSRF-Token', token);
+            }
+        }
+    }
+    return _origFetch.call(this, input, init);
+};
 
 // Make all utility functions globally available
 window.showNotification = showNotification;

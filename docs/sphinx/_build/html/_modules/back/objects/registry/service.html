@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
-    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
@@ -73,6 +73,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -126,9 +127,11 @@
 <span class="sd">    svc  = RegistryService.from_context(domain, settings)</span>
 <span class="sd">    ok, names, msg = svc.list_domains()</span>
 <span class="sd">&quot;&quot;&quot;</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
@@ -145,6 +148,7 @@
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
+<span class="n">_SCHEME_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^https?:/[^/]&quot;</span><span class="p">)</span>
 <span class="n">_DEFAULT_VOLUME</span> <span class="o">=</span> <span class="s2">&quot;OntoBricksRegistry&quot;</span>
 <span class="n">_REGISTRY_MARKER</span> <span class="o">=</span> <span class="s2">&quot;.registry&quot;</span>
 <span class="n">_DOMAINS_FOLDER</span> <span class="o">=</span> <span class="s2">&quot;domains&quot;</span>
@@ -154,6 +158,7 @@
 <span class="c1"># ------------------------------------------------------------------</span>
 <span class="c1"># RegistryCfg — lightweight value object</span>
 <span class="c1"># ------------------------------------------------------------------</span>
+
 
 <div class="viewcode-block" id="RegistryCfg">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryCfg">[docs]</a>
@@ -175,7 +180,9 @@
         <span class="n">parts</span> <span class="o">=</span> <span class="n">path</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">4</span> <span class="ow">and</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;volumes&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">catalog</span><span class="o">=</span><span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">schema</span><span class="o">=</span><span class="n">parts</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">volume</span><span class="o">=</span><span class="n">parts</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Cannot parse volume path &#39;</span><span class="si">%s</span><span class="s2">&#39;; expected /Volumes/&lt;c&gt;/&lt;s&gt;/&lt;v&gt;&quot;</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="s2">&quot;Cannot parse volume path &#39;</span><span class="si">%s</span><span class="s2">&#39;; expected /Volumes/&lt;c&gt;/&lt;s&gt;/&lt;v&gt;&quot;</span><span class="p">,</span> <span class="n">path</span>
+        <span class="p">)</span>
         <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">catalog</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">volume</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span></div>
 
 
@@ -206,7 +213,8 @@
     <span class="nd">@classmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_session</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RegistryCfg</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Build from *SessionManager* and *Settings*.&quot;&quot;&quot;</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session.domain_session</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_domain</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session.DomainSession</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_domain</span>
+
         <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">),</span> <span class="n">settings</span><span class="p">)</span></div>
 
 
@@ -240,6 +248,7 @@
 <span class="c1"># ------------------------------------------------------------------</span>
 <span class="c1"># RegistryService — all I/O operations</span>
 <span class="c1"># ------------------------------------------------------------------</span>
+
 
 <div class="viewcode-block" id="RegistryService">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService">[docs]</a>
@@ -312,7 +321,9 @@
         <span class="n">legacy_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">root</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">_LEGACY_DOMAINS_FOLDER</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="n">ok_legacy</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="n">legacy_path</span><span class="p">,</span> <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">ok_legacy</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Using legacy &#39;</span><span class="si">%s</span><span class="s2">/&#39; folder in registry volume&quot;</span><span class="p">,</span> <span class="n">_LEGACY_DOMAINS_FOLDER</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Using legacy &#39;</span><span class="si">%s</span><span class="s2">/&#39; folder in registry volume&quot;</span><span class="p">,</span> <span class="n">_LEGACY_DOMAINS_FOLDER</span>
+            <span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_resolved_domains_folder</span> <span class="o">=</span> <span class="n">_LEGACY_DOMAINS_FOLDER</span>
             <span class="k">return</span> <span class="n">_LEGACY_DOMAINS_FOLDER</span>
 
@@ -394,7 +405,9 @@
                 <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Failed to create volume </span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">&quot;</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">write_file</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">marker_path</span><span class="p">(),</span> <span class="s2">&quot;OntoBricks Domain Registry&quot;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">marker_path</span><span class="p">(),</span>
+            <span class="s2">&quot;OntoBricks Domain Registry&quot;</span><span class="p">,</span>
+            <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Registry initialized at </span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">c</span><span class="o">.</span><span class="n">catalog</span><span class="p">,</span> <span class="n">c</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span> <span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Registry initialized: </span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">&quot;</span></div>
@@ -439,11 +452,16 @@
 <div class="viewcode-block" id="RegistryService.list_domain_details">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_domain_details">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">list_domain_details</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;List domains with name, URI, description and version list.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List domains with name, URI, description and enriched version list.</span>
 
-<span class="sd">        For each domain folder the latest version file is opened to</span>
-<span class="sd">        extract the description from ``info.description`` and the base URI</span>
-<span class="sd">        from the ontology section.</span>
+<span class="sd">        For each domain folder every version file is opened to extract</span>
+<span class="sd">        ``info.mcp_enabled`` (exposed as ``active``).  The latest version</span>
+<span class="sd">        also provides description and base URI.</span>
+
+<span class="sd">        Each entry in ``versions`` is a dict::</span>
+
+<span class="sd">            {&quot;version&quot;: &quot;2&quot;, &quot;active&quot;: True,</span>
+<span class="sd">             &quot;last_update&quot;: &quot;2025-…&quot;, &quot;last_build&quot;: &quot;2025-…&quot;}</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domains_path</span><span class="p">(),</span> <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
@@ -457,28 +475,45 @@
 
             <span class="n">description</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
             <span class="n">base_uri</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-            <span class="n">version_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">version_objects</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">version_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_versions_sorted</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">version_list</span><span class="p">:</span>
-                    <span class="n">latest</span> <span class="o">=</span> <span class="n">version_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">sorted_versions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_versions_sorted</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">ver</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">sorted_versions</span><span class="p">):</span>
+                    <span class="n">active</span> <span class="o">=</span> <span class="kc">False</span>
+                    <span class="n">last_update</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+                    <span class="n">last_build</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
                     <span class="n">f_ok</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">version_file_path</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">latest</span><span class="p">),</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">version_file_path</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">ver</span><span class="p">),</span>
                     <span class="p">)</span>
                     <span class="k">if</span> <span class="n">f_ok</span> <span class="ow">and</span> <span class="n">content</span><span class="p">:</span>
                         <span class="n">doc</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
-                        <span class="n">description</span> <span class="o">=</span> <span class="n">doc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-                        <span class="n">ontology</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_latest_ontology</span><span class="p">(</span><span class="n">doc</span><span class="p">)</span>
-                        <span class="n">base_uri</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                        <span class="n">info</span> <span class="o">=</span> <span class="n">doc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="p">{})</span>
+                        <span class="n">active</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mcp_enabled&quot;</span><span class="p">))</span>
+                        <span class="n">last_update</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;last_update&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                        <span class="n">last_build</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;last_build&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">idx</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                            <span class="n">description</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                            <span class="n">ontology</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_latest_ontology</span><span class="p">(</span><span class="n">doc</span><span class="p">)</span>
+                            <span class="n">base_uri</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                    <span class="n">version_objects</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">{</span>
+                            <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="n">ver</span><span class="p">,</span>
+                            <span class="s2">&quot;active&quot;</span><span class="p">:</span> <span class="n">active</span><span class="p">,</span>
+                            <span class="s2">&quot;last_update&quot;</span><span class="p">:</span> <span class="n">last_update</span><span class="p">,</span>
+                            <span class="s2">&quot;last_build&quot;</span><span class="p">:</span> <span class="n">last_build</span><span class="p">,</span>
+                        <span class="p">}</span>
+                    <span class="p">)</span>
             <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not read details for domain </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
 
-            <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
-                <span class="s2">&quot;base_uri&quot;</span><span class="p">:</span> <span class="n">base_uri</span><span class="p">,</span>
-                <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="n">description</span><span class="p">,</span>
-                <span class="s2">&quot;versions&quot;</span><span class="p">:</span> <span class="n">version_list</span><span class="p">,</span>
-            <span class="p">})</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+                    <span class="s2">&quot;base_uri&quot;</span><span class="p">:</span> <span class="n">base_uri</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="n">description</span><span class="p">,</span>
+                    <span class="s2">&quot;versions&quot;</span><span class="p">:</span> <span class="n">version_objects</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
 
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="s2">&quot;&quot;</span></div>
 
@@ -496,6 +531,84 @@
         <span class="k">return</span> <span class="n">ok</span><span class="p">,</span> <span class="n">details</span><span class="p">,</span> <span class="n">msg</span></div>
 
 
+<div class="viewcode-block" id="RegistryService.normalize_entity_uri">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.normalize_entity_uri">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">normalize_entity_uri</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Restore double-slash after scheme when proxies collapse it.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">_SCHEME_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">raw</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">raw</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;:/&quot;</span><span class="p">,</span> <span class="s2">&quot;://&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">raw</span></div>
+
+
+<div class="viewcode-block" id="RegistryService.resolve_uri_to_domain">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.resolve_uri_to_domain">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">resolve_uri_to_domain</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">entity_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">current_domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">current_folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">current_base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Find the registry domain whose base URI longest-prefix matches *entity_uri*.</span>
+
+<span class="sd">        Returns the domain folder name to bridge to, or ``None`` when the URI</span>
+<span class="sd">        already belongs to the current domain (no switch needed) or when no</span>
+<span class="sd">        match is found. *current_base_uri* should be normalized with</span>
+<span class="sd">        ``rstrip(&#39;/&#39;)`` by the caller.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_blocking</span>
+
+        <span class="n">current_name</span> <span class="o">=</span> <span class="n">current_domain_name</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="n">current_folder_l</span> <span class="o">=</span> <span class="n">current_folder</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="n">current_base</span> <span class="o">=</span> <span class="n">current_base_uri</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">ok</span><span class="p">,</span> <span class="n">details</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">list_domain_details</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;Could not list registry domains for URI resolution: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">msg</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="kc">None</span>
+
+            <span class="n">best_match</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">best_len</span> <span class="o">=</span> <span class="mi">0</span>
+
+            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">details</span><span class="p">:</span>
+                <span class="n">base</span> <span class="o">=</span> <span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">base</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="n">entity_uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">base</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">base</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">best_len</span><span class="p">:</span>
+                    <span class="n">best_match</span> <span class="o">=</span> <span class="n">p</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+                    <span class="n">best_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">base</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">best_match</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;No registry domain matches URI </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">entity_uri</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">None</span>
+
+            <span class="k">if</span> <span class="n">best_match</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="p">(</span><span class="n">current_name</span><span class="p">,</span> <span class="n">current_folder_l</span><span class="p">):</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                    <span class="s2">&quot;URI </span><span class="si">%s</span><span class="s2"> belongs to the current domain; no switch needed&quot;</span><span class="p">,</span>
+                    <span class="n">entity_uri</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="kc">None</span>
+
+            <span class="k">if</span> <span class="n">current_base</span> <span class="ow">and</span> <span class="n">entity_uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">current_base</span><span class="p">):</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                    <span class="s2">&quot;URI </span><span class="si">%s</span><span class="s2"> matches current domain base URI; no switch needed&quot;</span><span class="p">,</span>
+                    <span class="n">entity_uri</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="kc">None</span>
+
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;URI </span><span class="si">%s</span><span class="s2"> resolved to domain &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">entity_uri</span><span class="p">,</span> <span class="n">best_match</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">best_match</span>
+
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Error resolving domain for URI </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">entity_uri</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span></div>
+
+
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_extract_latest_ontology</span><span class="p">(</span><span class="n">doc</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the ontology dict from the latest version in a domain document.&quot;&quot;&quot;</span>
@@ -508,7 +621,9 @@
 
 <div class="viewcode-block" id="RegistryService.list_mcp_domains">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_mcp_domains">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">list_mcp_domains</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">require_ontology</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_mcp_domains</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">require_ontology</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;List domains that have an MCP-enabled version.</span>
 
 <span class="sd">        Returns ``(ok, domains, message)`` where each domain is</span>
@@ -535,7 +650,9 @@
                     <span class="n">ont</span> <span class="o">=</span> <span class="n">ver_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="n">mcp_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="p">{}))</span>
                     <span class="k">if</span> <span class="ow">not</span> <span class="n">ont</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">):</span>
                         <span class="k">continue</span>
-                <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)})</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)}</span>
+                <span class="p">)</span>
             <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not inspect domain </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="s2">&quot;&quot;</span></div>
@@ -584,8 +701,9 @@
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;recursive_delete: removed directory </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">dir_path</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d_msg</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;recursive_delete: could not remove directory </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                           <span class="n">dir_path</span><span class="p">,</span> <span class="n">d_msg</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;recursive_delete: could not remove directory </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">dir_path</span><span class="p">,</span> <span class="n">d_msg</span>
+            <span class="p">)</span>
 
         <span class="k">return</span> <span class="n">errors</span></div>
 
@@ -600,7 +718,8 @@
 <span class="sd">        Scans ``V{N}/`` subdirectories inside the domain folder.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">domain_path</span><span class="p">(</span><span class="n">folder</span><span class="p">),</span> <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">domain_path</span><span class="p">(</span><span class="n">folder</span><span class="p">),</span>
+            <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="n">msg</span>
@@ -695,7 +814,7 @@
             <span class="n">ok</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_version</span><span class="p">(</span><span class="n">folder</span><span class="p">,</span> <span class="n">ver</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
                 <span class="k">continue</span>
-            <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;info&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;mcp_enabled&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mcp_enabled&quot;</span><span class="p">):</span>
                 <span class="k">return</span> <span class="n">ver</span><span class="p">,</span> <span class="n">data</span>
         <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="p">{}</span></div>
 
@@ -721,7 +840,10 @@
 <div class="viewcode-block" id="RegistryService.copy_version_documents">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.copy_version_documents">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">copy_version_documents</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">src_version</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">dst_version</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">src_version</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">dst_version</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Copy all documents from one version directory to another.</span>
 
@@ -752,6 +874,73 @@
                 <span class="k">continue</span>
             <span class="n">copied</span> <span class="o">+=</span> <span class="mi">1</span>
         <span class="k">return</span> <span class="n">copied</span><span class="p">,</span> <span class="n">errors</span></div>
+
+
+    <span class="c1"># -- bridge aggregation ---------------------------------------------</span>
+
+<div class="viewcode-block" id="RegistryService.list_all_bridges">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_all_bridges">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_all_bridges</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Collect all bridges across every domain in the registry.</span>
+
+<span class="sd">        Iterates over each domain, loads its latest version, and extracts</span>
+<span class="sd">        bridges from ``ontology.classes[].bridges``.</span>
+
+<span class="sd">        Returns ``(ok, domains_with_bridges, error_msg)`` where each entry</span>
+<span class="sd">        has ``name``, ``base_uri``, and ``bridges`` (list of bridge dicts</span>
+<span class="sd">        with ``source_class``, ``source_class_uri``, ``source_emoji``,</span>
+<span class="sd">        ``target_domain``, ``target_class_name``, ``target_class_uri``,</span>
+<span class="sd">        ``label``).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domains_path</span><span class="p">(),</span> <span class="n">dirs_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">[],</span> <span class="n">msg</span>
+
+        <span class="n">result</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">items</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">i</span><span class="p">:</span> <span class="n">i</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">):</span>
+                <span class="k">continue</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">d_ok</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">_ver</span><span class="p">,</span> <span class="n">d_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_latest_domain_data</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">d_ok</span><span class="p">:</span>
+                    <span class="k">continue</span>
+
+                <span class="n">ontology</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_latest_ontology</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+                <span class="n">base_uri</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="n">raw_classes</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="p">[])</span>
+
+                <span class="n">bridges</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="n">raw_classes</span><span class="p">:</span>
+                    <span class="n">cls_bridges</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;bridges&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">cls_bridges</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">cls_bridges</span><span class="p">:</span>
+                        <span class="n">bridges</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="p">{</span>
+                                <span class="s2">&quot;source_class&quot;</span><span class="p">:</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                                <span class="s2">&quot;source_class_uri&quot;</span><span class="p">:</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                                <span class="s2">&quot;source_emoji&quot;</span><span class="p">:</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;emoji&quot;</span><span class="p">,</span> <span class="s2">&quot;📦&quot;</span><span class="p">),</span>
+                                <span class="s2">&quot;target_domain&quot;</span><span class="p">:</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_domain&quot;</span><span class="p">)</span>
+                                <span class="ow">or</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_project&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                                <span class="s2">&quot;target_class_name&quot;</span><span class="p">:</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                                <span class="s2">&quot;target_class_uri&quot;</span><span class="p">:</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                                <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                            <span class="p">}</span>
+                        <span class="p">)</span>
+
+                <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="p">{</span>
+                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+                        <span class="s2">&quot;base_uri&quot;</span><span class="p">:</span> <span class="n">base_uri</span><span class="p">,</span>
+                        <span class="s2">&quot;bridges&quot;</span><span class="p">:</span> <span class="n">bridges</span><span class="p">,</span>
+                    <span class="p">}</span>
+                <span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not read bridges for domain </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="s2">&quot;&quot;</span></div>
 
 
     <span class="c1"># -- one-time layout migration -------------------------------------</span>
@@ -802,7 +991,8 @@
             <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;No flat version files found — nothing to migrate&quot;</span>
 
         <span class="n">flat_versions</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span>
-            <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)],</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)],</span>
+            <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="n">latest_version</span> <span class="o">=</span> <span class="n">flat_versions</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
         <span class="n">errors</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
@@ -853,11 +1043,15 @@
                     <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;is_directory&quot;</span><span class="p">):</span>
                         <span class="k">continue</span>
                     <span class="n">name</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
-                    <span class="n">r_ok</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">r_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">read_binary_file</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">src_docs</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="n">r_ok</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">r_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">read_binary_file</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">src_docs</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="p">)</span>
                     <span class="k">if</span> <span class="ow">not</span> <span class="n">r_ok</span><span class="p">:</span>
                         <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Read doc </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">r_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
                         <span class="k">continue</span>
-                    <span class="n">w_ok</span><span class="p">,</span> <span class="n">w_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">write_binary_file</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dst_docs</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span>
+                    <span class="n">w_ok</span><span class="p">,</span> <span class="n">w_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uc</span><span class="o">.</span><span class="n">write_binary_file</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dst_docs</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">content</span>
+                    <span class="p">)</span>
                     <span class="k">if</span> <span class="ow">not</span> <span class="n">w_ok</span><span class="p">:</span>
                         <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Write doc </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">w_msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
                         <span class="k">continue</span>

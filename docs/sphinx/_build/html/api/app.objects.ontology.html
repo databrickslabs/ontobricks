@@ -10,7 +10,7 @@
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
-    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -76,6 +76,7 @@
 <li class="toctree-l1"><a class="reference internal" href="api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -118,24 +119,24 @@
             
   <section id="back-objects-ontology-ontology-management-domain">
 <h1><code class="docutils literal notranslate"><span class="pre">back.objects.ontology</span></code> – Ontology management (domain)<a class="headerlink" href="#back-objects-ontology-ontology-management-domain" title="Link to this heading">¶</a></h1>
-<section id="module-back.objects.ontology.ontology">
-<span id="ontology-class"></span><h2>Ontology class<a class="headerlink" href="#module-back.objects.ontology.ontology" title="Link to this heading">¶</a></h2>
+<section id="module-back.objects.ontology.Ontology">
+<span id="ontology-class"></span><h2>Ontology class<a class="headerlink" href="#module-back.objects.ontology.Ontology" title="Link to this heading">¶</a></h2>
 <p>Ontology management (non-HTTP).</p>
-<p>Use <a class="reference internal" href="#back.objects.ontology.ontology.Ontology" title="back.objects.ontology.ontology.Ontology"><code class="xref py py-class docutils literal notranslate"><span class="pre">Ontology</span></code></a> with a <code class="xref py py-class docutils literal notranslate"><span class="pre">DomainSession</span></code> for
+<p>Use <a class="reference internal" href="#back.objects.ontology.Ontology.Ontology" title="back.objects.ontology.Ontology.Ontology"><code class="xref py py-class docutils literal notranslate"><span class="pre">Ontology</span></code></a> with a <a class="reference internal" href="app.objects.session.html#module-back.objects.session.DomainSession" title="back.objects.session.DomainSession"><code class="xref py py-class docutils literal notranslate"><span class="pre">DomainSession</span></code></a> for
 operations that persist to the session; use static methods for pure transforms.</p>
 <dl class="py class">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.ontology.ontology.</span></span><span class="sig-name descname"><span class="pre">Ontology</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.ontology.Ontology.</span></span><span class="sig-name descname"><span class="pre">Ontology</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
 <p>Ontology operations for the current domain session or as static helpers.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>session</strong> (<em>DomainSession</em>)</p>
+<dd class="field-odd"><p><strong>session</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.DomainSession.DomainSession" title="back.objects.session.DomainSession.DomainSession"><em>DomainSession</em></a>)</p>
 </dd>
 </dl>
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.generate_with_agent">
-<span class="sig-name descname"><span class="pre">generate_with_agent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">endpoint_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">guidelines</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">selected_docs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.generate_with_agent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.generate_with_agent" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.generate_with_agent">
+<span class="sig-name descname"><span class="pre">generate_with_agent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">endpoint_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">guidelines</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">selected_docs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.generate_with_agent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.generate_with_agent" title="Link to this definition">¶</a></dt>
 <dd><p>Run <code class="docutils literal notranslate"><span class="pre">agent_owl_generator</span></code> for this project (blocking).</p>
 <p>Resolves <code class="docutils literal notranslate"><span class="pre">base_uri</span></code>, registry, project folder, and table selection from
 the session and the provided <code class="docutils literal notranslate"><span class="pre">metadata</span></code> (same rules as the wizard).</p>
@@ -160,8 +161,8 @@ the session and the provided <code class="docutils literal notranslate"><span cl
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.agent_ontology_context">
-<span class="sig-name descname"><span class="pre">agent_ontology_context</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.agent_ontology_context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.agent_ontology_context" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.agent_ontology_context">
+<span class="sig-name descname"><span class="pre">agent_ontology_context</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.agent_ontology_context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.agent_ontology_context" title="Link to this definition">¶</a></dt>
 <dd><p>Ontology snapshot for agents: entities (classes + attributes) + object-property rels.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
@@ -171,8 +172,8 @@ the session and the provided <code class="docutils literal notranslate"><span cl
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.assign_icons_with_agent">
-<span class="sig-name descname"><span class="pre">assign_icons_with_agent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">endpoint_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">entity_names</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.assign_icons_with_agent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.assign_icons_with_agent" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.assign_icons_with_agent">
+<span class="sig-name descname"><span class="pre">assign_icons_with_agent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">endpoint_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">entity_names</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.assign_icons_with_agent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.assign_icons_with_agent" title="Link to this definition">¶</a></dt>
 <dd><p>Run <code class="docutils literal notranslate"><span class="pre">agent_auto_icon_assign</span></code> for this project (blocking).</p>
 <p>Uses session ontology classes/properties and <code class="docutils literal notranslate"><span class="pre">catalog_metadata</span></code> as agent context.</p>
 <dl class="field-list simple">
@@ -192,8 +193,8 @@ the session and the provided <code class="docutils literal notranslate"><span cl
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.ensure_uris">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">ensure_uris</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.ensure_uris"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.ensure_uris" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.ensure_uris">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">ensure_uris</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.ensure_uris"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.ensure_uris" title="Link to this definition">¶</a></dt>
 <dd><p>Ensure all classes and properties have URIs.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -209,8 +210,8 @@ the session and the provided <code class="docutils literal notranslate"><span cl
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.get_ontology_stats">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_ontology_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.get_ontology_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.get_ontology_stats" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.get_ontology_stats">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_ontology_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.get_ontology_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.get_ontology_stats" title="Link to this definition">¶</a></dt>
 <dd><p>Get statistics from ontology configuration.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -226,8 +227,8 @@ the session and the provided <code class="docutils literal notranslate"><span cl
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.normalize_property_domain_range">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">normalize_property_domain_range</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ontology_config</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_replace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.normalize_property_domain_range"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.normalize_property_domain_range" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.normalize_property_domain_range">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">normalize_property_domain_range</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ontology_config</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_replace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.normalize_property_domain_range"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.normalize_property_domain_range" title="Link to this definition">¶</a></dt>
 <dd><p>Align property <code class="docutils literal notranslate"><span class="pre">domain</span></code> / <code class="docutils literal notranslate"><span class="pre">range</span></code> with canonical class names (case-insensitive).</p>
 <p>Mutates <code class="docutils literal notranslate"><span class="pre">ontology_config['properties']</span></code> in place. If <code class="docutils literal notranslate"><span class="pre">on_replace</span></code> is set, it is
 called as <code class="docutils literal notranslate"><span class="pre">(prop_dict,</span> <span class="pre">field_name,</span> <span class="pre">old_value,</span> <span class="pre">new_value)</span></code> for each change.</p>
@@ -248,8 +249,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.prune_mappings_to_ontology_uris">
-<span class="sig-name descname"><span class="pre">prune_mappings_to_ontology_uris</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">class_uris</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_uris</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.prune_mappings_to_ontology_uris"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.prune_mappings_to_ontology_uris" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.prune_mappings_to_ontology_uris">
+<span class="sig-name descname"><span class="pre">prune_mappings_to_ontology_uris</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">class_uris</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_uris</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.prune_mappings_to_ontology_uris"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.prune_mappings_to_ontology_uris" title="Link to this definition">¶</a></dt>
 <dd><p>Drop entity/relationship mappings whose URIs are not in the given sets.</p>
 <p>Updates session assignment only when rows are removed.</p>
 <dl class="field-list simple">
@@ -269,8 +270,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.save_ontology_config_from_editor">
-<span class="sig-name descname"><span class="pre">save_ontology_config_from_editor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">raw_body</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.save_ontology_config_from_editor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.save_ontology_config_from_editor" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.save_ontology_config_from_editor">
+<span class="sig-name descname"><span class="pre">save_ontology_config_from_editor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">raw_body</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.save_ontology_config_from_editor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.save_ontology_config_from_editor" title="Link to this definition">¶</a></dt>
 <dd><p>Persist ontology from the visual editor API (wrapped or bare config dict).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -283,8 +284,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.delete_class_by_uri">
-<span class="sig-name descname"><span class="pre">delete_class_by_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">class_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.delete_class_by_uri"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.delete_class_by_uri" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.delete_class_by_uri">
+<span class="sig-name descname"><span class="pre">delete_class_by_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">class_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.delete_class_by_uri"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.delete_class_by_uri" title="Link to this definition">¶</a></dt>
 <dd><p>Remove a class by URI and drop entity mappings that reference it.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -297,8 +298,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.delete_property_by_uri">
-<span class="sig-name descname"><span class="pre">delete_property_by_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">property_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.delete_property_by_uri"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.delete_property_by_uri" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.delete_property_by_uri">
+<span class="sig-name descname"><span class="pre">delete_property_by_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">property_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.delete_property_by_uri"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.delete_property_by_uri" title="Link to this definition">¶</a></dt>
 <dd><p>Remove an object property by URI and drop relationship mappings that reference it.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -311,8 +312,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.add_class">
-<span class="sig-name descname"><span class="pre">add_class</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.add_class"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.add_class" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.add_class">
+<span class="sig-name descname"><span class="pre">add_class</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.add_class"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.add_class" title="Link to this definition">¶</a></dt>
 <dd><p>Build a class from <em>data</em>, append if unique URI, clear cache and save.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -325,8 +326,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.update_class">
-<span class="sig-name descname"><span class="pre">update_class</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.update_class"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.update_class" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.update_class">
+<span class="sig-name descname"><span class="pre">update_class</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.update_class"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.update_class" title="Link to this definition">¶</a></dt>
 <dd><p>Find class by <em>uri</em> in data, merge updates, clear cache and save.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -339,8 +340,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.add_property">
-<span class="sig-name descname"><span class="pre">add_property</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.add_property"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.add_property" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.add_property">
+<span class="sig-name descname"><span class="pre">add_property</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.add_property"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.add_property" title="Link to this definition">¶</a></dt>
 <dd><p>Build a property from <em>data</em>, append if unique URI, clear cache and save.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -353,8 +354,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.update_property">
-<span class="sig-name descname"><span class="pre">update_property</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.update_property"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.update_property" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.update_property">
+<span class="sig-name descname"><span class="pre">update_property</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.update_property"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.update_property" title="Link to this definition">¶</a></dt>
 <dd><p>Find property by <em>uri</em> in data, merge updates, clear cache and save.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -367,13 +368,13 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.ingest_owl">
-<span class="sig-name descname"><span class="pre">ingest_owl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">owl_content</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">name_fallback_to_domain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outcome</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'import'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.ingest_owl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.ingest_owl" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.ingest_owl">
+<span class="sig-name descname"><span class="pre">ingest_owl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">owl_content</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">name_fallback_to_domain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outcome</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'import'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.ingest_owl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.ingest_owl" title="Link to this definition">¶</a></dt>
 <dd><p>Parse OWL content, apply to project, return the appropriate success payload.</p>
 <p><code class="docutils literal notranslate"><span class="pre">outcome</span></code> controls the response shape:
-- <code class="docutils literal notranslate"><span class="pre">&quot;import&quot;</span></code>  → <a class="reference internal" href="#back.objects.ontology.ontology.Ontology.build_import_owl_success_payload" title="back.objects.ontology.ontology.Ontology.build_import_owl_success_payload"><code class="xref py py-meth docutils literal notranslate"><span class="pre">build_import_owl_success_payload()</span></code></a>
-- <code class="docutils literal notranslate"><span class="pre">&quot;parse&quot;</span></code>   → <a class="reference internal" href="#back.objects.ontology.ontology.Ontology.build_parse_owl_success_payload" title="back.objects.ontology.ontology.Ontology.build_parse_owl_success_payload"><code class="xref py py-meth docutils literal notranslate"><span class="pre">build_parse_owl_success_payload()</span></code></a>
-- <a href="#id1"><span class="problematic" id="id2">``</span></a>”load_file”<a href="#id3"><span class="problematic" id="id4">``</span></a>→ <a class="reference internal" href="#back.objects.ontology.ontology.Ontology.build_load_owl_file_success_payload" title="back.objects.ontology.ontology.Ontology.build_load_owl_file_success_payload"><code class="xref py py-meth docutils literal notranslate"><span class="pre">build_load_owl_file_success_payload()</span></code></a></p>
+- <code class="docutils literal notranslate"><span class="pre">&quot;import&quot;</span></code>  → <a class="reference internal" href="#back.objects.ontology.Ontology.Ontology.build_import_owl_success_payload" title="back.objects.ontology.Ontology.Ontology.build_import_owl_success_payload"><code class="xref py py-meth docutils literal notranslate"><span class="pre">build_import_owl_success_payload()</span></code></a>
+- <code class="docutils literal notranslate"><span class="pre">&quot;parse&quot;</span></code>   → <a class="reference internal" href="#back.objects.ontology.Ontology.Ontology.build_parse_owl_success_payload" title="back.objects.ontology.Ontology.Ontology.build_parse_owl_success_payload"><code class="xref py py-meth docutils literal notranslate"><span class="pre">build_parse_owl_success_payload()</span></code></a>
+- <a href="#id1"><span class="problematic" id="id2">``</span></a>”load_file”<a href="#id3"><span class="problematic" id="id4">``</span></a>→ <a class="reference internal" href="#back.objects.ontology.Ontology.Ontology.build_load_owl_file_success_payload" title="back.objects.ontology.Ontology.Ontology.build_load_owl_file_success_payload"><code class="xref py py-meth docutils literal notranslate"><span class="pre">build_load_owl_file_success_payload()</span></code></a></p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -389,8 +390,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.apply_parsed_rdfs_to_domain">
-<span class="sig-name descname"><span class="pre">apply_parsed_rdfs_to_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rdfs_content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.apply_parsed_rdfs_to_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.apply_parsed_rdfs_to_domain" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.apply_parsed_rdfs_to_domain">
+<span class="sig-name descname"><span class="pre">apply_parsed_rdfs_to_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rdfs_content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.apply_parsed_rdfs_to_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.apply_parsed_rdfs_to_domain" title="Link to this definition">¶</a></dt>
 <dd><p>Parse RDFS content, apply to project, return success payload.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -403,8 +404,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.rename_relationship_references">
-<span class="sig-name descname"><span class="pre">rename_relationship_references</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">old_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.rename_relationship_references"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.rename_relationship_references" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.rename_relationship_references">
+<span class="sig-name descname"><span class="pre">rename_relationship_references</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">old_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.rename_relationship_references"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.rename_relationship_references" title="Link to this definition">¶</a></dt>
 <dd><p>Rename a relationship across mappings, constraints, and axioms. Saves session.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -420,8 +421,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.apply_agent_ontology_changes">
-<span class="sig-name descname"><span class="pre">apply_agent_ontology_changes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">prune_orphan_mappings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.apply_agent_ontology_changes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.apply_agent_ontology_changes" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.apply_agent_ontology_changes">
+<span class="sig-name descname"><span class="pre">apply_agent_ontology_changes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">prune_orphan_mappings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.apply_agent_ontology_changes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.apply_agent_ontology_changes" title="Link to this definition">¶</a></dt>
 <dd><p>Normalize + persist ontology from an assistant agent result.</p>
 <p>Returns the config dict suitable for <code class="docutils literal notranslate"><span class="pre">response[&quot;config&quot;]</span></code>.</p>
 <dl class="field-list simple">
@@ -439,8 +440,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.validate_swrl_rule">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_swrl_rule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.validate_swrl_rule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.validate_swrl_rule" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.validate_swrl_rule">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_swrl_rule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.validate_swrl_rule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.validate_swrl_rule" title="Link to this definition">¶</a></dt>
 <dd><p>Validate a SWRL rule dict, return list of error strings (empty = valid).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -453,8 +454,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.merge_icon_suggestions">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">merge_icon_suggestions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entity_names</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">icons</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.merge_icon_suggestions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.merge_icon_suggestions" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.merge_icon_suggestions">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">merge_icon_suggestions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entity_names</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">icons</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.merge_icon_suggestions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.merge_icon_suggestions" title="Link to this definition">¶</a></dt>
 <dd><p>Case-insensitive merge of agent icon suggestions into a final map.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -470,8 +471,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.postprocess_generated_owl">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">postprocess_generated_owl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.postprocess_generated_owl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.postprocess_generated_owl" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.postprocess_generated_owl">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">postprocess_generated_owl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.postprocess_generated_owl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.postprocess_generated_owl" title="Link to this definition">¶</a></dt>
 <dd><p>Clean LLM output and compute stats in one step. Returns <code class="docutils literal notranslate"><span class="pre">(turtle,</span> <span class="pre">stats)</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -484,8 +485,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.build_class_from_data">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">build_class_from_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">existing</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.build_class_from_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.build_class_from_data" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.build_class_from_data">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">build_class_from_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">existing</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.build_class_from_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.build_class_from_data" title="Link to this definition">¶</a></dt>
 <dd><p>Build a class dict from request data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -504,8 +505,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.build_property_from_data">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">build_property_from_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">existing</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.build_property_from_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.build_property_from_data" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.build_property_from_data">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">build_property_from_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">existing</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.build_property_from_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.build_property_from_data" title="Link to this definition">¶</a></dt>
 <dd><p>Build a property dict from request data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -524,8 +525,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.validate_constraint">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_constraint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">constraint</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.validate_constraint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.validate_constraint" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.validate_constraint">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_constraint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">constraint</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.validate_constraint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.validate_constraint" title="Link to this definition">¶</a></dt>
 <dd><p>Validate constraint and return error message if invalid.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -541,8 +542,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.validate_shape">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.validate_shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.validate_shape" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.validate_shape">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.validate_shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.validate_shape" title="Link to this definition">¶</a></dt>
 <dd><p>Validate a SHACL shape dict, return error message or None.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -555,8 +556,8 @@ called as <code class="docutils literal notranslate"><span class="pre">(prop_dic
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.validate_classes">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_classes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">classes</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.validate_classes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.validate_classes" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.validate_classes">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">validate_classes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">classes</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.validate_classes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.validate_classes" title="Link to this definition">¶</a></dt>
 <dd><p>Check ontology classes for completeness.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
@@ -574,8 +575,8 @@ and all entries have at least a URI, name, or localName.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.generate_shacl">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">generate_shacl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shapes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.generate_shacl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.generate_shacl" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.generate_shacl">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">generate_shacl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shapes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.generate_shacl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.generate_shacl" title="Link to this definition">¶</a></dt>
 <dd><p>Generate SHACL Turtle from shape dicts.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -591,8 +592,8 @@ and all entries have at least a URI, name, or localName.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.generate_owl">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">generate_owl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expressions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groups</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.generate_owl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.generate_owl" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.generate_owl">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">generate_owl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expressions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groups</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.generate_owl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.generate_owl" title="Link to this definition">¶</a></dt>
 <dd><p>Generate OWL from ontology configuration.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -615,8 +616,8 @@ and all entries have at least a URI, name, or localName.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.parse_owl">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">parse_owl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">content</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extract_advanced</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.parse_owl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.parse_owl" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.parse_owl">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">parse_owl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">content</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extract_advanced</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.parse_owl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.parse_owl" title="Link to this definition">¶</a></dt>
 <dd><p>Parse OWL content and return structured data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -640,8 +641,8 @@ if extract_advanced=True</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.parse_rdfs">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">parse_rdfs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.parse_rdfs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.parse_rdfs" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.parse_rdfs">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">parse_rdfs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.parse_rdfs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.parse_rdfs" title="Link to this definition">¶</a></dt>
 <dd><p>Parse RDFS content and return structured data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -657,8 +658,8 @@ if extract_advanced=True</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.import_industry_ontology">
-<span class="sig-name descname"><span class="pre">import_industry_ontology</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kind</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_keys</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.import_industry_ontology"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.import_industry_ontology" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.import_industry_ontology">
+<span class="sig-name descname"><span class="pre">import_industry_ontology</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kind</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_keys</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.import_industry_ontology"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.import_industry_ontology" title="Link to this definition">¶</a></dt>
 <dd><p>Fetch industry modules, merge, parse, persist to project session.</p>
 <p>Returns the same dict shape as the former /import-fibo|cdisc|iof handlers.</p>
 <dl class="field-list simple">
@@ -675,9 +676,9 @@ if extract_advanced=True</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.apply_parsed_owl_to_domain">
-<span class="sig-name descname"><span class="pre">apply_parsed_owl_to_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ontology_info</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expressions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">groups</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name_fallback_to_domain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.apply_parsed_owl_to_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.apply_parsed_owl_to_domain" title="Link to this definition">¶</a></dt>
-<dd><p>Write parse result into self._s.ontology and save. Returns resolved ontology name.</p>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.apply_parsed_owl_to_domain">
+<span class="sig-name descname"><span class="pre">apply_parsed_owl_to_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ontology_info</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expressions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">groups</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name_fallback_to_domain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.apply_parsed_owl_to_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.apply_parsed_owl_to_domain" title="Link to this definition">¶</a></dt>
+<dd><p>Write parse result into self._domain.ontology and save. Returns resolved ontology name.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -699,8 +700,8 @@ if extract_advanced=True</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.build_import_owl_success_payload">
-<span class="sig-name descname"><span class="pre">build_import_owl_success_payload</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.build_import_owl_success_payload"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.build_import_owl_success_payload" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.build_import_owl_success_payload">
+<span class="sig-name descname"><span class="pre">build_import_owl_success_payload</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.build_import_owl_success_payload"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.build_import_owl_success_payload" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -716,8 +717,8 @@ if extract_advanced=True</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.build_parse_owl_success_payload">
-<span class="sig-name descname"><span class="pre">build_parse_owl_success_payload</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ontology_info</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expressions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">resolved_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.build_parse_owl_success_payload"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.build_parse_owl_success_payload" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.build_parse_owl_success_payload">
+<span class="sig-name descname"><span class="pre">build_parse_owl_success_payload</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ontology_info</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expressions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">resolved_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.build_parse_owl_success_payload"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.build_parse_owl_success_payload" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -738,8 +739,8 @@ if extract_advanced=True</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.build_load_owl_file_success_payload">
-<span class="sig-name descname"><span class="pre">build_load_owl_file_success_payload</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expressions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.build_load_owl_file_success_payload"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.build_load_owl_file_success_payload" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.build_load_owl_file_success_payload">
+<span class="sig-name descname"><span class="pre">build_load_owl_file_success_payload</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swrl_rules</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axioms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expressions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.build_load_owl_file_success_payload"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.build_load_owl_file_success_payload" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -758,8 +759,8 @@ if extract_advanced=True</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.clean_owl_output">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">clean_owl_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.clean_owl_output"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.clean_owl_output" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.clean_owl_output">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">clean_owl_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.clean_owl_output"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.clean_owl_output" title="Link to this definition">¶</a></dt>
 <dd><p>Clean up LLM output to extract valid Turtle content.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -772,8 +773,8 @@ if extract_advanced=True</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.save_group">
-<span class="sig-name descname"><span class="pre">save_group</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">group</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.save_group"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.save_group" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.save_group">
+<span class="sig-name descname"><span class="pre">save_group</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">group</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.save_group"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.save_group" title="Link to this definition">¶</a></dt>
 <dd><p>Create or update an entity group.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -797,8 +798,8 @@ otherwise a new group is appended (duplicate names are rejected).</p></li>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.delete_group">
-<span class="sig-name descname"><span class="pre">delete_group</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.delete_group"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.delete_group" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.delete_group">
+<span class="sig-name descname"><span class="pre">delete_group</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.delete_group"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.delete_group" title="Link to this definition">¶</a></dt>
 <dd><p>Delete an entity group by <em>index</em> or <em>name</em>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
@@ -820,8 +821,8 @@ otherwise a new group is appended (duplicate names are rejected).</p></li>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.update_group_members">
-<span class="sig-name descname"><span class="pre">update_group_members</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">group_name</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">add</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.update_group_members"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.update_group_members" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.update_group_members">
+<span class="sig-name descname"><span class="pre">update_group_members</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">group_name</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">add</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.update_group_members"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.update_group_members" title="Link to this definition">¶</a></dt>
 <dd><p>Add or remove members from the group identified by <em>group_name</em>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
@@ -844,8 +845,8 @@ otherwise a new group is appended (duplicate names are rejected).</p></li>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.ontology.ontology.Ontology.calculate_owl_stats">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">calculate_owl_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">owl_content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/ontology.html#Ontology.calculate_owl_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.ontology.Ontology.calculate_owl_stats" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.ontology.Ontology.Ontology.calculate_owl_stats">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">calculate_owl_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">owl_content</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/ontology/Ontology.html#Ontology.calculate_owl_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.ontology.Ontology.Ontology.calculate_owl_stats" title="Link to this definition">¶</a></dt>
 <dd><p>Calculate statistics from OWL content.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>

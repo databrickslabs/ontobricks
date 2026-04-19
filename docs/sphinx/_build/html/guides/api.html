@@ -10,7 +10,7 @@
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
-    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -61,6 +61,7 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">OntoBricks External REST API</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#base-url">Base URL</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#authentication">Authentication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#csrf-protection">CSRF Protection</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#response-format">Response Format</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#endpoints">Endpoints</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#graphql-api">GraphQL API</a></li>
@@ -89,6 +90,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -150,6 +152,16 @@
 </pre></div>
 </div>
 </section>
+</section>
+<section id="csrf-protection">
+<h2>CSRF Protection<a class="headerlink" href="#csrf-protection" title="Link to this heading">¶</a></h2>
+<p>State-changing requests (POST, PUT, PATCH, DELETE) to internal endpoints require a valid CSRF token:</p>
+<ol class="arabic simple">
+<li><p>The server sets a <code class="docutils literal notranslate"><span class="pre">csrf_token</span></code> cookie on first visit.</p></li>
+<li><p>Include the cookie value in the <code class="docutils literal notranslate"><span class="pre">X-CSRF-Token</span></code> request header.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">fetch()</span></code> wrapper in the frontend attaches this header automatically.</p></li>
+<li><p>External API endpoints (<code class="docutils literal notranslate"><span class="pre">/api/v1/</span></code>) and GraphQL are exempted.</p></li>
+</ol>
 </section>
 <section id="response-format">
 <h2>Response Format<a class="headerlink" href="#response-format" title="Link to this heading">¶</a></h2>
@@ -2557,7 +2569,7 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">front/routes/home.py</span></code>, <code class="docutils literal notranslate"><span class="pre">api/routers/internal/home.py</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">back/services/home.py</span></code>, <code class="docutils literal notranslate"><span class="pre">back/objects/session/domain_session.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back/services/home.py</span></code>, <code class="docutils literal notranslate"><span class="pre">back/objects/session/DomainSession.py</span></code></p></td>
 <td><p>Home / session overview</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">front/routes/home.py</span></code> (settings page served from home), <code class="docutils literal notranslate"><span class="pre">api/routers/internal/settings.py</span></code></p></td>
@@ -2577,7 +2589,7 @@ curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </spa
 <td><p>Digital Twin, SPARQL, query UI</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">front/routes/domain.py</span></code>, <code class="docutils literal notranslate"><span class="pre">api/routers/internal/domain.py</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">back/objects/domain/domain.py</span></code>, <code class="docutils literal notranslate"><span class="pre">back/objects/session/domain_session.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back/objects/domain/Domain.py</span></code>, <code class="docutils literal notranslate"><span class="pre">back/objects/session/DomainSession.py</span></code></p></td>
 <td><p>Domain save/load &amp; registry UX</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api/routers/internal/tasks.py</span></code></p></td>

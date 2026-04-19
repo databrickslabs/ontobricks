@@ -10,7 +10,7 @@
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
-    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -81,6 +81,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -249,13 +250,19 @@
 <td><p>Apache-2.0</p></td>
 <td><p><a class="reference external" href="https://github.com/RDFLib/pySHACL">github.com/RDFLib/pySHACL</a></p></td>
 </tr>
-<tr class="row-odd"><td><p><strong>strawberry-graphql[fastapi]</strong></p></td>
+<tr class="row-odd"><td><p><strong>NetworkX</strong></p></td>
+<td><p>≥3.0</p></td>
+<td><p>Graph analysis library — server-side community detection (Louvain, Label Propagation, Greedy Modularity) on the full knowledge graph</p></td>
+<td><p>BSD-3-Clause</p></td>
+<td><p><a class="reference external" href="https://networkx.org/">networkx.org</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>strawberry-graphql[fastapi]</strong></p></td>
 <td><p>≥0.220.0</p></td>
 <td><p>GraphQL library for Python — auto-generates typed schema from ontology and integrates with FastAPI</p></td>
 <td><p>MIT</p></td>
 <td><p><a class="reference external" href="https://strawberry.rocks/">strawberry.rocks</a></p></td>
 </tr>
-<tr class="row-even"><td><p><strong>MLflow</strong></p></td>
+<tr class="row-odd"><td><p><strong>MLflow</strong></p></td>
 <td><p>≥2.19.0</p></td>
 <td><p>ML lifecycle platform — used for agent tracing, evaluation, and the Databricks Agent Framework (ResponsesAgent)</p></td>
 <td><p>Apache-2.0</p></td>
@@ -352,6 +359,18 @@
 <td><p>MIT</p></td>
 <td><p><a class="reference external" href="https://flake8.pycqa.org/">flake8.pycqa.org</a></p></td>
 </tr>
+<tr class="row-even"><td><p><strong>Sphinx</strong></p></td>
+<td><p>≥7.0.0</p></td>
+<td><p>Documentation generator from docstrings (API reference)</p></td>
+<td><p>BSD-2-Clause</p></td>
+<td><p><a class="reference external" href="https://www.sphinx-doc.org/">sphinx-doc.org</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>myst-parser</strong></p></td>
+<td><p>≥3.0.0</p></td>
+<td><p>Markdown support for Sphinx (MyST flavour)</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://myst-parser.readthedocs.io/">myst-parser.readthedocs.io</a></p></td>
+</tr>
 </tbody>
 </table>
 </section>
@@ -430,7 +449,7 @@
 </tr>
 <tr class="row-even"><td><p><strong>Graphology Library</strong></p></td>
 <td><p>0.8.0</p></td>
-<td><p>Standard library bundle for Graphology (includes ForceAtlas2 layout)</p></td>
+<td><p>Standard library bundle for Graphology (includes ForceAtlas2 layout and Louvain community detection)</p></td>
 <td><p>MIT</p></td>
 <td><p><a class="reference external" href="https://cdn.jsdelivr.net/npm/graphology-library&#64;0.8.0/">cdn.jsdelivr.net/npm/graphology-library</a></p></td>
 </tr>
@@ -439,6 +458,12 @@
 <td><p>Advanced table plugin with sorting, searching, and pagination</p></td>
 <td><p>MIT</p></td>
 <td><p><a class="reference external" href="https://unpkg.com/gridjs/dist/gridjs.umd.js">unpkg.com/gridjs</a></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Chart.js</strong></p></td>
+<td><p>4.x</p></td>
+<td><p>Simple yet flexible charting library (doughnut gauges on Cockpit)</p></td>
+<td><p>MIT</p></td>
+<td><p><a class="reference external" href="https://cdn.jsdelivr.net/npm/chart.js&#64;4/dist/chart.umd.min.js">cdn.jsdelivr.net/npm/chart.js&#64;4</a></p></td>
 </tr>
 </tbody>
 </table>
@@ -651,16 +676,16 @@
 </thead>
 <tbody>
 <tr class="row-even"><td><p><strong>MIT</strong></p></td>
-<td><p>FastAPI, pydantic, pydantic-settings, Bootstrap, Bootstrap Icons, Sigma.js, Graphology, Grid.js, OntoViz, strawberry-graphql, real_ladybug, pytest, pytest-asyncio, pytest-cov, black, flake8</p></td>
+<td><p>FastAPI, pydantic, pydantic-settings, Bootstrap, Bootstrap Icons, Sigma.js, Graphology, Grid.js, Chart.js, OntoViz, strawberry-graphql, real_ladybug, pytest, pytest-asyncio, pytest-cov, black, flake8</p></td>
 </tr>
 <tr class="row-odd"><td><p><strong>BSD-3-Clause</strong></p></td>
-<td><p>Uvicorn, Starlette, Jinja2, itsdangerous, RDFLib, python-dotenv, httpx</p></td>
+<td><p>Uvicorn, Starlette, Jinja2, itsdangerous, RDFLib, python-dotenv, httpx, NetworkX</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>Apache-2.0</strong></p></td>
 <td><p>databricks-sql-connector, databricks-sdk, pyarrow, python-multipart, aiofiles, requests, fastmcp, MLflow, pyshacl, responses, playwright</p></td>
 </tr>
-<tr class="row-odd"><td><p><strong>LGPL-3.0</strong></p></td>
-<td><p>psycopg</p></td>
+<tr class="row-odd"><td><p><strong>BSD-2-Clause</strong></p></td>
+<td><p>Sphinx</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>ISC</strong></p></td>
 <td><p>D3.js</p></td>
@@ -684,10 +709,10 @@
 <section id="id1">
 <h4>Python Dependencies<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h4>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1">## Update all dependencies</span>
-uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span>-r<span class="w"> </span>pyproject.toml
+uv<span class="w"> </span>sync<span class="w"> </span>--upgrade
 
-<span class="c1">## Update specific package</span>
-uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span>fastapi
+<span class="c1">## Update a specific package</span>
+uv<span class="w"> </span>lock<span class="w"> </span>--upgrade-package<span class="w"> </span>fastapi<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>uv<span class="w"> </span>sync
 </pre></div>
 </div>
 </section>
@@ -709,6 +734,8 @@ uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </s
 <li><p>Python packages are installed from PyPI</p></li>
 <li><p>Regular security audits recommended via <code class="docutils literal notranslate"><span class="pre">pip-audit</span></code></p></li>
 <li><p>Keep dependencies updated for security patches</p></li>
+<li><p><strong>CSRF protection</strong> is active for all state-changing requests (POST, PUT, PATCH, DELETE). The middleware (<code class="docutils literal notranslate"><span class="pre">shared/fastapi/csrf.py</span></code>) validates a <code class="docutils literal notranslate"><span class="pre">X-CSRF-Token</span></code> header against the <code class="docutils literal notranslate"><span class="pre">csrf_token</span></code> cookie. Tests bypass this via <code class="docutils literal notranslate"><span class="pre">CSRF_DISABLED=1</span></code> (set in <code class="docutils literal notranslate"><span class="pre">tests/conftest.py</span></code>).</p></li>
+<li><p><strong>Static asset versioning</strong>: All <code class="docutils literal notranslate"><span class="pre">&lt;script&gt;</span></code> and <code class="docutils literal notranslate"><span class="pre">&lt;link&gt;</span></code> tags must use <code class="docutils literal notranslate"><span class="pre">?v={{</span> <span class="pre">asset_version</span> <span class="pre">}}</span></code> for deterministic cache busting. Do not use <code class="docutils literal notranslate"><span class="pre">{{</span> <span class="pre">range(...)</span> <span class="pre">|</span> <span class="pre">random</span> <span class="pre">}}</span></code>.</p></li>
 </ul>
 </section>
 </section>
@@ -751,7 +778,7 @@ uv<span class="w"> </span>sync<span class="w"> </span>--dev
   <span class="n">conftest</span><span class="o">.</span><span class="n">py</span>                       <span class="c1"># Shared fixtures and test configuration</span>
   <span class="n">fixtures</span><span class="o">/</span>
     <span class="n">sample_ontology</span><span class="o">.</span><span class="n">owl</span>             <span class="c1"># Sample OWL/Turtle content for parsing tests</span>
-    <span class="n">sample_project</span><span class="o">.</span><span class="n">json</span>             <span class="c1"># Sample project export for import/export tests</span>
+    <span class="n">sample_domain</span><span class="o">.</span><span class="n">json</span>              <span class="c1"># Sample domain export for import/export tests</span>
   <span class="n">test_owl_parser</span><span class="o">.</span><span class="n">py</span>                <span class="c1"># OWL parser unit tests</span>
   <span class="n">test_owl_generator</span><span class="o">.</span><span class="n">py</span>             <span class="c1"># OWL generator unit tests</span>
   <span class="n">test_r2rml_parser</span><span class="o">.</span><span class="n">py</span>              <span class="c1"># R2RML parser unit tests</span>
@@ -942,7 +969,7 @@ uv<span class="w"> </span>sync<span class="w"> </span>--dev
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_domain_session.py</span></code></p></td>
 <td><p>21</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">back.objects.session.domain_session</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back.objects.session.DomainSession</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">get_empty_domain</span></code>, <code class="docutils literal notranslate"><span class="pre">DomainSession</span></code> properties (info, version, ontology, assignment, generated, R2RML), save/reset, export/import, legacy migration</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_mapping_service.py</span></code></p></td>
@@ -1148,7 +1175,7 @@ open<span class="w"> </span>htmlcov/index.html
 <td><p>67%</p></td>
 <td><p>Good coverage</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">back/objects/session/domain_session.py</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">back/objects/session/DomainSession.py</span></code></p></td>
 <td><p>66%</p></td>
 <td><p>Legacy migration paths less covered</p></td>
 </tr>
@@ -1355,7 +1382,7 @@ uv<span class="w"> </span>sync<span class="w"> </span>--dev
 <td><p>All 6 sidebar items switch to correct section</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TestDigitalTwinSidebar</span></code></p></td>
-<td><p>Sync section visible by default, Build link present</p></td>
+<td><p>Knowledge Graph section visible by default, sidebar navigation links present</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TestAboutPage</span></code></p></td>
 <td><p>Page content and R2RML reference present</p></td>
@@ -1454,11 +1481,15 @@ list</strong>. It is intended for administrators who deploy and manage OntoBrick
 </tr>
 <tr class="row-odd"><td><p><strong>In-app permission list</strong></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">.permissions.json</span></code> stored in the Unity Catalog Registry Volume</p></td>
-<td><p>Fine-grained roles (<strong>Viewer</strong> / <strong>Editor</strong>) for individual users and groups.</p></td>
+<td><p>Fine-grained roles (<strong>Viewer</strong> / <strong>Editor</strong> / <strong>Builder</strong>) for individual users and groups.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Domain-level overrides</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">.domain_permissions.json</span></code> inside each domain folder</p></td>
+<td><p>Per-domain role overrides that can restrict (but not elevate) the app-level role.</p></td>
 </tr>
 </tbody>
 </table>
-<p>A user’s effective role is determined by combining both layers.</p>
+<p>A user’s effective role is determined by combining all three layers.</p>
 </section>
 <hr class="docutils" />
 <section id="roles">
@@ -1473,22 +1504,27 @@ list</strong>. It is intended for administrators who deploy and manage OntoBrick
 <tbody>
 <tr class="row-even"><td><p><strong>Admin</strong></p></td>
 <td><p>Databricks App <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> permission</p></td>
-<td><p>Full access. Can view, edit, and manage the Settings page including the permission list.</p></td>
+<td><p>Full access. Can view, edit, build, and manage the Settings page including the permission list.</p></td>
 </tr>
-<tr class="row-odd"><td><p><strong>Editor</strong></p></td>
+<tr class="row-odd"><td><p><strong>Builder</strong></p></td>
 <td><p>In-app permission list</p></td>
-<td><p>Can view all pages, create and modify domains, ontologies, mappings, and run syncs. Cannot access Settings.</p></td>
+<td><p>Can view, edit, and <strong>build digital twins</strong>. Cannot access Settings.</p></td>
 </tr>
-<tr class="row-even"><td><p><strong>Viewer</strong></p></td>
+<tr class="row-even"><td><p><strong>Editor</strong></p></td>
+<td><p>In-app permission list</p></td>
+<td><p>Can view all pages, create and modify domains, ontologies, and mappings. <strong>Cannot build digital twins.</strong> Cannot access Settings.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Viewer</strong></p></td>
 <td><p>In-app permission list</p></td>
 <td><p>Read-only access. Can browse domains, ontologies, and query results. All write operations (POST, PUT, PATCH, DELETE) are blocked. Cannot access Settings.</p></td>
 </tr>
-<tr class="row-odd"><td><p><strong>None</strong></p></td>
+<tr class="row-even"><td><p><strong>None</strong></p></td>
 <td><p>Default when not matched</p></td>
 <td><p>Completely blocked. Redirected to the Access Denied page.</p></td>
 </tr>
 </tbody>
 </table>
+<p>Role hierarchy: <code class="docutils literal notranslate"><span class="pre">admin</span> <span class="pre">&gt;</span> <span class="pre">builder</span> <span class="pre">&gt;</span> <span class="pre">editor</span> <span class="pre">&gt;</span> <span class="pre">viewer</span> <span class="pre">&gt;</span> <span class="pre">none</span></code>.</p>
 </section>
 <hr class="docutils" />
 <section id="how-permission-resolution-works">
@@ -1503,22 +1539,29 @@ resolution follows this priority order:</p>
   ├─ Path is a bypass path (/static, /health, /docs, /api, etc.)?
   │    └─ Yes → pass through, no role enforcement
   │
-  └─ Resolve role via get_user_role():
+  └─ Resolve app-level role via get_user_role():
        │
        ├─ 1. is_admin(email)?
        │    Check if the user has CAN_MANAGE on the Databricks App.
-       │    └─ Yes → role = admin
+       │    └─ Yes → app_role = admin
        │
        ├─ 2. User explicitly listed in .permissions.json?
        │    Match email (case-insensitive).
-       │    └─ Yes → role from entry (viewer or editor)
+       │    └─ Yes → app_role from entry (viewer, editor, or builder)
        │
        ├─ 3. User belongs to a group listed in .permissions.json?
        │    Check group membership via Databricks SCIM API.
-       │    └─ Yes → role from group entry (viewer or editor)
+       │    └─ Yes → app_role from group entry (viewer, editor, or builder)
        │
        └─ 4. No match
-            └─ role = none → Access Denied
+            └─ app_role = none → Access Denied
+       │
+       └─ Resolve domain-level role (when a domain is loaded):
+            │
+            ├─ Admin → always admin (domain overrides ignored)
+            ├─ User/group listed in .domain_permissions.json?
+            │    └─ Yes → effective_role = min(app_role, domain_role)
+            └─ Not listed → effective_role = app_role (inherit)
 </pre></div>
 </div>
 <section id="enforcement-rules">
@@ -1539,7 +1582,10 @@ resolution follows this priority order:</p>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">role</span> <span class="pre">!=</span> <span class="pre">admin</span></code> + path starts with <code class="docutils literal notranslate"><span class="pre">/settings</span></code></p></td>
 <td><p>JSON 403 or redirect to <code class="docutils literal notranslate"><span class="pre">/</span></code>. Only admins can access the Settings page.</p></td>
 </tr>
-<tr class="row-odd"><td><p>Otherwise</p></td>
+<tr class="row-odd"><td><p>Digital twin build + effective domain role &lt; <code class="docutils literal notranslate"><span class="pre">builder</span></code></p></td>
+<td><p>JSON 403: “Only builders and admins can build a digital twin”.</p></td>
+</tr>
+<tr class="row-even"><td><p>Otherwise</p></td>
 <td><p>Request proceeds normally.</p></td>
 </tr>
 </tbody>
@@ -1635,7 +1681,7 @@ Unity Catalog Registry Volume:</p>
 <td><p>Human-readable name shown in the UI.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">role</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">&quot;viewer&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;editor&quot;</span></code>. Admins are never listed here — they are determined by <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code>.</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;viewer&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;editor&quot;</span></code>, or <code class="docutils literal notranslate"><span class="pre">&quot;builder&quot;</span></code>. Admins are never listed here — they are determined by <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code>.</p></td>
 </tr>
 </tbody>
 </table>
@@ -1646,6 +1692,70 @@ Unity Catalog Registry Volume:</p>
 array, <strong>only users with <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> have access</strong>. All other
 authenticated users are blocked. This is by design — it prevents
 accidental open access before the admin configures the permission list.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="domain-level-permissions">
+<h3>Domain-Level Permissions<a class="headerlink" href="#domain-level-permissions" title="Link to this heading">¶</a></h3>
+<p>Domain-level permissions allow admins to override a user’s app-level role
+on a per-domain basis. These overrides can only <strong>restrict</strong> (never
+elevate) the app-level role.</p>
+<section id="storage">
+<h4>Storage<a class="headerlink" href="#storage" title="Link to this heading">¶</a></h4>
+<p>Each domain has an optional <code class="docutils literal notranslate"><span class="pre">.domain_permissions.json</span></code> file inside its
+domain folder on the registry volume:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">/</span><span class="n">Volumes</span><span class="o">/</span><span class="p">{</span><span class="n">catalog</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">schema</span><span class="p">}</span><span class="o">/</span><span class="p">{</span><span class="n">volume</span><span class="p">}</span><span class="o">/</span><span class="n">domains</span><span class="o">/</span><span class="p">{</span><span class="n">domain_name</span><span class="p">}</span><span class="o">/.</span><span class="n">domain_permissions</span><span class="o">.</span><span class="n">json</span>
+</pre></div>
+</div>
+</section>
+<section id="id2">
+<h4>File Format<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h4>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;permissions&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;principal&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;alice@example.com&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;principal_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;viewer&quot;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;principal&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;data-team&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;principal_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;group&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;builder&quot;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="resolution-logic">
+<h4>Resolution Logic<a class="headerlink" href="#resolution-logic" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Admin</strong> users always keep admin access regardless of domain overrides.</p></li>
+<li><p>If a user has no entry in the domain permission file, they inherit their
+app-level role unchanged (backward compatible).</p></li>
+<li><p>If a user has a domain-level entry, their effective role is
+<code class="docutils literal notranslate"><span class="pre">min(app_role,</span> <span class="pre">domain_role)</span></code>. For example, an app-level <code class="docutils literal notranslate"><span class="pre">builder</span></code> with
+domain-level <code class="docutils literal notranslate"><span class="pre">viewer</span></code> is effectively a <code class="docutils literal notranslate"><span class="pre">viewer</span></code> on that domain.</p></li>
+</ul>
+</section>
+<section id="api-endpoints">
+<h4>API Endpoints<a class="headerlink" href="#api-endpoints" title="Link to this heading">¶</a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Path</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>GET</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/settings/domain-permissions/{domain_name}</span></code></p></td>
+<td><p>List domain entries</p></td>
+</tr>
+<tr class="row-odd"><td><p>POST</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/settings/domain-permissions/{domain_name}</span></code></p></td>
+<td><p>Add/update entry</p></td>
+</tr>
+<tr class="row-even"><td><p>DELETE</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/settings/domain-permissions/{domain_name}/{principal}</span></code></p></td>
+<td><p>Remove entry</p></td>
+</tr>
+</tbody>
+</table>
+<p>These endpoints are admin-only.</p>
 </section>
 </section>
 <hr class="docutils" />
@@ -1672,7 +1782,7 @@ to Settings.</p></li>
 <li><p>Select <strong>User</strong> or <strong>Group</strong>.</p></li>
 <li><p>Search and select from the dropdown. The list shows users and groups
 that have permissions on the Databricks App (CAN_USE or CAN_MANAGE).</p></li>
-<li><p>Choose a role: <strong>Viewer</strong> or <strong>Editor</strong>.</p></li>
+<li><p>Choose a role: <strong>Viewer</strong>, <strong>Editor</strong>, or <strong>Builder</strong>.</p></li>
 </ul>
 </li>
 <li><p>Click <strong>Add</strong>. The entry is immediately saved to the Registry.</p></li>
@@ -1821,8 +1931,8 @@ user has no access to any part of the application.</p>
 </pre></div>
 </div>
 </section>
-<section id="api-endpoints">
-<h4>API Endpoints<a class="headerlink" href="#api-endpoints" title="Link to this heading">¶</a></h4>
+<section id="id3">
+<h4>API Endpoints<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h4>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Endpoint</p></th>

@@ -4,7 +4,7 @@
 Domain class
 ------------
 
-.. automodule:: back.objects.domain.domain
+.. automodule:: back.objects.domain.Domain
    :members:
    :undoc-members:
    :show-inheritance:
@@ -29,6 +29,22 @@ Payload helpers
 ---------------
 
 .. automodule:: back.objects.domain.payload
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Home service
+------------
+
+.. automodule:: back.objects.domain.HomeService
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Settings service
+----------------
+
+.. automodule:: back.objects.domain.SettingsService
    :members:
    :undoc-members:
    :show-inheritance:

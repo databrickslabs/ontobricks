@@ -986,10 +986,18 @@ See the [MCP Server documentation](mcp.md) for full details including local usag
 
 | Shortcut | Action |
 |----------|--------|
+| Ctrl/Cmd + S | Save domain |
+| Ctrl/Cmd + K | Focus sidebar search (if available) |
+| ? | Show / hide the keyboard shortcuts overlay |
 | Ctrl/Cmd + Enter | Confirm action |
 | Tab | Navigate between form fields |
 | Enter | Submit form / confirm dialog |
-| Escape | Close modal |
+| Escape | Close modal or shortcut overlay |
+
+### Navigation
+
+- **Deep-linked sections**: Sidebar section changes update the URL (`?section=<id>`), so you can bookmark or share a specific section. Browser Back/Forward navigates between previously visited sections.
+- **Breadcrumb bar**: A breadcrumb trail below the navbar shows your current position (e.g. Registry > Domain > Ontology > Entities) and updates as you switch sidebar sections.
 
 ---
 

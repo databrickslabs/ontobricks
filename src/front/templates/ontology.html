@@ -20,7 +20,7 @@
 
 {% block content %}
 <!-- Ontology Core Module (shared state across all partials) -->
-<script src="{{ url_for('static', filename='global/js/ontology-core.js') }}"></script>
+<script src="{{ url_for('static', filename='global/js/ontology-core.js') }}?v={{ asset_version }}"></script>
 
 <div class="container-fluid px-0">
     <div class="sidebar-layout">

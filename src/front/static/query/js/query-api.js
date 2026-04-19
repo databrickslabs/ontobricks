@@ -317,7 +317,7 @@ function getGraphqlDomainSlug() {
 function openGraphiQL() {
     const domainSlug = getGraphqlDomainSlug();
     if (!domainSlug) {
-        alert('Enter a domain name first.');
+        showNotification('Enter a domain name first.', 'warning');
         return;
     }
     window.open(GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(domainSlug), '_blank');
@@ -326,13 +326,13 @@ function openGraphiQL() {
 async function tryGraphqlQuery(btnEl) {
     const domainSlug = getGraphqlDomainSlug();
     if (!domainSlug) {
-        alert('Enter a domain name first.');
+        showNotification('Enter a domain name first.', 'warning');
         return;
     }
 
     const queryText = document.getElementById('apiGraphqlQuery')?.value?.trim();
     if (!queryText) {
-        alert('Enter a GraphQL query.');
+        showNotification('Enter a GraphQL query.', 'warning');
         return;
     }
 
@@ -384,7 +384,7 @@ async function tryGraphqlQuery(btnEl) {
 async function tryGraphqlSchema(btnEl) {
     const domainSlug = getGraphqlDomainSlug();
     if (!domainSlug) {
-        alert('Enter a domain name first.');
+        showNotification('Enter a domain name first.', 'warning');
         return;
     }
     const path = GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(domainSlug) + '/schema';

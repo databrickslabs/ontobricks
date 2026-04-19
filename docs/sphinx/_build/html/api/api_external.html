@@ -10,7 +10,7 @@
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
-    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -86,6 +86,7 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -133,7 +134,7 @@ and OpenAPI metadata: <code class="docutils literal notranslate"><span class="pr
 <code class="docutils literal notranslate"><span class="pre">API_URL_PATH_VERSION</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">v1</span></code> → <code class="docutils literal notranslate"><span class="pre">/api/v1/...</span></code>).</p>
 <dl class="py data">
 <dt class="sig sig-object py" id="api.constants.API_VERSION">
-<span class="sig-prename descclassname"><span class="pre">api.constants.</span></span><span class="sig-name descname"><span class="pre">API_VERSION</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'0.1.0'</span></span><a class="headerlink" href="#api.constants.API_VERSION" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">api.constants.</span></span><span class="sig-name descname"><span class="pre">API_VERSION</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'0.1.1'</span></span><a class="headerlink" href="#api.constants.API_VERSION" title="Link to this definition">¶</a></dt>
 <dd><p>OpenAPI <code class="docutils literal notranslate"><span class="pre">info.version</span></code> for the mounted external API (<code class="docutils literal notranslate"><span class="pre">/api/docs</span></code>).</p>
 </dd></dl>
 
@@ -1541,7 +1542,7 @@ targets a specific version; when omitted, the latest version is used.</p>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
@@ -1559,7 +1560,7 @@ targets a specific version; when omitted, the latest version is used.</p>
 <li><p><strong>registry_catalog</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_schema</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_volume</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
@@ -1577,7 +1578,7 @@ targets a specific version; when omitted, the latest version is used.</p>
 <li><p><strong>registry_catalog</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_schema</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_volume</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
@@ -1596,7 +1597,7 @@ targets a specific version; when omitted, the latest version is used.</p>
 <li><p><strong>registry_catalog</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_schema</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_volume</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
@@ -1629,7 +1630,7 @@ targets a specific version; when omitted, the latest version is used.</p>
 <li><p><strong>registry_catalog</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_schema</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_volume</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
@@ -1655,7 +1656,7 @@ targets a specific version; when omitted, the latest version is used.</p>
 <li><p><strong>registry_catalog</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_schema</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_volume</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
@@ -1674,7 +1675,7 @@ targets a specific version; when omitted, the latest version is used.</p>
 <li><p><strong>registry_catalog</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_schema</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_volume</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
@@ -1703,7 +1704,7 @@ targets a specific version; when omitted, the latest version is used.</p>
 <li><p><strong>registry_catalog</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_schema</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_volume</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
@@ -1721,7 +1722,7 @@ targets a specific version; when omitted, the latest version is used.</p>
 <li><p><strong>registry_catalog</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_schema</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>registry_volume</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
@@ -1867,7 +1868,7 @@ POST …/graphql/{domain_name}    — execute a GraphQL query</p>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
@@ -1887,7 +1888,7 @@ POST …/graphql/{domain_name}    — execute a GraphQL query</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>request</strong> (<em>Request</em>)</p></li>
 <li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
@@ -1902,7 +1903,7 @@ POST …/graphql/{domain_name}    — execute a GraphQL query</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>body</strong> (<a class="reference internal" href="#back.fastapi.graphql_routes.GraphQLRequest" title="back.fastapi.graphql_routes.GraphQLRequest"><em>GraphQLRequest</em></a>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
@@ -1916,7 +1917,7 @@ POST …/graphql/{domain_name}    — execute a GraphQL query</p>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
@@ -1932,7 +1933,7 @@ POST …/graphql/{domain_name}    — execute a GraphQL query</p>
 <li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>type_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>search</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.manager.SessionManager" title="back.objects.session.manager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>

@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
-    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
@@ -73,6 +73,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -109,9 +110,11 @@
           <div class="body" role="main">
             
   <h1>Source code for back.core.logging.LogManager</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">json</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging.config</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
 
@@ -122,6 +125,24 @@
     <span class="n">LOG_BACKUP_COUNT</span><span class="p">,</span>
     <span class="n">LOG_MAX_BYTES</span><span class="p">,</span>
 <span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_JSONFormatter</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">Formatter</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Emit each log record as a single JSON line for machine parsing.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">format</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">:</span> <span class="n">logging</span><span class="o">.</span><span class="n">LogRecord</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">entry</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;ts&quot;</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">created</span><span class="p">,</span> <span class="n">tz</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(),</span>
+            <span class="s2">&quot;level&quot;</span><span class="p">:</span> <span class="n">record</span><span class="o">.</span><span class="n">levelname</span><span class="p">,</span>
+            <span class="s2">&quot;logger&quot;</span><span class="p">:</span> <span class="n">record</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="s2">&quot;module&quot;</span><span class="p">:</span> <span class="n">record</span><span class="o">.</span><span class="n">module</span><span class="p">,</span>
+            <span class="s2">&quot;func&quot;</span><span class="p">:</span> <span class="n">record</span><span class="o">.</span><span class="n">funcName</span><span class="p">,</span>
+            <span class="s2">&quot;line&quot;</span><span class="p">:</span> <span class="n">record</span><span class="o">.</span><span class="n">lineno</span><span class="p">,</span>
+            <span class="s2">&quot;msg&quot;</span><span class="p">:</span> <span class="n">record</span><span class="o">.</span><span class="n">getMessage</span><span class="p">(),</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="n">record</span><span class="o">.</span><span class="n">exc_info</span> <span class="ow">and</span> <span class="n">record</span><span class="o">.</span><span class="n">exc_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;exception&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">formatException</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">exc_info</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">_json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="nb">str</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="LogManager">
@@ -208,7 +229,9 @@
 
         <span class="n">resolved_level</span> <span class="o">=</span> <span class="p">(</span><span class="n">level</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;LOG_LEVEL&quot;</span><span class="p">,</span> <span class="n">DEFAULT_LOG_LEVEL</span><span class="p">))</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
         <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_config</span><span class="p">(</span>
-            <span class="n">level</span><span class="o">=</span><span class="n">resolved_level</span><span class="p">,</span> <span class="n">log_dir</span><span class="o">=</span><span class="n">log_dir</span><span class="p">,</span> <span class="n">log_file</span><span class="o">=</span><span class="n">log_file</span><span class="p">,</span>
+            <span class="n">level</span><span class="o">=</span><span class="n">resolved_level</span><span class="p">,</span>
+            <span class="n">log_dir</span><span class="o">=</span><span class="n">log_dir</span><span class="p">,</span>
+            <span class="n">log_file</span><span class="o">=</span><span class="n">log_file</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="n">logging</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dictConfig</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
 
@@ -284,45 +307,60 @@
         <span class="n">log_dir</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">log_file</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build a logging dict-config (log4J-style hierarchy).&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build a logging dict-config (log4J-style hierarchy).</span>
+
+<span class="sd">        Set ``LOG_FORMAT=json`` to emit structured JSON lines on both</span>
+<span class="sd">        console and file handlers (useful for log aggregation in</span>
+<span class="sd">        production).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">resolved_dir</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_resolve_log_dir</span><span class="p">(</span><span class="n">log_dir</span><span class="p">)</span>
         <span class="n">resolved_file</span> <span class="o">=</span> <span class="n">log_file</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;LOG_FILE&quot;</span><span class="p">,</span> <span class="n">DEFAULT_LOG_FILE</span><span class="p">)</span>
         <span class="n">log_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">resolved_dir</span><span class="p">,</span> <span class="n">resolved_file</span><span class="p">)</span>
+
+        <span class="n">use_json</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;LOG_FORMAT&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;json&quot;</span>
+
+        <span class="n">console_formatter</span> <span class="o">=</span> <span class="s2">&quot;json&quot;</span> <span class="k">if</span> <span class="n">use_json</span> <span class="k">else</span> <span class="s2">&quot;console&quot;</span>
+        <span class="n">file_formatter</span> <span class="o">=</span> <span class="s2">&quot;json&quot;</span> <span class="k">if</span> <span class="n">use_json</span> <span class="k">else</span> <span class="s2">&quot;detailed&quot;</span>
+
+        <span class="n">formatters</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;detailed&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="p">(</span>
+                    <span class="s2">&quot;</span><span class="si">%(asctime)s</span><span class="s2"> | </span><span class="si">%(levelname)-8s</span><span class="s2"> | </span><span class="si">%(name)s</span><span class="s2"> | &quot;</span>
+                    <span class="s2">&quot;</span><span class="si">%(module)s</span><span class="s2">.</span><span class="si">%(funcName)s</span><span class="s2">:</span><span class="si">%(lineno)d</span><span class="s2"> | </span><span class="si">%(message)s</span><span class="s2">&quot;</span>
+                <span class="p">),</span>
+                <span class="s2">&quot;datefmt&quot;</span><span class="p">:</span> <span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2">T%H:%M:%S%z&quot;</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="s2">&quot;console&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="p">(</span>
+                    <span class="s2">&quot;</span><span class="si">%(levelname)-8s</span><span class="s2"> | </span><span class="si">%(name)s</span><span class="s2"> | &quot;</span>
+                    <span class="s2">&quot;</span><span class="si">%(module)s</span><span class="s2">.</span><span class="si">%(funcName)s</span><span class="s2">:</span><span class="si">%(lineno)d</span><span class="s2"> | </span><span class="si">%(message)s</span><span class="s2">&quot;</span>
+                <span class="p">),</span>
+            <span class="p">},</span>
+            <span class="s2">&quot;brief&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;</span><span class="si">%(levelname)-8s</span><span class="s2"> | </span><span class="si">%(message)s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+
+        <span class="k">if</span> <span class="n">use_json</span><span class="p">:</span>
+            <span class="n">formatters</span><span class="p">[</span><span class="s2">&quot;json&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;()&quot;</span><span class="p">:</span> <span class="n">_JSONFormatter</span><span class="p">}</span>
 
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
             <span class="s2">&quot;disable_existing_loggers&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
             <span class="c1"># ── Formatters ──────────────────────────────────────────</span>
-            <span class="s2">&quot;formatters&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;detailed&quot;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="p">(</span>
-                        <span class="s2">&quot;</span><span class="si">%(asctime)s</span><span class="s2"> | </span><span class="si">%(levelname)-8s</span><span class="s2"> | </span><span class="si">%(name)s</span><span class="s2"> | &quot;</span>
-                        <span class="s2">&quot;</span><span class="si">%(module)s</span><span class="s2">.</span><span class="si">%(funcName)s</span><span class="s2">:</span><span class="si">%(lineno)d</span><span class="s2"> | </span><span class="si">%(message)s</span><span class="s2">&quot;</span>
-                    <span class="p">),</span>
-                    <span class="s2">&quot;datefmt&quot;</span><span class="p">:</span> <span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2">T%H:%M:%S%z&quot;</span><span class="p">,</span>
-                <span class="p">},</span>
-                <span class="s2">&quot;console&quot;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="p">(</span>
-                        <span class="s2">&quot;</span><span class="si">%(levelname)-8s</span><span class="s2"> | </span><span class="si">%(name)s</span><span class="s2"> | &quot;</span>
-                        <span class="s2">&quot;</span><span class="si">%(module)s</span><span class="s2">.</span><span class="si">%(funcName)s</span><span class="s2">:</span><span class="si">%(lineno)d</span><span class="s2"> | </span><span class="si">%(message)s</span><span class="s2">&quot;</span>
-                    <span class="p">),</span>
-                <span class="p">},</span>
-                <span class="s2">&quot;brief&quot;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;</span><span class="si">%(levelname)-8s</span><span class="s2"> | </span><span class="si">%(message)s</span><span class="s2">&quot;</span><span class="p">,</span>
-                <span class="p">},</span>
-            <span class="p">},</span>
+            <span class="s2">&quot;formatters&quot;</span><span class="p">:</span> <span class="n">formatters</span><span class="p">,</span>
             <span class="c1"># ── Handlers ────────────────────────────────────────────</span>
             <span class="s2">&quot;handlers&quot;</span><span class="p">:</span> <span class="p">{</span>
                 <span class="s2">&quot;console&quot;</span><span class="p">:</span> <span class="p">{</span>
                     <span class="s2">&quot;class&quot;</span><span class="p">:</span> <span class="s2">&quot;logging.StreamHandler&quot;</span><span class="p">,</span>
                     <span class="s2">&quot;level&quot;</span><span class="p">:</span> <span class="n">level</span><span class="p">,</span>
-                    <span class="s2">&quot;formatter&quot;</span><span class="p">:</span> <span class="s2">&quot;console&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;formatter&quot;</span><span class="p">:</span> <span class="n">console_formatter</span><span class="p">,</span>
                     <span class="s2">&quot;stream&quot;</span><span class="p">:</span> <span class="s2">&quot;ext://sys.stdout&quot;</span><span class="p">,</span>
                 <span class="p">},</span>
                 <span class="s2">&quot;file&quot;</span><span class="p">:</span> <span class="p">{</span>
                     <span class="s2">&quot;class&quot;</span><span class="p">:</span> <span class="s2">&quot;logging.handlers.RotatingFileHandler&quot;</span><span class="p">,</span>
                     <span class="s2">&quot;level&quot;</span><span class="p">:</span> <span class="n">level</span><span class="p">,</span>
-                    <span class="s2">&quot;formatter&quot;</span><span class="p">:</span> <span class="s2">&quot;detailed&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;formatter&quot;</span><span class="p">:</span> <span class="n">file_formatter</span><span class="p">,</span>
                     <span class="s2">&quot;filename&quot;</span><span class="p">:</span> <span class="n">log_path</span><span class="p">,</span>
                     <span class="s2">&quot;maxBytes&quot;</span><span class="p">:</span> <span class="n">LOG_MAX_BYTES</span><span class="p">,</span>
                     <span class="s2">&quot;backupCount&quot;</span><span class="p">:</span> <span class="n">LOG_BACKUP_COUNT</span><span class="p">,</span>

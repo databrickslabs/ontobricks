@@ -308,6 +308,8 @@ Frontend libraries are loaded via CDN with pinned versions. To update:
 - Python packages are installed from PyPI
 - Regular security audits recommended via `pip-audit`
 - Keep dependencies updated for security patches
+- **CSRF protection** is active for all state-changing requests (POST, PUT, PATCH, DELETE). The middleware (`shared/fastapi/csrf.py`) validates a `X-CSRF-Token` header against the `csrf_token` cookie. Tests bypass this via `CSRF_DISABLED=1` (set in `tests/conftest.py`).
+- **Static asset versioning**: All `<script>` and `<link>` tags must use `?v={{ asset_version }}` for deterministic cache busting. Do not use `{{ range(...) | random }}`.
 
 
 

@@ -67,6 +67,25 @@
 - **Databricks Playground**: Deployed as `mcp-ontobricks`, auto-discoverable by LLM agents in the Databricks Playground.
 - **Multi-Client**: Works with Cursor, Claude Desktop, or any MCP-compatible client.
 
+## Navigation & UX
+- **Deep-Linkable Sections**: Sidebar section changes push `?section=<id>` to browser history — sections are bookmarkable and navigable with Back/Forward.
+- **Breadcrumb Navigation**: Auto-generated breadcrumb bar below the navbar shows Registry > Domain > Ontology > Section context.
+- **Keyboard Shortcuts**: `Cmd/Ctrl+S` to save domain, `Cmd/Ctrl+K` to focus sidebar search, `?` for a shortcut overlay.
+- **Toast Notifications**: All user feedback uses non-blocking toast notifications (no `alert()` dialogs).
+
+## Performance
+- **SQL Connection Pooling**: `SQLWarehouse` maintains a `queue.Queue`-based pool of database connections, eliminating per-query TLS handshake overhead.
+- **Dedicated Thread Pool**: Blocking Databricks I/O runs in a dedicated `ThreadPoolExecutor` (configurable via `ONTOBRICKS_THREAD_POOL_SIZE`, default 20).
+- **Consistent Asset Versioning**: All static assets use deterministic `?v={{ asset_version }}` cache busting.
+
+## Security
+- **CSRF Protection**: Double-submit cookie pattern for all state-changing requests; `X-CSRF-Token` header auto-attached by the frontend fetch wrapper.
+- **Secure Cookies**: Session cookies use `secure=True` and `samesite=lax` in Databricks Apps deployments (HTTPS-only).
+
+## Observability
+- **Structured JSON Logging**: Set `LOG_FORMAT=json` for machine-readable log lines with `ts`, `level`, `logger`, `module`, `func`, `line`, `msg` fields.
+- **Request Timing**: Middleware logs method, path, status code, and duration (ms) for every non-static request.
+
 ## Deployment
 - **Databricks Apps Ready**: Deploy as a native Databricks App with service principal authentication.
 - **MCP Server App**: Separate `mcp-ontobricks` Databricks App for Playground integration.

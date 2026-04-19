@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
-    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
@@ -73,6 +73,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -111,6 +112,7 @@
 
 <span class="sd">Uses typed node/relationship tables from the graph schema.</span>
 <span class="sd">&quot;&quot;&quot;</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
@@ -142,7 +144,8 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_build_cypher_builtin_filters</span><span class="p">(</span>
-        <span class="n">builtin_atoms</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="n">var_alias</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="n">builtin_atoms</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+        <span class="n">var_alias</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Translate built-in atoms to Cypher WHERE fragments.&quot;&quot;&quot;</span>
         <span class="n">filters</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
@@ -167,38 +170,44 @@
             <span class="k">elif</span> <span class="n">bi</span><span class="o">.</span><span class="n">category</span> <span class="o">==</span> <span class="s2">&quot;date&quot;</span> <span class="ow">and</span> <span class="n">bi</span><span class="o">.</span><span class="n">arity</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
                 <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">bi</span><span class="o">.</span><span class="n">cypher_template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">resolved</span><span class="p">[:</span><span class="mi">2</span><span class="p">]))</span>
             <span class="k">elif</span> <span class="n">bi</span><span class="o">.</span><span class="n">arity</span> <span class="o">&lt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">resolved</span><span class="p">):</span>
-                <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">bi</span><span class="o">.</span><span class="n">cypher_template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">resolved</span><span class="p">[:</span><span class="n">bi</span><span class="o">.</span><span class="n">arity</span><span class="p">]))</span>
+                <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">bi</span><span class="o">.</span><span class="n">cypher_template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">resolved</span><span class="p">[:</span> <span class="n">bi</span><span class="o">.</span><span class="n">arity</span><span class="p">]))</span>
         <span class="k">return</span> <span class="n">filters</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_node_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">class_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-                            <span class="n">uri_map</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_node_table</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">class_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Map a SWRL class name to a graph-schema node table name.&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb.GraphSchema</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSchema</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.ladybugdb.GraphSchema</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSchema</span>
+
             <span class="k">return</span> <span class="n">GraphSchema</span><span class="o">.</span><span class="n">safe_identifier</span><span class="p">(</span><span class="n">class_name</span><span class="p">)</span>
 
         <span class="n">uri</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">class_name</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">)</span>
         <span class="n">tbl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">class_uri_to_table</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">tbl</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">tbl</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb.GraphSchema</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSchema</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.ladybugdb.GraphSchema</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSchema</span>
+
         <span class="n">safe</span> <span class="o">=</span> <span class="n">GraphSchema</span><span class="o">.</span><span class="n">safe_identifier</span><span class="p">(</span><span class="n">class_name</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">safe</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">node_tables</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">safe</span>
         <span class="k">return</span> <span class="n">safe</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_rel_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prop_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-                           <span class="n">uri_map</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_rel_table</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">prop_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Map a SWRL property name to a graph-schema relationship table.&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb.GraphSchema</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSchema</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.ladybugdb.GraphSchema</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSchema</span>
+
             <span class="k">return</span> <span class="n">GraphSchema</span><span class="o">.</span><span class="n">safe_identifier</span><span class="p">(</span><span class="n">prop_name</span><span class="p">)</span>
 
         <span class="n">uri</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">prop_name</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">)</span>
         <span class="n">tbl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">property_uri_to_table</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">tbl</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">tbl</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb.GraphSchema</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSchema</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.ladybugdb.GraphSchema</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphSchema</span>
+
         <span class="n">safe</span> <span class="o">=</span> <span class="n">GraphSchema</span><span class="o">.</span><span class="n">safe_identifier</span><span class="p">(</span><span class="n">prop_name</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">safe</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">rel_tables</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">safe</span>
@@ -208,24 +217,17 @@
 <a class="viewcode-back" href="../../../../api/app.core.reasoning.html#back.core.reasoning.SWRLCypherTranslator.SWRLCypherTranslator.build_violation_query">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_violation_query</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Build Cypher that returns subjects violating a SWRL rule.&quot;&quot;&quot;</span>
-        <span class="n">antecedent</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;antecedent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-        <span class="n">consequent</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;consequent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">base_uri</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">uri_map</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri_map&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
 
-        <span class="n">ante_atoms</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">parse_atoms</span><span class="p">(</span><span class="n">antecedent</span><span class="p">)</span>
-        <span class="n">cons_atoms</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">parse_atoms</span><span class="p">(</span><span class="n">consequent</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">ante_atoms</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cons_atoms</span><span class="p">:</span>
+        <span class="n">part</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">partition_rule_atoms</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">part</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
-
-        <span class="n">class_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
-                       <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
-        <span class="n">prop_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
-                      <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
-        <span class="n">builtin_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
-        <span class="n">negated_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">class_atoms</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">class_atoms</span> <span class="o">=</span> <span class="n">part</span><span class="o">.</span><span class="n">class_atoms</span>
+        <span class="n">prop_atoms</span> <span class="o">=</span> <span class="n">part</span><span class="o">.</span><span class="n">prop_atoms</span>
+        <span class="n">builtin_atoms</span> <span class="o">=</span> <span class="n">part</span><span class="o">.</span><span class="n">builtin_atoms</span>
+        <span class="n">negated_atoms</span> <span class="o">=</span> <span class="n">part</span><span class="o">.</span><span class="n">negated_atoms</span>
+        <span class="n">cons_atoms</span> <span class="o">=</span> <span class="n">part</span><span class="o">.</span><span class="n">consequent_atoms</span>
 
         <span class="n">var_tables</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">class_atoms</span><span class="p">:</span>
@@ -340,7 +342,12 @@
         <span class="n">cypher_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT </span><span class="si">{</span><span class="n">viol_cypher</span><span class="si">}</span><span class="s2">.uri AS s&quot;</span><span class="p">)</span>
 
         <span class="n">query</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">cypher_lines</span><span class="p">)</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;SWRL Cypher [</span><span class="si">%s</span><span class="s2"> -&gt; </span><span class="si">%s</span><span class="s2">]:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">antecedent</span><span class="p">,</span> <span class="n">consequent</span><span class="p">,</span> <span class="n">query</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">&quot;SWRL Cypher [</span><span class="si">%s</span><span class="s2"> -&gt; </span><span class="si">%s</span><span class="s2">]:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;antecedent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;consequent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="n">query</span><span class="p">,</span>
+        <span class="p">)</span>
         <span class="k">return</span> <span class="n">query</span></div>
 
 
@@ -358,16 +365,24 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ante_atoms</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cons_atoms</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
 
-        <span class="n">class_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
-                       <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
-        <span class="n">prop_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
-                      <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
+        <span class="n">class_atoms</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">a</span>
+            <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
+            <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)</span>
+        <span class="p">]</span>
+        <span class="n">prop_atoms</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">a</span>
+            <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
+            <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)</span>
+        <span class="p">]</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">class_atoms</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
 
         <span class="n">var_tables</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">class_atoms</span><span class="p">:</span>
-            <span class="n">var_tables</span><span class="p">[</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_node_table</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">)</span>
+            <span class="n">var_tables</span><span class="p">[</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_node_table</span><span class="p">(</span>
+                <span class="n">a</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span>
+            <span class="p">)</span>
 
         <span class="n">primary_var</span> <span class="o">=</span> <span class="n">class_atoms</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
         <span class="n">connected</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">find_connected_vars</span><span class="p">(</span><span class="n">primary_var</span><span class="p">,</span> <span class="n">prop_atoms</span><span class="p">)</span>
@@ -403,7 +418,9 @@
                     <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                         <span class="s2">&quot;SWRL materialisation: skipping consequent &#39;</span><span class="si">%s</span><span class="s2">&#39; — &quot;</span>
                         <span class="s2">&quot;variables </span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2"> not connected (cartesian product)&quot;</span><span class="p">,</span>
-                        <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">var_s</span><span class="p">,</span> <span class="n">var_o</span><span class="p">,</span>
+                        <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
+                        <span class="n">var_s</span><span class="p">,</span>
+                        <span class="n">var_o</span><span class="p">,</span>
                     <span class="p">)</span>
                     <span class="k">continue</span>
                 <span class="n">rel_table</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_rel_table</span><span class="p">(</span><span class="n">atom</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">)</span>
@@ -434,16 +451,24 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ante_atoms</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cons_atoms</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
 
-        <span class="n">class_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
-                       <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
-        <span class="n">prop_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
-                      <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)]</span>
+        <span class="n">class_atoms</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">a</span>
+            <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
+            <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)</span>
+        <span class="p">]</span>
+        <span class="n">prop_atoms</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">a</span>
+            <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">ante_atoms</span>
+            <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;arity&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;builtin&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;negated&quot;</span><span class="p">)</span>
+        <span class="p">]</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">class_atoms</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
 
         <span class="n">var_tables</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">class_atoms</span><span class="p">:</span>
-            <span class="n">var_tables</span><span class="p">[</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_node_table</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">)</span>
+            <span class="n">var_tables</span><span class="p">[</span><span class="n">a</span><span class="p">[</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_node_table</span><span class="p">(</span>
+                <span class="n">a</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span>
+            <span class="p">)</span>
 
         <span class="n">primary_var</span> <span class="o">=</span> <span class="n">class_atoms</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;args&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
         <span class="n">connected</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">find_connected_vars</span><span class="p">(</span><span class="n">primary_var</span><span class="p">,</span> <span class="n">prop_atoms</span><span class="p">)</span>
@@ -487,9 +512,7 @@
                     <span class="k">continue</span>
                 <span class="n">cls_uri</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">atom</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">)</span>
                 <span class="n">v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_var_name</span><span class="p">(</span><span class="n">var</span><span class="p">)</span>
-                <span class="n">ret</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2">.uri AS subject, &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39; AS predicate, &#39;</span><span class="si">{</span><span class="n">cls_uri</span><span class="si">}</span><span class="s2">&#39; AS object&quot;</span>
-                <span class="p">)</span>
+                <span class="n">ret</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2">.uri AS subject, &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39; AS predicate, &#39;</span><span class="si">{</span><span class="n">cls_uri</span><span class="si">}</span><span class="s2">&#39; AS object&quot;</span>
                 <span class="n">not_exists</span> <span class="o">=</span> <span class="p">(</span>
                     <span class="sa">f</span><span class="s2">&quot;NOT EXISTS </span><span class="se">{{</span><span class="s2"> MATCH (</span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2">)-[:rdf_type]-&gt;(:</span><span class="se">{{</span><span class="s2">uri: &#39;</span><span class="si">{</span><span class="n">cls_uri</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">}}</span><span class="s2">) </span><span class="se">}}</span><span class="s2">&quot;</span>
                 <span class="p">)</span>
@@ -501,7 +524,9 @@
                     <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                         <span class="s2">&quot;SWRL inference: skipping consequent property atom &#39;</span><span class="si">%s</span><span class="s2">&#39; — &quot;</span>
                         <span class="s2">&quot;variables </span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2"> are not connected (would cause cartesian product)&quot;</span><span class="p">,</span>
-                        <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">var_s</span><span class="p">,</span> <span class="n">var_o</span><span class="p">,</span>
+                        <span class="n">atom</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
+                        <span class="n">var_s</span><span class="p">,</span>
+                        <span class="n">var_o</span><span class="p">,</span>
                     <span class="p">)</span>
                     <span class="k">continue</span>
                 <span class="n">prop_uri</span> <span class="o">=</span> <span class="n">SWRLParser</span><span class="o">.</span><span class="n">resolve_uri</span><span class="p">(</span><span class="n">atom</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">)</span>

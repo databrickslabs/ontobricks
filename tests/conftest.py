@@ -30,6 +30,7 @@ def setup_test_env(monkeypatch):
     monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
     monkeypatch.delenv("DATABRICKS_CLIENT_ID", raising=False)
     monkeypatch.delenv("DATABRICKS_CLIENT_SECRET", raising=False)
+    monkeypatch.setenv("CSRF_DISABLED", "1")
 
 
 @pytest.fixture

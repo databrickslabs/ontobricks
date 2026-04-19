@@ -613,3 +613,71 @@ body.read-only-mode .btn.disabled {
     border-radius: 0.375rem;
 }
 
+
+/* ==========================================================================
+   Breadcrumb
+   ========================================================================== */
+
+.ob-breadcrumb {
+    padding: 0.35rem 1rem;
+    background: var(--bs-light, #f8f9fa);
+    border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+    font-size: 0.8rem;
+}
+
+.ob-breadcrumb .breadcrumb-item + .breadcrumb-item::before {
+    content: "\F285";
+    font-family: "bootstrap-icons";
+    font-size: 0.65rem;
+    vertical-align: middle;
+}
+
+.ob-breadcrumb .breadcrumb-item a {
+    color: var(--bs-secondary);
+    text-decoration: none;
+}
+
+.ob-breadcrumb .breadcrumb-item a:hover {
+    text-decoration: underline;
+}
+
+.ob-breadcrumb .breadcrumb-item.active {
+    color: var(--bs-body-color);
+    font-weight: 500;
+}
+
+
+/* ==========================================================================
+   Keyboard Shortcut Overlay
+   ========================================================================== */
+
+.ob-shortcut-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ob-shortcut-overlay.d-none {
+    display: none !important;
+}
+
+.ob-shortcut-card {
+    background: var(--bs-body-bg, #fff);
+    border-radius: 0.5rem;
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+    min-width: 320px;
+}
+
+.ob-shortcut-card kbd {
+    background: var(--bs-tertiary-bg, #e9ecef);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 3px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.8rem;
+}
+

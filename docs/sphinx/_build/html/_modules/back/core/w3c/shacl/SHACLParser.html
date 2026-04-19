@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
-    <script src="../../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../../../../../genindex.html" />
@@ -73,6 +73,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -112,11 +113,12 @@
 <span class="sd">Reads SHACL Turtle (or other RDF serialisations) and extracts internal</span>
 <span class="sd">shape dicts compatible with ``SHACLService``.</span>
 <span class="sd">&quot;&quot;&quot;</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">URIRef</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib.namespace</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF</span><span class="p">,</span> <span class="n">RDFS</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Graph</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">rdflib.namespace</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">PARAM_CATEGORY_HINTS</span><span class="p">,</span> <span class="n">SEVERITY_REVERSE</span><span class="p">,</span> <span class="n">SH</span>
@@ -132,6 +134,7 @@
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_local_name</span><span class="p">(</span><span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">extract_local_name</span>
+
         <span class="k">return</span> <span class="n">extract_local_name</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
 
 <div class="viewcode-block" id="SHACLParser.parse">
@@ -164,12 +167,16 @@
                 <span class="k">break</span>
 
             <span class="k">for</span> <span class="n">ps</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">node_shape</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">property</span><span class="p">):</span>
-                <span class="n">shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_property_shape</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">target_class</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="p">)</span>
+                <span class="n">shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_property_shape</span><span class="p">(</span>
+                    <span class="n">g</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">target_class</span><span class="p">,</span> <span class="n">target_class_uri</span>
+                <span class="p">)</span>
                 <span class="k">if</span> <span class="n">shape</span><span class="p">:</span>
                     <span class="n">shapes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
 
             <span class="k">for</span> <span class="n">sparql_node</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">node_shape</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">sparql</span><span class="p">):</span>
-                <span class="n">shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_sparql_constraint</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">sparql_node</span><span class="p">,</span> <span class="n">target_class</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="p">)</span>
+                <span class="n">shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_sparql_constraint</span><span class="p">(</span>
+                    <span class="n">g</span><span class="p">,</span> <span class="n">sparql_node</span><span class="p">,</span> <span class="n">target_class</span><span class="p">,</span> <span class="n">target_class_uri</span>
+                <span class="p">)</span>
                 <span class="k">if</span> <span class="n">shape</span><span class="p">:</span>
                     <span class="n">shapes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
 
@@ -178,26 +185,32 @@
                 <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;true&quot;</span><span class="p">:</span>
                     <span class="n">closed</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="k">if</span> <span class="n">closed</span><span class="p">:</span>
-                <span class="n">shapes</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                    <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;shape_structural_</span><span class="si">{</span><span class="n">target_class</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;global&#39;</span><span class="si">}</span><span class="s2">_closed_</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">6</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;structural&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">target_class</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;Global&#39;</span><span class="si">}</span><span class="s2"> is a closed shape&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;target_class&quot;</span><span class="p">:</span> <span class="n">target_class</span><span class="p">,</span>
-                    <span class="s2">&quot;target_class_uri&quot;</span><span class="p">:</span> <span class="n">target_class_uri</span><span class="p">,</span>
-                    <span class="s2">&quot;property_path&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;property_uri&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;shacl_type&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:closed&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{},</span>
-                    <span class="s2">&quot;severity&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:Violation&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">target_class</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;Shape&#39;</span><span class="si">}</span><span class="s2"> does not allow unexpected properties&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-                <span class="p">})</span>
+                <span class="n">shapes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="p">{</span>
+                        <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;shape_structural_</span><span class="si">{</span><span class="n">target_class</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;global&#39;</span><span class="si">}</span><span class="s2">_closed_</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">6</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;structural&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">target_class</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;Global&#39;</span><span class="si">}</span><span class="s2"> is a closed shape&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;target_class&quot;</span><span class="p">:</span> <span class="n">target_class</span><span class="p">,</span>
+                        <span class="s2">&quot;target_class_uri&quot;</span><span class="p">:</span> <span class="n">target_class_uri</span><span class="p">,</span>
+                        <span class="s2">&quot;property_path&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;property_uri&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;shacl_type&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:closed&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{},</span>
+                        <span class="s2">&quot;severity&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:Violation&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">target_class</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;Shape&#39;</span><span class="si">}</span><span class="s2"> does not allow unexpected properties&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                    <span class="p">}</span>
+                <span class="p">)</span>
 
         <span class="k">return</span> <span class="n">shapes</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_parse_property_shape</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">target_class</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">g</span><span class="p">:</span> <span class="n">Graph</span><span class="p">,</span>
+        <span class="n">ps</span><span class="p">,</span>
+        <span class="n">target_class</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">target_class_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
         <span class="n">prop_uri</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
         <span class="n">prop_path</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
@@ -274,7 +287,11 @@
         <span class="p">}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_parse_sparql_constraint</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">sparql_node</span><span class="p">,</span> <span class="n">target_class</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">g</span><span class="p">:</span> <span class="n">Graph</span><span class="p">,</span>
+        <span class="n">sparql_node</span><span class="p">,</span>
+        <span class="n">target_class</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">target_class_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
         <span class="n">query</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
         <span class="k">for</span> <span class="n">sel</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">sparql_node</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">select</span><span class="p">):</span>

@@ -4,7 +4,7 @@
 Mapping class
 -------------
 
-.. automodule:: back.objects.mapping.mapping
+.. automodule:: back.objects.mapping.Mapping
    :members:
    :undoc-members:
    :show-inheritance:

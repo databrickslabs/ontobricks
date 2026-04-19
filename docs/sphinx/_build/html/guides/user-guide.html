@@ -10,7 +10,7 @@
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
-    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -96,6 +96,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -761,6 +762,21 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <li><p>The dashboard displays data specific to the selected entity</p></li>
 </ol>
 <p><strong>Note</strong>: Empty entities (type URIs without data) are automatically filtered out.</p>
+<p><strong>Data Clusters:</strong></p>
+<p>The Knowledge Graph includes a <strong>Data Clusters</strong> panel (in the View tab) for detecting communities in the graph:</p>
+<ol class="arabic simple">
+<li><p><strong>Detect clusters (local)</strong>: Runs the Louvain community detection algorithm client-side using Graphology on the currently displayed subgraph. Adjust the <strong>Resolution</strong> slider to control cluster granularity (higher = more clusters).</p></li>
+<li><p><strong>Full graph (backend)</strong>: Sends a request to the server which loads the entire triple store into NetworkX and runs the selected algorithm (Louvain, Label Propagation, or Greedy Modularity) on the full dataset. Use this for large graphs that exceed the visible subgraph.</p></li>
+<li><p><strong>Color by cluster</strong>: Toggle to recolor nodes by their detected community instead of by entity type.</p></li>
+<li><p><strong>Collapse / Expand</strong>: Collapse clusters into super-nodes that show the cluster size and member count. Click a collapsed cluster super-node to see its members in the detail panel. Expand individual clusters or all at once.</p></li>
+<li><p><strong>Clear clusters</strong>: Reset all cluster assignments and return to the default visualization.</p></li>
+</ol>
+<p>The cluster panel also displays:</p>
+<ul class="simple">
+<li><p>Total number of detected clusters</p></li>
+<li><p>A color-coded chip list of all clusters with their sizes</p></li>
+<li><p>Click a chip to toggle collapse/expand for that cluster</p></li>
+</ul>
 </section>
 <section id="quality-checks-sidebar">
 <h3>Quality Checks (Sidebar)<a class="headerlink" href="#quality-checks-sidebar" title="Link to this heading">¶</a></h3>
@@ -1445,20 +1461,36 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>Ctrl/Cmd + Enter</p></td>
+<tr class="row-even"><td><p>Ctrl/Cmd + S</p></td>
+<td><p>Save domain</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ctrl/Cmd + K</p></td>
+<td><p>Focus sidebar search (if available)</p></td>
+</tr>
+<tr class="row-even"><td><p>?</p></td>
+<td><p>Show / hide the keyboard shortcuts overlay</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ctrl/Cmd + Enter</p></td>
 <td><p>Confirm action</p></td>
 </tr>
-<tr class="row-odd"><td><p>Tab</p></td>
+<tr class="row-even"><td><p>Tab</p></td>
 <td><p>Navigate between form fields</p></td>
 </tr>
-<tr class="row-even"><td><p>Enter</p></td>
+<tr class="row-odd"><td><p>Enter</p></td>
 <td><p>Submit form / confirm dialog</p></td>
 </tr>
-<tr class="row-odd"><td><p>Escape</p></td>
-<td><p>Close modal</p></td>
+<tr class="row-even"><td><p>Escape</p></td>
+<td><p>Close modal or shortcut overlay</p></td>
 </tr>
 </tbody>
 </table>
+<section id="navigation">
+<h3>Navigation<a class="headerlink" href="#navigation" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Deep-linked sections</strong>: Sidebar section changes update the URL (<code class="docutils literal notranslate"><span class="pre">?section=&lt;id&gt;</span></code>), so you can bookmark or share a specific section. Browser Back/Forward navigates between previously visited sections.</p></li>
+<li><p><strong>Breadcrumb bar</strong>: A breadcrumb trail below the navbar shows your current position (e.g. Registry &gt; Domain &gt; Ontology &gt; Entities) and updates as you switch sidebar sections.</p></li>
+</ul>
+</section>
 </section>
 <hr class="docutils" />
 <section id="support">

@@ -26,6 +26,15 @@ X-Databricks-Token: dapi...your-token
 }
 ```
 
+## CSRF Protection
+
+State-changing requests (POST, PUT, PATCH, DELETE) to internal endpoints require a valid CSRF token:
+
+1. The server sets a `csrf_token` cookie on first visit.
+2. Include the cookie value in the `X-CSRF-Token` request header.
+3. The `fetch()` wrapper in the frontend attaches this header automatically.
+4. External API endpoints (`/api/v1/`) and GraphQL are exempted.
+
 ## Response Format
 
 All endpoints return JSON responses with a standard format:

@@ -1,5 +1,6 @@
 import asyncio
 import os
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Any, Callable, Dict, Tuple
 
@@ -9,6 +10,11 @@ from back.core.logging import get_logger
 from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
+
+_BLOCKING_POOL = ThreadPoolExecutor(
+    max_workers=int(os.getenv("ONTOBRICKS_THREAD_POOL_SIZE", "20")),
+    thread_name_prefix="ob-blocking",
+)
 
 
 def make_volume_file_service(domain, settings=None):
@@ -24,7 +30,12 @@ def make_volume_file_service(domain, settings=None):
 class DatabricksHelpers:
     @staticmethod
     async def run_blocking(func: Callable, *args: Any, **kwargs: Any) -> Any:
-        """Run a blocking function in a thread pool so it doesn't freeze the event loop.
+        """Run a blocking function in a sized thread pool.
+
+        Uses a dedicated :class:`ThreadPoolExecutor` (default 20 threads,
+        configurable via ``ONTOBRICKS_THREAD_POOL_SIZE``) instead of the
+        default asyncio executor so that concurrent blocking work does not
+        starve the event loop.
 
         Usage in an ``async def`` route handler::
 
@@ -32,7 +43,7 @@ class DatabricksHelpers:
         """
         loop = asyncio.get_running_loop()
         call = partial(func, *args, **kwargs) if kwargs else partial(func, *args)
-        return await loop.run_in_executor(None, call)
+        return await loop.run_in_executor(_BLOCKING_POOL, call)
 
     @staticmethod
     def _resolve_registry_cfg(domain, settings) -> Dict[str, str]:

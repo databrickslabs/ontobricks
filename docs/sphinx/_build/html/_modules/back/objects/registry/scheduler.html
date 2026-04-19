@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
-    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
@@ -73,6 +73,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -126,6 +127,7 @@
 <span class="sd">If registry config is session-only, jobs are lazily registered when a</span>
 <span class="sd">user opens the Schedule tab (``get_all_schedules``).</span>
 <span class="sd">&quot;&quot;&quot;</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
@@ -205,15 +207,20 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_sched</span><span class="o">.</span><span class="n">add_listener</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_on_job_event</span><span class="p">,</span>
-            <span class="n">EVENT_JOB_ADDED</span> <span class="o">|</span> <span class="n">EVENT_JOB_REMOVED</span> <span class="o">|</span> <span class="n">EVENT_JOB_SUBMITTED</span>
-            <span class="o">|</span> <span class="n">EVENT_JOB_EXECUTED</span> <span class="o">|</span> <span class="n">EVENT_JOB_ERROR</span> <span class="o">|</span> <span class="n">EVENT_JOB_MISSED</span><span class="p">,</span>
+            <span class="n">EVENT_JOB_ADDED</span>
+            <span class="o">|</span> <span class="n">EVENT_JOB_REMOVED</span>
+            <span class="o">|</span> <span class="n">EVENT_JOB_SUBMITTED</span>
+            <span class="o">|</span> <span class="n">EVENT_JOB_EXECUTED</span>
+            <span class="o">|</span> <span class="n">EVENT_JOB_ERROR</span>
+            <span class="o">|</span> <span class="n">EVENT_JOB_MISSED</span><span class="p">,</span>
         <span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_sched</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_started</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
             <span class="s2">&quot;BuildScheduler started (running=</span><span class="si">%s</span><span class="s2">, misfire_grace=</span><span class="si">%d</span><span class="s2">s)&quot;</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_sched</span><span class="o">.</span><span class="n">running</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_MISFIRE_GRACE</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_sched</span><span class="o">.</span><span class="n">running</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_MISFIRE_GRACE</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_restore_jobs</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
@@ -229,16 +236,25 @@
             <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">exception</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
                     <span class="s2">&quot;APScheduler EVENT_JOB_ERROR  job=</span><span class="si">%s</span><span class="s2">  exception=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">job_id</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">exception</span><span class="p">,</span>
+                    <span class="n">job_id</span><span class="p">,</span>
+                    <span class="n">event</span><span class="o">.</span><span class="n">exception</span><span class="p">,</span>
                 <span class="p">)</span>
                 <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">traceback</span><span class="p">:</span>
                     <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;APScheduler traceback:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">traceback</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;APScheduler EVENT_JOB_EXECUTED  job=</span><span class="si">%s</span><span class="s2">  retval=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">retval</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;APScheduler EVENT_JOB_EXECUTED  job=</span><span class="si">%s</span><span class="s2">  retval=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">job_id</span><span class="p">,</span>
+                    <span class="n">event</span><span class="o">.</span><span class="n">retval</span><span class="p">,</span>
+                <span class="p">)</span>
         <span class="k">elif</span> <span class="n">event</span><span class="o">.</span><span class="n">code</span> <span class="o">==</span> <span class="n">EVENT_JOB_SUBMITTED</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;APScheduler EVENT_JOB_SUBMITTED  job=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">job_id</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">event</span><span class="o">.</span><span class="n">code</span> <span class="o">==</span> <span class="n">EVENT_JOB_MISSED</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;APScheduler EVENT_JOB_MISSED  job=</span><span class="si">%s</span><span class="s2">  scheduled_run_time=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="s2">&quot;scheduled_run_time&quot;</span><span class="p">,</span> <span class="s2">&quot;?&quot;</span><span class="p">))</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;APScheduler EVENT_JOB_MISSED  job=</span><span class="si">%s</span><span class="s2">  scheduled_run_time=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">job_id</span><span class="p">,</span>
+                <span class="nb">getattr</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="s2">&quot;scheduled_run_time&quot;</span><span class="p">,</span> <span class="s2">&quot;?&quot;</span><span class="p">),</span>
+            <span class="p">)</span>
         <span class="k">elif</span> <span class="n">event</span><span class="o">.</span><span class="n">code</span> <span class="o">==</span> <span class="n">EVENT_JOB_ADDED</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;APScheduler EVENT_JOB_ADDED  job=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">job_id</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">event</span><span class="o">.</span><span class="n">code</span> <span class="o">==</span> <span class="n">EVENT_JOB_REMOVED</span><span class="p">:</span>
@@ -260,13 +276,17 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a diagnostic snapshot of the scheduler&#39;s internal state.&quot;&quot;&quot;</span>
         <span class="n">jobs_info</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">job</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sched</span><span class="o">.</span><span class="n">get_jobs</span><span class="p">():</span>
-            <span class="n">jobs_info</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-                <span class="s2">&quot;next_run_time&quot;</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">next_run_time</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span> <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">next_run_time</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
-                <span class="s2">&quot;trigger&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">trigger</span><span class="p">),</span>
-                <span class="s2">&quot;pending&quot;</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">pending</span><span class="p">,</span>
-            <span class="p">})</span>
+            <span class="n">jobs_info</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                    <span class="s2">&quot;next_run_time&quot;</span><span class="p">:</span> <span class="p">(</span>
+                        <span class="n">job</span><span class="o">.</span><span class="n">next_run_time</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span> <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">next_run_time</span> <span class="k">else</span> <span class="kc">None</span>
+                    <span class="p">),</span>
+                    <span class="s2">&quot;trigger&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">trigger</span><span class="p">),</span>
+                    <span class="s2">&quot;pending&quot;</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">pending</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">&quot;started&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_started</span><span class="p">,</span>
             <span class="s2">&quot;running&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sched</span><span class="o">.</span><span class="n">running</span><span class="p">,</span>
@@ -282,7 +302,10 @@
 <div class="viewcode-block" id="BuildScheduler.get_all_schedules">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.scheduler.BuildScheduler.get_all_schedules">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_all_schedules</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Return every schedule definition enriched with next-run info.</span>
 
@@ -296,7 +319,8 @@
             <span class="n">job</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sched</span><span class="o">.</span><span class="n">get_job</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_job_id</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">job</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_started</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_add_or_update_job</span><span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_settings</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_settings</span><span class="p">,</span>
+                    <span class="n">name</span><span class="p">,</span>
                     <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;interval_minutes&quot;</span><span class="p">,</span> <span class="mi">60</span><span class="p">),</span>
                     <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;drop_existing&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
                     <span class="n">registry_cfg</span><span class="p">,</span>
@@ -317,7 +341,10 @@
 <div class="viewcode-block" id="BuildScheduler.get_schedule_history">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.scheduler.BuildScheduler.get_schedule_history">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_schedule_history</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
         <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the run history for a single domain, newest first.&quot;&quot;&quot;</span>
@@ -360,18 +387,34 @@
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">msg</span>
 
         <span class="k">if</span> <span class="n">enabled</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_started</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_add_or_update_job</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">interval_minutes</span><span class="p">,</span> <span class="n">drop_existing</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">version</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_add_or_update_job</span><span class="p">(</span>
+                <span class="n">settings</span><span class="p">,</span>
+                <span class="n">domain_name</span><span class="p">,</span>
+                <span class="n">interval_minutes</span><span class="p">,</span>
+                <span class="n">drop_existing</span><span class="p">,</span>
+                <span class="n">registry_cfg</span><span class="p">,</span>
+                <span class="n">version</span><span class="p">,</span>
+            <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_remove_job</span><span class="p">(</span><span class="n">domain_name</span><span class="p">)</span>
 
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Schedule saved for &#39;</span><span class="si">%s</span><span class="s2">&#39;: every </span><span class="si">%d</span><span class="s2"> min, version=</span><span class="si">%s</span><span class="s2">, enabled=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">interval_minutes</span><span class="p">,</span> <span class="n">version</span><span class="p">,</span> <span class="n">enabled</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Schedule saved for &#39;</span><span class="si">%s</span><span class="s2">&#39;: every </span><span class="si">%d</span><span class="s2"> min, version=</span><span class="si">%s</span><span class="s2">, enabled=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">domain_name</span><span class="p">,</span>
+            <span class="n">interval_minutes</span><span class="p">,</span>
+            <span class="n">version</span><span class="p">,</span>
+            <span class="n">enabled</span><span class="p">,</span>
+        <span class="p">)</span>
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Schedule for &#39;</span><span class="si">{</span><span class="n">domain_name</span><span class="si">}</span><span class="s2">&#39; saved&quot;</span></div>
 
 
 <div class="viewcode-block" id="BuildScheduler.remove_schedule">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.scheduler.BuildScheduler.remove_schedule">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">remove_schedule</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
         <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete a schedule for *domain_name*.&quot;&quot;&quot;</span>
@@ -393,30 +436,41 @@
     <span class="c1"># Persistence helpers</span>
     <span class="c1"># ------------------------------------------------------------------</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_load_schedules</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_load_schedules</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">):</span>
             <span class="k">return</span> <span class="p">{}</span>
         <span class="n">cfg</span> <span class="o">=</span> <span class="n">global_config_service</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SCHEDULES_KEY</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_persist_schedules</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">schedules</span><span class="p">:</span> <span class="n">Dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_persist_schedules</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">schedules</span><span class="p">:</span> <span class="n">Dict</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Databricks credentials or registry not configured&quot;</span>
-        <span class="k">return</span> <span class="n">global_config_service</span><span class="o">.</span><span class="n">_save</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="p">{</span><span class="n">_SCHEDULES_KEY</span><span class="p">:</span> <span class="n">schedules</span><span class="p">})</span>
+        <span class="k">return</span> <span class="n">global_config_service</span><span class="o">.</span><span class="n">_save</span><span class="p">(</span>
+            <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="p">{</span><span class="n">_SCHEDULES_KEY</span><span class="p">:</span> <span class="n">schedules</span><span class="p">}</span>
+        <span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_history_path</span><span class="p">(</span><span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.service</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span><span class="p">,</span> <span class="n">_DOMAINS_FOLDER</span>
+
         <span class="n">c</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">registry_cfg</span><span class="p">)</span>
         <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;/Volumes/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">_DOMAINS_FOLDER</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">domain_name</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">_HISTORY_FILENAME</span><span class="si">}</span><span class="s2">&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_load_domain_history</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
         <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">):</span>
             <span class="k">return</span> <span class="p">[]</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks.VolumeFileService</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
+
         <span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_history_path</span><span class="p">(</span><span class="n">registry_cfg</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">uc</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
@@ -428,14 +482,19 @@
         <span class="k">return</span> <span class="p">[]</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_append_history</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
-        <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entry</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">entry</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">entries</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_domain_history</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
         <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">_MAX_HISTORY</span><span class="p">:</span>
             <span class="n">entries</span> <span class="o">=</span> <span class="n">entries</span><span class="p">[</span><span class="o">-</span><span class="n">_MAX_HISTORY</span><span class="p">:]</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks.VolumeFileService</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
+
         <span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_history_path</span><span class="p">(</span><span class="n">registry_cfg</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">uc</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
@@ -456,6 +515,7 @@
 
             <span class="k">class</span><span class="w"> </span><span class="nc">_Stub</span><span class="p">:</span>
                 <span class="n">databricks</span> <span class="o">=</span> <span class="p">{}</span>
+
             <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">_Stub</span><span class="p">(),</span> <span class="n">settings</span><span class="p">)</span>
 
         <span class="n">cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="p">(</span>
@@ -473,8 +533,12 @@
         <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_JOB_PREFIX</span><span class="si">}{</span><span class="n">domain_name</span><span class="si">}</span><span class="s2">&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_add_or_update_job</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">interval_minutes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-        <span class="n">drop_existing</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">,</span>
+        <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">interval_minutes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">drop_existing</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+        <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;latest&quot;</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="n">job_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_job_id</span><span class="p">(</span><span class="n">domain_name</span><span class="p">)</span>
@@ -497,7 +561,10 @@
         <span class="n">next_run</span> <span class="o">=</span> <span class="n">job</span><span class="o">.</span><span class="n">next_run_time</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span> <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">next_run_time</span> <span class="k">else</span> <span class="s2">&quot;unknown&quot;</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
             <span class="s2">&quot;APScheduler job added/updated: </span><span class="si">%s</span><span class="s2"> (every </span><span class="si">%d</span><span class="s2"> min, next_run=</span><span class="si">%s</span><span class="s2">, misfire_grace=</span><span class="si">%d</span><span class="s2">s)&quot;</span><span class="p">,</span>
-            <span class="n">job_id</span><span class="p">,</span> <span class="n">interval_minutes</span><span class="p">,</span> <span class="n">next_run</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_MISFIRE_GRACE</span><span class="p">,</span>
+            <span class="n">job_id</span><span class="p">,</span>
+            <span class="n">interval_minutes</span><span class="p">,</span>
+            <span class="n">next_run</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_MISFIRE_GRACE</span><span class="p">,</span>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_remove_job</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
@@ -520,7 +587,8 @@
         <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">cfg</span> <span class="ow">in</span> <span class="n">schedules</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">):</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_add_or_update_job</span><span class="p">(</span>
-                    <span class="n">settings</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span>
+                    <span class="n">settings</span><span class="p">,</span>
+                    <span class="n">name</span><span class="p">,</span>
                     <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;interval_minutes&quot;</span><span class="p">,</span> <span class="mi">60</span><span class="p">),</span>
                     <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;drop_existing&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
                     <span class="n">reg</span><span class="p">,</span>
@@ -535,21 +603,28 @@
 <span class="c1"># Build execution (runs in APScheduler&#39;s thread pool)</span>
 <span class="c1"># ======================================================================</span>
 
+
 <span class="k">def</span><span class="w"> </span><span class="nf">_load_domain_for_build</span><span class="p">(</span>
-    <span class="n">svc</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">reg</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
+    <span class="n">svc</span><span class="p">,</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">version</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">reg</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Load a domain from the registry into a headless DomainSession.</span>
 
 <span class="sd">    Returns ``(domain, loaded_version, domain_path, latest_filename)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session.domain_session</span><span class="w"> </span><span class="kn">import</span> <span class="n">DomainSession</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">resolve_warehouse_id</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session.DomainSession</span><span class="w"> </span><span class="kn">import</span> <span class="n">DomainSession</span>
 
     <span class="k">if</span> <span class="n">version</span> <span class="ow">and</span> <span class="n">version</span> <span class="o">!=</span> <span class="s2">&quot;latest&quot;</span><span class="p">:</span>
         <span class="n">ok</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">read_version</span><span class="p">(</span><span class="n">domain_name</span><span class="p">,</span> <span class="n">version</span><span class="p">)</span>
         <span class="n">loaded_version</span> <span class="o">=</span> <span class="n">version</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">NotFoundError</span><span class="p">(</span><span class="n">err</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;Version &#39;</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">&#39; not found for domain &#39;</span><span class="si">{</span><span class="n">domain_name</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">NotFoundError</span><span class="p">(</span>
+                <span class="n">err</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;Version &#39;</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">&#39; not found for domain &#39;</span><span class="si">{</span><span class="n">domain_name</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+            <span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">ok</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">loaded_version</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">load_latest_domain_data</span><span class="p">(</span><span class="n">domain_name</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
@@ -557,17 +632,21 @@
 
     <span class="k">class</span><span class="w"> </span><span class="nc">_FakeSessionMgr</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Minimal stand-in so DomainSession can load without a real session.&quot;&quot;&quot;</span>
+
         <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="p">:</span> <span class="n">Dict</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">default</span><span class="p">)</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">default</span><span class="p">)</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
 
     <span class="n">domain</span> <span class="o">=</span> <span class="n">DomainSession</span><span class="p">(</span><span class="n">_FakeSessionMgr</span><span class="p">())</span>
     <span class="n">domain</span><span class="o">.</span><span class="n">import_from_file</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="n">loaded_version</span><span class="p">)</span>
     <span class="n">domain</span><span class="o">.</span><span class="n">domain_folder</span> <span class="o">=</span> <span class="n">domain_name</span>
     <span class="n">domain</span><span class="o">.</span><span class="n">settings</span><span class="p">[</span><span class="s2">&quot;registry&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">reg</span>
     <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="p">[</span><span class="s2">&quot;host&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">host</span>
-    <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="p">[</span><span class="s2">&quot;token&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">token</span>
     <span class="n">domain</span><span class="o">.</span><span class="n">ensure_generated_content</span><span class="p">()</span>
 
     <span class="n">domain_path</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">domain_path</span><span class="p">(</span><span class="n">domain_name</span><span class="p">)</span>
@@ -581,7 +660,10 @@
 <span class="sd">    Returns ``(sql_text, view_table, graph_name, base_uri)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c</span><span class="w"> </span><span class="kn">import</span> <span class="n">sparql</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin</span><span class="w"> </span><span class="kn">import</span> <span class="n">augment_mappings_from_config</span><span class="p">,</span> <span class="n">augment_relationships_from_config</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+        <span class="n">augment_mappings_from_config</span><span class="p">,</span>
+        <span class="n">augment_relationships_from_config</span><span class="p">,</span>
+    <span class="p">)</span>
 
     <span class="n">r2rml</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">get_r2rml</span><span class="p">()</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">r2rml</span><span class="p">:</span>
@@ -605,7 +687,9 @@
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: generating SQL from R2RML&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
     <span class="n">ent</span><span class="p">,</span> <span class="n">rels</span> <span class="o">=</span> <span class="n">sparql</span><span class="o">.</span><span class="n">extract_r2rml_mappings</span><span class="p">(</span><span class="n">r2rml</span><span class="p">)</span>
     <span class="n">ent</span> <span class="o">=</span> <span class="n">augment_mappings_from_config</span><span class="p">(</span><span class="n">ent</span><span class="p">,</span> <span class="n">mapping_config</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">ontology_config</span><span class="p">)</span>
-    <span class="n">rels</span> <span class="o">=</span> <span class="n">augment_relationships_from_config</span><span class="p">(</span><span class="n">rels</span><span class="p">,</span> <span class="n">mapping_config</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">ontology_config</span><span class="p">)</span>
+    <span class="n">rels</span> <span class="o">=</span> <span class="n">augment_relationships_from_config</span><span class="p">(</span>
+        <span class="n">rels</span><span class="p">,</span> <span class="n">mapping_config</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">ontology_config</span>
+    <span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">ent</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">rels</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No valid mappings found&quot;</span><span class="p">)</span>
 
@@ -617,42 +701,60 @@
         <span class="s2">&quot;WHERE {</span><span class="se">\n</span><span class="s2">    ?subject ?predicate ?object .</span><span class="se">\n</span><span class="s2">}&quot;</span>
     <span class="p">)</span>
     <span class="n">res</span> <span class="o">=</span> <span class="n">sparql</span><span class="o">.</span><span class="n">translate_sparql_to_spark</span><span class="p">(</span><span class="n">sparql_q</span><span class="p">,</span> <span class="n">ent</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">rels</span><span class="p">,</span> <span class="n">dialect</span><span class="o">=</span><span class="s2">&quot;spark&quot;</span><span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">res</span><span class="p">[</span><span class="s2">&quot;success&quot;</span><span class="p">]:</span>
-        <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="n">res</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;message&quot;</span><span class="p">,</span> <span class="s2">&quot;Translation failed&quot;</span><span class="p">))</span>
 
     <span class="k">return</span> <span class="n">res</span><span class="p">[</span><span class="s2">&quot;sql&quot;</span><span class="p">],</span> <span class="n">view_table</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">ent</span><span class="p">,</span> <span class="n">rels</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_write_graph_triples</span><span class="p">(</span>
-    <span class="n">store</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">view_table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">actual_mode</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">to_add</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">to_remove</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">incr_svc</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">store</span><span class="p">,</span>
+    <span class="n">src</span><span class="p">,</span>
+    <span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">view_table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">actual_mode</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">to_add</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
+    <span class="n">to_remove</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
+    <span class="n">incr_svc</span><span class="p">,</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Write triples to the graph store. Returns the triple count.&quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">actual_mode</span> <span class="o">==</span> <span class="s2">&quot;full&quot;</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: reading triples from VIEW&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
         <span class="n">triples</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT * FROM </span><span class="si">{</span><span class="n">view_table</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="n">triple_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">)</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: </span><span class="si">%d</span><span class="s2"> triples from VIEW&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">triple_count</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: </span><span class="si">%d</span><span class="s2"> triples from VIEW&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">triple_count</span>
+        <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">triple_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">store</span><span class="o">.</span><span class="n">drop_table</span><span class="p">(</span><span class="n">graph_name</span><span class="p">)</span>
             <span class="n">store</span><span class="o">.</span><span class="n">create_table</span><span class="p">(</span><span class="n">graph_name</span><span class="p">)</span>
             <span class="n">store</span><span class="o">.</span><span class="n">insert_triples</span><span class="p">(</span><span class="n">graph_name</span><span class="p">,</span> <span class="n">triples</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
             <span class="n">store</span><span class="o">.</span><span class="n">optimize_table</span><span class="p">(</span><span class="n">graph_name</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: graph &#39;</span><span class="si">%s</span><span class="s2">&#39; populated with </span><span class="si">%d</span><span class="s2"> triples&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">,</span> <span class="n">triple_count</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: graph &#39;</span><span class="si">%s</span><span class="s2">&#39; populated with </span><span class="si">%d</span><span class="s2"> triples&quot;</span><span class="p">,</span>
+                <span class="n">domain_name</span><span class="p">,</span>
+                <span class="n">graph_name</span><span class="p">,</span>
+                <span class="n">triple_count</span><span class="p">,</span>
+            <span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">triple_count</span> <span class="o">=</span> <span class="n">incr_svc</span><span class="o">.</span><span class="n">count_view_triples</span><span class="p">(</span><span class="n">view_table</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">to_remove</span><span class="p">:</span>
             <span class="n">store</span><span class="o">.</span><span class="n">delete_triples</span><span class="p">(</span><span class="n">graph_name</span><span class="p">,</span> <span class="n">to_remove</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: removed </span><span class="si">%d</span><span class="s2"> triples&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">to_remove</span><span class="p">))</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: removed </span><span class="si">%d</span><span class="s2"> triples&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">to_remove</span><span class="p">)</span>
+            <span class="p">)</span>
         <span class="k">if</span> <span class="n">to_add</span><span class="p">:</span>
             <span class="n">store</span><span class="o">.</span><span class="n">insert_triples</span><span class="p">(</span><span class="n">graph_name</span><span class="p">,</span> <span class="n">to_add</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: added </span><span class="si">%d</span><span class="s2"> triples&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">to_add</span><span class="p">))</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: added </span><span class="si">%d</span><span class="s2"> triples&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">to_add</span><span class="p">)</span>
+            <span class="p">)</span>
         <span class="n">store</span><span class="o">.</span><span class="n">optimize_table</span><span class="p">(</span><span class="n">graph_name</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">triple_count</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_persist_domain_metadata</span><span class="p">(</span><span class="n">uc</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">domain_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">latest</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">build_ts</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_persist_domain_metadata</span><span class="p">(</span>
+    <span class="n">uc</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">domain_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">latest</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">build_ts</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span>
+<span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Stamp last_build and write domain JSON back to the registry.&quot;&quot;&quot;</span>
     <span class="n">domain</span><span class="o">.</span><span class="n">last_build</span> <span class="o">=</span> <span class="n">build_ts</span>
     <span class="k">try</span><span class="p">:</span>
@@ -663,15 +765,29 @@
             <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">if</span> <span class="n">w_ok</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: stamped last_build=</span><span class="si">%s</span><span class="s2"> in registry&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">build_ts</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: stamped last_build=</span><span class="si">%s</span><span class="s2"> in registry&quot;</span><span class="p">,</span>
+                <span class="n">domain_name</span><span class="p">,</span>
+                <span class="n">build_ts</span><span class="p">,</span>
+            <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: write_file returned failure: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">w_msg</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: write_file returned failure: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">domain_name</span><span class="p">,</span>
+                <span class="n">w_msg</span><span class="p">,</span>
+            <span class="p">)</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">save_exc</span><span class="p">:</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: could not stamp last_build: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">save_exc</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: could not stamp last_build: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">domain_name</span><span class="p">,</span>
+            <span class="n">save_exc</span><span class="p">,</span>
+        <span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_run_scheduled_build</span><span class="p">(</span>
-    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">drop_existing</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">drop_existing</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">settings</span><span class="p">,</span>
     <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;latest&quot;</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -686,7 +802,12 @@
 <span class="sd">    The entire function is wrapped in a fail-safe try/except so that</span>
 <span class="sd">    no exception can silently escape to APScheduler&#39;s executor.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Scheduled build FIRED for &#39;</span><span class="si">%s</span><span class="s2">&#39; version=</span><span class="si">%s</span><span class="s2"> (thread=</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">version</span><span class="p">,</span> <span class="n">threading</span><span class="o">.</span><span class="n">current_thread</span><span class="p">()</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Scheduled build FIRED for &#39;</span><span class="si">%s</span><span class="s2">&#39; version=</span><span class="si">%s</span><span class="s2"> (thread=</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span>
+        <span class="n">domain_name</span><span class="p">,</span>
+        <span class="n">version</span><span class="p">,</span>
+        <span class="n">threading</span><span class="o">.</span><span class="n">current_thread</span><span class="p">()</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+    <span class="p">)</span>
     <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
     <span class="n">build_ts</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
 
@@ -703,13 +824,17 @@
         <span class="n">scheduler</span> <span class="o">=</span> <span class="n">get_scheduler</span><span class="p">()</span>
 
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.task_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_task_manager</span>
+
         <span class="n">tm</span> <span class="o">=</span> <span class="n">get_task_manager</span><span class="p">()</span>
         <span class="n">task</span> <span class="o">=</span> <span class="n">tm</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span>
             <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Scheduled Build — </span><span class="si">{</span><span class="n">domain_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
             <span class="n">task_type</span><span class="o">=</span><span class="s2">&quot;scheduled_build&quot;</span><span class="p">,</span>
             <span class="n">steps</span><span class="o">=</span><span class="p">[</span>
                 <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;prepare&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Loading domain and generating SQL&quot;</span><span class="p">},</span>
-                <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;view&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Creating zero-copy VIEW in Unity Catalog&quot;</span><span class="p">},</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;view&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Creating Triple-Store VIEW in Unity Catalog&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
                 <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;graph&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Populating LadybugDB graph&quot;</span><span class="p">},</span>
             <span class="p">],</span>
         <span class="p">)</span>
@@ -719,13 +844,16 @@
         <span class="n">reg</span> <span class="o">=</span> <span class="n">registry_cfg</span> <span class="ow">or</span> <span class="n">env_reg</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
             <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: creds resolved host=</span><span class="si">%s</span><span class="s2"> reg_catalog=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-            <span class="n">domain_name</span><span class="p">,</span> <span class="nb">bool</span><span class="p">(</span><span class="n">host</span><span class="p">),</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="n">domain_name</span><span class="p">,</span>
+            <span class="nb">bool</span><span class="p">(</span><span class="n">host</span><span class="p">),</span>
+            <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
         <span class="p">)</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Databricks host/token not available&quot;</span><span class="p">)</span>
 
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.service</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span><span class="p">,</span> <span class="n">RegistryService</span>
+
         <span class="n">cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">reg</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cfg</span><span class="o">.</span><span class="n">schema</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Registry not configured&quot;</span><span class="p">)</span>
@@ -739,7 +867,12 @@
         <span class="n">uc</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
         <span class="n">svc</span> <span class="o">=</span> <span class="n">RegistryService</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">uc</span><span class="p">)</span>
         <span class="n">domain</span><span class="p">,</span> <span class="n">version</span><span class="p">,</span> <span class="n">domain_path</span><span class="p">,</span> <span class="n">latest</span> <span class="o">=</span> <span class="n">_load_domain_for_build</span><span class="p">(</span>
-            <span class="n">svc</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">version</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">reg</span><span class="p">,</span>
+            <span class="n">svc</span><span class="p">,</span>
+            <span class="n">domain_name</span><span class="p">,</span>
+            <span class="n">version</span><span class="p">,</span>
+            <span class="n">host</span><span class="p">,</span>
+            <span class="n">token</span><span class="p">,</span>
+            <span class="n">reg</span><span class="p">,</span>
         <span class="p">)</span>
 
         <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">resolve_warehouse_id</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
@@ -747,8 +880,11 @@
             <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;No SQL warehouse configured&quot;</span><span class="p">)</span>
 
         <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="s2">&quot;Generating SQL from R2RML mappings...&quot;</span><span class="p">)</span>
-        <span class="n">sql_text</span><span class="p">,</span> <span class="n">view_table</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">ent_mappings</span><span class="p">,</span> <span class="n">rel_mappings</span> <span class="o">=</span> <span class="n">_generate_sql_from_r2rml</span><span class="p">(</span>
-            <span class="n">domain</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span>
+        <span class="n">sql_text</span><span class="p">,</span> <span class="n">view_table</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">ent_mappings</span><span class="p">,</span> <span class="n">rel_mappings</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">_generate_sql_from_r2rml</span><span class="p">(</span>
+                <span class="n">domain</span><span class="p">,</span>
+                <span class="n">domain_name</span><span class="p">,</span>
+            <span class="p">)</span>
         <span class="p">)</span>
 
         <span class="c1"># --- Step 2: Create VIEW ---</span>
@@ -760,13 +896,19 @@
         <span class="n">view_ok</span><span class="p">,</span> <span class="n">view_msg</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">create_or_replace_view</span><span class="p">(</span><span class="n">cat</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">vname</span><span class="p">,</span> <span class="n">sql_text</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">view_ok</span><span class="p">:</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin</span><span class="w"> </span><span class="kn">import</span> <span class="n">DigitalTwin</span>
-            <span class="n">detail</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">diagnose_view_error</span><span class="p">(</span><span class="n">view_msg</span><span class="p">,</span> <span class="n">ent_mappings</span><span class="p">,</span> <span class="n">rel_mappings</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: VIEW creation failed:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">detail</span><span class="p">)</span>
+
+            <span class="n">detail</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">diagnose_view_error</span><span class="p">(</span>
+                <span class="n">view_msg</span><span class="p">,</span> <span class="n">ent_mappings</span><span class="p">,</span> <span class="n">rel_mappings</span>
+            <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: VIEW creation failed:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">detail</span>
+            <span class="p">)</span>
             <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to create VIEW: </span><span class="si">{</span><span class="n">detail</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="mi">40</span><span class="p">,</span> <span class="s2">&quot;VIEW created&quot;</span><span class="p">)</span>
 
         <span class="c1"># --- Incremental logic ---</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore</span><span class="w"> </span><span class="kn">import</span> <span class="n">IncrementalBuildService</span>
+
         <span class="n">incr_svc</span> <span class="o">=</span> <span class="n">IncrementalBuildService</span><span class="p">(</span><span class="n">src</span><span class="p">)</span>
 
         <span class="n">snapshot_table</span> <span class="o">=</span> <span class="n">incr_svc</span><span class="o">.</span><span class="n">snapshot_table_name</span><span class="p">(</span>
@@ -784,22 +926,37 @@
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">to_add</span><span class="p">,</span> <span class="n">to_remove</span> <span class="o">=</span> <span class="n">incr_svc</span><span class="o">.</span><span class="n">compute_diff</span><span class="p">(</span><span class="n">view_table</span><span class="p">,</span> <span class="n">snapshot_table</span><span class="p">)</span>
                 <span class="n">view_count</span> <span class="o">=</span> <span class="n">incr_svc</span><span class="o">.</span><span class="n">count_view_triples</span><span class="p">(</span><span class="n">view_table</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">incr_svc</span><span class="o">.</span><span class="n">should_fallback_to_full</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">to_add</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">to_remove</span><span class="p">),</span> <span class="n">view_count</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">incr_svc</span><span class="o">.</span><span class="n">should_fallback_to_full</span><span class="p">(</span>
+                    <span class="nb">len</span><span class="p">(</span><span class="n">to_add</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">to_remove</span><span class="p">),</span> <span class="n">view_count</span>
+                <span class="p">):</span>
                     <span class="n">actual_mode</span> <span class="o">=</span> <span class="s2">&quot;full&quot;</span>
                 <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">to_add</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">to_remove</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
                     <span class="n">triple_count</span> <span class="o">=</span> <span class="n">view_count</span>
-                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: no changes, skipping graph write&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: no changes, skipping graph write&quot;</span><span class="p">,</span>
+                        <span class="n">domain_name</span><span class="p">,</span>
+                    <span class="p">)</span>
                     <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="mi">90</span><span class="p">,</span> <span class="s2">&quot;No changes detected&quot;</span><span class="p">)</span>
                     <span class="k">try</span><span class="p">:</span>
                         <span class="n">incr_svc</span><span class="o">.</span><span class="n">refresh_snapshot</span><span class="p">(</span><span class="n">view_table</span><span class="p">,</span> <span class="n">snapshot_table</span><span class="p">)</span>
                     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">snap_e</span><span class="p">:</span>
-                        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: snapshot refresh failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">snap_e</span><span class="p">)</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                            <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: snapshot refresh failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                            <span class="n">domain_name</span><span class="p">,</span>
+                            <span class="n">snap_e</span><span class="p">,</span>
+                        <span class="p">)</span>
                     <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;success&quot;</span>
                     <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;No changes — </span><span class="si">{</span><span class="n">triple_count</span><span class="si">}</span><span class="s2"> triples unchanged&quot;</span>
-                    <span class="n">_persist_domain_metadata</span><span class="p">(</span><span class="n">uc</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">domain_path</span><span class="p">,</span> <span class="n">latest</span><span class="p">,</span> <span class="n">build_ts</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
+                    <span class="n">_persist_domain_metadata</span><span class="p">(</span>
+                        <span class="n">uc</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">domain_path</span><span class="p">,</span> <span class="n">latest</span><span class="p">,</span> <span class="n">build_ts</span><span class="p">,</span> <span class="n">domain_name</span>
+                    <span class="p">)</span>
                     <span class="k">return</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: incremental diff failed, falling back to full: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: incremental diff failed, falling back to full: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">domain_name</span><span class="p">,</span>
+                    <span class="n">e</span><span class="p">,</span>
+                <span class="p">)</span>
                 <span class="n">actual_mode</span> <span class="o">=</span> <span class="s2">&quot;full&quot;</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">actual_mode</span> <span class="o">=</span> <span class="s2">&quot;full&quot;</span>
@@ -810,21 +967,30 @@
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_triplestore</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">DomainSnapshot</span>
 
-        <span class="n">snap</span> <span class="o">=</span> <span class="n">DomainSnapshot</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+        <span class="n">snap</span> <span class="o">=</span> <span class="n">DomainSnapshot</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
         <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Could not initialize LadybugDB backend&quot;</span><span class="p">)</span>
 
         <span class="n">triple_count</span> <span class="o">=</span> <span class="n">_write_graph_triples</span><span class="p">(</span>
-            <span class="n">store</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">,</span> <span class="n">view_table</span><span class="p">,</span> <span class="n">actual_mode</span><span class="p">,</span>
-            <span class="n">to_add</span><span class="p">,</span> <span class="n">to_remove</span><span class="p">,</span> <span class="n">incr_svc</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span>
+            <span class="n">store</span><span class="p">,</span>
+            <span class="n">src</span><span class="p">,</span>
+            <span class="n">graph_name</span><span class="p">,</span>
+            <span class="n">view_table</span><span class="p">,</span>
+            <span class="n">actual_mode</span><span class="p">,</span>
+            <span class="n">to_add</span><span class="p">,</span>
+            <span class="n">to_remove</span><span class="p">,</span>
+            <span class="n">incr_svc</span><span class="p">,</span>
+            <span class="n">domain_name</span><span class="p">,</span>
         <span class="p">)</span>
 
         <span class="k">try</span><span class="p">:</span>
             <span class="n">incr_svc</span><span class="o">.</span><span class="n">refresh_snapshot</span><span class="p">(</span><span class="n">view_table</span><span class="p">,</span> <span class="n">snapshot_table</span><span class="p">)</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: snapshot refreshed&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">snap_e</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: snapshot refresh failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">snap_e</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: snapshot refresh failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">snap_e</span>
+            <span class="p">)</span>
 
         <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="mi">95</span><span class="p">,</span> <span class="s2">&quot;Saving domain metadata...&quot;</span><span class="p">)</span>
         <span class="n">_persist_domain_metadata</span><span class="p">(</span><span class="n">uc</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">domain_path</span><span class="p">,</span> <span class="n">latest</span><span class="p">,</span> <span class="n">build_ts</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
@@ -835,7 +1001,12 @@
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
         <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;error&quot;</span>
         <span class="n">message</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">] failed after </span><span class="si">%.1f</span><span class="s2">s: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+            <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">] failed after </span><span class="si">%.1f</span><span class="s2">s: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">domain_name</span><span class="p">,</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">,</span>
+            <span class="n">exc</span><span class="p">,</span>
+        <span class="p">)</span>
 
     <span class="k">finally</span><span class="p">:</span>
         <span class="n">duration</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
@@ -843,39 +1014,64 @@
         <span class="k">try</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">tm</span> <span class="ow">and</span> <span class="n">task</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;success&quot;</span><span class="p">:</span>
-                    <span class="n">tm</span><span class="o">.</span><span class="n">complete_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">result</span><span class="o">=</span><span class="p">{</span>
-                        <span class="s2">&quot;triple_count&quot;</span><span class="p">:</span> <span class="n">triple_count</span><span class="p">,</span>
-                        <span class="s2">&quot;duration_seconds&quot;</span><span class="p">:</span> <span class="n">duration</span><span class="p">,</span>
-                    <span class="p">},</span> <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">)</span>
+                    <span class="n">tm</span><span class="o">.</span><span class="n">complete_task</span><span class="p">(</span>
+                        <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                        <span class="n">result</span><span class="o">=</span><span class="p">{</span>
+                            <span class="s2">&quot;triple_count&quot;</span><span class="p">:</span> <span class="n">triple_count</span><span class="p">,</span>
+                            <span class="s2">&quot;duration_seconds&quot;</span><span class="p">:</span> <span class="n">duration</span><span class="p">,</span>
+                        <span class="p">},</span>
+                        <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span>
+                    <span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">tm_exc</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: task-manager update failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">tm_exc</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: task-manager update failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">domain_name</span><span class="p">,</span>
+                <span class="n">tm_exc</span><span class="p">,</span>
+            <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">host</span> <span class="ow">and</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">):</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">_update_schedule_status</span><span class="p">(</span>
-                    <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">reg</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">status</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span>
-                    <span class="n">duration_s</span><span class="o">=</span><span class="n">duration</span><span class="p">,</span> <span class="n">triple_count</span><span class="o">=</span><span class="n">triple_count</span><span class="p">,</span>
+                    <span class="n">host</span><span class="p">,</span>
+                    <span class="n">token</span><span class="p">,</span>
+                    <span class="n">reg</span><span class="p">,</span>
+                    <span class="n">domain_name</span><span class="p">,</span>
+                    <span class="n">status</span><span class="p">,</span>
+                    <span class="n">message</span><span class="p">,</span>
+                    <span class="n">duration_s</span><span class="o">=</span><span class="n">duration</span><span class="p">,</span>
+                    <span class="n">triple_count</span><span class="o">=</span><span class="n">triple_count</span><span class="p">,</span>
                     <span class="n">run_ts</span><span class="o">=</span><span class="n">build_ts</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">status_exc</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
                     <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: failed to update status: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">domain_name</span><span class="p">,</span> <span class="n">status_exc</span><span class="p">,</span>
+                    <span class="n">domain_name</span><span class="p">,</span>
+                    <span class="n">status_exc</span><span class="p">,</span>
                 <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
                 <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: cannot update status — no host or registry config&quot;</span><span class="p">,</span>
                 <span class="n">domain_name</span><span class="p">,</span>
             <span class="p">)</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: finished with status=</span><span class="si">%s</span><span class="s2"> in </span><span class="si">%.1f</span><span class="s2">s&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">status</span><span class="p">,</span> <span class="n">duration</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: finished with status=</span><span class="si">%s</span><span class="s2"> in </span><span class="si">%.1f</span><span class="s2">s&quot;</span><span class="p">,</span>
+            <span class="n">domain_name</span><span class="p">,</span>
+            <span class="n">status</span><span class="p">,</span>
+            <span class="n">duration</span><span class="p">,</span>
+        <span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_update_schedule_status</span><span class="p">(</span>
-    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
-    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">duration_s</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">triple_count</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">status</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">duration_s</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">triple_count</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
     <span class="n">run_ts</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Update last_run / last_status / last_message and append to run history.</span>

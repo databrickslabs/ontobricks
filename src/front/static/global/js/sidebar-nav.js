@@ -62,6 +62,8 @@ const SidebarNav = {
                     targetSection.classList.add('active');
                 }
                 
+                SidebarNav._pushSectionState(section);
+
                 document.dispatchEvent(new CustomEvent('sidebarSectionChanged', {
                     detail: { section, targetSection }
                 }));
@@ -91,6 +93,45 @@ const SidebarNav = {
     getActiveSection: function() {
         const activeLink = document.querySelector('.sidebar-nav .nav-link.active');
         return activeLink ? activeLink.dataset.section : null;
+    },
+
+    /**
+     * Update the URL query string to reflect the active section without a
+     * full page reload, so that Back / Forward and bookmarks work.
+     */
+    _pushSectionState: function(section) {
+        if (!section || !window.history || !window.history.pushState) return;
+        const url = new URL(window.location);
+        if (url.searchParams.get('section') === section) return;
+        url.searchParams.set('section', section);
+        window.history.pushState({ section: section }, '', url);
+    },
+
+    /**
+     * Restore the visible section from a popstate event (Back / Forward).
+     */
+    _onPopState: function(e) {
+        const section = (e.state && e.state.section)
+            || new URLSearchParams(window.location.search).get('section');
+        if (section) {
+            SidebarNav._activateSection(section);
+        }
+    },
+
+    /**
+     * Activate a section by id without pushing a new history entry.
+     */
+    _activateSection: function(sectionName) {
+        const link = document.querySelector(`.sidebar-nav .nav-link[data-section="${sectionName}"]`);
+        if (!link) return;
+        document.querySelectorAll('.sidebar-nav .nav-link').forEach(l => l.classList.remove('active'));
+        link.classList.add('active');
+        document.querySelectorAll('.sidebar-section').forEach(s => s.classList.remove('active'));
+        const target = document.getElementById(sectionName + '-section');
+        if (target) target.classList.add('active');
+        document.dispatchEvent(new CustomEvent('sidebarSectionChanged', {
+            detail: { section: sectionName, targetSection: target }
+        }));
     },
 
     /**
@@ -174,15 +215,17 @@ if (typeof window !== 'undefined' && !window.SIDEBAR_NAV_MANUAL_INIT) {
         if (document.querySelector('.sidebar-nav')) {
             SidebarNav._setupCollapse();
             SidebarNav.init();
-            
-            // Handle URL query param (?section=...) or hash (#...) for direct section navigation
+
+            window.addEventListener('popstate', SidebarNav._onPopState);
+
             const params = new URLSearchParams(window.location.search);
             const target = params.get('section') || window.location.hash.substring(1);
             if (target) {
                 const link = document.querySelector(`.sidebar-nav .nav-link[data-section="${target}"]`);
                 if (link) {
                     setTimeout(() => {
-                        SidebarNav.switchTo(target);
+                        SidebarNav._activateSection(target);
+                        window.history.replaceState({ section: target }, '', window.location.href);
                     }, 100);
                 }
             }

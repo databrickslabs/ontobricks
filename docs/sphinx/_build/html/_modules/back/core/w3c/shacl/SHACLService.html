@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
-    <script src="../../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../../../../../genindex.html" />
@@ -73,6 +73,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -113,13 +114,20 @@
 <span class="sd">UI code should only import ``SHACLService``; the generator and parser</span>
 <span class="sd">are internal implementation details.</span>
 <span class="sd">&quot;&quot;&quot;</span>
+
 <span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">QUALITY_CATEGORIES</span><span class="p">,</span> <span class="n">RDFS_LABEL</span><span class="p">,</span> <span class="n">XSD_TO_SPARK_TYPE</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.rdf_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">uri_local_name</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF_TYPE</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl.constants</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">QUALITY_CATEGORIES</span><span class="p">,</span>
+    <span class="n">RDFS_LABEL</span><span class="p">,</span>
+    <span class="n">XSD_TO_SPARK_TYPE</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl.SHACLGenerator</span><span class="w"> </span><span class="kn">import</span> <span class="n">SHACLGenerator</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl.SHACLParser</span><span class="w"> </span><span class="kn">import</span> <span class="n">SHACLParser</span>
 
@@ -170,13 +178,17 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">cat</span> <span class="o">=</span> <span class="n">category</span> <span class="k">if</span> <span class="n">category</span> <span class="ow">in</span> <span class="n">QUALITY_CATEGORIES</span> <span class="k">else</span> <span class="s2">&quot;conformance&quot;</span>
         <span class="n">safe_cls</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^a-zA-Z0-9_]&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">target_class</span> <span class="ow">or</span> <span class="s2">&quot;global&quot;</span><span class="p">)</span>
-        <span class="n">safe_prop</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^a-zA-Z0-9_]&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">property_path</span> <span class="ow">or</span> <span class="n">shacl_type</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;sh:&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
+        <span class="n">safe_prop</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s2">&quot;[^a-zA-Z0-9_]&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">property_path</span> <span class="ow">or</span> <span class="n">shacl_type</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;sh:&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">shape_id</span><span class="p">:</span>
             <span class="n">shape_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;shape_</span><span class="si">{</span><span class="n">cat</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">safe_cls</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">safe_prop</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">6</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">shape_id</span><span class="p">,</span>
             <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="n">cat</span><span class="p">,</span>
-            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span> <span class="ow">or</span> <span class="n">message</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">shacl_type</span><span class="si">}</span><span class="s2"> on </span><span class="si">{</span><span class="n">target_class</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">property_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span>
+            <span class="ow">or</span> <span class="n">message</span>
+            <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">shacl_type</span><span class="si">}</span><span class="s2"> on </span><span class="si">{</span><span class="n">target_class</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">property_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
             <span class="s2">&quot;target_class&quot;</span><span class="p">:</span> <span class="n">target_class</span><span class="p">,</span>
             <span class="s2">&quot;target_class_uri&quot;</span><span class="p">:</span> <span class="n">target_class_uri</span><span class="p">,</span>
             <span class="s2">&quot;property_path&quot;</span><span class="p">:</span> <span class="n">property_path</span><span class="p">,</span>
@@ -234,7 +246,13 @@
         <span class="p">]</span>
         <span class="n">digest</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="s2">&quot;|&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">key_parts</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()[:</span><span class="mi">10</span><span class="p">]</span>
         <span class="n">ctype</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^a-zA-Z0-9_]&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">constraint</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown&quot;</span><span class="p">))</span>
-        <span class="bp">cls</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^a-zA-Z0-9_]&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">constraint</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;className&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">constraint</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;attributeName&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;global&quot;</span><span class="p">)</span>
+        <span class="bp">cls</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s2">&quot;[^a-zA-Z0-9_]&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="n">constraint</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;className&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="ow">or</span> <span class="n">constraint</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;attributeName&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="ow">or</span> <span class="s2">&quot;global&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
         <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;migrated_</span><span class="si">{</span><span class="n">ctype</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">digest</span><span class="si">}</span><span class="s2">&quot;</span>
 
     <span class="c1"># ------------------------------------------------------------------</span>
@@ -243,7 +261,9 @@
 
 <div class="viewcode-block" id="SHACLService.generate_turtle">
 <a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.shacl.SHACLService.SHACLService.generate_turtle">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">generate_turtle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">shapes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">generate_turtle</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">shapes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate SHACL Turtle from the shapes list.&quot;&quot;&quot;</span>
         <span class="n">uri</span> <span class="o">=</span> <span class="n">base_uri</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_base_uri</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generator</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">shapes</span><span class="p">,</span> <span class="n">base_uri</span><span class="o">=</span><span class="n">uri</span><span class="p">)</span></div>
@@ -263,7 +283,9 @@
 <div class="viewcode-block" id="SHACLService.run_inference">
 <a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.shacl.SHACLService.SHACLService.run_inference">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">run_inference</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">data_turtle</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">rule_shapes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">data_turtle</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">rule_shapes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
         <span class="n">base_uri</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Run SHACL-AF inference rules and return newly inferred triples.</span>
@@ -281,8 +303,14 @@
             <span class="kn">import</span><span class="w"> </span><span class="nn">pyshacl</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Graph</span> <span class="k">as</span> <span class="n">RG</span>
         <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;pyshacl/rdflib not installed — cannot run SHACL rule inference&quot;</span><span class="p">)</span>
-            <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;inferred_triples&quot;</span><span class="p">:</span> <span class="p">[],</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;pyshacl not available&quot;</span><span class="p">}</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                <span class="s2">&quot;pyshacl/rdflib not installed — cannot run SHACL rule inference&quot;</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;inferred_triples&quot;</span><span class="p">:</span> <span class="p">[],</span>
+                <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+                <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;pyshacl not available&quot;</span><span class="p">,</span>
+            <span class="p">}</span>
 
         <span class="n">shapes_turtle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_rule_shapes_turtle</span><span class="p">(</span><span class="n">rule_shapes</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">shapes_turtle</span><span class="p">:</span>
@@ -313,7 +341,12 @@
 
         <span class="n">new_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_graph</span><span class="p">)</span>
         <span class="n">inferred</span> <span class="o">=</span> <span class="n">new_count</span> <span class="o">-</span> <span class="n">original_count</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;SHACL rules inferred </span><span class="si">%d</span><span class="s2"> new triples (</span><span class="si">%d</span><span class="s2"> → </span><span class="si">%d</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">inferred</span><span class="p">,</span> <span class="n">original_count</span><span class="p">,</span> <span class="n">new_count</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;SHACL rules inferred </span><span class="si">%d</span><span class="s2"> new triples (</span><span class="si">%d</span><span class="s2"> → </span><span class="si">%d</span><span class="s2">)&quot;</span><span class="p">,</span>
+            <span class="n">inferred</span><span class="p">,</span>
+            <span class="n">original_count</span><span class="p">,</span>
+            <span class="n">new_count</span><span class="p">,</span>
+        <span class="p">)</span>
 
         <span class="n">inferred_triples</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">if</span> <span class="n">inferred</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
@@ -325,15 +358,21 @@
             <span class="k">for</span> <span class="n">s</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">data_graph</span><span class="p">:</span>
                 <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">s</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">o</span><span class="p">))</span>
                 <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">original_set</span><span class="p">:</span>
-                    <span class="n">inferred_triples</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                        <span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">s</span><span class="p">),</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">),</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">o</span><span class="p">),</span>
-                    <span class="p">})</span>
+                    <span class="n">inferred_triples</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">{</span>
+                            <span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">s</span><span class="p">),</span>
+                            <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">),</span>
+                            <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">o</span><span class="p">),</span>
+                        <span class="p">}</span>
+                    <span class="p">)</span>
 
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;inferred_triples&quot;</span><span class="p">:</span> <span class="n">inferred_triples</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">inferred_triples</span><span class="p">)}</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_generate_rule_shapes_turtle</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">rule_shapes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">rule_shapes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+        <span class="n">base_uri</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate Turtle for SHACL rule shapes (sh:TripleRule / sh:SPARQLRule).&quot;&quot;&quot;</span>
         <span class="n">uri</span> <span class="o">=</span> <span class="n">base_uri</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_base_uri</span>
@@ -393,7 +432,10 @@
 <div class="viewcode-block" id="SHACLService.validate_graph">
 <a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.shacl.SHACLService.SHACLService.validate_graph">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">validate_graph</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">data_turtle</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">shapes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">data_turtle</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">shapes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+        <span class="n">base_uri</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Run PySHACL validation and return a result dict.</span>
 
@@ -457,9 +499,9 @@
         <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">[]</span>
 
-        <span class="n">RDF_TYPE</span> <span class="o">=</span> <span class="n">URIRef</span><span class="p">(</span><span class="s2">&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#type&quot;</span><span class="p">)</span>
+        <span class="n">rdf_type_ref</span> <span class="o">=</span> <span class="n">URIRef</span><span class="p">(</span><span class="n">RDF_TYPE</span><span class="p">)</span>
         <span class="n">violations</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">SH_NS</span><span class="o">.</span><span class="n">ValidationResult</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">rdf_type_ref</span><span class="p">,</span> <span class="n">SH_NS</span><span class="o">.</span><span class="n">ValidationResult</span><span class="p">):</span>
             <span class="n">focus</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
             <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">SH_NS</span><span class="o">.</span><span class="n">focusNode</span><span class="p">):</span>
                 <span class="n">focus</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
@@ -477,12 +519,14 @@
                 <span class="k">elif</span> <span class="s2">&quot;Info&quot;</span> <span class="ow">in</span> <span class="n">sev_str</span><span class="p">:</span>
                     <span class="n">severity</span> <span class="o">=</span> <span class="s2">&quot;sh:Info&quot;</span>
 
-            <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                <span class="s2">&quot;focus_node&quot;</span><span class="p">:</span> <span class="n">focus</span><span class="p">,</span>
-                <span class="s2">&quot;result_path&quot;</span><span class="p">:</span> <span class="n">path</span><span class="p">,</span>
-                <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span>
-                <span class="s2">&quot;severity&quot;</span><span class="p">:</span> <span class="n">severity</span><span class="p">,</span>
-            <span class="p">})</span>
+            <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;focus_node&quot;</span><span class="p">:</span> <span class="n">focus</span><span class="p">,</span>
+                    <span class="s2">&quot;result_path&quot;</span><span class="p">:</span> <span class="n">path</span><span class="p">,</span>
+                    <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span>
+                    <span class="s2">&quot;severity&quot;</span><span class="p">:</span> <span class="n">severity</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
         <span class="k">return</span> <span class="n">violations</span>
 
     <span class="c1"># ------------------------------------------------------------------</span>
@@ -491,7 +535,9 @@
 
 <div class="viewcode-block" id="SHACLService.migrate_legacy_constraints">
 <a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.shacl.SHACLService.SHACLService.migrate_legacy_constraints">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">migrate_legacy_constraints</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">constraints</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">migrate_legacy_constraints</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">constraints</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="n">base_uri</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert old OntoBricks constraint dicts to SHACL shape dicts.</span>
 
 <span class="sd">        Handles all types stored in ``ontology.constraints``:</span>
@@ -519,7 +565,9 @@
         <span class="k">return</span> <span class="n">shapes</span></div>
 
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_cardinality</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_cardinality</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
         <span class="n">ctype</span> <span class="o">=</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span>
         <span class="bp">cls</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;className&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">cls_uri</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classUri&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">uri</span><span class="si">}{</span><span class="n">sep</span><span class="si">}{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="bp">cls</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
@@ -538,27 +586,36 @@
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span>
             <span class="n">category</span><span class="o">=</span><span class="s2">&quot;structural&quot;</span><span class="p">,</span>
-            <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
-            <span class="n">property_path</span><span class="o">=</span><span class="n">prop</span><span class="p">,</span> <span class="n">property_uri</span><span class="o">=</span><span class="n">prop_uri</span><span class="p">,</span>
+            <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span>
+            <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
+            <span class="n">property_path</span><span class="o">=</span><span class="n">prop</span><span class="p">,</span>
+            <span class="n">property_uri</span><span class="o">=</span><span class="n">prop_uri</span><span class="p">,</span>
             <span class="n">shacl_type</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">params</span> <span class="k">else</span> <span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span>
             <span class="n">parameters</span><span class="o">=</span><span class="n">params</span><span class="p">,</span>
             <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ctype</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">prop</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="n">val</span><span class="si">}</span><span class="s2">) on </span><span class="si">{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
             <span class="n">shape_id</span><span class="o">=</span><span class="n">stable_id</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_functional</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_functional</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
         <span class="n">prop</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">prop_uri</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;propertyUri&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">data_ns</span><span class="si">}{</span><span class="n">prop</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">prop</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span>
             <span class="n">category</span><span class="o">=</span><span class="s2">&quot;consistency&quot;</span><span class="p">,</span>
-            <span class="n">target_class</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
-            <span class="n">property_path</span><span class="o">=</span><span class="n">prop</span><span class="p">,</span> <span class="n">property_uri</span><span class="o">=</span><span class="n">prop_uri</span><span class="p">,</span>
-            <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:maxCount&quot;</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:maxCount&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+            <span class="n">target_class</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="n">target_class_uri</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="n">property_path</span><span class="o">=</span><span class="n">prop</span><span class="p">,</span>
+            <span class="n">property_uri</span><span class="o">=</span><span class="n">prop_uri</span><span class="p">,</span>
+            <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:maxCount&quot;</span><span class="p">,</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:maxCount&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
             <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Functional property </span><span class="si">{</span><span class="n">prop</span><span class="si">}</span><span class="s2">: at most one value per subject&quot;</span><span class="p">,</span>
             <span class="n">shape_id</span><span class="o">=</span><span class="n">stable_id</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_inverse_functional</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_inverse_functional</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
         <span class="n">prop</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">prop_uri</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;propertyUri&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">data_ns</span><span class="si">}{</span><span class="n">prop</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">prop</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">query</span> <span class="o">=</span> <span class="p">(</span>
@@ -567,14 +624,19 @@
         <span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span>
             <span class="n">category</span><span class="o">=</span><span class="s2">&quot;consistency&quot;</span><span class="p">,</span>
-            <span class="n">target_class</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
-            <span class="n">property_path</span><span class="o">=</span><span class="n">prop</span><span class="p">,</span> <span class="n">property_uri</span><span class="o">=</span><span class="n">prop_uri</span><span class="p">,</span>
-            <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:sparql&quot;</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:select&quot;</span><span class="p">:</span> <span class="n">query</span><span class="p">},</span>
+            <span class="n">target_class</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="n">target_class_uri</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="n">property_path</span><span class="o">=</span><span class="n">prop</span><span class="p">,</span>
+            <span class="n">property_uri</span><span class="o">=</span><span class="n">prop_uri</span><span class="p">,</span>
+            <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:sparql&quot;</span><span class="p">,</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:select&quot;</span><span class="p">:</span> <span class="n">query</span><span class="p">},</span>
             <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Inverse-functional property </span><span class="si">{</span><span class="n">prop</span><span class="si">}</span><span class="s2">: each value maps to at most one subject&quot;</span><span class="p">,</span>
             <span class="n">shape_id</span><span class="o">=</span><span class="n">stable_id</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_value_check</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_value_check</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
         <span class="bp">cls</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;className&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">cls_uri</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">uri</span><span class="si">}{</span><span class="n">sep</span><span class="si">}{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="bp">cls</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
         <span class="n">attr</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;attributeName&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
@@ -585,9 +647,12 @@
         <span class="k">if</span> <span class="n">check_type</span> <span class="o">==</span> <span class="s2">&quot;notNull&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span>
                 <span class="n">category</span><span class="o">=</span><span class="s2">&quot;consistency&quot;</span><span class="p">,</span>
-                <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
-                <span class="n">property_path</span><span class="o">=</span><span class="n">attr</span><span class="p">,</span> <span class="n">property_uri</span><span class="o">=</span><span class="n">attr_uri</span><span class="p">,</span>
-                <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+                <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span>
+                <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
+                <span class="n">property_path</span><span class="o">=</span><span class="n">attr</span><span class="p">,</span>
+                <span class="n">property_uri</span><span class="o">=</span><span class="n">attr_uri</span><span class="p">,</span>
+                <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span>
+                <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
                 <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">attr</span><span class="si">}</span><span class="s2"> must not be empty&quot;</span><span class="p">,</span>
                 <span class="n">shape_id</span><span class="o">=</span><span class="n">stable_id</span><span class="p">,</span>
             <span class="p">)</span>
@@ -601,8 +666,10 @@
         <span class="k">if</span> <span class="n">check_type</span> <span class="ow">in</span> <span class="n">pattern_map</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span>
                 <span class="n">category</span><span class="o">=</span><span class="s2">&quot;consistency&quot;</span><span class="p">,</span>
-                <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
-                <span class="n">property_path</span><span class="o">=</span><span class="n">attr</span><span class="p">,</span> <span class="n">property_uri</span><span class="o">=</span><span class="n">attr_uri</span><span class="p">,</span>
+                <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span>
+                <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
+                <span class="n">property_path</span><span class="o">=</span><span class="n">attr</span><span class="p">,</span>
+                <span class="n">property_uri</span><span class="o">=</span><span class="n">attr_uri</span><span class="p">,</span>
                 <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:pattern&quot;</span><span class="p">,</span>
                 <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:pattern&quot;</span><span class="p">:</span> <span class="n">pattern_map</span><span class="p">[</span><span class="n">check_type</span><span class="p">],</span> <span class="s2">&quot;sh:flags&quot;</span><span class="p">:</span> <span class="s2">&quot;i&quot;</span><span class="p">},</span>
                 <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">attr</span><span class="si">}</span><span class="s2"> must match </span><span class="si">{</span><span class="n">check_type</span><span class="si">}</span><span class="s2"> &#39;</span><span class="si">{</span><span class="n">check_value</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
@@ -612,9 +679,12 @@
         <span class="k">if</span> <span class="n">check_type</span> <span class="o">==</span> <span class="s2">&quot;equals&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span>
                 <span class="n">category</span><span class="o">=</span><span class="s2">&quot;consistency&quot;</span><span class="p">,</span>
-                <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
-                <span class="n">property_path</span><span class="o">=</span><span class="n">attr</span><span class="p">,</span> <span class="n">property_uri</span><span class="o">=</span><span class="n">attr_uri</span><span class="p">,</span>
-                <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:hasValue&quot;</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:hasValue&quot;</span><span class="p">:</span> <span class="n">check_value</span><span class="p">},</span>
+                <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span>
+                <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
+                <span class="n">property_path</span><span class="o">=</span><span class="n">attr</span><span class="p">,</span>
+                <span class="n">property_uri</span><span class="o">=</span><span class="n">attr_uri</span><span class="p">,</span>
+                <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:hasValue&quot;</span><span class="p">,</span>
+                <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:hasValue&quot;</span><span class="p">:</span> <span class="n">check_value</span><span class="p">},</span>
                 <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">attr</span><span class="si">}</span><span class="s2"> must equal &#39;</span><span class="si">{</span><span class="n">check_value</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
                 <span class="n">shape_id</span><span class="o">=</span><span class="n">stable_id</span><span class="p">,</span>
             <span class="p">)</span>
@@ -626,16 +696,21 @@
             <span class="p">)</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span>
                 <span class="n">category</span><span class="o">=</span><span class="s2">&quot;consistency&quot;</span><span class="p">,</span>
-                <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
-                <span class="n">property_path</span><span class="o">=</span><span class="n">attr</span><span class="p">,</span> <span class="n">property_uri</span><span class="o">=</span><span class="n">attr_uri</span><span class="p">,</span>
-                <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:sparql&quot;</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:select&quot;</span><span class="p">:</span> <span class="n">query</span><span class="p">},</span>
+                <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span>
+                <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
+                <span class="n">property_path</span><span class="o">=</span><span class="n">attr</span><span class="p">,</span>
+                <span class="n">property_uri</span><span class="o">=</span><span class="n">attr_uri</span><span class="p">,</span>
+                <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:sparql&quot;</span><span class="p">,</span>
+                <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:select&quot;</span><span class="p">:</span> <span class="n">query</span><span class="p">},</span>
                 <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">attr</span><span class="si">}</span><span class="s2"> must not equal &#39;</span><span class="si">{</span><span class="n">check_value</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
                 <span class="n">shape_id</span><span class="o">=</span><span class="n">stable_id</span><span class="p">,</span>
             <span class="p">)</span>
 
         <span class="k">return</span> <span class="kc">None</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_all_values_from</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_all_values_from</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
         <span class="bp">cls</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;className&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">cls_uri</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classUri&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">uri</span><span class="si">}{</span><span class="n">sep</span><span class="si">}{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="bp">cls</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">prop</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
@@ -644,14 +719,19 @@
         <span class="n">val_class_uri</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">uri</span><span class="si">}{</span><span class="n">sep</span><span class="si">}{</span><span class="n">val_class</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">val_class</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span>
             <span class="n">category</span><span class="o">=</span><span class="s2">&quot;consistency&quot;</span><span class="p">,</span>
-            <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
-            <span class="n">property_path</span><span class="o">=</span><span class="n">prop</span><span class="p">,</span> <span class="n">property_uri</span><span class="o">=</span><span class="n">prop_uri</span><span class="p">,</span>
-            <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:class&quot;</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:class&quot;</span><span class="p">:</span> <span class="n">val_class_uri</span><span class="p">},</span>
+            <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span>
+            <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
+            <span class="n">property_path</span><span class="o">=</span><span class="n">prop</span><span class="p">,</span>
+            <span class="n">property_uri</span><span class="o">=</span><span class="n">prop_uri</span><span class="p">,</span>
+            <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:class&quot;</span><span class="p">,</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:class&quot;</span><span class="p">:</span> <span class="n">val_class_uri</span><span class="p">},</span>
             <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;All values of </span><span class="si">{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">prop</span><span class="si">}</span><span class="s2"> must be of type </span><span class="si">{</span><span class="n">val_class</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
             <span class="n">shape_id</span><span class="o">=</span><span class="n">stable_id</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_some_values_from</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_some_values_from</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
         <span class="bp">cls</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;className&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">cls_uri</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classUri&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">uri</span><span class="si">}{</span><span class="n">sep</span><span class="si">}{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="bp">cls</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">prop</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
@@ -664,14 +744,19 @@
         <span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span>
             <span class="n">category</span><span class="o">=</span><span class="s2">&quot;consistency&quot;</span><span class="p">,</span>
-            <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
-            <span class="n">property_path</span><span class="o">=</span><span class="n">prop</span><span class="p">,</span> <span class="n">property_uri</span><span class="o">=</span><span class="n">prop_uri</span><span class="p">,</span>
-            <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:sparql&quot;</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:select&quot;</span><span class="p">:</span> <span class="n">query</span><span class="p">},</span>
+            <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span>
+            <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
+            <span class="n">property_path</span><span class="o">=</span><span class="n">prop</span><span class="p">,</span>
+            <span class="n">property_uri</span><span class="o">=</span><span class="n">prop_uri</span><span class="p">,</span>
+            <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:sparql&quot;</span><span class="p">,</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:select&quot;</span><span class="p">:</span> <span class="n">query</span><span class="p">},</span>
             <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">prop</span><span class="si">}</span><span class="s2"> must have at least one value of type </span><span class="si">{</span><span class="n">val_class</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
             <span class="n">shape_id</span><span class="o">=</span><span class="n">stable_id</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_has_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_has_value</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
         <span class="bp">cls</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;className&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">cls_uri</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classUri&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">uri</span><span class="si">}{</span><span class="n">sep</span><span class="si">}{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="bp">cls</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">prop</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
@@ -679,14 +764,19 @@
         <span class="n">val</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;hasValue&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span>
             <span class="n">category</span><span class="o">=</span><span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
-            <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
-            <span class="n">property_path</span><span class="o">=</span><span class="n">prop</span><span class="p">,</span> <span class="n">property_uri</span><span class="o">=</span><span class="n">prop_uri</span><span class="p">,</span>
-            <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:hasValue&quot;</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:hasValue&quot;</span><span class="p">:</span> <span class="n">val</span><span class="p">},</span>
+            <span class="n">target_class</span><span class="o">=</span><span class="bp">cls</span><span class="p">,</span>
+            <span class="n">target_class_uri</span><span class="o">=</span><span class="n">cls_uri</span><span class="p">,</span>
+            <span class="n">property_path</span><span class="o">=</span><span class="n">prop</span><span class="p">,</span>
+            <span class="n">property_uri</span><span class="o">=</span><span class="n">prop_uri</span><span class="p">,</span>
+            <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:hasValue&quot;</span><span class="p">,</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:hasValue&quot;</span><span class="p">:</span> <span class="n">val</span><span class="p">},</span>
             <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">prop</span><span class="si">}</span><span class="s2"> must have value &#39;</span><span class="si">{</span><span class="n">val</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
             <span class="n">shape_id</span><span class="o">=</span><span class="n">stable_id</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_global_rule</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_global_rule</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
         <span class="n">rule</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ruleName&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">rule</span> <span class="o">==</span> <span class="s2">&quot;noOrphans&quot;</span><span class="p">:</span>
             <span class="n">query</span> <span class="o">=</span> <span class="p">(</span>
@@ -698,18 +788,22 @@
             <span class="p">)</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span>
                 <span class="n">category</span><span class="o">=</span><span class="s2">&quot;structural&quot;</span><span class="p">,</span>
-                <span class="n">target_class</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
-                <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:sparql&quot;</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:select&quot;</span><span class="p">:</span> <span class="n">query</span><span class="p">},</span>
+                <span class="n">target_class</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="n">target_class_uri</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:sparql&quot;</span><span class="p">,</span>
+                <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:select&quot;</span><span class="p">:</span> <span class="n">query</span><span class="p">},</span>
                 <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Every entity must have at least one relationship (no orphans)&quot;</span><span class="p">,</span>
                 <span class="n">shape_id</span><span class="o">=</span><span class="n">stable_id</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">if</span> <span class="n">rule</span> <span class="o">==</span> <span class="s2">&quot;requireLabels&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span>
                 <span class="n">category</span><span class="o">=</span><span class="s2">&quot;structural&quot;</span><span class="p">,</span>
-                <span class="n">target_class</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="n">target_class</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="n">target_class_uri</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
                 <span class="n">property_path</span><span class="o">=</span><span class="s2">&quot;label&quot;</span><span class="p">,</span>
                 <span class="n">property_uri</span><span class="o">=</span><span class="s2">&quot;http://www.w3.org/2000/01/rdf-schema#label&quot;</span><span class="p">,</span>
-                <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+                <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span>
+                <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
                 <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Every entity must have an rdfs:label&quot;</span><span class="p">,</span>
                 <span class="n">shape_id</span><span class="o">=</span><span class="n">stable_id</span><span class="p">,</span>
             <span class="p">)</span>
@@ -721,14 +815,18 @@
             <span class="p">)</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span>
                 <span class="n">category</span><span class="o">=</span><span class="s2">&quot;structural&quot;</span><span class="p">,</span>
-                <span class="n">target_class</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">target_class_uri</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
-                <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:sparql&quot;</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:select&quot;</span><span class="p">:</span> <span class="n">query</span><span class="p">},</span>
+                <span class="n">target_class</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="n">target_class_uri</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="n">shacl_type</span><span class="o">=</span><span class="s2">&quot;sh:sparql&quot;</span><span class="p">,</span>
+                <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;sh:select&quot;</span><span class="p">:</span> <span class="n">query</span><span class="p">},</span>
                 <span class="n">message</span><span class="o">=</span><span class="s2">&quot;All entity identifiers must be unique&quot;</span><span class="p">,</span>
                 <span class="n">shape_id</span><span class="o">=</span><span class="n">stable_id</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_noop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_migrate_noop</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sep</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_ns</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">stable_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Skip property characteristics that are handled by the reasoning engine, not DQ.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="kc">None</span>
 
@@ -806,21 +904,16 @@
                     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;URI fallback (/→#): &#39;</span><span class="si">%s</span><span class="s2">&#39; → &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">,</span> <span class="n">alt</span><span class="p">)</span>
                     <span class="k">return</span> <span class="n">alt</span>
 
-        <span class="k">def</span><span class="w"> </span><span class="nf">_local</span><span class="p">(</span><span class="n">u</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-            <span class="k">if</span> <span class="s2">&quot;#&quot;</span> <span class="ow">in</span> <span class="n">u</span><span class="p">:</span>
-                <span class="k">return</span> <span class="n">u</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-            <span class="k">if</span> <span class="s2">&quot;/&quot;</span> <span class="ow">in</span> <span class="n">u</span><span class="p">:</span>
-                <span class="k">return</span> <span class="n">u</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-            <span class="k">return</span> <span class="n">u</span>
-
-        <span class="n">target_local</span> <span class="o">=</span> <span class="n">_local</span><span class="p">(</span><span class="n">prop_uri</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="n">target_local</span> <span class="o">=</span> <span class="n">uri_local_name</span><span class="p">(</span><span class="n">prop_uri</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">target_local</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">pred</span> <span class="ow">in</span> <span class="n">available_predicates</span><span class="p">:</span>
                 <span class="k">if</span> <span class="s2">&quot;w3.org&quot;</span> <span class="ow">in</span> <span class="n">pred</span><span class="p">:</span>
                     <span class="k">continue</span>
-                <span class="k">if</span> <span class="n">_local</span><span class="p">(</span><span class="n">pred</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="n">target_local</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">uri_local_name</span><span class="p">(</span><span class="n">pred</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="n">target_local</span><span class="p">:</span>
                     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                        <span class="s2">&quot;URI fallback (local-name): &#39;</span><span class="si">%s</span><span class="s2">&#39; → &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">,</span> <span class="n">pred</span><span class="p">,</span>
+                        <span class="s2">&quot;URI fallback (local-name): &#39;</span><span class="si">%s</span><span class="s2">&#39; → &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+                        <span class="n">prop_uri</span><span class="p">,</span>
+                        <span class="n">pred</span><span class="p">,</span>
                     <span class="p">)</span>
                     <span class="k">return</span> <span class="n">pred</span>
 
@@ -834,8 +927,11 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_mem_cardinality</span><span class="p">(</span>
-        <span class="n">cls_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
-        <span class="n">class_instances_fn</span><span class="p">,</span> <span class="n">subj_by_pred</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+        <span class="n">cls_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">prop_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+        <span class="n">class_instances_fn</span><span class="p">,</span>
+        <span class="n">subj_by_pred</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
         <span class="n">min_count</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">)</span>
         <span class="n">max_count</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sh:maxCount&quot;</span><span class="p">)</span>
@@ -860,7 +956,9 @@
             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                 <span class="s2">&quot;Cardinality check: predicate &#39;</span><span class="si">%s</span><span class="s2">&#39; has NO values for ANY of </span><span class="si">%d</span><span class="s2"> &quot;</span>
                 <span class="s2">&quot;instances of &#39;</span><span class="si">%s</span><span class="s2">&#39; — possible URI mismatch between shape and graph&quot;</span><span class="p">,</span>
-                <span class="n">prop_uri</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">),</span> <span class="n">cls_uri</span><span class="p">,</span>
+                <span class="n">prop_uri</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">),</span>
+                <span class="n">cls_uri</span><span class="p">,</span>
             <span class="p">)</span>
 
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">:</span>
@@ -873,7 +971,12 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_sql_cardinality</span><span class="p">(</span>
-        <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">cls_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">rdf_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">esc</span><span class="p">,</span>
+        <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">cls_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">prop_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+        <span class="n">rdf_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">esc</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
         <span class="n">min_count</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">)</span>
         <span class="n">max_count</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sh:maxCount&quot;</span><span class="p">)</span>
@@ -913,7 +1016,12 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_sql_datatype</span><span class="p">(</span>
-        <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">cls_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">rdf_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">esc</span><span class="p">,</span>
+        <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">cls_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">prop_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+        <span class="n">rdf_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">esc</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate SQL to find values that don&#39;t match the expected XSD datatype.</span>
 
@@ -938,7 +1046,10 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_sql_sparql_wellknown</span><span class="p">(</span>
-        <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">rdf_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">esc</span><span class="p">,</span>
+        <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+        <span class="n">rdf_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">esc</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Translate well-known sh:sparql patterns to native SQL.</span>
 
@@ -999,7 +1110,6 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            SQL string, or ``None`` if the shape cannot be translated.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">RDF_TYPE</span> <span class="o">=</span> <span class="s2">&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#type&quot;</span>
         <span class="n">shacl_type</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;shacl_type&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">params</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parameters&quot;</span><span class="p">,</span> <span class="p">{})</span>
         <span class="n">cls_uri</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
@@ -1011,7 +1121,9 @@
         <span class="k">if</span> <span class="n">shacl_type</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:maxCount&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
             <span class="s2">&quot;sh:minCount&quot;</span> <span class="ow">in</span> <span class="n">params</span> <span class="ow">or</span> <span class="s2">&quot;sh:maxCount&quot;</span> <span class="ow">in</span> <span class="n">params</span>
         <span class="p">):</span>
-            <span class="k">return</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">_sql_cardinality</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="n">cls_uri</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">esc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">_sql_cardinality</span><span class="p">(</span>
+                <span class="n">table</span><span class="p">,</span> <span class="n">cls_uri</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">esc</span>
+            <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">shacl_type</span> <span class="o">==</span> <span class="s2">&quot;sh:pattern&quot;</span><span class="p">:</span>
             <span class="n">pattern</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sh:pattern&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
@@ -1053,7 +1165,9 @@
             <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">shacl_type</span> <span class="o">==</span> <span class="s2">&quot;sh:datatype&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">_sql_datatype</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="n">cls_uri</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">esc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">_sql_datatype</span><span class="p">(</span>
+                <span class="n">table</span><span class="p">,</span> <span class="n">cls_uri</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">esc</span>
+            <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">shacl_type</span> <span class="o">==</span> <span class="s2">&quot;sh:closed&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
@@ -1064,19 +1178,18 @@
         <span class="k">return</span> <span class="kc">None</span></div>
 
 
-
 <div class="viewcode-block" id="SHACLService.evaluate_shape_in_memory">
 <a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.shacl.SHACLService.SHACLService.evaluate_shape_in_memory">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">evaluate_shape_in_memory</span><span class="p">(</span>
-        <span class="n">shape</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="n">shape</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Evaluate a single SHACL shape against an in-memory list of triples.</span>
 
 <span class="sd">        Each triple is ``{&quot;subject&quot;: ..., &quot;predicate&quot;: ..., &quot;object&quot;: ...}``.</span>
 <span class="sd">        Returns a list of violation dicts (empty if no violations).</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">RDF_TYPE</span> <span class="o">=</span> <span class="s2">&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#type&quot;</span>
         <span class="n">shacl_type</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;shacl_type&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">params</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parameters&quot;</span><span class="p">,</span> <span class="p">{})</span>
         <span class="n">cls_uri</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
@@ -1102,10 +1215,13 @@
         <span class="k">if</span> <span class="n">shacl_type</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:maxCount&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
             <span class="s2">&quot;sh:minCount&quot;</span> <span class="ow">in</span> <span class="n">params</span> <span class="ow">or</span> <span class="s2">&quot;sh:maxCount&quot;</span> <span class="ow">in</span> <span class="n">params</span>
         <span class="p">):</span>
-            <span class="k">return</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">_mem_cardinality</span><span class="p">(</span><span class="n">cls_uri</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">_class_instances</span><span class="p">,</span> <span class="n">subj_by_pred</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">_mem_cardinality</span><span class="p">(</span>
+                <span class="n">cls_uri</span><span class="p">,</span> <span class="n">prop_uri</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">_class_instances</span><span class="p">,</span> <span class="n">subj_by_pred</span>
+            <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">shacl_type</span> <span class="o">==</span> <span class="s2">&quot;sh:pattern&quot;</span><span class="p">:</span>
             <span class="kn">import</span><span class="w"> </span><span class="nn">re</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_re</span>
+
             <span class="n">pattern</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sh:pattern&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">pattern</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cls_uri</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">prop_uri</span><span class="p">:</span>
                 <span class="k">return</span> <span class="p">[]</span>
@@ -1113,7 +1229,9 @@
             <span class="n">prop_vals</span> <span class="o">=</span> <span class="n">subj_by_pred</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">prop_uri</span><span class="p">,</span> <span class="p">{})</span>
             <span class="n">violations</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">regex</span> <span class="o">=</span> <span class="n">_re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">_re</span><span class="o">.</span><span class="n">IGNORECASE</span> <span class="k">if</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sh:flags&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;i&quot;</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span>
+                <span class="n">regex</span> <span class="o">=</span> <span class="n">_re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+                    <span class="n">pattern</span><span class="p">,</span> <span class="n">_re</span><span class="o">.</span><span class="n">IGNORECASE</span> <span class="k">if</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sh:flags&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;i&quot;</span> <span class="k">else</span> <span class="mi">0</span>
+                <span class="p">)</span>
             <span class="k">except</span> <span class="n">_re</span><span class="o">.</span><span class="n">error</span><span class="p">:</span>
                 <span class="k">return</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">:</span>

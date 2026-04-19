@@ -59,10 +59,78 @@
         }
     }
 
+    // ── Keyboard shortcuts ──────────────────────────────────────────
+
+    var _SHORTCUT_OVERLAY_ID = 'obShortcutOverlay';
+
+    function _isMac() { return navigator.platform.indexOf('Mac') > -1; }
+    function _mod(e) { return _isMac() ? e.metaKey : e.ctrlKey; }
+
+    function _buildOverlay() {
+        var el = document.getElementById(_SHORTCUT_OVERLAY_ID);
+        if (el) return el;
+        el = document.createElement('div');
+        el.id = _SHORTCUT_OVERLAY_ID;
+        el.className = 'ob-shortcut-overlay d-none';
+        var mod = _isMac() ? 'Cmd' : 'Ctrl';
+        el.innerHTML =
+            '<div class="ob-shortcut-card">' +
+            '<h6><i class="bi bi-keyboard me-2"></i>Keyboard Shortcuts</h6>' +
+            '<table class="table table-sm mb-0">' +
+            '<tr><td><kbd>' + mod + '+S</kbd></td><td>Save domain</td></tr>' +
+            '<tr><td><kbd>' + mod + '+K</kbd></td><td>Focus sidebar search (if available)</td></tr>' +
+            '<tr><td><kbd>?</kbd></td><td>Show / hide this overlay</td></tr>' +
+            '</table>' +
+            '<div class="text-muted small mt-2">Press <kbd>Esc</kbd> or <kbd>?</kbd> to close</div>' +
+            '</div>';
+        document.body.appendChild(el);
+        el.addEventListener('click', function (ev) {
+            if (ev.target === el) el.classList.add('d-none');
+        });
+        return el;
+    }
+
+    function _toggleShortcutHelp() {
+        var ol = _buildOverlay();
+        ol.classList.toggle('d-none');
+    }
+
+    function initKeyboardShortcuts() {
+        document.addEventListener('keydown', function (e) {
+            var tag = (e.target.tagName || '').toLowerCase();
+            var inInput = (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable);
+
+            if (_mod(e) && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                var saveFn = window.domainSave;
+                if (typeof saveFn === 'function') saveFn();
+            }
+
+            if (_mod(e) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                var searchInput = document.querySelector('.sidebar-nav input[type="search"], .sidebar-nav input[type="text"]');
+                if (searchInput) searchInput.focus();
+            }
+
+            if (!inInput && e.key === '?') {
+                e.preventDefault();
+                _toggleShortcutHelp();
+            }
+
+            if (e.key === 'Escape') {
+                var ol = document.getElementById(_SHORTCUT_OVERLAY_ID);
+                if (ol && !ol.classList.contains('d-none')) {
+                    ol.classList.add('d-none');
+                }
+            }
+        });
+    }
+
     function init() {
         initNavbarActionDelegation();
         initTaskTrackerControls();
         initNotificationControls();
+        initKeyboardShortcuts();
     }
 
     if (document.readyState === 'loading') {

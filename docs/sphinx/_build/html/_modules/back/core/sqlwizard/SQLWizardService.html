@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
-    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
@@ -73,6 +73,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -113,12 +114,13 @@
 <span class="sd">Provides LLM-based SQL generation from natural language prompts,</span>
 <span class="sd">with schema context discovery and SQL validation.</span>
 <span class="sd">&quot;&quot;&quot;</span>
+
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span><span class="p">,</span> <span class="n">InfrastructureError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">OntoBricksError</span><span class="p">,</span> <span class="n">ValidationError</span><span class="p">,</span> <span class="n">InfrastructureError</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">SchemaContext</span>
 
@@ -129,16 +131,25 @@
 <a class="viewcode-back" href="../../../../api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">SQLWizardService</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Service for generating SQL from natural language using LLM endpoints.&quot;&quot;&quot;</span>
-    
+
     <span class="c1"># SQL keywords that indicate non-SELECT statements</span>
     <span class="n">FORBIDDEN_KEYWORDS</span> <span class="o">=</span> <span class="p">[</span>
-        <span class="s1">&#39;CREATE&#39;</span><span class="p">,</span> <span class="s1">&#39;ALTER&#39;</span><span class="p">,</span> <span class="s1">&#39;DROP&#39;</span><span class="p">,</span> <span class="s1">&#39;INSERT&#39;</span><span class="p">,</span> <span class="s1">&#39;UPDATE&#39;</span><span class="p">,</span> <span class="s1">&#39;DELETE&#39;</span><span class="p">,</span> 
-        <span class="s1">&#39;TRUNCATE&#39;</span><span class="p">,</span> <span class="s1">&#39;GRANT&#39;</span><span class="p">,</span> <span class="s1">&#39;REVOKE&#39;</span><span class="p">,</span> <span class="s1">&#39;MERGE&#39;</span><span class="p">,</span> <span class="s1">&#39;REPLACE&#39;</span>
+        <span class="s2">&quot;CREATE&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;ALTER&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;DROP&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;INSERT&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;UPDATE&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;DELETE&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;TRUNCATE&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;GRANT&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;REVOKE&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;MERGE&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;REPLACE&quot;</span><span class="p">,</span>
     <span class="p">]</span>
-    
+
     <span class="c1"># Default query limit</span>
     <span class="n">DEFAULT_LIMIT</span> <span class="o">=</span> <span class="mi">100</span>
-    
+
 <div class="viewcode-block" id="SQLWizardService.__init__">
 <a class="viewcode-back" href="../../../../api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.__init__">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">databricks_client</span><span class="p">):</span>
@@ -146,119 +157,141 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">client</span> <span class="o">=</span> <span class="n">databricks_client</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_schema_cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">SchemaContext</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span></div>
 
-    
+
 <div class="viewcode-block" id="SQLWizardService.get_model_serving_endpoints">
 <a class="viewcode-back" href="../../../../api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.get_model_serving_endpoints">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_model_serving_endpoints</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get list of text-capable model serving endpoints from the workspace.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Returns:</span>
 <span class="sd">            List of dicts with &#39;name&#39; and &#39;state&#39; keys</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
-        
+
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">has_valid_auth</span><span class="p">():</span>
             <span class="k">return</span> <span class="p">[]</span>
-        
+
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">host</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
-            <span class="n">headers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">_get_auth_headers</span><span class="p">()</span>
-            
+            <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">host</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+            <span class="n">headers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">get_auth_headers</span><span class="p">()</span>
+
             <span class="c1"># Use the serving endpoints API</span>
             <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}</span><span class="s2">/api/2.0/serving-endpoints&quot;</span>
-            
+
             <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
             <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
             <span class="n">data</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-            
+
             <span class="n">endpoints</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;endpoints&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;endpoints&quot;</span><span class="p">,</span> <span class="p">[]):</span>
                 <span class="c1"># Filter for endpoints that can handle text/chat completions</span>
                 <span class="c1"># Look for foundation models, external models, or custom models</span>
-                <span class="n">endpoint_type</span> <span class="o">=</span> <span class="n">ep</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;config&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;served_entities&#39;</span><span class="p">,</span> <span class="p">[{}])[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;entity_name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-                
-                <span class="n">endpoints</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                    <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">ep</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span>
-                    <span class="s1">&#39;state&#39;</span><span class="p">:</span> <span class="n">ep</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ready&#39;</span><span class="p">,</span> <span class="s1">&#39;UNKNOWN&#39;</span><span class="p">),</span>
-                    <span class="s1">&#39;endpoint_type&#39;</span><span class="p">:</span> <span class="n">endpoint_type</span>
-                <span class="p">})</span>
-            
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[SQLWizard] Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">endpoints</span><span class="p">)</span><span class="si">}</span><span class="s2"> serving endpoints&quot;</span><span class="p">)</span>
+                <span class="n">endpoint_type</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">ep</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;config&quot;</span><span class="p">,</span> <span class="p">{})</span>
+                    <span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;served_entities&quot;</span><span class="p">,</span> <span class="p">[{}])[</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;entity_name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="p">)</span>
+
+                <span class="n">endpoints</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="p">{</span>
+                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">ep</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                        <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="n">ep</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;state&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ready&quot;</span><span class="p">,</span> <span class="s2">&quot;UNKNOWN&quot;</span><span class="p">),</span>
+                        <span class="s2">&quot;endpoint_type&quot;</span><span class="p">:</span> <span class="n">endpoint_type</span><span class="p">,</span>
+                    <span class="p">}</span>
+                <span class="p">)</span>
+
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] Found </span><span class="si">%d</span><span class="s2"> serving endpoints&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">endpoints</span><span class="p">))</span>
             <span class="k">return</span> <span class="n">endpoints</span>
-            
+
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[SQLWizard] Error fetching serving endpoints: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] Error fetching serving endpoints: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
             <span class="k">return</span> <span class="p">[]</span></div>
 
-    
+
 <div class="viewcode-block" id="SQLWizardService.get_schema_context">
 <a class="viewcode-back" href="../../../../api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.get_schema_context">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_schema_context</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">use_cache</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SchemaContext</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_schema_context</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">use_cache</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SchemaContext</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Collect schema metadata for the specified catalog and schema.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Note: This method is deprecated. Prefer using pre-built schema context with full_name in each table.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Args:</span>
 <span class="sd">            catalog: Unity Catalog catalog name</span>
 <span class="sd">            schema: Schema name</span>
 <span class="sd">            use_cache: Whether to use cached schema context</span>
-<span class="sd">            </span>
+
 <span class="sd">        Returns:</span>
 <span class="sd">            SchemaContext with tables and columns</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">cache_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">catalog</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">schema</span><span class="si">}</span><span class="s2">&quot;</span>
-        
+
         <span class="k">if</span> <span class="n">use_cache</span> <span class="ow">and</span> <span class="n">cache_key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema_cache</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[SQLWizard] Using cached schema context for </span><span class="si">{</span><span class="n">cache_key</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] Using cached schema context for </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">cache_key</span><span class="p">)</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema_cache</span><span class="p">[</span><span class="n">cache_key</span><span class="p">]</span>
-        
+
         <span class="c1"># Get tables in the schema</span>
         <span class="n">tables</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">get_tables</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span>
-        
+
         <span class="n">table_metadata</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">table_name</span> <span class="ow">in</span> <span class="n">tables</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">columns</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">get_table_columns</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span>
                 <span class="n">full_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">catalog</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">schema</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">&quot;</span>
-                <span class="n">table_metadata</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                    <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">table_name</span><span class="p">,</span>
-                    <span class="s1">&#39;full_name&#39;</span><span class="p">:</span> <span class="n">full_name</span><span class="p">,</span>
-                    <span class="s1">&#39;columns&#39;</span><span class="p">:</span> <span class="n">columns</span>
-                <span class="p">})</span>
+                <span class="n">table_metadata</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">table_name</span><span class="p">,</span> <span class="s2">&quot;full_name&quot;</span><span class="p">:</span> <span class="n">full_name</span><span class="p">,</span> <span class="s2">&quot;columns&quot;</span><span class="p">:</span> <span class="n">columns</span><span class="p">}</span>
+                <span class="p">)</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[SQLWizard] Could not get columns for </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;[SQLWizard] Could not get columns for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">e</span>
+                <span class="p">)</span>
                 <span class="n">full_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">catalog</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">schema</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">&quot;</span>
-                <span class="n">table_metadata</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">table_name</span><span class="p">,</span> <span class="s1">&#39;full_name&#39;</span><span class="p">:</span> <span class="n">full_name</span><span class="p">,</span> <span class="s1">&#39;columns&#39;</span><span class="p">:</span> <span class="p">[]})</span>
-        
+                <span class="n">table_metadata</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">table_name</span><span class="p">,</span> <span class="s2">&quot;full_name&quot;</span><span class="p">:</span> <span class="n">full_name</span><span class="p">,</span> <span class="s2">&quot;columns&quot;</span><span class="p">:</span> <span class="p">[]}</span>
+                <span class="p">)</span>
+
         <span class="n">context</span> <span class="o">=</span> <span class="n">SchemaContext</span><span class="p">(</span><span class="n">tables</span><span class="o">=</span><span class="n">table_metadata</span><span class="p">)</span>
-        
+
         <span class="c1"># Cache the result</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_schema_cache</span><span class="p">[</span><span class="n">cache_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">context</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[SQLWizard] Built schema context for </span><span class="si">{</span><span class="n">cache_key</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span><span class="si">}</span><span class="s2"> tables&quot;</span><span class="p">)</span>
-        
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;[SQLWizard] Built schema context for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%d</span><span class="s2"> tables&quot;</span><span class="p">,</span> <span class="n">cache_key</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span>
+        <span class="p">)</span>
+
         <span class="k">return</span> <span class="n">context</span></div>
 
-    
+
 <div class="viewcode-block" id="SQLWizardService.compose_prompt">
 <a class="viewcode-back" href="../../../../api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.compose_prompt">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">compose_prompt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_prompt</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">schema_context</span><span class="p">:</span> <span class="n">SchemaContext</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">mapping_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compose_prompt</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">user_prompt</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">schema_context</span><span class="p">:</span> <span class="n">SchemaContext</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">mapping_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Compose the full prompt for the LLM.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Args:</span>
 <span class="sd">            user_prompt: User&#39;s natural language request</span>
 <span class="sd">            schema_context: Schema context object</span>
 <span class="sd">            limit: Query result limit (default: DEFAULT_LIMIT). Ignored for entity/relationship mapping types.</span>
 <span class="sd">            mapping_type: Type of mapping (&#39;entity&#39;, &#39;relationship&#39;, or None for general)</span>
-<span class="sd">            </span>
+
 <span class="sd">        Returns:</span>
 <span class="sd">            Dict with &#39;system&#39; and &#39;user&#39; messages</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] compose_prompt: mapping_type=</span><span class="si">%s</span><span class="s2">, prompt=</span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span> <span class="n">mapping_type</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">user_prompt</span><span class="p">))</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;[SQLWizard] compose_prompt: mapping_type=</span><span class="si">%s</span><span class="s2">, prompt=</span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span>
+            <span class="n">mapping_type</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">user_prompt</span><span class="p">),</span>
+        <span class="p">)</span>
         <span class="k">if</span> <span class="n">limit</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">limit</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">DEFAULT_LIMIT</span>
-        
-        <span class="n">is_mapping</span> <span class="o">=</span> <span class="n">mapping_type</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;entity&#39;</span><span class="p">,</span> <span class="s1">&#39;relationship&#39;</span><span class="p">)</span>
-        
+
+        <span class="n">is_mapping</span> <span class="o">=</span> <span class="n">mapping_type</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;entity&quot;</span><span class="p">,</span> <span class="s2">&quot;relationship&quot;</span><span class="p">)</span>
+
         <span class="c1"># Base system instruction (general / ad-hoc queries only)</span>
         <span class="n">system_instruction</span> <span class="o">=</span> <span class="p">(</span>
             <span class="s2">&quot;You are a text-to-SQL assistant for Databricks SQL. &quot;</span>
@@ -267,9 +300,9 @@
             <span class="s2">&quot;Prefer explicit aliases. &quot;</span>
             <span class="sa">f</span><span class="s2">&quot;Always include LIMIT </span><span class="si">{</span><span class="n">limit</span><span class="si">}</span><span class="s2"> unless the user explicitly asks otherwise.&quot;</span>
         <span class="p">)</span>
-        
+
         <span class="c1"># Add mapping-type-specific instructions</span>
-        <span class="k">if</span> <span class="n">mapping_type</span> <span class="o">==</span> <span class="s1">&#39;entity&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">mapping_type</span> <span class="o">==</span> <span class="s2">&quot;entity&quot;</span><span class="p">:</span>
             <span class="n">system_instruction</span> <span class="o">=</span> <span class="p">(</span>
                 <span class="s2">&quot;You are a text-to-SQL assistant for Databricks SQL, specialized for entity data extraction. &quot;</span>
                 <span class="s2">&quot;Produce ONLY a single SELECT statement valid for Databricks SQL. &quot;</span>
@@ -287,7 +320,7 @@
                 <span class="s2">&quot;7. Add WHERE IS NOT NULL on the identifier column to filter out null keys.</span><span class="se">\n</span><span class="s2">&quot;</span>
                 <span class="s2">&quot;8. Do NOT add any LIMIT clause — the query must return ALL rows.&quot;</span>
             <span class="p">)</span>
-        <span class="k">elif</span> <span class="n">mapping_type</span> <span class="o">==</span> <span class="s1">&#39;relationship&#39;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">mapping_type</span> <span class="o">==</span> <span class="s2">&quot;relationship&quot;</span><span class="p">:</span>
             <span class="n">system_instruction</span> <span class="o">=</span> <span class="p">(</span>
                 <span class="s2">&quot;You are a text-to-SQL assistant for Databricks SQL, specialized for relationship/link data extraction. &quot;</span>
                 <span class="s2">&quot;Produce ONLY a single SELECT statement valid for Databricks SQL. &quot;</span>
@@ -302,11 +335,11 @@
                 <span class="s2">&quot;7. Keep the query as simple as possible - minimal joins, no unnecessary complexity.</span><span class="se">\n</span><span class="s2">&quot;</span>
                 <span class="s2">&quot;8. Do NOT add any LIMIT clause — the query must return ALL rows.&quot;</span>
             <span class="p">)</span>
-        
+
         <span class="n">rendered_schema</span> <span class="o">=</span> <span class="n">schema_context</span><span class="o">.</span><span class="n">to_yaml_like</span><span class="p">()</span>
-        
+
         <span class="c1"># Build user message</span>
-        <span class="k">if</span> <span class="n">mapping_type</span> <span class="o">==</span> <span class="s1">&#39;entity&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">mapping_type</span> <span class="o">==</span> <span class="s2">&quot;entity&quot;</span><span class="p">:</span>
             <span class="n">user_message</span> <span class="o">=</span> <span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;Available objects:</span><span class="se">\n</span><span class="si">{</span><span class="n">rendered_schema</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">&quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;Task: </span><span class="si">{</span><span class="n">user_prompt</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">&quot;</span>
@@ -319,7 +352,7 @@
                 <span class="sa">f</span><span class="s2">&quot;- Do NOT add ORDER BY</span><span class="se">\n</span><span class="s2">&quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;- Do NOT add LIMIT — return all rows&quot;</span>
             <span class="p">)</span>
-        <span class="k">elif</span> <span class="n">mapping_type</span> <span class="o">==</span> <span class="s1">&#39;relationship&#39;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">mapping_type</span> <span class="o">==</span> <span class="s2">&quot;relationship&quot;</span><span class="p">:</span>
             <span class="n">user_message</span> <span class="o">=</span> <span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;Available objects:</span><span class="se">\n</span><span class="si">{</span><span class="n">rendered_schema</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">&quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;Task: </span><span class="si">{</span><span class="n">user_prompt</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">&quot;</span>
@@ -338,90 +371,123 @@
                 <span class="sa">f</span><span class="s2">&quot;Constraints: Use only listed objects; ISO date literals; &quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;avoid full scans; add WHERE predicates where appropriate; LIMIT </span><span class="si">{</span><span class="n">limit</span><span class="si">}</span><span class="s2">.&quot;</span>
             <span class="p">)</span>
-        
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] compose_prompt: system (</span><span class="si">%d</span><span class="s2"> chars): </span><span class="si">%.200s</span><span class="s2">…&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">system_instruction</span><span class="p">),</span> <span class="n">system_instruction</span><span class="p">)</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] compose_prompt: user (</span><span class="si">%d</span><span class="s2"> chars): </span><span class="si">%.300s</span><span class="s2">…&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">user_message</span><span class="p">),</span> <span class="n">user_message</span><span class="p">)</span>
-        <span class="k">return</span> <span class="p">{</span>
-            <span class="s1">&#39;system&#39;</span><span class="p">:</span> <span class="n">system_instruction</span><span class="p">,</span>
-            <span class="s1">&#39;user&#39;</span><span class="p">:</span> <span class="n">user_message</span>
-        <span class="p">}</span></div>
 
-    
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">&quot;[SQLWizard] compose_prompt: system (</span><span class="si">%d</span><span class="s2"> chars): </span><span class="si">%.200s</span><span class="s2">…&quot;</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">system_instruction</span><span class="p">),</span>
+            <span class="n">system_instruction</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">&quot;[SQLWizard] compose_prompt: user (</span><span class="si">%d</span><span class="s2"> chars): </span><span class="si">%.300s</span><span class="s2">…&quot;</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">user_message</span><span class="p">),</span>
+            <span class="n">user_message</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;system&quot;</span><span class="p">:</span> <span class="n">system_instruction</span><span class="p">,</span> <span class="s2">&quot;user&quot;</span><span class="p">:</span> <span class="n">user_message</span><span class="p">}</span></div>
+
+
 <div class="viewcode-block" id="SQLWizardService.call_llm_endpoint">
 <a class="viewcode-back" href="../../../../api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.call_llm_endpoint">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">call_llm_endpoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">endpoint_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">prompt</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">60</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">call_llm_endpoint</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">endpoint_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">prompt</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">60</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Call the LLM endpoint and get the generated SQL.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Args:</span>
 <span class="sd">            endpoint_name: Name of the model serving endpoint</span>
 <span class="sd">            prompt: Dict with &#39;system&#39; and &#39;user&#39; messages</span>
 <span class="sd">            timeout: Request timeout in seconds</span>
-<span class="sd">            </span>
+
 <span class="sd">        Returns:</span>
 <span class="sd">            Generated SQL text</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-        
+
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">has_valid_auth</span><span class="p">():</span>
             <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Databricks credentials not configured&quot;</span><span class="p">)</span>
-        
-        <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">host</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
-        <span class="n">headers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">_get_auth_headers</span><span class="p">()</span>
-        
+
+        <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">host</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+        <span class="n">headers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">get_auth_headers</span><span class="p">()</span>
+
         <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}</span><span class="s2">/serving-endpoints/</span><span class="si">{</span><span class="n">endpoint_name</span><span class="si">}</span><span class="s2">/invocations&quot;</span>
-        
+
         <span class="n">payload</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s2">&quot;messages&quot;</span><span class="p">:</span> <span class="p">[</span>
-                <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">prompt</span><span class="p">[</span><span class="s1">&#39;system&#39;</span><span class="p">]},</span>
-                <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">prompt</span><span class="p">[</span><span class="s1">&#39;user&#39;</span><span class="p">]}</span>
+                <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">prompt</span><span class="p">[</span><span class="s2">&quot;system&quot;</span><span class="p">]},</span>
+                <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">prompt</span><span class="p">[</span><span class="s2">&quot;user&quot;</span><span class="p">]},</span>
             <span class="p">],</span>
             <span class="s2">&quot;max_tokens&quot;</span><span class="p">:</span> <span class="mi">1024</span><span class="p">,</span>
-            <span class="s2">&quot;temperature&quot;</span><span class="p">:</span> <span class="mf">0.1</span>
+            <span class="s2">&quot;temperature&quot;</span><span class="p">:</span> <span class="mf">0.1</span><span class="p">,</span>
         <span class="p">}</span>
-        
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] call_llm_endpoint: POST </span><span class="si">%s</span><span class="s2"> (timeout=</span><span class="si">%d</span><span class="s2">s)&quot;</span><span class="p">,</span> <span class="n">endpoint_name</span><span class="p">,</span> <span class="n">timeout</span><span class="p">)</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;[SQLWizard] call_llm_endpoint: POST </span><span class="si">%s</span><span class="s2"> (timeout=</span><span class="si">%d</span><span class="s2">s)&quot;</span><span class="p">,</span>
+            <span class="n">endpoint_name</span><span class="p">,</span>
+            <span class="n">timeout</span><span class="p">,</span>
+        <span class="p">)</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] call_llm_endpoint: url=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">url</span><span class="p">)</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
             <span class="s2">&quot;[SQLWizard] call_llm_endpoint: payload system=</span><span class="si">%d</span><span class="s2"> chars, user=</span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span>
-            <span class="nb">len</span><span class="p">(</span><span class="n">prompt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;system&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)),</span> <span class="nb">len</span><span class="p">(</span><span class="n">prompt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;user&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)),</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">prompt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">prompt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
         <span class="p">)</span>
-        
+
         <span class="k">try</span><span class="p">:</span>
             <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-            <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span>
+                <span class="n">url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span>
+            <span class="p">)</span>
             <span class="n">elapsed_ms</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                 <span class="s2">&quot;[SQLWizard] call_llm_endpoint: response status=</span><span class="si">%d</span><span class="s2">, </span><span class="si">%d</span><span class="s2"> bytes in </span><span class="si">%d</span><span class="s2">ms&quot;</span><span class="p">,</span>
-                <span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">content</span><span class="p">),</span> <span class="n">elapsed_ms</span><span class="p">,</span>
+                <span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">content</span><span class="p">),</span>
+                <span class="n">elapsed_ms</span><span class="p">,</span>
             <span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] call_llm_endpoint: response body preview: </span><span class="si">%.500s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;[SQLWizard] call_llm_endpoint: response body preview: </span><span class="si">%.500s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="p">,</span>
+            <span class="p">)</span>
             <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
-            
+
             <span class="n">result</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-            
+
             <span class="c1"># Extract content from response</span>
-            <span class="k">if</span> <span class="s1">&#39;choices&#39;</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
-                <span class="n">content</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s1">&#39;choices&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;message&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;content&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] call_llm_endpoint: extracted from choices — </span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">content</span><span class="p">))</span>
-            <span class="k">elif</span> <span class="s1">&#39;predictions&#39;</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
-                <span class="n">content</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s1">&#39;predictions&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">result</span><span class="p">[</span><span class="s1">&#39;predictions&#39;</span><span class="p">]</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] call_llm_endpoint: extracted from predictions — </span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">content</span><span class="p">))</span>
+            <span class="k">if</span> <span class="s2">&quot;choices&quot;</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+                <span class="n">content</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;choices&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;message&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;content&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                    <span class="s2">&quot;[SQLWizard] call_llm_endpoint: extracted from choices — </span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span>
+                    <span class="nb">len</span><span class="p">(</span><span class="n">content</span><span class="p">),</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="s2">&quot;predictions&quot;</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+                <span class="n">content</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;predictions&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;predictions&quot;</span><span class="p">]</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                    <span class="s2">&quot;[SQLWizard] call_llm_endpoint: extracted from predictions — </span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span>
+                    <span class="nb">len</span><span class="p">(</span><span class="n">content</span><span class="p">),</span>
+                <span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">content</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] call_llm_endpoint: unexpected response format, keys=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
-            
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;[SQLWizard] call_llm_endpoint: unexpected response format, keys=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="nb">list</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span>
+                <span class="p">)</span>
+
             <span class="c1"># Log token usage if present</span>
-            <span class="n">usage</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;usage&#39;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="n">usage</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;usage&quot;</span><span class="p">,</span> <span class="p">{})</span>
             <span class="k">if</span> <span class="n">usage</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                     <span class="s2">&quot;[SQLWizard] call_llm_endpoint: tokens prompt=</span><span class="si">%d</span><span class="s2">, completion=</span><span class="si">%d</span><span class="s2">, total=</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">usage</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;prompt_tokens&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">usage</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;completion_tokens&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">usage</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;total_tokens&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+                    <span class="n">usage</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;prompt_tokens&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+                    <span class="n">usage</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;completion_tokens&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+                    <span class="n">usage</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;total_tokens&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
                 <span class="p">)</span>
-            
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] call_llm_endpoint: LLM returned </span><span class="si">%d</span><span class="s2"> chars of content&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">content</span><span class="p">))</span>
+
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;[SQLWizard] call_llm_endpoint: LLM returned </span><span class="si">%d</span><span class="s2"> chars of content&quot;</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">content</span><span class="p">),</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="n">content</span>
-            
+
         <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">Timeout</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] call_llm_endpoint: timeout after </span><span class="si">%d</span><span class="s2">s&quot;</span><span class="p">,</span> <span class="n">timeout</span><span class="p">)</span>
             <span class="k">raise</span> <span class="ne">TimeoutError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;LLM endpoint call timed out after </span><span class="si">{</span><span class="n">timeout</span><span class="si">}</span><span class="s2">s&quot;</span><span class="p">)</span>
@@ -431,133 +497,172 @@
                 <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;?&quot;</span><span class="p">,</span>
                 <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="p">[:</span><span class="mi">300</span><span class="p">]</span> <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;N/A&quot;</span><span class="p">,</span>
             <span class="p">)</span>
-            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;LLM endpoint error: </span><span class="si">{</span><span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;LLM endpoint error&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
 
-    
+
 <div class="viewcode-block" id="SQLWizardService.extract_sql">
 <a class="viewcode-back" href="../../../../api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.extract_sql">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">extract_sql</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">llm_output</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract a single SQL statement from the LLM output.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Handles code fences, prose, and multiple statements.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Args:</span>
 <span class="sd">            llm_output: Raw output from the LLM</span>
-<span class="sd">            </span>
+
 <span class="sd">        Returns:</span>
 <span class="sd">            Cleaned SQL statement</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] extract_sql: input </span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">llm_output</span><span class="p">))</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] extract_sql: raw input: </span><span class="si">%.300s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">llm_output</span><span class="p">)</span>
         <span class="n">text</span> <span class="o">=</span> <span class="n">llm_output</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-        
+
         <span class="c1"># Extract from code fences</span>
-        <span class="n">fence_pattern</span> <span class="o">=</span> <span class="sa">r</span><span class="s1">&#39;```(?:sql)?\s*([\s\S]*?)```&#39;</span>
+        <span class="n">fence_pattern</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">&quot;```(?:sql)?\s*([\s\S]*?)```&quot;</span>
         <span class="n">matches</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">fence_pattern</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">matches</span><span class="p">:</span>
             <span class="n">text</span> <span class="o">=</span> <span class="n">matches</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] extract_sql: extracted from code fence (</span><span class="si">%d</span><span class="s2"> chars)&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">))</span>
-        
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;[SQLWizard] extract_sql: extracted from code fence (</span><span class="si">%d</span><span class="s2"> chars)&quot;</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">),</span>
+            <span class="p">)</span>
+
         <span class="c1"># If still has prose, extract the SELECT</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">text</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;SELECT&#39;</span><span class="p">):</span>
-            <span class="n">select_pattern</span> <span class="o">=</span> <span class="sa">r</span><span class="s1">&#39;(SELECT[\s\S]*?)(?:;|$)&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">text</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;SELECT&quot;</span><span class="p">):</span>
+            <span class="n">select_pattern</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">&quot;(SELECT[\s\S]*?)(?:;|$)&quot;</span>
             <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">select_pattern</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
                 <span class="n">text</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] extract_sql: extracted SELECT from prose (</span><span class="si">%d</span><span class="s2"> chars)&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">))</span>
-        
-        <span class="n">text</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-        
-        <span class="k">if</span> <span class="s1">&#39;;&#39;</span> <span class="ow">in</span> <span class="n">text</span><span class="p">:</span>
-            <span class="n">text</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;;&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] extract_sql: took first statement before semicolon&quot;</span><span class="p">)</span>
-        
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] extract_sql: output </span><span class="si">%d</span><span class="s2"> chars, starts_with_SELECT=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">),</span> <span class="n">text</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;SELECT&#39;</span><span class="p">))</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                    <span class="s2">&quot;[SQLWizard] extract_sql: extracted SELECT from prose (</span><span class="si">%d</span><span class="s2"> chars)&quot;</span><span class="p">,</span>
+                    <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">),</span>
+                <span class="p">)</span>
+
+        <span class="n">text</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="s2">&quot;;&quot;</span> <span class="ow">in</span> <span class="n">text</span><span class="p">:</span>
+            <span class="n">text</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;;&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;[SQLWizard] extract_sql: took first statement before semicolon&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;[SQLWizard] extract_sql: output </span><span class="si">%d</span><span class="s2"> chars, starts_with_SELECT=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">),</span>
+            <span class="n">text</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;SELECT&quot;</span><span class="p">),</span>
+        <span class="p">)</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] extract_sql: result: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">text</span></div>
 
-    
+
 <div class="viewcode-block" id="SQLWizardService.validate_sql_static">
 <a class="viewcode-back" href="../../../../api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.validate_sql_static">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">validate_sql_static</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">schema_context</span><span class="p">:</span> <span class="n">SchemaContext</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">mapping_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_sql_static</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">schema_context</span><span class="p">:</span> <span class="n">SchemaContext</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">mapping_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Perform static validation on the SQL statement.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Args:</span>
 <span class="sd">            sql: SQL statement to validate</span>
 <span class="sd">            schema_context: Schema context for table whitelist</span>
 <span class="sd">            limit: Expected LIMIT value (ignored for entity/relationship mapping types)</span>
 <span class="sd">            mapping_type: Type of mapping (&#39;entity&#39;, &#39;relationship&#39;, or None for general)</span>
-<span class="sd">            </span>
+
 <span class="sd">        Returns:</span>
 <span class="sd">            Tuple of (is_valid, message, corrected_sql)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] validate_sql_static: mapping_type=</span><span class="si">%s</span><span class="s2">, sql=</span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span> <span class="n">mapping_type</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">sql</span><span class="p">))</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;[SQLWizard] validate_sql_static: mapping_type=</span><span class="si">%s</span><span class="s2">, sql=</span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span>
+            <span class="n">mapping_type</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">sql</span><span class="p">),</span>
+        <span class="p">)</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] validate_sql_static: sql=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">sql</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">limit</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">limit</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">DEFAULT_LIMIT</span>
-        
-        <span class="n">is_mapping</span> <span class="o">=</span> <span class="n">mapping_type</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;entity&#39;</span><span class="p">,</span> <span class="s1">&#39;relationship&#39;</span><span class="p">)</span>
-        
+
+        <span class="n">is_mapping</span> <span class="o">=</span> <span class="n">mapping_type</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;entity&quot;</span><span class="p">,</span> <span class="s2">&quot;relationship&quot;</span><span class="p">)</span>
+
         <span class="n">corrected_sql</span> <span class="o">=</span> <span class="n">sql</span>
         <span class="n">issues</span> <span class="o">=</span> <span class="p">[]</span>
-        
+
         <span class="n">sql_upper</span> <span class="o">=</span> <span class="n">sql</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">sql_upper</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;SELECT&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">sql_upper</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;SELECT&quot;</span><span class="p">):</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] validate_sql_static: not a SELECT statement&quot;</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Query must be a SELECT statement&quot;</span><span class="p">,</span> <span class="n">sql</span>
-        
+
         <span class="c1"># Check for forbidden keywords</span>
         <span class="k">for</span> <span class="n">keyword</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">FORBIDDEN_KEYWORDS</span><span class="p">:</span>
-            <span class="n">pattern</span> <span class="o">=</span> <span class="sa">rf</span><span class="s1">&#39;\b</span><span class="si">{</span><span class="n">keyword</span><span class="si">}</span><span class="s1">\b&#39;</span>
+            <span class="n">pattern</span> <span class="o">=</span> <span class="sa">rf</span><span class="s2">&quot;\b</span><span class="si">{</span><span class="n">keyword</span><span class="si">}</span><span class="s2">\b&quot;</span>
             <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">sql_upper</span><span class="p">):</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] validate_sql_static: forbidden keyword &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">keyword</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;[SQLWizard] validate_sql_static: forbidden keyword &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">keyword</span>
+                <span class="p">)</span>
                 <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Query contains forbidden keyword: </span><span class="si">{</span><span class="n">keyword</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">sql</span>
-        
+
         <span class="c1"># Build table whitelist</span>
         <span class="n">valid_tables</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
         <span class="k">for</span> <span class="n">table</span> <span class="ow">in</span> <span class="n">schema_context</span><span class="o">.</span><span class="n">tables</span><span class="p">:</span>
-            <span class="n">table_name</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-            <span class="n">full_name</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;full_name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="n">table_name</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="n">full_name</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;full_name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">table_name</span><span class="p">:</span>
                 <span class="n">valid_tables</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">table_name</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
             <span class="k">if</span> <span class="n">full_name</span><span class="p">:</span>
                 <span class="n">valid_tables</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">full_name</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
-                <span class="n">parts</span> <span class="o">=</span> <span class="n">full_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)</span>
+                <span class="n">parts</span> <span class="o">=</span> <span class="n">full_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span>
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
                     <span class="n">valid_tables</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">parts</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
                     <span class="n">valid_tables</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] validate_sql_static: whitelist has </span><span class="si">%d</span><span class="s2"> table name variants&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">valid_tables</span><span class="p">))</span>
-        
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">&quot;[SQLWizard] validate_sql_static: whitelist has </span><span class="si">%d</span><span class="s2"> table name variants&quot;</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">valid_tables</span><span class="p">),</span>
+        <span class="p">)</span>
+
         <span class="c1"># Extract table references</span>
-        <span class="n">from_pattern</span> <span class="o">=</span> <span class="sa">r</span><span class="s1">&#39;\b(?:FROM|JOIN)\s+([^\s,\(\)]+)&#39;</span>
+        <span class="n">from_pattern</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">&quot;\b(?:FROM|JOIN)\s+([^\s,\(\)]+)&quot;</span>
         <span class="n">table_refs</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">from_pattern</span><span class="p">,</span> <span class="n">sql</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] validate_sql_static: found table refs: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">table_refs</span><span class="p">)</span>
-        
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">&quot;[SQLWizard] validate_sql_static: found table refs: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">table_refs</span>
+        <span class="p">)</span>
+
         <span class="k">for</span> <span class="n">ref</span> <span class="ow">in</span> <span class="n">table_refs</span><span class="p">:</span>
             <span class="n">table_ref</span> <span class="o">=</span> <span class="n">ref</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;`&quot;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
             <span class="k">if</span> <span class="n">table_ref</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">valid_tables</span><span class="p">:</span>
                 <span class="n">issues</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Table &#39;</span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s2">&#39; not in schema context&quot;</span><span class="p">)</span>
-        
+
         <span class="k">if</span> <span class="n">issues</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] validate_sql_static: FAILED — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">issues</span><span class="p">))</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;[SQLWizard] validate_sql_static: FAILED — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">issues</span><span class="p">)</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">issues</span><span class="p">),</span> <span class="n">sql</span>
-        
+
         <span class="k">if</span> <span class="n">is_mapping</span><span class="p">:</span>
-            <span class="n">corrected_sql</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;\s+LIMIT\s+\d+\s*$&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">corrected_sql</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-            <span class="n">corrected_sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_deduplicate_select_columns</span><span class="p">(</span><span class="n">corrected_sql</span><span class="p">,</span> <span class="n">mapping_type</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] validate_sql_static: mapping mode — stripped LIMIT, deduplicated columns&quot;</span><span class="p">)</span>
+            <span class="n">corrected_sql</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span>
+                <span class="sa">r</span><span class="s2">&quot;\s+LIMIT\s+\d+\s*$&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">corrected_sql</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="n">corrected_sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_deduplicate_select_columns</span><span class="p">(</span>
+                <span class="n">corrected_sql</span><span class="p">,</span> <span class="n">mapping_type</span>
+            <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;[SQLWizard] validate_sql_static: mapping mode — stripped LIMIT, deduplicated columns&quot;</span>
+            <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">if</span> <span class="s1">&#39;LIMIT&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sql_upper</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s2">&quot;LIMIT&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sql_upper</span><span class="p">:</span>
                 <span class="n">corrected_sql</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">sql</span><span class="si">}</span><span class="s2"> LIMIT </span><span class="si">{</span><span class="n">limit</span><span class="si">}</span><span class="s2">&quot;</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] validate_sql_static: added LIMIT </span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">limit</span><span class="p">)</span>
-        
+
         <span class="k">if</span> <span class="n">corrected_sql</span> <span class="o">!=</span> <span class="n">sql</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] validate_sql_static: corrected SQL: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">corrected_sql</span><span class="p">)</span>
-        
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;[SQLWizard] validate_sql_static: corrected SQL: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">corrected_sql</span>
+            <span class="p">)</span>
+
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] validate_sql_static: PASSED&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;Validation passed&quot;</span><span class="p">,</span> <span class="n">corrected_sql</span></div>
 
-    
+
     <span class="c1"># ------------------------------------------------------------------</span>
     <span class="c1"># Column deduplication / alias enforcement for mapping queries</span>
     <span class="c1"># ------------------------------------------------------------------</span>
@@ -565,19 +670,19 @@
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_parse_select_columns</span><span class="p">(</span><span class="n">sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract the raw SELECT column list string from a SQL statement.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Returns (select_part, rest) where *select_part* is the text between</span>
 <span class="sd">        SELECT and FROM (respecting parenthesised sub-expressions) and *rest*</span>
 <span class="sd">        is everything from FROM onwards.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">upper</span> <span class="o">=</span> <span class="n">sql</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
         <span class="c1"># Skip past SELECT [DISTINCT]</span>
-        <span class="n">idx</span> <span class="o">=</span> <span class="n">upper</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s1">&#39;SELECT&#39;</span><span class="p">)</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">upper</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;SELECT&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">idx</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="n">sql</span>
-        <span class="n">start</span> <span class="o">=</span> <span class="n">idx</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="s1">&#39;SELECT&#39;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">upper</span><span class="p">[</span><span class="n">start</span><span class="p">:]</span><span class="o">.</span><span class="n">lstrip</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;DISTINCT&#39;</span><span class="p">):</span>
-            <span class="n">start</span> <span class="o">=</span> <span class="n">upper</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="s1">&#39;DISTINCT&#39;</span><span class="p">,</span> <span class="n">start</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="s1">&#39;DISTINCT&#39;</span><span class="p">)</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">idx</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="s2">&quot;SELECT&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">upper</span><span class="p">[</span><span class="n">start</span><span class="p">:]</span><span class="o">.</span><span class="n">lstrip</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;DISTINCT&quot;</span><span class="p">):</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="n">upper</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="s2">&quot;DISTINCT&quot;</span><span class="p">,</span> <span class="n">start</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="s2">&quot;DISTINCT&quot;</span><span class="p">)</span>
 
         <span class="c1"># Walk forward to find the top-level FROM (not inside parentheses)</span>
         <span class="n">depth</span> <span class="o">=</span> <span class="mi">0</span>
@@ -585,11 +690,15 @@
         <span class="n">from_pos</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">while</span> <span class="n">pos</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">sql</span><span class="p">):</span>
             <span class="n">ch</span> <span class="o">=</span> <span class="n">sql</span><span class="p">[</span><span class="n">pos</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">ch</span> <span class="o">==</span> <span class="s1">&#39;(&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">ch</span> <span class="o">==</span> <span class="s2">&quot;(&quot;</span><span class="p">:</span>
                 <span class="n">depth</span> <span class="o">+=</span> <span class="mi">1</span>
-            <span class="k">elif</span> <span class="n">ch</span> <span class="o">==</span> <span class="s1">&#39;)&#39;</span><span class="p">:</span>
+            <span class="k">elif</span> <span class="n">ch</span> <span class="o">==</span> <span class="s2">&quot;)&quot;</span><span class="p">:</span>
                 <span class="n">depth</span> <span class="o">-=</span> <span class="mi">1</span>
-            <span class="k">elif</span> <span class="n">depth</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">upper</span><span class="p">[</span><span class="n">pos</span><span class="p">:</span><span class="n">pos</span> <span class="o">+</span> <span class="mi">5</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39; FROM&#39;</span> <span class="ow">and</span> <span class="p">(</span><span class="n">pos</span> <span class="o">+</span> <span class="mi">5</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">sql</span><span class="p">[</span><span class="n">pos</span> <span class="o">+</span> <span class="mi">5</span><span class="p">]</span><span class="o">.</span><span class="n">isalnum</span><span class="p">()):</span>
+            <span class="k">elif</span> <span class="p">(</span>
+                <span class="n">depth</span> <span class="o">==</span> <span class="mi">0</span>
+                <span class="ow">and</span> <span class="n">upper</span><span class="p">[</span><span class="n">pos</span> <span class="p">:</span> <span class="n">pos</span> <span class="o">+</span> <span class="mi">5</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot; FROM&quot;</span>
+                <span class="ow">and</span> <span class="p">(</span><span class="n">pos</span> <span class="o">+</span> <span class="mi">5</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">sql</span><span class="p">[</span><span class="n">pos</span> <span class="o">+</span> <span class="mi">5</span><span class="p">]</span><span class="o">.</span><span class="n">isalnum</span><span class="p">())</span>
+            <span class="p">):</span>
                 <span class="n">from_pos</span> <span class="o">=</span> <span class="n">pos</span>
                 <span class="k">break</span>
             <span class="n">pos</span> <span class="o">+=</span> <span class="mi">1</span>
@@ -609,25 +718,25 @@
         <span class="n">depth</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="n">current</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="n">select_part</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">ch</span> <span class="o">==</span> <span class="s1">&#39;(&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">ch</span> <span class="o">==</span> <span class="s2">&quot;(&quot;</span><span class="p">:</span>
                 <span class="n">depth</span> <span class="o">+=</span> <span class="mi">1</span>
                 <span class="n">current</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="n">ch</span> <span class="o">==</span> <span class="s1">&#39;)&#39;</span><span class="p">:</span>
+            <span class="k">elif</span> <span class="n">ch</span> <span class="o">==</span> <span class="s2">&quot;)&quot;</span><span class="p">:</span>
                 <span class="n">depth</span> <span class="o">-=</span> <span class="mi">1</span>
                 <span class="n">current</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="n">ch</span> <span class="o">==</span> <span class="s1">&#39;,&#39;</span> <span class="ow">and</span> <span class="n">depth</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-                <span class="n">cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">current</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+            <span class="k">elif</span> <span class="n">ch</span> <span class="o">==</span> <span class="s2">&quot;,&quot;</span> <span class="ow">and</span> <span class="n">depth</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">current</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
                 <span class="n">current</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">current</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">current</span><span class="p">:</span>
-            <span class="n">cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">current</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+            <span class="n">cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">current</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
         <span class="k">return</span> <span class="n">cols</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_effective_name</span><span class="p">(</span><span class="n">col_expr</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the effective output name of a column expression.</span>
-<span class="sd">        </span>
+
 <span class="sd">        If it has an alias (… AS foo), return the alias.</span>
 <span class="sd">        Otherwise return the last dot-segment or the whole expression.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -636,12 +745,12 @@
         <span class="k">if</span> <span class="n">m</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
         <span class="c1"># Bare column — possibly table.column</span>
-        <span class="n">token</span> <span class="o">=</span> <span class="n">col_expr</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;`&quot;&#39;</span><span class="p">)</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">col_expr</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;`&quot;&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">token</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_deduplicate_select_columns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">mapping_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Ensure every column in the SELECT list has a unique output name.</span>
-<span class="sd">        </span>
+
 <span class="sd">        - For *entity* queries: guarantees the first column is aliased AS ID</span>
 <span class="sd">          and the second AS Label.</span>
 <span class="sd">        - For *relationship* queries: guarantees the first column is aliased</span>
@@ -660,10 +769,10 @@
             <span class="k">return</span> <span class="n">sql</span>
 
         <span class="c1"># --- Phase 1: enforce mandatory aliases on positional columns ------</span>
-        <span class="k">if</span> <span class="n">mapping_type</span> <span class="o">==</span> <span class="s1">&#39;entity&#39;</span><span class="p">:</span>
-            <span class="n">required</span> <span class="o">=</span> <span class="p">{</span><span class="mi">0</span><span class="p">:</span> <span class="s1">&#39;ID&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">:</span> <span class="s1">&#39;Label&#39;</span><span class="p">}</span>
-        <span class="k">elif</span> <span class="n">mapping_type</span> <span class="o">==</span> <span class="s1">&#39;relationship&#39;</span><span class="p">:</span>
-            <span class="n">required</span> <span class="o">=</span> <span class="p">{</span><span class="mi">0</span><span class="p">:</span> <span class="s1">&#39;source_id&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">:</span> <span class="s1">&#39;target_id&#39;</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">mapping_type</span> <span class="o">==</span> <span class="s2">&quot;entity&quot;</span><span class="p">:</span>
+            <span class="n">required</span> <span class="o">=</span> <span class="p">{</span><span class="mi">0</span><span class="p">:</span> <span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;Label&quot;</span><span class="p">}</span>
+        <span class="k">elif</span> <span class="n">mapping_type</span> <span class="o">==</span> <span class="s2">&quot;relationship&quot;</span><span class="p">:</span>
+            <span class="n">required</span> <span class="o">=</span> <span class="p">{</span><span class="mi">0</span><span class="p">:</span> <span class="s2">&quot;source_id&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;target_id&quot;</span><span class="p">}</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">required</span> <span class="o">=</span> <span class="p">{}</span>
 
@@ -673,7 +782,9 @@
                 <span class="n">eff</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_effective_name</span><span class="p">(</span><span class="n">col</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">eff</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="o">!=</span> <span class="n">alias</span><span class="o">.</span><span class="n">upper</span><span class="p">():</span>
                     <span class="c1"># Strip any existing alias first</span>
-                    <span class="n">col_stripped</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;\s+AS\s+\S+\s*$&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">col</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                    <span class="n">col_stripped</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span>
+                        <span class="sa">r</span><span class="s2">&quot;\s+AS\s+\S+\s*$&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">col</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span>
+                    <span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
                     <span class="n">columns</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">col_stripped</span><span class="si">}</span><span class="s2"> AS </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2">&quot;</span>
 
         <span class="c1"># --- Phase 2: deduplicate names ------------------------------------</span>
@@ -684,55 +795,61 @@
             <span class="k">if</span> <span class="n">eff</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
                 <span class="n">seen</span><span class="p">[</span><span class="n">eff</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
                 <span class="n">new_alias</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_effective_name</span><span class="p">(</span><span class="n">col</span><span class="p">)</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">seen</span><span class="p">[</span><span class="n">eff</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
-                <span class="n">col_stripped</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;\s+AS\s+\S+\s*$&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">col</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                <span class="n">col_stripped</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span>
+                    <span class="sa">r</span><span class="s2">&quot;\s+AS\s+\S+\s*$&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">col</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span>
+                <span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
                 <span class="n">deduped</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">col_stripped</span><span class="si">}</span><span class="s2"> AS </span><span class="si">{</span><span class="n">new_alias</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">seen</span><span class="p">[</span><span class="n">eff</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
                 <span class="n">deduped</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">col</span><span class="p">)</span>
 
-        <span class="n">new_select</span> <span class="o">=</span> <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">deduped</span><span class="p">)</span>
+        <span class="n">new_select</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">deduped</span><span class="p">)</span>
         <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">new_select</span><span class="si">}{</span><span class="n">rest</span><span class="si">}</span><span class="s2">&quot;</span>
 
 <div class="viewcode-block" id="SQLWizardService.validate_sql_explain">
 <a class="viewcode-back" href="../../../../api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.validate_sql_explain">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">validate_sql_explain</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_sql_explain</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Run EXPLAIN on the SQL to validate the query plan.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Args:</span>
 <span class="sd">            sql: SQL statement to explain</span>
 <span class="sd">            timeout: Query timeout in seconds</span>
-<span class="sd">            </span>
+
 <span class="sd">        Returns:</span>
 <span class="sd">            Tuple of (is_valid, message, plan_info)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">explain_query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;EXPLAIN </span><span class="si">{</span><span class="n">sql</span><span class="si">}</span><span class="s2">&quot;</span>
-            
+
             <span class="c1"># Execute EXPLAIN</span>
             <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">explain_query</span><span class="p">)</span>
-            
+
             <span class="c1"># Check for full table scans on large tables</span>
             <span class="n">plan_text</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
             <span class="n">warnings</span> <span class="o">=</span> <span class="p">[]</span>
-            
-            <span class="c1"># Look for signs of full table scans</span>
-            <span class="k">if</span> <span class="s1">&#39;Scan&#39;</span> <span class="ow">in</span> <span class="n">plan_text</span> <span class="ow">and</span> <span class="s1">&#39;Filter&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">plan_text</span><span class="p">:</span>
-                <span class="n">warnings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;Query may perform a full table scan without filters&quot;</span><span class="p">)</span>
-            
-            <span class="n">plan_info</span> <span class="o">=</span> <span class="p">{</span>
-                <span class="s1">&#39;plan&#39;</span><span class="p">:</span> <span class="n">result</span><span class="p">,</span>
-                <span class="s1">&#39;warnings&#39;</span><span class="p">:</span> <span class="n">warnings</span>
-            <span class="p">}</span>
-            
-            <span class="k">if</span> <span class="n">warnings</span><span class="p">:</span>
-                <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Query is valid but has warnings: </span><span class="si">{</span><span class="s1">&#39;; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">warnings</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">plan_info</span>
-            
-            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;Query plan validated successfully&quot;</span><span class="p">,</span> <span class="n">plan_info</span>
-            
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;EXPLAIN failed: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="kc">None</span></div>
 
-    
+            <span class="c1"># Look for signs of full table scans</span>
+            <span class="k">if</span> <span class="s2">&quot;Scan&quot;</span> <span class="ow">in</span> <span class="n">plan_text</span> <span class="ow">and</span> <span class="s2">&quot;Filter&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">plan_text</span><span class="p">:</span>
+                <span class="n">warnings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;Query may perform a full table scan without filters&quot;</span><span class="p">)</span>
+
+            <span class="n">plan_info</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;plan&quot;</span><span class="p">:</span> <span class="n">result</span><span class="p">,</span> <span class="s2">&quot;warnings&quot;</span><span class="p">:</span> <span class="n">warnings</span><span class="p">}</span>
+
+            <span class="k">if</span> <span class="n">warnings</span><span class="p">:</span>
+                <span class="k">return</span> <span class="p">(</span>
+                    <span class="kc">True</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;Query is valid but has warnings: </span><span class="si">{</span><span class="s1">&#39;; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">warnings</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">plan_info</span><span class="p">,</span>
+                <span class="p">)</span>
+
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;Query plan validated successfully&quot;</span><span class="p">,</span> <span class="n">plan_info</span>
+
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] validate_sql_explain failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;EXPLAIN validation failed.&quot;</span><span class="p">,</span> <span class="kc">None</span></div>
+
+
 <div class="viewcode-block" id="SQLWizardService.generate_sql">
 <a class="viewcode-back" href="../../../../api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.generate_sql">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">generate_sql</span><span class="p">(</span>
@@ -744,10 +861,10 @@
         <span class="n">schema_context_data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">mapping_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Full pipeline: generate and validate SQL from natural language.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Args:</span>
 <span class="sd">            endpoint_name: Model serving endpoint name</span>
 <span class="sd">            user_prompt: Natural language request</span>
@@ -757,124 +874,152 @@
 <span class="sd">            mapping_type: Type of mapping (&#39;entity&#39;, &#39;relationship&#39;, or None for general)</span>
 <span class="sd">            catalog: (deprecated) Unity Catalog catalog - only used if fetching from UC</span>
 <span class="sd">            schema: (deprecated) Schema name - only used if fetching from UC</span>
-<span class="sd">            </span>
+
 <span class="sd">        Returns:</span>
 <span class="sd">            Dict with generated SQL, validation results, and telemetry</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="n">limit</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">limit</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">DEFAULT_LIMIT</span>
-        
+
         <span class="c1"># Telemetry data (anonymized)</span>
         <span class="n">telemetry</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s1">&#39;endpoint&#39;</span><span class="p">:</span> <span class="n">endpoint_name</span><span class="p">,</span>
-            <span class="s1">&#39;prompt_hash&#39;</span><span class="p">:</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">user_prompt</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()[:</span><span class="mi">16</span><span class="p">],</span>
-            <span class="s1">&#39;validation_outcomes&#39;</span><span class="p">:</span> <span class="p">[],</span>
-            <span class="s1">&#39;mapping_type&#39;</span><span class="p">:</span> <span class="n">mapping_type</span>
+            <span class="s2">&quot;endpoint&quot;</span><span class="p">:</span> <span class="n">endpoint_name</span><span class="p">,</span>
+            <span class="s2">&quot;prompt_hash&quot;</span><span class="p">:</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">user_prompt</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()[:</span><span class="mi">16</span><span class="p">],</span>
+            <span class="s2">&quot;validation_outcomes&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="s2">&quot;mapping_type&quot;</span><span class="p">:</span> <span class="n">mapping_type</span><span class="p">,</span>
         <span class="p">}</span>
-        
+
         <span class="k">try</span><span class="p">:</span>
             <span class="c1"># Step 1: Get schema context</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql step 1: resolve schema context&quot;</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">schema_context_data</span> <span class="ow">and</span> <span class="n">schema_context_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tables&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">schema_context_data</span> <span class="ow">and</span> <span class="n">schema_context_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">):</span>
                 <span class="n">schema_context</span> <span class="o">=</span> <span class="n">SchemaContext</span><span class="p">(</span>
-                    <span class="n">tables</span><span class="o">=</span><span class="n">schema_context_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tables&#39;</span><span class="p">,</span> <span class="p">[])</span>
+                    <span class="n">tables</span><span class="o">=</span><span class="n">schema_context_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tables&quot;</span><span class="p">,</span> <span class="p">[])</span>
                 <span class="p">)</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: using pre-built schema context — </span><span class="si">%d</span><span class="s2"> table(s)&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">schema_context</span><span class="o">.</span><span class="n">tables</span><span class="p">))</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;[SQLWizard] generate_sql: using pre-built schema context — </span><span class="si">%d</span><span class="s2"> table(s)&quot;</span><span class="p">,</span>
+                    <span class="nb">len</span><span class="p">(</span><span class="n">schema_context</span><span class="o">.</span><span class="n">tables</span><span class="p">),</span>
+                <span class="p">)</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
                     <span class="s2">&quot;[SQLWizard] generate_sql: table names=[</span><span class="si">%s</span><span class="s2">]&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;full_name&#39;</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;?&#39;</span><span class="p">))</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">schema_context</span><span class="o">.</span><span class="n">tables</span><span class="p">),</span>
+                    <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                        <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;full_name&quot;</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;?&quot;</span><span class="p">))</span>
+                        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">schema_context</span><span class="o">.</span><span class="n">tables</span>
+                    <span class="p">),</span>
                 <span class="p">)</span>
             <span class="k">elif</span> <span class="n">catalog</span> <span class="ow">and</span> <span class="n">schema</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: fetching schema from UC — </span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;[SQLWizard] generate_sql: fetching schema from UC — </span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">catalog</span><span class="p">,</span>
+                    <span class="n">schema</span><span class="p">,</span>
+                <span class="p">)</span>
                 <span class="n">schema_context</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_schema_context</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: no schema context and no catalog/schema&quot;</span><span class="p">)</span>
-                <span class="k">return</span> <span class="p">{</span>
-                    <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
-                    <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;No schema context provided and no catalog/schema specified&#39;</span><span class="p">,</span>
-                    <span class="s1">&#39;telemetry&#39;</span><span class="p">:</span> <span class="n">telemetry</span>
-                <span class="p">}</span>
-            <span class="n">telemetry</span><span class="p">[</span><span class="s1">&#39;tables_count&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">schema_context</span><span class="o">.</span><span class="n">tables</span><span class="p">)</span>
-            
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;[SQLWizard] generate_sql: no schema context and no catalog/schema&quot;</span>
+                <span class="p">)</span>
+                <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                    <span class="s2">&quot;No schema context provided and no catalog/schema specified&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="n">telemetry</span><span class="p">[</span><span class="s2">&quot;tables_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">schema_context</span><span class="o">.</span><span class="n">tables</span><span class="p">)</span>
+
             <span class="c1"># Step 2: Compose prompt</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql step 2: compose prompt (mapping_type=</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">mapping_type</span><span class="p">)</span>
-            <span class="n">prompt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compose_prompt</span><span class="p">(</span><span class="n">user_prompt</span><span class="p">,</span> <span class="n">schema_context</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">mapping_type</span><span class="p">)</span>
-            
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;[SQLWizard] generate_sql step 2: compose prompt (mapping_type=</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span>
+                <span class="n">mapping_type</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">prompt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compose_prompt</span><span class="p">(</span>
+                <span class="n">user_prompt</span><span class="p">,</span> <span class="n">schema_context</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">mapping_type</span>
+            <span class="p">)</span>
+
             <span class="c1"># Step 3: Call LLM</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql step 3: call LLM endpoint &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">endpoint_name</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;[SQLWizard] generate_sql step 3: call LLM endpoint &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">endpoint_name</span>
+            <span class="p">)</span>
             <span class="n">raw_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">call_llm_endpoint</span><span class="p">(</span><span class="n">endpoint_name</span><span class="p">,</span> <span class="n">prompt</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: raw LLM output (</span><span class="si">%d</span><span class="s2"> chars): </span><span class="si">%.300s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">raw_output</span><span class="p">),</span> <span class="n">raw_output</span><span class="p">)</span>
-            
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;[SQLWizard] generate_sql: raw LLM output (</span><span class="si">%d</span><span class="s2"> chars): </span><span class="si">%.300s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">raw_output</span><span class="p">),</span>
+                <span class="n">raw_output</span><span class="p">,</span>
+            <span class="p">)</span>
+
             <span class="c1"># Step 4: Extract SQL</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql step 4: extract SQL from LLM output&quot;</span><span class="p">)</span>
             <span class="n">sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">extract_sql</span><span class="p">(</span><span class="n">raw_output</span><span class="p">)</span>
-            
+
             <span class="k">if</span> <span class="ow">not</span> <span class="n">sql</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: could not extract SQL from LLM output&quot;</span><span class="p">)</span>
-                <span class="k">return</span> <span class="p">{</span>
-                    <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
-                    <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;Could not extract SQL from LLM output&#39;</span><span class="p">,</span>
-                    <span class="s1">&#39;raw_output&#39;</span><span class="p">:</span> <span class="n">raw_output</span><span class="p">,</span>
-                    <span class="s1">&#39;telemetry&#39;</span><span class="p">:</span> <span class="n">telemetry</span>
-                <span class="p">}</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;[SQLWizard] generate_sql: could not extract SQL from LLM output&quot;</span>
+                <span class="p">)</span>
+                <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Could not extract SQL from LLM output&quot;</span><span class="p">)</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: extracted SQL — </span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">sql</span><span class="p">))</span>
-            
+
             <span class="c1"># Step 5: Static validation</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql step 5: static validation&quot;</span><span class="p">)</span>
-            <span class="n">is_valid</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">corrected_sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">validate_sql_static</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">schema_context</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">mapping_type</span><span class="p">)</span>
-            <span class="n">telemetry</span><span class="p">[</span><span class="s1">&#39;validation_outcomes&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;static&#39;</span><span class="p">:</span> <span class="n">is_valid</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">})</span>
-            
+            <span class="n">is_valid</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">corrected_sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">validate_sql_static</span><span class="p">(</span>
+                <span class="n">sql</span><span class="p">,</span> <span class="n">schema_context</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">mapping_type</span>
+            <span class="p">)</span>
+            <span class="n">telemetry</span><span class="p">[</span><span class="s2">&quot;validation_outcomes&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span><span class="s2">&quot;static&quot;</span><span class="p">:</span> <span class="n">is_valid</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">message</span><span class="p">}</span>
+            <span class="p">)</span>
+
             <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: static validation FAILED — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
-                <span class="k">return</span> <span class="p">{</span>
-                    <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
-                    <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span>
-                    <span class="s1">&#39;sql&#39;</span><span class="p">:</span> <span class="n">sql</span><span class="p">,</span>
-                    <span class="s1">&#39;telemetry&#39;</span><span class="p">:</span> <span class="n">telemetry</span>
-                <span class="p">}</span>
-            
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;[SQLWizard] generate_sql: static validation FAILED — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">message</span>
+                <span class="p">)</span>
+                <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="n">sql</span><span class="p">)</span>
+
             <span class="c1"># Step 6: Optional EXPLAIN validation</span>
             <span class="n">plan_warning</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="n">validate_plan</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql step 6: EXPLAIN validation&quot;</span><span class="p">)</span>
-                <span class="n">plan_valid</span><span class="p">,</span> <span class="n">plan_message</span><span class="p">,</span> <span class="n">plan_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">validate_sql_explain</span><span class="p">(</span><span class="n">corrected_sql</span><span class="p">)</span>
-                <span class="n">telemetry</span><span class="p">[</span><span class="s1">&#39;validation_outcomes&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;explain&#39;</span><span class="p">:</span> <span class="n">plan_valid</span><span class="p">,</span> <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="n">plan_message</span><span class="p">})</span>
-                <span class="n">telemetry</span><span class="p">[</span><span class="s1">&#39;explain_status&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;success&#39;</span> <span class="k">if</span> <span class="n">plan_valid</span> <span class="k">else</span> <span class="s1">&#39;failed&#39;</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: EXPLAIN result — valid=</span><span class="si">%s</span><span class="s2">, message=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">plan_valid</span><span class="p">,</span> <span class="n">plan_message</span><span class="p">)</span>
-                
-                <span class="k">if</span> <span class="n">plan_info</span> <span class="ow">and</span> <span class="n">plan_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;warnings&#39;</span><span class="p">):</span>
-                    <span class="n">plan_warning</span> <span class="o">=</span> <span class="n">plan_info</span><span class="p">[</span><span class="s1">&#39;warnings&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
-                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: EXPLAIN warning: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">plan_warning</span><span class="p">)</span>
+                <span class="n">plan_valid</span><span class="p">,</span> <span class="n">plan_message</span><span class="p">,</span> <span class="n">plan_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">validate_sql_explain</span><span class="p">(</span>
+                    <span class="n">corrected_sql</span>
+                <span class="p">)</span>
+                <span class="n">telemetry</span><span class="p">[</span><span class="s2">&quot;validation_outcomes&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="p">{</span><span class="s2">&quot;explain&quot;</span><span class="p">:</span> <span class="n">plan_valid</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">plan_message</span><span class="p">}</span>
+                <span class="p">)</span>
+                <span class="n">telemetry</span><span class="p">[</span><span class="s2">&quot;explain_status&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;success&quot;</span> <span class="k">if</span> <span class="n">plan_valid</span> <span class="k">else</span> <span class="s2">&quot;failed&quot;</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;[SQLWizard] generate_sql: EXPLAIN result — valid=</span><span class="si">%s</span><span class="s2">, message=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">plan_valid</span><span class="p">,</span>
+                    <span class="n">plan_message</span><span class="p">,</span>
+                <span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">plan_info</span> <span class="ow">and</span> <span class="n">plan_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;warnings&quot;</span><span class="p">):</span>
+                    <span class="n">plan_warning</span> <span class="o">=</span> <span class="n">plan_info</span><span class="p">[</span><span class="s2">&quot;warnings&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                        <span class="s2">&quot;[SQLWizard] generate_sql: EXPLAIN warning: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">plan_warning</span>
+                    <span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: EXPLAIN validation skipped&quot;</span><span class="p">)</span>
-            
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: SUCCESS — final SQL </span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">corrected_sql</span><span class="p">))</span>
+
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;[SQLWizard] generate_sql: SUCCESS — final SQL </span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">corrected_sql</span><span class="p">),</span>
+            <span class="p">)</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: final SQL: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">corrected_sql</span><span class="p">)</span>
             <span class="k">return</span> <span class="p">{</span>
-                <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-                <span class="s1">&#39;sql&#39;</span><span class="p">:</span> <span class="n">corrected_sql</span><span class="p">,</span>
-                <span class="s1">&#39;warning&#39;</span><span class="p">:</span> <span class="n">plan_warning</span><span class="p">,</span>
-                <span class="s1">&#39;telemetry&#39;</span><span class="p">:</span> <span class="n">telemetry</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="n">corrected_sql</span><span class="p">,</span>
+                <span class="s2">&quot;warning&quot;</span><span class="p">:</span> <span class="n">plan_warning</span><span class="p">,</span>
+                <span class="s2">&quot;telemetry&quot;</span><span class="p">:</span> <span class="n">telemetry</span><span class="p">,</span>
             <span class="p">}</span>
-            
+
+        <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
+            <span class="k">raise</span>
         <span class="k">except</span> <span class="ne">TimeoutError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: TIMEOUT — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-            <span class="n">telemetry</span><span class="p">[</span><span class="s1">&#39;validation_outcomes&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;timeout&#39;</span><span class="p">})</span>
-            <span class="k">return</span> <span class="p">{</span>
-                <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
-                <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span>
-                <span class="s1">&#39;telemetry&#39;</span><span class="p">:</span> <span class="n">telemetry</span>
-            <span class="p">}</span>
+            <span class="n">telemetry</span><span class="p">[</span><span class="s2">&quot;validation_outcomes&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;timeout&quot;</span><span class="p">})</span>
+            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
+                <span class="s2">&quot;The model request timed out.&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;[SQLWizard] generate_sql: FAILED — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-            <span class="n">telemetry</span><span class="p">[</span><span class="s1">&#39;validation_outcomes&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)})</span>
-            <span class="k">return</span> <span class="p">{</span>
-                <span class="s1">&#39;success&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
-                <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span>
-                <span class="s1">&#39;telemetry&#39;</span><span class="p">:</span> <span class="n">telemetry</span>
-            <span class="p">}</span></div>
+            <span class="n">telemetry</span><span class="p">[</span><span class="s2">&quot;validation_outcomes&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;generation_failed&quot;</span><span class="p">})</span>
+            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;SQL generation failed.&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
 
-    
+
 <div class="viewcode-block" id="SQLWizardService.clear_cache">
 <a class="viewcode-back" href="../../../../api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.clear_cache">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">clear_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>

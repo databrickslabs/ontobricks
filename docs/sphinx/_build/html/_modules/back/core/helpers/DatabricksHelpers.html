@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
-    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
@@ -73,6 +73,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -109,23 +110,49 @@
   <h1>Source code for back.core.helpers.DatabricksHelpers</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">concurrent.futures</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadPoolExecutor</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Tuple</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_databricks</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_BASE_URI</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
+<span class="n">_BLOCKING_POOL</span> <span class="o">=</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span>
+    <span class="n">max_workers</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;ONTOBRICKS_THREAD_POOL_SIZE&quot;</span><span class="p">,</span> <span class="s2">&quot;20&quot;</span><span class="p">)),</span>
+    <span class="n">thread_name_prefix</span><span class="o">=</span><span class="s2">&quot;ob-blocking&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="make_volume_file_service">
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.make_volume_file_service">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">make_volume_file_service</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return :class:`VolumeFileService` using host/token from ``get_databricks_host_and_token``.&quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings</span> <span class="k">as</span> <span class="n">_get_settings</span>
+
+    <span class="n">resolved</span> <span class="o">=</span> <span class="n">settings</span> <span class="k">if</span> <span class="n">settings</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">_get_settings</span><span class="p">()</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">resolved</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span></div>
+
+
 
 <div class="viewcode-block" id="DatabricksHelpers">
-<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.DatabricksHelpers">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">DatabricksHelpers</span><span class="p">:</span>
 <div class="viewcode-block" id="DatabricksHelpers.run_blocking">
-<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.DatabricksHelpers.run_blocking">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.run_blocking">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">run_blocking</span><span class="p">(</span><span class="n">func</span><span class="p">:</span> <span class="n">Callable</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run a blocking function in a thread pool so it doesn&#39;t freeze the event loop.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run a blocking function in a sized thread pool.</span>
+
+<span class="sd">        Uses a dedicated :class:`ThreadPoolExecutor` (default 20 threads,</span>
+<span class="sd">        configurable via ``ONTOBRICKS_THREAD_POOL_SIZE``) instead of the</span>
+<span class="sd">        default asyncio executor so that concurrent blocking work does not</span>
+<span class="sd">        starve the event loop.</span>
 
 <span class="sd">        Usage in an ``async def`` route handler::</span>
 
@@ -133,7 +160,7 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">loop</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">get_running_loop</span><span class="p">()</span>
         <span class="n">call</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">if</span> <span class="n">kwargs</span> <span class="k">else</span> <span class="n">partial</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
-        <span class="k">return</span> <span class="k">await</span> <span class="n">loop</span><span class="o">.</span><span class="n">run_in_executor</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">call</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="k">await</span> <span class="n">loop</span><span class="o">.</span><span class="n">run_in_executor</span><span class="p">(</span><span class="n">_BLOCKING_POOL</span><span class="p">,</span> <span class="n">call</span><span class="p">)</span></div>
 
 
     <span class="nd">@staticmethod</span>
@@ -147,7 +174,7 @@
         <span class="k">return</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span>
 
 <div class="viewcode-block" id="DatabricksHelpers.resolve_warehouse_id">
-<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.DatabricksHelpers.resolve_warehouse_id">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.resolve_warehouse_id">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">resolve_warehouse_id</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the SQL Warehouse ID using a layered fallback strategy.</span>
@@ -175,7 +202,7 @@
         <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">_resolve_registry_cfg</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">host</span> <span class="ow">and</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;catalog&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;schema&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">host</span> <span class="ow">and</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">):</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">wid</span> <span class="o">=</span> <span class="n">global_config_service</span><span class="o">.</span><span class="n">get_warehouse_id</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">wid</span><span class="p">:</span>
@@ -183,11 +210,11 @@
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not read global warehouse config: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
 
-        <span class="n">session_wid</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;warehouse_id&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+        <span class="n">session_wid</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;warehouse_id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">session_wid</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">session_wid</span>
 
-        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="s1">&#39;sql_warehouse_id&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="s2">&quot;sql_warehouse_id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">settings</span><span class="o">.</span><span class="n">sql_warehouse_id</span>
 
         <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span></div>
@@ -201,7 +228,7 @@
         <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">_resolve_registry_cfg</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">host</span> <span class="ow">and</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;catalog&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;schema&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">host</span> <span class="ow">and</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">):</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">getter</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">global_config_service</span><span class="p">,</span> <span class="n">getter_name</span><span class="p">)</span>
                 <span class="n">val</span> <span class="o">=</span> <span class="n">getter</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">)</span>
@@ -212,21 +239,20 @@
         <span class="k">return</span> <span class="s2">&quot;&quot;</span>
 
 <div class="viewcode-block" id="DatabricksHelpers.resolve_default_base_uri">
-<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.DatabricksHelpers.resolve_default_base_uri">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.resolve_default_base_uri">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">resolve_default_base_uri</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the default ontology base URI domain from global config.</span>
 
-<span class="sd">        Falls back to the hard-coded default ``https://databricks-ontology.com``.</span>
+<span class="sd">        Falls back to :data:`shared.config.constants.DEFAULT_BASE_URI` (no trailing slash).</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">(</span>
-            <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">_resolve_global_setting</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="s2">&quot;get_default_base_uri&quot;</span><span class="p">)</span>
-            <span class="ow">or</span> <span class="s2">&quot;https://databricks-ontology.com&quot;</span>
-        <span class="p">)</span></div>
+        <span class="k">return</span> <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">_resolve_global_setting</span><span class="p">(</span>
+            <span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="s2">&quot;get_default_base_uri&quot;</span>
+        <span class="p">)</span> <span class="ow">or</span> <span class="n">DEFAULT_BASE_URI</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="DatabricksHelpers.resolve_default_emoji">
-<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.DatabricksHelpers.resolve_default_emoji">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.resolve_default_emoji">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">resolve_default_emoji</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the default class icon from global config.</span>
@@ -234,13 +260,15 @@
 <span class="sd">        Falls back to the hard-coded default ``📦``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="p">(</span>
-            <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">_resolve_global_setting</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="s2">&quot;get_default_emoji&quot;</span><span class="p">)</span>
+            <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">_resolve_global_setting</span><span class="p">(</span>
+                <span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="s2">&quot;get_default_emoji&quot;</span>
+            <span class="p">)</span>
             <span class="ow">or</span> <span class="s2">&quot;📦&quot;</span>
         <span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="DatabricksHelpers.get_databricks_client">
-<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.DatabricksHelpers.get_databricks_client">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.get_databricks_client">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_databricks_client</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get Databricks client from domain session or settings.</span>
@@ -255,22 +283,26 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            DatabricksClient instance or None if not configured</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">host</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;host&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
-        <span class="n">token</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;token&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
+        <span class="n">host</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
         <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">resolve_warehouse_id</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
 
         <span class="c1"># In Databricks Apps mode, always create a client (SDK handles auth)</span>
         <span class="k">if</span> <span class="n">_databricks</span><span class="o">.</span><span class="n">is_databricks_app</span><span class="p">():</span>
-            <span class="k">return</span> <span class="n">_databricks</span><span class="o">.</span><span class="n">DatabricksClient</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span><span class="o">=</span><span class="n">warehouse_id</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">_databricks</span><span class="o">.</span><span class="n">DatabricksClient</span><span class="p">(</span>
+                <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span><span class="o">=</span><span class="n">warehouse_id</span>
+            <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">host</span> <span class="ow">and</span> <span class="n">token</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">_databricks</span><span class="o">.</span><span class="n">DatabricksClient</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span><span class="o">=</span><span class="n">warehouse_id</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">_databricks</span><span class="o">.</span><span class="n">DatabricksClient</span><span class="p">(</span>
+                <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span><span class="o">=</span><span class="n">warehouse_id</span>
+            <span class="p">)</span>
 
         <span class="k">return</span> <span class="kc">None</span></div>
 
 
 <div class="viewcode-block" id="DatabricksHelpers.get_databricks_credentials">
-<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.DatabricksHelpers.get_databricks_credentials">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.get_databricks_credentials">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_databricks_credentials</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get Databricks credentials from domain session or settings.</span>
@@ -290,7 +322,7 @@
 
 
 <div class="viewcode-block" id="DatabricksHelpers.get_databricks_host_and_token">
-<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.DatabricksHelpers.get_databricks_host_and_token">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.get_databricks_host_and_token">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get only host and token from domain session or settings.</span>
@@ -306,8 +338,8 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            Tuple of (host, token)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">host</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;host&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
-        <span class="n">token</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;token&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
+        <span class="n">host</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
 
         <span class="k">if</span> <span class="n">host</span> <span class="ow">and</span> <span class="n">token</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">_databricks</span><span class="o">.</span><span class="n">normalize_host</span><span class="p">(</span><span class="n">host</span><span class="p">),</span> <span class="n">token</span>
@@ -318,7 +350,7 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="n">token</span> <span class="ow">and</span> <span class="n">host</span><span class="p">:</span>
                 <span class="k">try</span><span class="p">:</span>
                     <span class="n">client</span> <span class="o">=</span> <span class="n">_databricks</span><span class="o">.</span><span class="n">DatabricksClient</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">)</span>
-                    <span class="n">token</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">_get_oauth_token</span><span class="p">()</span>
+                    <span class="n">token</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_oauth_token</span><span class="p">()</span>
                     <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Obtained OAuth token for agent call (host=</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">host</span><span class="p">)</span>
                 <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
                     <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not obtain OAuth token in app mode: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
@@ -327,53 +359,42 @@
 
 
 <div class="viewcode-block" id="DatabricksHelpers.require_serving_llm">
-<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.DatabricksHelpers.require_serving_llm">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.require_serving_llm">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">require_serving_llm</span><span class="p">(</span>
-        <span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]:</span>
+        <span class="n">domain</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Validate host, token, and domain LLM serving endpoint.</span>
 
-<span class="sd">        Returns ``(error_response, None)`` or ``(None, (host, token, endpoint_name))``.</span>
-<span class="sd">        ``error_response`` uses ``success`` + ``message`` for JSON routes.</span>
+<span class="sd">        Returns ``(host, token, endpoint_name)`` or raises :class:`ValidationError`.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
-            <span class="k">return</span> <span class="p">({</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Databricks credentials not configured&quot;</span><span class="p">},</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Databricks credentials not configured&quot;</span><span class="p">)</span>
         <span class="n">endpoint</span> <span class="o">=</span> <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">info</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;llm_endpoint&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">endpoint</span><span class="p">:</span>
-            <span class="k">return</span> <span class="p">(</span>
-                <span class="p">{</span>
-                    <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
-                    <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;No LLM serving endpoint configured. Please set it in Domain Settings.&quot;</span><span class="p">,</span>
-                <span class="p">},</span>
-                <span class="kc">None</span><span class="p">,</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;No LLM serving endpoint configured. Please set it in Domain Settings.&quot;</span><span class="p">,</span>
             <span class="p">)</span>
-        <span class="k">return</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">))</span></div>
+        <span class="k">return</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">endpoint</span></div>
 </div>
 
 
 
 <div class="viewcode-block" id="resolve_ladybug_local_path">
-<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.resolve_ladybug_local_path">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.resolve_ladybug_local_path">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">resolve_ladybug_local_path</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">db_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the local file-system path for a LadybugDB archive.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the local file-system path for a LadybugDB archive.&quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.ladybugdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">local_db_path</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_LADYBUG_PATH</span>
 
-<span class="sd">    Extracts the ``db_path`` from the domain&#39;s ladybug / triplestore</span>
-<span class="sd">    configuration, falling back to ``/tmp/ontobricks``.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore.ladybugdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">local_db_path</span>
-
-    <span class="n">lb_cfg</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;ladybug&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">lb_cfg</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;triplestore&quot;</span><span class="p">):</span>
-        <span class="n">lb_cfg</span> <span class="o">=</span> <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">triplestore</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ladybug&quot;</span><span class="p">,</span> <span class="p">{})</span>
-    <span class="n">local_base</span> <span class="o">=</span> <span class="n">lb_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;db_path&quot;</span><span class="p">,</span> <span class="s2">&quot;/tmp/ontobricks&quot;</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">local_db_path</span><span class="p">(</span><span class="n">db_name</span><span class="p">,</span> <span class="n">local_base</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">local_db_path</span><span class="p">(</span><span class="n">db_name</span><span class="p">,</span> <span class="n">DEFAULT_LADYBUG_PATH</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="effective_uc_version_path">
-<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.effective_uc_version_path">[docs]</a>
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.effective_uc_version_path">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">effective_uc_version_path</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the version-scoped UC Volume path, with domain-level fallback.</span>
 
@@ -382,9 +403,9 @@
 <span class="sd">    and returns an empty string when neither is available.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">(</span>
-        <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;uc_version_path&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-        <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s1">&#39;uc_domain_path&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-        <span class="ow">or</span> <span class="s1">&#39;&#39;</span>
+        <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;uc_version_path&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;uc_domain_path&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
     <span class="p">)</span></div>
 
 </pre></div>

@@ -119,6 +119,15 @@ git push origin main --tags
 - **Data quality violation limits** — cap the number of violations displayed per rule (configurable via dropdown, default 10) for faster quality checks
 - **Per-rule progress tracking** — SWRL inference and data quality checks report progress for each individual rule
 
+### Navigation & Performance
+
+- **Deep-linked sidebar sections** — shareable URLs, browser Back/Forward support
+- **Breadcrumb navigation** — always see your position (Registry > Domain > Ontology > Section)
+- **Keyboard shortcuts** — `Cmd/Ctrl+S` save, `Cmd/Ctrl+K` search, `?` help overlay
+- **SQL connection pooling** — reusable database connections, no per-query TLS handshake
+- **CSRF protection** — double-submit cookie for all state-changing requests
+- **Structured JSON logging** — set `LOG_FORMAT=json` for production-grade observability
+
 ### MCP Integration
 
 OntoBricks exposes the knowledge graph to LLM agents via the [Model Context Protocol](https://modelcontextprotocol.io/). Deploy the companion `mcp-ontobricks` app and connect from Cursor, Claude Desktop, or the Databricks Playground.

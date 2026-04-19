@@ -238,7 +238,7 @@ The ASGI app is built in **`src/shared/fastapi/main.py`** (`create_app()`), whic
 
 | Package | Location | Role |
 |---------|----------|------|
-| **shared** | `shared/fastapi/main.py`, `shared/fastapi/health.py` | Application factory, CORS / session / permission middleware, `/static` mount, health and root endpoints; includes routers from `front.routes`, `api.routers.internal`, and mounts the external API |
+| **shared** | `shared/fastapi/main.py`, `shared/fastapi/health.py`, `shared/fastapi/csrf.py`, `shared/fastapi/timing.py` | Application factory, CORS / session / permission / CSRF / request-timing middleware, `/static` mount, health and root endpoints; includes routers from `front.routes`, `api.routers.internal`, and mounts the external API |
 | **front** | `front/fastapi/dependencies.py` | Jinja2 templates and shared FastAPI/Starlette dependencies for HTML routes |
 | **back** | `back/fastapi/graphql_routes.py` | GraphQL router (per-domain auto-generated schema) |
 
@@ -329,7 +329,9 @@ src/
 ├── shared/                             # Shared app shell & configuration
 │   ├── fastapi/
 │   │   ├── main.py                     # Application factory (create_app), middleware, router registration
-│   │   └── health.py                   # Health check & root endpoints
+│   │   ├── health.py                   # Health check & root endpoints
+│   │   ├── csrf.py                     # CSRF double-submit cookie middleware
+│   │   └── timing.py                   # Request duration logging middleware
 │   └── config/
 │       ├── settings.py                 # Pydantic BaseSettings (env vars, .env)
 │       └── constants.py                # Static constants & defaults (namespaces, LLM params, wizard templates)
@@ -368,7 +370,7 @@ src/
 │   │   ├── databricks/                 # Databricks connectivity
 │   │   │   ├── DatabricksAuth.py       # Authentication & utility functions
 │   │   │   ├── DatabricksClient.py     # Thin facade
-│   │   │   ├── SQLWarehouse.py         # Query execution, DDL
+│   │   │   ├── SQLWarehouse.py         # Query execution, DDL (connection-pooled)
 │   │   │   ├── UnityCatalog.py         # Catalogs, schemas, tables, volumes
 │   │   │   ├── UCDomainIO.py           # Domain I/O on UC Volumes
 │   │   │   ├── VolumeFileService.py    # File I/O on UC Volumes
@@ -1139,6 +1141,21 @@ Logging is controlled via environment variables or Pydantic `Settings`:
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `LOG_DIR` | *(auto)* | Directory for the rotating log file |
 | `LOG_FILE` | `ontobricks.log` | Filename inside `LOG_DIR` |
+| `LOG_FORMAT` | *(text)* | Set to `json` to emit structured JSON lines (one JSON object per log entry with `ts`, `level`, `logger`, `module`, `func`, `line`, `msg` fields) |
+
+### Structured JSON Logging
+
+Set `LOG_FORMAT=json` to switch both console and file handlers to JSON-line output. Each entry is a single JSON object:
+
+```json
+{"ts": "2026-04-19T10:30:05+00:00", "level": "INFO", "logger": "ontobricks.shared.fastapi.main", "module": "main", "func": "lifespan", "line": 95, "msg": "OntoBricks FastAPI starting"}
+```
+
+This mode is recommended for production deployments where logs are aggregated by external tools (e.g. Databricks log console, ELK, Datadog).
+
+### Request Timing
+
+The `RequestTimingMiddleware` (`shared/fastapi/timing.py`) logs `method`, `path`, `status_code`, and `duration_ms` for every non-static request. Combined with JSON logging, this provides per-endpoint latency visibility without external APM tooling.
 
 ### Usage in Modules
 
@@ -1229,6 +1246,27 @@ Tracing degrades gracefully: if MLflow is not configured or the tracking server 
 
 ---
 
+## Performance Infrastructure
+
+### SQL Connection Pooling
+
+`SQLWarehouse` maintains a `queue.Queue`-based pool of reusable database connections (`src/back/core/databricks/SQLWarehouse.py`). Instead of opening a fresh `databricks.sql.connect()` per query (costly due to TLS handshakes), connections are borrowed from the pool and returned after use. Stale connections (idle > 300 s) are discarded automatically.
+
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| Pool size | 8 | Max concurrent connections per warehouse |
+| Max idle | 300 s | Connections older than this are replaced |
+
+### Dedicated Thread Pool
+
+All blocking Databricks I/O runs through `run_blocking()` in `DatabricksHelpers.py`, which dispatches to a dedicated `ThreadPoolExecutor` instead of the default asyncio pool. This prevents SQL latency from starving the event loop.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ONTOBRICKS_THREAD_POOL_SIZE` | `20` | Max workers for blocking I/O |
+
+---
+
 ## Security Considerations
 
 ### Authentication
@@ -1236,10 +1274,17 @@ Tracing degrades gracefully: if MLflow is not configured or the tracking server 
 - Service Principal (production/Databricks Apps)
 - Tokens stored in environment variables
 
+### CSRF Protection
+- Double-submit cookie pattern via `CSRFMiddleware` (`shared/fastapi/csrf.py`)
+- A `csrf_token` cookie is set on first visit; state-changing requests (POST, PUT, PATCH, DELETE) must include the same value in an `X-CSRF-Token` header
+- The browser-side `fetch()` wrapper in `utils.js` attaches the header automatically
+- Bypass paths: `/static/`, `/health`, `/api/`, `/graphql/`, docs endpoints
+- Disabled via `CSRF_DISABLED=1` for automated test suites
+
 ### Data Protection
-- Secure session cookies with signed tokens
+- Session cookies use `secure=True` and `samesite=lax` when running as a Databricks App (`DATABRICKS_APP_PORT` set), ensuring cookies are only sent over HTTPS
 - No credentials persisted to disk
-- HTTPS in production
+- HTTPS enforced in production
 
 ### SQL Injection Prevention
 - Parameterized queries via Databricks SQL Connector

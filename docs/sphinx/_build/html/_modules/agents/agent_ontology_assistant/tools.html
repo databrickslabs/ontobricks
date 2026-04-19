@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
-    <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../../../genindex.html" />
@@ -73,6 +73,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -127,6 +128,7 @@
 <span class="c1"># Read tools</span>
 <span class="c1"># =====================================================</span>
 
+
 <div class="viewcode-block" id="tool_get_ontology_classes">
 <a class="viewcode-back" href="../../../api/agents.html#agents.agent_ontology_assistant.tools.tool_get_ontology_classes">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">tool_get_ontology_classes</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
@@ -175,11 +177,19 @@
 <span class="c1"># Mutation tools – entities (classes)</span>
 <span class="c1"># =====================================================</span>
 
+
 <div class="viewcode-block" id="tool_add_entity">
 <a class="viewcode-back" href="../../../api/agents.html#agents.agent_ontology_assistant.tools.tool_add_entity">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">tool_add_entity</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">parent</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="n">emoji</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;📦&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">tool_add_entity</span><span class="p">(</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">parent</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">emoji</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;📦&quot;</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">_kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a new entity (class) to the ontology.&quot;&quot;&quot;</span>
     <span class="n">classes</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_classes</span>
     <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">name</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">classes</span><span class="p">):</span>
@@ -218,11 +228,13 @@
 
     <span class="n">classes</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
 
-    <span class="n">removed_props</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">properties</span>
-                     <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domain&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">name</span> <span class="ow">or</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;range&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">name</span><span class="p">]</span>
+    <span class="n">removed_props</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">properties</span>
+        <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domain&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">name</span> <span class="ow">or</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;range&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">name</span>
+    <span class="p">]</span>
     <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_properties</span><span class="p">[:]</span> <span class="o">=</span> <span class="p">[</span>
-        <span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">properties</span>
-        <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domain&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">name</span> <span class="ow">and</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;range&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">name</span>
+        <span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">properties</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domain&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">name</span> <span class="ow">and</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;range&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">name</span>
     <span class="p">]</span>
 
     <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">classes</span><span class="p">:</span>
@@ -230,19 +242,26 @@
             <span class="n">c</span><span class="p">[</span><span class="s2">&quot;parent&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
 
     <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_dirty</span> <span class="o">=</span> <span class="kc">True</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_remove_entity: removed &#39;</span><span class="si">%s</span><span class="s2">&#39;, cascade-removed </span><span class="si">%d</span><span class="s2"> relationships&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">removed_props</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span>
-        <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-        <span class="s2">&quot;removed_entity&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
-        <span class="s2">&quot;removed_relationships&quot;</span><span class="p">:</span> <span class="n">removed_props</span><span class="p">,</span>
-    <span class="p">})</span></div>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;tool_remove_entity: removed &#39;</span><span class="si">%s</span><span class="s2">&#39;, cascade-removed </span><span class="si">%d</span><span class="s2"> relationships&quot;</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">,</span>
+        <span class="nb">len</span><span class="p">(</span><span class="n">removed_props</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;removed_entity&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+            <span class="s2">&quot;removed_relationships&quot;</span><span class="p">:</span> <span class="n">removed_props</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="tool_rename_entity">
 <a class="viewcode-back" href="../../../api/agents.html#agents.agent_ontology_assistant.tools.tool_rename_entity">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">tool_rename_entity</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">old_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">new_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-                       <span class="n">new_label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">tool_rename_entity</span><span class="p">(</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">old_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">new_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">new_label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Rename an entity and update all references (properties, inheritance).&quot;&quot;&quot;</span>
     <span class="n">classes</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_classes</span>
     <span class="n">properties</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_properties</span>
@@ -278,9 +297,16 @@
 
 <div class="viewcode-block" id="tool_update_entity">
 <a class="viewcode-back" href="../../../api/agents.html#agents.agent_ontology_assistant.tools.tool_update_entity">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">tool_update_entity</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-                       <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">parent</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-                       <span class="n">emoji</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">tool_update_entity</span><span class="p">(</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parent</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">emoji</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">_kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Update fields of an existing entity.&quot;&quot;&quot;</span>
     <span class="n">classes</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_classes</span>
     <span class="bp">cls</span> <span class="o">=</span> <span class="nb">next</span><span class="p">((</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">classes</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">name</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
@@ -310,9 +336,15 @@
 
 <div class="viewcode-block" id="tool_add_attribute">
 <a class="viewcode-back" href="../../../api/agents.html#agents.agent_ontology_assistant.tools.tool_add_attribute">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">tool_add_attribute</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">entity_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-                       <span class="n">attribute_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">attribute_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;xsd:string&quot;</span><span class="p">,</span>
-                       <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">tool_add_attribute</span><span class="p">(</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">entity_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">attribute_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">attribute_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;xsd:string&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">_kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a data property (attribute) to an entity.&quot;&quot;&quot;</span>
     <span class="n">classes</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_classes</span>
     <span class="bp">cls</span> <span class="o">=</span> <span class="nb">next</span><span class="p">((</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">classes</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">entity_name</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
@@ -321,26 +353,35 @@
 
     <span class="n">data_props</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;dataProperties&quot;</span><span class="p">,</span> <span class="p">[])</span>
     <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">dp</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">attribute_name</span> <span class="k">for</span> <span class="n">dp</span> <span class="ow">in</span> <span class="n">data_props</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Attribute &#39;</span><span class="si">{</span><span class="n">attribute_name</span><span class="si">}</span><span class="s2">&#39; already exists on &#39;</span><span class="si">{</span><span class="n">entity_name</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">})</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+            <span class="p">{</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Attribute &#39;</span><span class="si">{</span><span class="n">attribute_name</span><span class="si">}</span><span class="s2">&#39; already exists on &#39;</span><span class="si">{</span><span class="n">entity_name</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">}</span>
+        <span class="p">)</span>
 
     <span class="n">base_uri</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_base_uri</span>
-    <span class="n">data_props</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-        <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_uri</span><span class="si">}{</span><span class="n">attribute_name</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">base_uri</span> <span class="k">else</span> <span class="n">attribute_name</span><span class="p">,</span>
-        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">attribute_name</span><span class="p">,</span>
-        <span class="s2">&quot;localName&quot;</span><span class="p">:</span> <span class="n">attribute_name</span><span class="p">,</span>
-        <span class="s2">&quot;range&quot;</span><span class="p">:</span> <span class="n">attribute_type</span><span class="p">,</span>
-        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="n">description</span><span class="p">,</span>
-    <span class="p">})</span>
+    <span class="n">data_props</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_uri</span><span class="si">}{</span><span class="n">attribute_name</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">base_uri</span> <span class="k">else</span> <span class="n">attribute_name</span><span class="p">,</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">attribute_name</span><span class="p">,</span>
+            <span class="s2">&quot;localName&quot;</span><span class="p">:</span> <span class="n">attribute_name</span><span class="p">,</span>
+            <span class="s2">&quot;range&quot;</span><span class="p">:</span> <span class="n">attribute_type</span><span class="p">,</span>
+            <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="n">description</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">)</span>
     <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_dirty</span> <span class="o">=</span> <span class="kc">True</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_add_attribute: added &#39;</span><span class="si">%s</span><span class="s2">&#39; to entity &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">attribute_name</span><span class="p">,</span> <span class="n">entity_name</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;entity&quot;</span><span class="p">:</span> <span class="n">entity_name</span><span class="p">,</span> <span class="s2">&quot;attribute&quot;</span><span class="p">:</span> <span class="n">attribute_name</span><span class="p">})</span></div>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;tool_add_attribute: added &#39;</span><span class="si">%s</span><span class="s2">&#39; to entity &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">attribute_name</span><span class="p">,</span> <span class="n">entity_name</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+        <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;entity&quot;</span><span class="p">:</span> <span class="n">entity_name</span><span class="p">,</span> <span class="s2">&quot;attribute&quot;</span><span class="p">:</span> <span class="n">attribute_name</span><span class="p">}</span>
+    <span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="tool_remove_attribute">
 <a class="viewcode-back" href="../../../api/agents.html#agents.agent_ontology_assistant.tools.tool_remove_attribute">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">tool_remove_attribute</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">entity_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-                          <span class="n">attribute_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">tool_remove_attribute</span><span class="p">(</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">entity_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">attribute_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a data property (attribute) from an entity.&quot;&quot;&quot;</span>
     <span class="n">classes</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_classes</span>
     <span class="bp">cls</span> <span class="o">=</span> <span class="nb">next</span><span class="p">((</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">classes</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">entity_name</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
@@ -349,13 +390,23 @@
 
     <span class="n">data_props</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;dataProperties&quot;</span><span class="p">,</span> <span class="p">[])</span>
     <span class="n">before</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_props</span><span class="p">)</span>
-    <span class="bp">cls</span><span class="p">[</span><span class="s2">&quot;dataProperties&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">dp</span> <span class="k">for</span> <span class="n">dp</span> <span class="ow">in</span> <span class="n">data_props</span> <span class="k">if</span> <span class="n">dp</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">attribute_name</span><span class="p">]</span>
+    <span class="bp">cls</span><span class="p">[</span><span class="s2">&quot;dataProperties&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">dp</span> <span class="k">for</span> <span class="n">dp</span> <span class="ow">in</span> <span class="n">data_props</span> <span class="k">if</span> <span class="n">dp</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">attribute_name</span>
+    <span class="p">]</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">cls</span><span class="p">[</span><span class="s2">&quot;dataProperties&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="n">before</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Attribute &#39;</span><span class="si">{</span><span class="n">attribute_name</span><span class="si">}</span><span class="s2">&#39; not found on &#39;</span><span class="si">{</span><span class="n">entity_name</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">})</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+            <span class="p">{</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Attribute &#39;</span><span class="si">{</span><span class="n">attribute_name</span><span class="si">}</span><span class="s2">&#39; not found on &#39;</span><span class="si">{</span><span class="n">entity_name</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">}</span>
+        <span class="p">)</span>
 
     <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_dirty</span> <span class="o">=</span> <span class="kc">True</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_remove_attribute: removed &#39;</span><span class="si">%s</span><span class="s2">&#39; from entity &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">attribute_name</span><span class="p">,</span> <span class="n">entity_name</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;entity&quot;</span><span class="p">:</span> <span class="n">entity_name</span><span class="p">,</span> <span class="s2">&quot;removed_attribute&quot;</span><span class="p">:</span> <span class="n">attribute_name</span><span class="p">})</span></div>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;tool_remove_attribute: removed &#39;</span><span class="si">%s</span><span class="s2">&#39; from entity &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+        <span class="n">attribute_name</span><span class="p">,</span>
+        <span class="n">entity_name</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+        <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;entity&quot;</span><span class="p">:</span> <span class="n">entity_name</span><span class="p">,</span> <span class="s2">&quot;removed_attribute&quot;</span><span class="p">:</span> <span class="n">attribute_name</span><span class="p">}</span>
+    <span class="p">)</span></div>
 
 
 
@@ -363,12 +414,20 @@
 <span class="c1"># Mutation tools – relationships (properties)</span>
 <span class="c1"># =====================================================</span>
 
+
 <div class="viewcode-block" id="tool_add_relationship">
 <a class="viewcode-back" href="../../../api/agents.html#agents.agent_ontology_assistant.tools.tool_add_relationship">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">tool_add_relationship</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">domain</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-                          <span class="nb">range</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                          <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                          <span class="n">direction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;forward&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">tool_add_relationship</span><span class="p">(</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">domain</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="nb">range</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">direction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;forward&quot;</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">_kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a new relationship (object property) to the ontology.&quot;&quot;&quot;</span>
     <span class="n">properties</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_properties</span>
     <span class="n">classes</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_classes</span>
@@ -396,20 +455,23 @@
     <span class="n">properties</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_prop</span><span class="p">)</span>
     <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_dirty</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_add_relationship: added &#39;</span><span class="si">%s</span><span class="s2">&#39; (</span><span class="si">%s</span><span class="s2"> -&gt; </span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="nb">range</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;relationship&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;range&quot;</span><span class="p">:</span> <span class="nb">range</span><span class="p">})</span></div>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+        <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;relationship&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;range&quot;</span><span class="p">:</span> <span class="nb">range</span><span class="p">}</span>
+    <span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="tool_remove_relationship">
 <a class="viewcode-back" href="../../../api/agents.html#agents.agent_ontology_assistant.tools.tool_remove_relationship">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">tool_remove_relationship</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-                             <span class="n">domain</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="nb">range</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                             <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">tool_remove_relationship</span><span class="p">(</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">domain</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="nb">range</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a relationship (object property). If domain/range given, match exactly.&quot;&quot;&quot;</span>
     <span class="n">properties</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_properties</span>
 
     <span class="n">matches</span> <span class="o">=</span> <span class="p">[</span>
-        <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">properties</span><span class="p">)</span>
+        <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">properties</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">name</span>
         <span class="ow">and</span> <span class="p">(</span><span class="ow">not</span> <span class="n">domain</span> <span class="ow">or</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domain&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">domain</span><span class="p">)</span>
         <span class="ow">and</span> <span class="p">(</span><span class="ow">not</span> <span class="nb">range</span> <span class="ow">or</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;range&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="nb">range</span><span class="p">)</span>
@@ -421,18 +483,29 @@
         <span class="n">properties</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
 
     <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_dirty</span> <span class="o">=</span> <span class="kc">True</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_remove_relationship: removed </span><span class="si">%d</span><span class="s2"> instance(s) of &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">matches</span><span class="p">),</span> <span class="n">name</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;removed_relationship&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">matches</span><span class="p">)})</span></div>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;tool_remove_relationship: removed </span><span class="si">%d</span><span class="s2"> instance(s) of &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">matches</span><span class="p">),</span> <span class="n">name</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+        <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;removed_relationship&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">matches</span><span class="p">)}</span>
+    <span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="tool_update_relationship">
 <a class="viewcode-back" href="../../../api/agents.html#agents.agent_ontology_assistant.tools.tool_update_relationship">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">tool_update_relationship</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-                             <span class="n">new_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-                             <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">domain</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-                             <span class="nb">range</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">direction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-                             <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">tool_update_relationship</span><span class="p">(</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">new_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">domain</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="nb">range</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">direction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">_kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Update fields of an existing relationship.&quot;&quot;&quot;</span>
     <span class="n">properties</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_properties</span>
     <span class="n">prop</span> <span class="o">=</span> <span class="nb">next</span><span class="p">((</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">properties</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">name</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
@@ -465,13 +538,17 @@
     <span class="k">if</span> <span class="n">updated</span><span class="p">:</span>
         <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_dirty</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_update_relationship: &#39;</span><span class="si">%s</span><span class="s2">&#39; updated fields: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">updated</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;relationship&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;updated_fields&quot;</span><span class="p">:</span> <span class="n">updated</span><span class="p">})</span></div>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+        <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;relationship&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;updated_fields&quot;</span><span class="p">:</span> <span class="n">updated</span><span class="p">}</span>
+    <span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="tool_set_inheritance">
 <a class="viewcode-back" href="../../../api/agents.html#agents.agent_ontology_assistant.tools.tool_set_inheritance">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">tool_set_inheritance</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">child</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">parent</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">tool_set_inheritance</span><span class="p">(</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">child</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">parent</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Set or change the parent (superclass) of an entity.&quot;&quot;&quot;</span>
     <span class="n">classes</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_classes</span>
     <span class="n">child_cls</span> <span class="o">=</span> <span class="nb">next</span><span class="p">((</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">classes</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">child</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
@@ -483,8 +560,20 @@
     <span class="n">old_parent</span> <span class="o">=</span> <span class="n">child_cls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
     <span class="n">child_cls</span><span class="p">[</span><span class="s2">&quot;parent&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">parent</span>
     <span class="n">ctx</span><span class="o">.</span><span class="n">ontology_dirty</span> <span class="o">=</span> <span class="kc">True</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_set_inheritance: &#39;</span><span class="si">%s</span><span class="s2">&#39; parent changed from &#39;</span><span class="si">%s</span><span class="s2">&#39; to &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">child</span><span class="p">,</span> <span class="n">old_parent</span><span class="p">,</span> <span class="n">parent</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;child&quot;</span><span class="p">:</span> <span class="n">child</span><span class="p">,</span> <span class="s2">&quot;old_parent&quot;</span><span class="p">:</span> <span class="n">old_parent</span><span class="p">,</span> <span class="s2">&quot;new_parent&quot;</span><span class="p">:</span> <span class="n">parent</span><span class="p">})</span></div>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;tool_set_inheritance: &#39;</span><span class="si">%s</span><span class="s2">&#39; parent changed from &#39;</span><span class="si">%s</span><span class="s2">&#39; to &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+        <span class="n">child</span><span class="p">,</span>
+        <span class="n">old_parent</span><span class="p">,</span>
+        <span class="n">parent</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;child&quot;</span><span class="p">:</span> <span class="n">child</span><span class="p">,</span>
+            <span class="s2">&quot;old_parent&quot;</span><span class="p">:</span> <span class="n">old_parent</span><span class="p">,</span>
+            <span class="s2">&quot;new_parent&quot;</span><span class="p">:</span> <span class="n">parent</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">)</span></div>
 
 
 
@@ -518,10 +607,16 @@
         <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
             <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Entity class name (PascalCase, e.g. &#39;Customer&#39;)&quot;</span><span class="p">},</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Entity class name (PascalCase, e.g. &#39;Customer&#39;)&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
                 <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Human-readable label&quot;</span><span class="p">},</span>
                 <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Short description&quot;</span><span class="p">},</span>
-                <span class="s2">&quot;parent&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Parent entity name for inheritance (empty if none)&quot;</span><span class="p">},</span>
+                <span class="s2">&quot;parent&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Parent entity name for inheritance (empty if none)&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
                 <span class="s2">&quot;emoji&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Icon emoji for the entity&quot;</span><span class="p">},</span>
             <span class="p">},</span>
             <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
@@ -554,7 +649,10 @@
             <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span>
                 <span class="s2">&quot;old_name&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Current entity name&quot;</span><span class="p">},</span>
                 <span class="s2">&quot;new_name&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;New entity name&quot;</span><span class="p">},</span>
-                <span class="s2">&quot;new_label&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;New human-readable label (defaults to new_name)&quot;</span><span class="p">},</span>
+                <span class="s2">&quot;new_label&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;New human-readable label (defaults to new_name)&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
             <span class="p">},</span>
             <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;old_name&quot;</span><span class="p">,</span> <span class="s2">&quot;new_name&quot;</span><span class="p">],</span>
         <span class="p">},</span>
@@ -572,7 +670,10 @@
                 <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Entity name to update&quot;</span><span class="p">},</span>
                 <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;New label&quot;</span><span class="p">},</span>
                 <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;New description&quot;</span><span class="p">},</span>
-                <span class="s2">&quot;parent&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;New parent entity name (empty to remove)&quot;</span><span class="p">},</span>
+                <span class="s2">&quot;parent&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;New parent entity name (empty to remove)&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
                 <span class="s2">&quot;emoji&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;New icon emoji&quot;</span><span class="p">},</span>
             <span class="p">},</span>
             <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
@@ -588,9 +689,18 @@
         <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
             <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;entity_name&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Entity to add the attribute to&quot;</span><span class="p">},</span>
-                <span class="s2">&quot;attribute_name&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Attribute name (camelCase)&quot;</span><span class="p">},</span>
-                <span class="s2">&quot;attribute_type&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;XSD type (e.g. xsd:string, xsd:integer, xsd:date)&quot;</span><span class="p">},</span>
+                <span class="s2">&quot;entity_name&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Entity to add the attribute to&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
+                <span class="s2">&quot;attribute_name&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Attribute name (camelCase)&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
+                <span class="s2">&quot;attribute_type&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;XSD type (e.g. xsd:string, xsd:integer, xsd:date)&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
                 <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Short description&quot;</span><span class="p">},</span>
             <span class="p">},</span>
             <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;entity_name&quot;</span><span class="p">,</span> <span class="s2">&quot;attribute_name&quot;</span><span class="p">],</span>
@@ -606,8 +716,14 @@
         <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
             <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;entity_name&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Entity to remove the attribute from&quot;</span><span class="p">},</span>
-                <span class="s2">&quot;attribute_name&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Attribute name to remove&quot;</span><span class="p">},</span>
+                <span class="s2">&quot;entity_name&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Entity to remove the attribute from&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
+                <span class="s2">&quot;attribute_name&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Attribute name to remove&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
             <span class="p">},</span>
             <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;entity_name&quot;</span><span class="p">,</span> <span class="s2">&quot;attribute_name&quot;</span><span class="p">],</span>
         <span class="p">},</span>
@@ -622,12 +738,19 @@
         <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
             <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Relationship name (camelCase, e.g. &#39;belongsTo&#39;)&quot;</span><span class="p">},</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Relationship name (camelCase, e.g. &#39;belongsTo&#39;)&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
                 <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Source entity name&quot;</span><span class="p">},</span>
                 <span class="s2">&quot;range&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Target entity name&quot;</span><span class="p">},</span>
                 <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Human-readable label&quot;</span><span class="p">},</span>
                 <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Short description&quot;</span><span class="p">},</span>
-                <span class="s2">&quot;direction&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;enum&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;forward&quot;</span><span class="p">,</span> <span class="s2">&quot;inverse&quot;</span><span class="p">],</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Relationship direction&quot;</span><span class="p">},</span>
+                <span class="s2">&quot;direction&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;enum&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;forward&quot;</span><span class="p">,</span> <span class="s2">&quot;inverse&quot;</span><span class="p">],</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Relationship direction&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
             <span class="p">},</span>
             <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;domain&quot;</span><span class="p">,</span> <span class="s2">&quot;range&quot;</span><span class="p">],</span>
         <span class="p">},</span>
@@ -642,9 +765,18 @@
         <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
             <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Relationship name to remove&quot;</span><span class="p">},</span>
-                <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Optional: filter by domain entity&quot;</span><span class="p">},</span>
-                <span class="s2">&quot;range&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Optional: filter by range entity&quot;</span><span class="p">},</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Relationship name to remove&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
+                <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Optional: filter by domain entity&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
+                <span class="s2">&quot;range&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Optional: filter by range entity&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
             <span class="p">},</span>
             <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
         <span class="p">},</span>
@@ -665,7 +797,11 @@
                 <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;New description&quot;</span><span class="p">},</span>
                 <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;New domain entity&quot;</span><span class="p">},</span>
                 <span class="s2">&quot;range&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;New range entity&quot;</span><span class="p">},</span>
-                <span class="s2">&quot;direction&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;enum&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;forward&quot;</span><span class="p">,</span> <span class="s2">&quot;inverse&quot;</span><span class="p">],</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;New direction&quot;</span><span class="p">},</span>
+                <span class="s2">&quot;direction&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;enum&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;forward&quot;</span><span class="p">,</span> <span class="s2">&quot;inverse&quot;</span><span class="p">],</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;New direction&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
             <span class="p">},</span>
             <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
         <span class="p">},</span>
@@ -681,7 +817,10 @@
             <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
             <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span>
                 <span class="s2">&quot;child&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Child entity name&quot;</span><span class="p">},</span>
-                <span class="s2">&quot;parent&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Parent entity name (empty to remove inheritance)&quot;</span><span class="p">},</span>
+                <span class="s2">&quot;parent&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Parent entity name (empty to remove inheritance)&quot;</span><span class="p">,</span>
+                <span class="p">},</span>
             <span class="p">},</span>
             <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;child&quot;</span><span class="p">,</span> <span class="s2">&quot;parent&quot;</span><span class="p">],</span>
         <span class="p">},</span>

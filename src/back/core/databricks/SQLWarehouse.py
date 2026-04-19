@@ -1,11 +1,16 @@
 """SQL Warehouse operations for Databricks.
 
 Provides query execution, DDL operations, and warehouse management
-through a SQL Warehouse endpoint.
+through a SQL Warehouse endpoint.  Connections are pooled so that
+repeated queries reuse existing TCP/TLS sessions.
 """
 
+import queue
+import threading
+import time
+from contextlib import contextmanager
 from databricks import sql
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
@@ -15,15 +20,38 @@ from .constants import SQL_WAREHOUSES_PATH
 
 logger = get_logger(__name__)
 
+_POOL_MAX_SIZE = 8
+_POOL_MAX_IDLE_SECS = 300
+
+
+class _PooledConnection:
+    """Wrapper that tracks creation time around a raw DB-API connection."""
+
+    __slots__ = ("conn", "created_at")
+
+    def __init__(self, conn) -> None:
+        self.conn = conn
+        self.created_at = time.monotonic()
+
+    @property
+    def age(self) -> float:
+        return time.monotonic() - self.created_at
+
 
 class SQLWarehouse:
     """Execute SQL against a Databricks SQL Warehouse.
 
     Requires a ``DatabricksAuth`` instance whose ``warehouse_id`` is set.
+    Connections are pooled and reused across calls to avoid per-query
+    TLS handshake overhead.
     """
 
     def __init__(self, auth: DatabricksAuth) -> None:
         self._auth = auth
+        self._pool: queue.Queue[_PooledConnection] = queue.Queue(
+            maxsize=_POOL_MAX_SIZE
+        )
+        self._pool_lock = threading.Lock()
 
     @property
     def warehouse_id(self) -> str:
@@ -32,6 +60,49 @@ class SQLWarehouse:
     def _require_warehouse(self) -> None:
         if not self._auth.warehouse_id:
             raise ValidationError(MSG_WAREHOUSE_ID_REQUIRED)
+
+    def _new_connection(self):
+        params = self._auth.get_sql_connection_params()
+        return sql.connect(**params)
+
+    @contextmanager
+    def _borrow(self):
+        """Borrow a connection from the pool; return it when done.
+
+        Stale connections (older than ``_POOL_MAX_IDLE_SECS``) are discarded
+        and a fresh one is created.  If the borrowed connection turns out to
+        be broken the caller should **not** return it (the ``except`` branch
+        takes care of that).
+        """
+        conn: Optional[_PooledConnection] = None
+        try:
+            conn = self._pool.get_nowait()
+            if conn.age > _POOL_MAX_IDLE_SECS:
+                self._close_quietly(conn)
+                conn = None
+        except queue.Empty:
+            conn = None
+
+        if conn is None:
+            conn = _PooledConnection(self._new_connection())
+
+        try:
+            yield conn.conn
+        except Exception:
+            self._close_quietly(conn)
+            raise
+        else:
+            try:
+                self._pool.put_nowait(conn)
+            except queue.Full:
+                self._close_quietly(conn)
+
+    @staticmethod
+    def _close_quietly(pc: _PooledConnection) -> None:
+        try:
+            pc.conn.close()
+        except Exception:
+            pass
 
     def test_connection(self) -> Tuple[bool, str]:
         """Test connectivity to the SQL Warehouse.
@@ -48,8 +119,7 @@ class SQLWarehouse:
             return False, "Missing configuration: DATABRICKS_HOST or DATABRICKS_TOKEN"
 
         try:
-            params = self._auth.get_sql_connection_params()
-            with sql.connect(**params) as conn:
+            with self._borrow() as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT 1")
                     cur.fetchone()
@@ -66,8 +136,7 @@ class SQLWarehouse:
         """Execute *query* and return rows as a list of dicts."""
         self._require_warehouse()
         try:
-            params = self._auth.get_sql_connection_params()
-            with sql.connect(**params) as conn:
+            with self._borrow() as conn:
                 with conn.cursor() as cur:
                     cur.execute(query)
                     columns = [desc[0] for desc in cur.description]
@@ -80,8 +149,7 @@ class SQLWarehouse:
         """Execute a DDL/DML *statement* without returning results."""
         self._require_warehouse()
         try:
-            params = self._auth.get_sql_connection_params()
-            with sql.connect(**params) as conn:
+            with self._borrow() as conn:
                 with conn.cursor() as cur:
                     cur.execute(statement)
             return True

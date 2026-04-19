@@ -316,10 +316,21 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Request duration logging (outermost — wraps everything)
+    from shared.fastapi.timing import RequestTimingMiddleware
+
+    app.add_middleware(RequestTimingMiddleware)
+
+    # CSRF protection
+    from shared.fastapi.csrf import CSRFMiddleware
+
+    app.add_middleware(CSRFMiddleware)
+
     # Permission enforcement (runs after session is available)
     app.add_middleware(PermissionMiddleware)
 
     # Custom file-based session middleware
+    is_app = bool(os.getenv("DATABRICKS_APP_PORT"))
     app.add_middleware(
         FileSessionMiddleware,
         secret_key=settings.secret_key,
@@ -327,7 +338,7 @@ def create_app() -> FastAPI:
         session_cookie=SESSION_COOKIE_NAME,
         max_age=settings.session_max_age,
         same_site="lax",
-        https_only=False,  # Set to True in production
+        https_only=is_app,
     )
 
     # Static files -- served from front/static/

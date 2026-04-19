@@ -916,6 +916,9 @@ The MCP app's SP needs `CAN_USE` permission on the main app. The `users` group s
 
 - **App logs**: Available in the Databricks Apps console
 - **Log level**: Configure via `LOG_LEVEL` environment variable (`DEBUG`, `INFO`, `WARNING`, `ERROR`)
+- **Structured JSON logs**: Set `LOG_FORMAT=json` to emit one JSON object per log line — ideal for log aggregation and search
+- **Request timing**: Every non-static request is logged with method, path, status code, and duration in milliseconds
+- **Thread pool**: Tune concurrent blocking work via `ONTOBRICKS_THREAD_POOL_SIZE` (default `20`)
 - **Health checks**: `GET /health` and `GET /health/detailed`
 - **Agent traces**: View under **Machine Learning > Experiments > `/Shared/ontobricks-agents`** — each agent call shows a span tree with inputs, outputs, latency, and token usage
 

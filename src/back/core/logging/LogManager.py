@@ -1,6 +1,8 @@
+import json as _json
 import logging
 import logging.config
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +13,24 @@ from shared.config.constants import (
     LOG_BACKUP_COUNT,
     LOG_MAX_BYTES,
 )
+
+
+class _JSONFormatter(logging.Formatter):
+    """Emit each log record as a single JSON line for machine parsing."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        entry = {
+            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "module": record.module,
+            "func": record.funcName,
+            "line": record.lineno,
+            "msg": record.getMessage(),
+        }
+        if record.exc_info and record.exc_info[0] is not None:
+            entry["exception"] = self.formatException(record.exc_info)
+        return _json.dumps(entry, default=str)
 
 
 class LogManager:
@@ -164,45 +184,60 @@ class LogManager:
         log_dir: Optional[str] = None,
         log_file: Optional[str] = None,
     ) -> dict:
-        """Build a logging dict-config (log4J-style hierarchy)."""
+        """Build a logging dict-config (log4J-style hierarchy).
+
+        Set ``LOG_FORMAT=json`` to emit structured JSON lines on both
+        console and file handlers (useful for log aggregation in
+        production).
+        """
         resolved_dir = cls._resolve_log_dir(log_dir)
         resolved_file = log_file or os.getenv("LOG_FILE", DEFAULT_LOG_FILE)
         log_path = os.path.join(resolved_dir, resolved_file)
+
+        use_json = os.getenv("LOG_FORMAT", "").lower() == "json"
+
+        console_formatter = "json" if use_json else "console"
+        file_formatter = "json" if use_json else "detailed"
+
+        formatters: dict = {
+            "detailed": {
+                "format": (
+                    "%(asctime)s | %(levelname)-8s | %(name)s | "
+                    "%(module)s.%(funcName)s:%(lineno)d | %(message)s"
+                ),
+                "datefmt": "%Y-%m-%dT%H:%M:%S%z",
+            },
+            "console": {
+                "format": (
+                    "%(levelname)-8s | %(name)s | "
+                    "%(module)s.%(funcName)s:%(lineno)d | %(message)s"
+                ),
+            },
+            "brief": {
+                "format": "%(levelname)-8s | %(message)s",
+            },
+        }
+
+        if use_json:
+            formatters["json"] = {"()": _JSONFormatter}
 
         return {
             "version": 1,
             "disable_existing_loggers": False,
             # ── Formatters ──────────────────────────────────────────
-            "formatters": {
-                "detailed": {
-                    "format": (
-                        "%(asctime)s | %(levelname)-8s | %(name)s | "
-                        "%(module)s.%(funcName)s:%(lineno)d | %(message)s"
-                    ),
-                    "datefmt": "%Y-%m-%dT%H:%M:%S%z",
-                },
-                "console": {
-                    "format": (
-                        "%(levelname)-8s | %(name)s | "
-                        "%(module)s.%(funcName)s:%(lineno)d | %(message)s"
-                    ),
-                },
-                "brief": {
-                    "format": "%(levelname)-8s | %(message)s",
-                },
-            },
+            "formatters": formatters,
             # ── Handlers ────────────────────────────────────────────
             "handlers": {
                 "console": {
                     "class": "logging.StreamHandler",
                     "level": level,
-                    "formatter": "console",
+                    "formatter": console_formatter,
                     "stream": "ext://sys.stdout",
                 },
                 "file": {
                     "class": "logging.handlers.RotatingFileHandler",
                     "level": level,
-                    "formatter": "detailed",
+                    "formatter": file_formatter,
                     "filename": log_path,
                     "maxBytes": LOG_MAX_BYTES,
                     "backupCount": LOG_BACKUP_COUNT,

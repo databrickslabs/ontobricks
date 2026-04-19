@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
-    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
@@ -73,6 +73,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -110,10 +111,16 @@
 <span></span><span class="sd">&quot;&quot;&quot;SQL Warehouse operations for Databricks.</span>
 
 <span class="sd">Provides query execution, DDL operations, and warehouse management</span>
-<span class="sd">through a SQL Warehouse endpoint.</span>
+<span class="sd">through a SQL Warehouse endpoint.  Connections are pooled so that</span>
+<span class="sd">repeated queries reuse existing TCP/TLS sessions.</span>
 <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">queue</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">contextmanager</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">sql</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Tuple</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span>
@@ -123,6 +130,23 @@
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
+<span class="n">_POOL_MAX_SIZE</span> <span class="o">=</span> <span class="mi">8</span>
+<span class="n">_POOL_MAX_IDLE_SECS</span> <span class="o">=</span> <span class="mi">300</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_PooledConnection</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wrapper that tracks creation time around a raw DB-API connection.&quot;&quot;&quot;</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;conn&quot;</span><span class="p">,</span> <span class="s2">&quot;created_at&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">conn</span> <span class="o">=</span> <span class="n">conn</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">created_at</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">age</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">created_at</span>
+
 
 <div class="viewcode-block" id="SQLWarehouse">
 <a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.SQLWarehouse.SQLWarehouse">[docs]</a>
@@ -130,10 +154,16 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Execute SQL against a Databricks SQL Warehouse.</span>
 
 <span class="sd">    Requires a ``DatabricksAuth`` instance whose ``warehouse_id`` is set.</span>
+<span class="sd">    Connections are pooled and reused across calls to avoid per-query</span>
+<span class="sd">    TLS handshake overhead.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">auth</span><span class="p">:</span> <span class="n">DatabricksAuth</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span> <span class="o">=</span> <span class="n">auth</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_pool</span><span class="p">:</span> <span class="n">queue</span><span class="o">.</span><span class="n">Queue</span><span class="p">[</span><span class="n">_PooledConnection</span><span class="p">]</span> <span class="o">=</span> <span class="n">queue</span><span class="o">.</span><span class="n">Queue</span><span class="p">(</span>
+            <span class="n">maxsize</span><span class="o">=</span><span class="n">_POOL_MAX_SIZE</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_pool_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">warehouse_id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
@@ -142,6 +172,49 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_require_warehouse</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">warehouse_id</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="n">MSG_WAREHOUSE_ID_REQUIRED</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_new_connection</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">get_sql_connection_params</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">sql</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
+
+    <span class="nd">@contextmanager</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_borrow</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Borrow a connection from the pool; return it when done.</span>
+
+<span class="sd">        Stale connections (older than ``_POOL_MAX_IDLE_SECS``) are discarded</span>
+<span class="sd">        and a fresh one is created.  If the borrowed connection turns out to</span>
+<span class="sd">        be broken the caller should **not** return it (the ``except`` branch</span>
+<span class="sd">        takes care of that).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">conn</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">_PooledConnection</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pool</span><span class="o">.</span><span class="n">get_nowait</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">conn</span><span class="o">.</span><span class="n">age</span> <span class="o">&gt;</span> <span class="n">_POOL_MAX_IDLE_SECS</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_close_quietly</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>
+                <span class="n">conn</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">except</span> <span class="n">queue</span><span class="o">.</span><span class="n">Empty</span><span class="p">:</span>
+            <span class="n">conn</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">if</span> <span class="n">conn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">conn</span> <span class="o">=</span> <span class="n">_PooledConnection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_new_connection</span><span class="p">())</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">conn</span><span class="o">.</span><span class="n">conn</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_close_quietly</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>
+            <span class="k">raise</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_pool</span><span class="o">.</span><span class="n">put_nowait</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">queue</span><span class="o">.</span><span class="n">Full</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_close_quietly</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_close_quietly</span><span class="p">(</span><span class="n">pc</span><span class="p">:</span> <span class="n">_PooledConnection</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">pc</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">pass</span>
 
 <div class="viewcode-block" id="SQLWarehouse.test_connection">
 <a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.SQLWarehouse.SQLWarehouse.test_connection">[docs]</a>
@@ -160,12 +233,15 @@
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Missing configuration: DATABRICKS_HOST or DATABRICKS_TOKEN&quot;</span>
 
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">get_sql_connection_params</span><span class="p">()</span>
-            <span class="k">with</span> <span class="n">sql</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_borrow</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
                 <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
                     <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT 1&quot;</span><span class="p">)</span>
                     <span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
-            <span class="n">auth_mode</span> <span class="o">=</span> <span class="s2">&quot;OAuth (Databricks App)&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">is_app_mode</span> <span class="k">else</span> <span class="s2">&quot;Personal Access Token&quot;</span>
+            <span class="n">auth_mode</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="s2">&quot;OAuth (Databricks App)&quot;</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">is_app_mode</span>
+                <span class="k">else</span> <span class="s2">&quot;Personal Access Token&quot;</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Connection successful (</span><span class="si">{</span><span class="n">auth_mode</span><span class="si">}</span><span class="s2">)&quot;</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Connection failed: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span></div>
@@ -177,8 +253,7 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Execute *query* and return rows as a list of dicts.&quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_require_warehouse</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">get_sql_connection_params</span><span class="p">()</span>
-            <span class="k">with</span> <span class="n">sql</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_borrow</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
                 <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
                     <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
                     <span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="n">desc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">desc</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">description</span><span class="p">]</span>
@@ -194,8 +269,7 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Execute a DDL/DML *statement* without returning results.&quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_require_warehouse</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">get_sql_connection_params</span><span class="p">()</span>
-            <span class="k">with</span> <span class="n">sql</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_borrow</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
                 <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
                     <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">statement</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">True</span>
@@ -204,27 +278,34 @@
             <span class="k">raise</span></div>
 
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_or_replace</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">select_sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Shared DDL wrapper for VIEW and TABLE creation.&quot;&quot;&quot;</span>
+        <span class="n">fqn</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;`</span><span class="si">{</span><span class="n">catalog</span><span class="si">}</span><span class="s2">`.`</span><span class="si">{</span><span class="n">schema</span><span class="si">}</span><span class="s2">`.`</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">`&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">ddl</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;CREATE OR REPLACE </span><span class="si">{</span><span class="n">kind</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">fqn</span><span class="si">}</span><span class="s2"> AS</span><span class="se">\n</span><span class="si">{</span><span class="n">select_sql</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">kind</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span> <span class="n">fqn</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DDL length: </span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">ddl</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">execute_statement</span><span class="p">(</span><span class="n">ddl</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;SUCCESS: </span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2"> created&quot;</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">fqn</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">kind</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">fqn</span><span class="si">}</span><span class="s2"> created successfully&quot;</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;ERROR creating </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">kind</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Failed to create </span><span class="si">{</span><span class="n">kind</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+
 <div class="viewcode-block" id="SQLWarehouse.create_or_replace_view">
 <a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.SQLWarehouse.SQLWarehouse.create_or_replace_view">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">create_or_replace_view</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">view_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">select_sql</span><span class="p">:</span> <span class="nb">str</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;``CREATE OR REPLACE VIEW`` wrapper.</span>
-
-<span class="sd">        Returns:</span>
-<span class="sd">            ``(success, message)`` tuple.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">fqn</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;`</span><span class="si">{</span><span class="n">catalog</span><span class="si">}</span><span class="s2">`.`</span><span class="si">{</span><span class="n">schema</span><span class="si">}</span><span class="s2">`.`</span><span class="si">{</span><span class="n">view_name</span><span class="si">}</span><span class="s2">`&quot;</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">ddl</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;CREATE OR REPLACE VIEW </span><span class="si">{</span><span class="n">fqn</span><span class="si">}</span><span class="s2"> AS</span><span class="se">\n</span><span class="si">{</span><span class="n">select_sql</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating view: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">fqn</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DDL length: </span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">ddl</span><span class="p">))</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">execute_statement</span><span class="p">(</span><span class="n">ddl</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;SUCCESS: View </span><span class="si">%s</span><span class="s2"> created&quot;</span><span class="p">,</span> <span class="n">fqn</span><span class="p">)</span>
-            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;View </span><span class="si">{</span><span class="n">fqn</span><span class="si">}</span><span class="s2"> created successfully&quot;</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;ERROR creating view: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
-            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Failed to create view: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span></div>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;``CREATE OR REPLACE VIEW`` wrapper.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_or_replace</span><span class="p">(</span><span class="s2">&quot;VIEW&quot;</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">view_name</span><span class="p">,</span> <span class="n">select_sql</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="SQLWarehouse.create_or_replace_table_from_query">
@@ -232,22 +313,8 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">create_or_replace_table_from_query</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">select_sql</span><span class="p">:</span> <span class="nb">str</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;``CREATE OR REPLACE TABLE ... AS SELECT`` (CTAS) wrapper.</span>
-
-<span class="sd">        Returns:</span>
-<span class="sd">            ``(success, message)`` tuple.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">fqn</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;`</span><span class="si">{</span><span class="n">catalog</span><span class="si">}</span><span class="s2">`.`</span><span class="si">{</span><span class="n">schema</span><span class="si">}</span><span class="s2">`.`</span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">`&quot;</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">ddl</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;CREATE OR REPLACE TABLE </span><span class="si">{</span><span class="n">fqn</span><span class="si">}</span><span class="s2"> AS</span><span class="se">\n</span><span class="si">{</span><span class="n">select_sql</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating table: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">fqn</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DDL length: </span><span class="si">%d</span><span class="s2"> chars&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">ddl</span><span class="p">))</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">execute_statement</span><span class="p">(</span><span class="n">ddl</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;SUCCESS: Table </span><span class="si">%s</span><span class="s2"> created&quot;</span><span class="p">,</span> <span class="n">fqn</span><span class="p">)</span>
-            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Table </span><span class="si">{</span><span class="n">fqn</span><span class="si">}</span><span class="s2"> created successfully&quot;</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;ERROR creating table: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
-            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Failed to create table: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span></div>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;``CREATE OR REPLACE TABLE ... AS SELECT`` (CTAS) wrapper.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_or_replace</span><span class="p">(</span><span class="s2">&quot;TABLE&quot;</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">select_sql</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="SQLWarehouse.get_warehouses">
@@ -269,11 +336,13 @@
                     <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;WorkspaceClient not properly initialized&quot;</span><span class="p">)</span>
                 <span class="n">warehouses</span> <span class="o">=</span> <span class="p">[]</span>
                 <span class="k">for</span> <span class="n">wh</span> <span class="ow">in</span> <span class="n">w</span><span class="o">.</span><span class="n">warehouses</span><span class="o">.</span><span class="n">list</span><span class="p">():</span>
-                    <span class="n">warehouses</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                        <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">wh</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
-                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">wh</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-                        <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">wh</span><span class="o">.</span><span class="n">state</span><span class="p">)</span> <span class="k">if</span> <span class="n">wh</span><span class="o">.</span><span class="n">state</span> <span class="k">else</span> <span class="s2">&quot;UNKNOWN&quot;</span><span class="p">,</span>
-                    <span class="p">})</span>
+                    <span class="n">warehouses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">{</span>
+                            <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">wh</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">wh</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                            <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">wh</span><span class="o">.</span><span class="n">state</span><span class="p">)</span> <span class="k">if</span> <span class="n">wh</span><span class="o">.</span><span class="n">state</span> <span class="k">else</span> <span class="s2">&quot;UNKNOWN&quot;</span><span class="p">,</span>
+                        <span class="p">}</span>
+                    <span class="p">)</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Found </span><span class="si">%d</span><span class="s2"> warehouses via SDK&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">warehouses</span><span class="p">))</span>
                 <span class="k">return</span> <span class="n">warehouses</span>
             <span class="k">except</span> <span class="ne">AttributeError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
@@ -298,11 +367,13 @@
             <span class="n">data</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
             <span class="n">warehouses</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">wh</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;warehouses&quot;</span><span class="p">,</span> <span class="p">[]):</span>
-                <span class="n">warehouses</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                    <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">wh</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">],</span>
-                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">wh</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
-                    <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="n">wh</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;state&quot;</span><span class="p">,</span> <span class="s2">&quot;UNKNOWN&quot;</span><span class="p">),</span>
-                <span class="p">})</span>
+                <span class="n">warehouses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="p">{</span>
+                        <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">wh</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">],</span>
+                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">wh</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
+                        <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="n">wh</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;state&quot;</span><span class="p">,</span> <span class="s2">&quot;UNKNOWN&quot;</span><span class="p">),</span>
+                    <span class="p">}</span>
+                <span class="p">)</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Found </span><span class="si">%d</span><span class="s2"> warehouses via REST&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">warehouses</span><span class="p">))</span>
             <span class="k">return</span> <span class="n">warehouses</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>

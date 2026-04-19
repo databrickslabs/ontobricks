@@ -183,18 +183,15 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
             )
             self._save_session(session_id, request.state.session)
 
-        # ALWAYS set session cookie to ensure browser has it
-        # Note: httponly=False allows JavaScript to access the cookie if needed
-        # samesite="lax" allows cookies to be sent with top-level navigations
         response.set_cookie(
             key=self.session_cookie,
             value=session_id,
             max_age=self.max_age,
-            path="/",  # Ensure cookie is sent for all paths
-            httponly=False,  # Allow JS to see the cookie for debugging
-            samesite="lax",  # Allow GET requests from external sites
-            secure=False,  # Allow HTTP (not just HTTPS)
-            domain=None,  # Let browser determine domain
+            path="/",
+            httponly=False,
+            samesite=self.same_site,
+            secure=self.https_only,
+            domain=None,
         )
 
         return response

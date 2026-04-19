@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
-    <script src="../../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../../../../../genindex.html" />
@@ -73,6 +73,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -108,6 +109,7 @@
             
   <h1>Source code for back.core.triplestore.delta.DeltaTripleStore</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;Delta (Databricks SQL Warehouse) triple store backend.&quot;&quot;&quot;</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
@@ -179,7 +181,7 @@
         <span class="kn">from</span><span class="w"> </span><span class="nn">databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">sql</span>
 
         <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
-        <span class="n">conn_params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">_get_sql_connection_params</span><span class="p">()</span>
+        <span class="n">conn_params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">get_sql_connection_params</span><span class="p">()</span>
         <span class="k">with</span> <span class="n">sql</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="o">**</span><span class="n">conn_params</span><span class="p">)</span> <span class="k">as</span> <span class="n">connection</span><span class="p">:</span>
             <span class="k">with</span> <span class="n">connection</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cursor</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">),</span> <span class="n">batch_size</span><span class="p">):</span>
@@ -196,7 +198,12 @@
                     <span class="n">total</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
                     <span class="k">if</span> <span class="n">on_progress</span><span class="p">:</span>
                         <span class="n">on_progress</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">))</span>
-                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Inserted batch </span><span class="si">%d</span><span class="s2">-</span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">i</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">))</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                        <span class="s2">&quot;Inserted batch </span><span class="si">%d</span><span class="s2">-</span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+                        <span class="n">i</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">),</span>
+                        <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">),</span>
+                    <span class="p">)</span>
 
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Inserted </span><span class="si">%d</span><span class="s2"> triples into </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">total</span></div>
@@ -234,7 +241,10 @@
             <span class="k">return</span> <span class="kc">True</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">error_msg</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
-            <span class="k">if</span> <span class="s2">&quot;TABLE_OR_VIEW_NOT_FOUND&quot;</span> <span class="ow">in</span> <span class="n">error_msg</span> <span class="ow">or</span> <span class="s2">&quot;does not exist&quot;</span> <span class="ow">in</span> <span class="n">error_msg</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="s2">&quot;TABLE_OR_VIEW_NOT_FOUND&quot;</span> <span class="ow">in</span> <span class="n">error_msg</span>
+                <span class="ow">or</span> <span class="s2">&quot;does not exist&quot;</span> <span class="ow">in</span> <span class="n">error_msg</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="p">):</span>
                 <span class="k">return</span> <span class="kc">False</span>
             <span class="k">raise</span></div>
 

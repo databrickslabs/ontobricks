@@ -10,7 +10,7 @@
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
-    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -90,6 +90,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -174,7 +175,7 @@
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">.databricksignore</span></code></p></td>
 <td><p>Excludes non-runtime files from the bundle sync</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">deploy.sh</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">scripts/deploy.sh</span></code></p></td>
 <td><p>Convenience wrapper around DAB commands</p></td>
 </tr>
 </tbody>
@@ -232,7 +233,7 @@ uv<span class="w"> </span>sync
 </section>
 <section id="run-locally">
 <h3>Run Locally<a class="headerlink" href="#run-locally" title="Link to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>./start.sh
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>scripts/start.sh
 <span class="c1"># Or directly: uv run python run.py</span>
 <span class="c1"># Open http://localhost:8000</span>
 </pre></div>
@@ -359,7 +360,7 @@ databricks<span class="w"> </span>current-user<span class="w"> </span>me
 databricks<span class="w"> </span>bundle<span class="w"> </span>deploy
 
 <span class="c1"># Or use the convenience script</span>
-./deploy.sh
+scripts/deploy.sh
 </pre></div>
 </div>
 <p>If the apps already exist in the workspace (e.g., from a previous manual deploy), bind them first:</p>
@@ -379,9 +380,9 @@ databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="
 </pre></div>
 </div>
 <p>Or use the convenience script:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>./deploy.sh<span class="w">              </span><span class="c1"># deploy + start main app</span>
-./deploy.sh<span class="w"> </span>--all<span class="w">        </span><span class="c1"># deploy + start both apps</span>
-./deploy.sh<span class="w"> </span>--mcp-only<span class="w">   </span><span class="c1"># deploy + start MCP only</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>scripts/deploy.sh<span class="w">              </span><span class="c1"># deploy + start main app</span>
+scripts/deploy.sh<span class="w"> </span>--all<span class="w">        </span><span class="c1"># deploy + start both apps</span>
+scripts/deploy.sh<span class="w"> </span>--mcp-only<span class="w">   </span><span class="c1"># deploy + start MCP only</span>
 </pre></div>
 </div>
 </section>
@@ -420,15 +421,15 @@ databricks<span class="w"> </span>bundle<span class="w"> </span>summary
 </pre></div>
 </div>
 </section>
-<section id="deploy-sh-reference">
-<h3><code class="docutils literal notranslate"><span class="pre">deploy.sh</span></code> Reference<a class="headerlink" href="#deploy-sh-reference" title="Link to this heading">¶</a></h3>
+<section id="scripts-deploy-sh-reference">
+<h3><code class="docutils literal notranslate"><span class="pre">scripts/deploy.sh</span></code> Reference<a class="headerlink" href="#scripts-deploy-sh-reference" title="Link to this heading">¶</a></h3>
 <p>The convenience script wraps all DAB commands:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>./deploy.sh<span class="w">                  </span><span class="c1"># validate + deploy + run main app (dev)</span>
-./deploy.sh<span class="w"> </span>--all<span class="w">            </span><span class="c1"># validate + deploy + run both apps</span>
-./deploy.sh<span class="w"> </span>--mcp-only<span class="w">       </span><span class="c1"># validate + deploy + run MCP only</span>
-./deploy.sh<span class="w"> </span>-t<span class="w"> </span>prod<span class="w">          </span><span class="c1"># deploy to production target</span>
-./deploy.sh<span class="w"> </span>--no-run<span class="w">         </span><span class="c1"># deploy without starting apps</span>
-./deploy.sh<span class="w"> </span>--bind<span class="w">           </span><span class="c1"># also bind existing apps post-deploy</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>scripts/deploy.sh<span class="w">                  </span><span class="c1"># validate + deploy + run main app (dev)</span>
+scripts/deploy.sh<span class="w"> </span>--all<span class="w">            </span><span class="c1"># validate + deploy + run both apps</span>
+scripts/deploy.sh<span class="w"> </span>--mcp-only<span class="w">       </span><span class="c1"># validate + deploy + run MCP only</span>
+scripts/deploy.sh<span class="w"> </span>-t<span class="w"> </span>prod<span class="w">          </span><span class="c1"># deploy to production target</span>
+scripts/deploy.sh<span class="w"> </span>--no-run<span class="w">         </span><span class="c1"># deploy without starting apps</span>
+scripts/deploy.sh<span class="w"> </span>--bind<span class="w">           </span><span class="c1"># also bind existing apps post-deploy</span>
 </pre></div>
 </div>
 </section>
@@ -658,7 +659,7 @@ databricks<span class="w"> </span>sql<span class="w"> </span>query<span class="w
 databricks<span class="w"> </span>bundle<span class="w"> </span>validate
 
 <span class="c1"># Deploy and start</span>
-./deploy.sh<span class="w"> </span>--all
+scripts/deploy.sh<span class="w"> </span>--all
 </pre></div>
 </div>
 </section>
@@ -687,7 +688,7 @@ databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"
 </pre></div>
 </div>
 <p>Update <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_URL</span></code> in <code class="docutils literal notranslate"><span class="pre">src/mcp-server/app.yaml</span></code> with this URL, then redeploy:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>./deploy.sh<span class="w"> </span>--mcp-only
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>scripts/deploy.sh<span class="w"> </span>--mcp-only
 </pre></div>
 </div>
 </section>
@@ -700,12 +701,12 @@ databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"
 <span class="p">[</span> <span class="p">]</span> <span class="mf">5.</span>  <span class="n">Update</span> <span class="n">databricks</span><span class="o">.</span><span class="n">yml</span> <span class="n">permissions</span> <span class="p">(</span><span class="n">your</span> <span class="n">email</span><span class="p">)</span>
 <span class="p">[</span> <span class="p">]</span> <span class="mf">6.</span>  <span class="n">Update</span> <span class="n">app</span><span class="o">.</span><span class="n">yaml</span> <span class="p">(</span><span class="n">DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT</span><span class="p">,</span> <span class="n">DATABRICKS_TRIPLESTORE_TABLE</span><span class="p">)</span>
 <span class="p">[</span> <span class="p">]</span> <span class="mf">7.</span>  <span class="n">databricks</span> <span class="n">bundle</span> <span class="n">validate</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">8.</span>  <span class="o">./</span><span class="n">deploy</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="nb">all</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">8.</span>  <span class="n">scripts</span><span class="o">/</span><span class="n">deploy</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="nb">all</span>
 <span class="p">[</span> <span class="p">]</span> <span class="mf">9.</span>  <span class="n">Bind</span> <span class="n">sql</span><span class="o">-</span><span class="n">warehouse</span> <span class="ow">and</span> <span class="n">volume</span> <span class="n">resources</span> <span class="ow">in</span> <span class="n">the</span> <span class="n">Apps</span> <span class="n">UI</span> <span class="p">(</span><span class="n">both</span> <span class="n">apps</span><span class="p">)</span>
 <span class="p">[</span> <span class="p">]</span> <span class="mf">10.</span> <span class="n">Initialize</span> <span class="n">registry</span> <span class="p">(</span><span class="n">Settings</span> <span class="o">&gt;</span> <span class="n">Registry</span> <span class="o">&gt;</span> <span class="n">Initialize</span><span class="p">)</span>
 <span class="p">[</span> <span class="p">]</span> <span class="mf">11.</span> <span class="n">Verify</span> <span class="n">both</span> <span class="n">apps</span> <span class="n">are</span> <span class="n">RUNNING</span>
 <span class="p">[</span> <span class="p">]</span> <span class="mf">12.</span> <span class="n">Update</span> <span class="n">ONTOBRICKS_URL</span> <span class="ow">in</span> <span class="n">src</span><span class="o">/</span><span class="n">mcp</span><span class="o">-</span><span class="n">server</span><span class="o">/</span><span class="n">app</span><span class="o">.</span><span class="n">yaml</span> <span class="k">with</span> <span class="n">the</span> <span class="n">main</span> <span class="n">app</span> <span class="n">URL</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">13.</span> <span class="o">./</span><span class="n">deploy</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">mcp</span><span class="o">-</span><span class="n">only</span> <span class="p">(</span><span class="n">redeploy</span> <span class="n">MCP</span> <span class="k">with</span> <span class="n">correct</span> <span class="n">URL</span><span class="p">)</span>
+<span class="p">[</span> <span class="p">]</span> <span class="mf">13.</span> <span class="n">scripts</span><span class="o">/</span><span class="n">deploy</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">mcp</span><span class="o">-</span><span class="n">only</span> <span class="p">(</span><span class="n">redeploy</span> <span class="n">MCP</span> <span class="k">with</span> <span class="n">correct</span> <span class="n">URL</span><span class="p">)</span>
 <span class="p">[</span> <span class="p">]</span> <span class="mf">14.</span> <span class="n">Verify</span> <span class="n">MCP</span> <span class="n">appears</span> <span class="ow">in</span> <span class="n">Databricks</span> <span class="n">Playground</span>
 </pre></div>
 </div>
@@ -753,10 +754,10 @@ databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"
 <h3>Deploy with DAB<a class="headerlink" href="#deploy-with-dab" title="Link to this heading">¶</a></h3>
 <p>The MCP server is deployed alongside the main app by the same <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code> bundle:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Deploy both apps</span>
-./deploy.sh<span class="w"> </span>--all
+scripts/deploy.sh<span class="w"> </span>--all
 
 <span class="c1"># Or deploy MCP only (main app already running)</span>
-./deploy.sh<span class="w"> </span>--mcp-only
+scripts/deploy.sh<span class="w"> </span>--mcp-only
 </pre></div>
 </div>
 </section>
@@ -858,12 +859,12 @@ uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </sp
 </pre></div>
 </div>
 <p>Or via the convenience wrapper at the project root:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>mcp_server.py<span class="w">              </span><span class="c1"># stdio (default)</span>
-python<span class="w"> </span>mcp_server.py<span class="w"> </span>--http<span class="w">       </span><span class="c1"># streamable-http on port 9100</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>src/mcp-server/mcp_server.py<span class="w">              </span><span class="c1"># stdio (default)</span>
+python<span class="w"> </span>src/mcp-server/mcp_server.py<span class="w"> </span>--http<span class="w">       </span><span class="c1"># streamable-http on port 9100</span>
 </pre></div>
 </div>
 <p>Override the target URL:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">ONTOBRICKS_URL</span><span class="o">=</span>http://your-host:8000<span class="w"> </span>python<span class="w"> </span>mcp_server.py
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">ONTOBRICKS_URL</span><span class="o">=</span>http://your-host:8000<span class="w"> </span>python<span class="w"> </span>src/mcp-server/mcp_server.py
 </pre></div>
 </div>
 </section>
@@ -962,7 +963,7 @@ python<span class="w"> </span>mcp_server.py<span class="w"> </span>--http<span c
 ├── app.yaml                # Main app runtime config
 ├── src/mcp-server/
 │   └── app.yaml            # MCP server runtime config
-└── dab/
+└── docs/dab-reference.md
     └── README.md           # DAB-specific documentation
 </pre></div>
 </div>
@@ -1074,7 +1075,7 @@ databricks<span class="w"> </span>bundle<span class="w"> </span>deploy
         [ ] (local dev only) REGISTRY_CATALOG / REGISTRY_SCHEMA / REGISTRY_VOLUME
 [ ] 6.  Validate: databricks bundle validate
 [ ] 7.  Deploy main app:
-          ./deploy.sh
+          scripts/deploy.sh
 [ ] 8.  Bind sql-warehouse resource in the Apps UI
 [ ] 9.  Bind volume resource to the registry UC Volume
 [ ] 10. Verify main app is RUNNING:
@@ -1084,7 +1085,7 @@ databricks<span class="w"> </span>bundle<span class="w"> </span>deploy
 [ ] 12. (If using MCP) Update ONTOBRICKS_URL in src/mcp-server/app.yaml:
           databricks apps get ontobricks -o json | python3 -c &quot;import sys,json; print(json.load(sys.stdin)[&#39;url&#39;])&quot;
 [ ] 13. (If using MCP) Deploy MCP server:
-          ./deploy.sh --mcp-only
+          scripts/deploy.sh --mcp-only
 [ ] 14. (If using MCP) Bind MCP resources (same warehouse + volume)
 [ ] 15. (If using MCP) Verify in Databricks Playground
 </pre></div>
@@ -1178,6 +1179,9 @@ databricks<span class="w"> </span>workspace<span class="w"> </span>delete<span c
 <ul class="simple">
 <li><p><strong>App logs</strong>: Available in the Databricks Apps console</p></li>
 <li><p><strong>Log level</strong>: Configure via <code class="docutils literal notranslate"><span class="pre">LOG_LEVEL</span></code> environment variable (<code class="docutils literal notranslate"><span class="pre">DEBUG</span></code>, <code class="docutils literal notranslate"><span class="pre">INFO</span></code>, <code class="docutils literal notranslate"><span class="pre">WARNING</span></code>, <code class="docutils literal notranslate"><span class="pre">ERROR</span></code>)</p></li>
+<li><p><strong>Structured JSON logs</strong>: Set <code class="docutils literal notranslate"><span class="pre">LOG_FORMAT=json</span></code> to emit one JSON object per log line — ideal for log aggregation and search</p></li>
+<li><p><strong>Request timing</strong>: Every non-static request is logged with method, path, status code, and duration in milliseconds</p></li>
+<li><p><strong>Thread pool</strong>: Tune concurrent blocking work via <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_THREAD_POOL_SIZE</span></code> (default <code class="docutils literal notranslate"><span class="pre">20</span></code>)</p></li>
 <li><p><strong>Health checks</strong>: <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health</span></code> and <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health/detailed</span></code></p></li>
 <li><p><strong>Agent traces</strong>: View under <strong>Machine Learning &gt; Experiments &gt; <code class="docutils literal notranslate"><span class="pre">/Shared/ontobricks-agents</span></code></strong> — each agent call shows a span tree with inputs, outputs, latency, and token usage</p></li>
 </ul>
@@ -1186,7 +1190,7 @@ databricks<span class="w"> </span>workspace<span class="w"> </span>delete<span c
 <h3>Updating<a class="headerlink" href="#updating" title="Link to this heading">¶</a></h3>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Pull latest code and redeploy</span>
 git<span class="w"> </span>pull<span class="w"> </span>origin<span class="w"> </span>main
-./deploy.sh<span class="w"> </span>--all
+scripts/deploy.sh<span class="w"> </span>--all
 </pre></div>
 </div>
 </section>

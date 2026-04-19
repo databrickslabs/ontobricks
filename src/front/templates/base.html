@@ -30,6 +30,7 @@
     <script defer src="{{ url_for('static', filename='global/js/sidebar-nav.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/task-tracker.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/base-ui-handlers.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='global/js/breadcrumb.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/emoji-picker.js') }}?v={{ asset_version }}"></script>
     
     {% block extra_css %}{% endblock %}
@@ -220,6 +221,11 @@
             <span class="ob-spinner-label" id="domainLoadingLabel">Loading domain...</span>
         </div>
     </div>
+
+    <!-- Breadcrumb -->
+    <nav id="obBreadcrumb" class="ob-breadcrumb d-none" aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0" id="obBreadcrumbList"></ol>
+    </nav>
 
     <!-- Main Content -->
     <div class="content-wrapper">

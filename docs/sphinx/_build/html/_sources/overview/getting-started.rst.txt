@@ -53,7 +53,7 @@ Building This Documentation
 .. code-block:: bash
 
    # From the project root
-   ./build_docs.sh
+   scripts/build_docs.sh
 
    # Or manually
    cd sphinx && make html

@@ -446,6 +446,11 @@ DATABRICKS_CATALOG=main
 DATABRICKS_SCHEMA=default
 SECRET_KEY=your-secret-key-here
 DATABRICKS_APP_PORT=8000
+
+## Performance / Observability (optional)
+LOG_FORMAT=json                        # Structured JSON logging (default: text)
+LOG_LEVEL=INFO                         # DEBUG, INFO, WARNING, ERROR, CRITICAL
+ONTOBRICKS_THREAD_POOL_SIZE=20         # Max threads for blocking I/O
 ```
 
 #### Shell Export

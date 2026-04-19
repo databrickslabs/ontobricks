@@ -1,6 +1,10 @@
 ``back.core.triplestore`` -- Pluggable RDF/Graph Backends
 ==========================================================
 
+The triple store package covers Unity Catalog / Delta materialization and
+related services. **Graph database** engines (LadybugDB, Cypher, volume sync)
+live in ``back.core.graphdb``; see :doc:`app.core.graphdb`.
+
 Constants
 ---------
 
@@ -37,44 +41,6 @@ Delta Backend
 ~~~~~~~~~~~~~
 
 .. automodule:: back.core.triplestore.delta.DeltaTripleStore
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-LadybugDB Backend
-~~~~~~~~~~~~~~~~~~
-
-.. automodule:: back.core.triplestore.ladybugdb.LadybugBase
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: back.core.triplestore.ladybugdb.LadybugFlatStore
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: back.core.triplestore.ladybugdb.LadybugGraphStore
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: back.core.triplestore.ladybugdb.models
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: back.core.triplestore.ladybugdb.GraphSchema
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: back.core.triplestore.ladybugdb.GraphSchemaBuilder
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: back.core.triplestore.ladybugdb.GraphSyncService
    :members:
    :undoc-members:
    :show-inheritance:

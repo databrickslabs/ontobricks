@@ -9,7 +9,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
-    <script src="../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
@@ -73,6 +73,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -112,11 +113,17 @@
 <span class="sd">Wraps the SCIM v2 and Permissions REST APIs so that workspace-level</span>
 <span class="sd">operations are isolated from SQL / UC / file concerns.</span>
 <span class="sd">&quot;&quot;&quot;</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.DatabricksAuth</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksAuth</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">SCIM_ME_PATH</span><span class="p">,</span> <span class="n">SCIM_USERS_PATH</span><span class="p">,</span> <span class="n">SCIM_GROUPS_PATH</span><span class="p">,</span> <span class="n">PERMISSIONS_APPS_PATH</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.constants</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">SCIM_ME_PATH</span><span class="p">,</span>
+    <span class="n">SCIM_USERS_PATH</span><span class="p">,</span>
+    <span class="n">SCIM_GROUPS_PATH</span><span class="p">,</span>
+    <span class="n">PERMISSIONS_APPS_PATH</span><span class="p">,</span>
+<span class="p">)</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
@@ -180,11 +187,13 @@
                 <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Resources&quot;</span><span class="p">,</span> <span class="p">[]):</span>
                     <span class="n">email</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;userName&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
                     <span class="k">if</span> <span class="n">email</span><span class="p">:</span>
-                        <span class="n">users</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                            <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">email</span><span class="p">,</span>
-                            <span class="s2">&quot;display_name&quot;</span><span class="p">:</span> <span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;displayName&quot;</span><span class="p">,</span> <span class="n">email</span><span class="p">),</span>
-                            <span class="s2">&quot;active&quot;</span><span class="p">:</span> <span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;active&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
-                        <span class="p">})</span>
+                        <span class="n">users</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="p">{</span>
+                                <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">email</span><span class="p">,</span>
+                                <span class="s2">&quot;display_name&quot;</span><span class="p">:</span> <span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;displayName&quot;</span><span class="p">,</span> <span class="n">email</span><span class="p">),</span>
+                                <span class="s2">&quot;active&quot;</span><span class="p">:</span> <span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;active&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
+                            <span class="p">}</span>
+                        <span class="p">)</span>
                 <span class="n">total</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;totalResults&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
                 <span class="n">start_index</span> <span class="o">+=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;itemsPerPage&quot;</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">start_index</span> <span class="o">&gt;</span> <span class="n">total</span> <span class="ow">or</span> <span class="n">start_index</span> <span class="o">&gt;</span> <span class="n">max_results</span><span class="p">:</span>
@@ -231,11 +240,12 @@
 
 <div class="viewcode-block" id="WorkspaceService.search_users">
 <a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.WorkspaceService.WorkspaceService.search_users">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">search_users</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">max_results</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">search_users</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">max_results</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">500</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Search workspace users via SCIM ``filter``.</span>
 
 <span class="sd">        Uses a server-side ``co`` (contains) filter on ``userName`` and</span>
-<span class="sd">        ``displayName`` so results are relevant even in large workspaces.</span>
+<span class="sd">        ``displayName``.  Paginates through all matching SCIM pages so</span>
+<span class="sd">        every workspace user matching *query* is returned.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">requests</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">req</span>
 
@@ -245,22 +255,37 @@
         <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">host</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
         <span class="n">headers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">get_auth_headers</span><span class="p">()</span>
         <span class="n">scim_filter</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;userName co &quot;</span><span class="si">{</span><span class="n">query</span><span class="si">}</span><span class="s1">&quot; or displayName co &quot;</span><span class="si">{</span><span class="n">query</span><span class="si">}</span><span class="s1">&quot;&#39;</span>
+        <span class="n">users</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">start_index</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">page_size</span> <span class="o">=</span> <span class="mi">100</span>
+
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">resp</span> <span class="o">=</span> <span class="n">req</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}{</span><span class="n">SCIM_USERS_PATH</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span>
-                <span class="n">params</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;filter&quot;</span><span class="p">:</span> <span class="n">scim_filter</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="n">max_results</span><span class="p">},</span>
-            <span class="p">)</span>
-            <span class="n">resp</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
-            <span class="n">users</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">resp</span><span class="o">.</span><span class="n">json</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Resources&quot;</span><span class="p">,</span> <span class="p">[]):</span>
-                <span class="n">email</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;userName&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">email</span><span class="p">:</span>
-                    <span class="n">users</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                        <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">email</span><span class="p">,</span>
-                        <span class="s2">&quot;display_name&quot;</span><span class="p">:</span> <span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;displayName&quot;</span><span class="p">,</span> <span class="n">email</span><span class="p">),</span>
-                        <span class="s2">&quot;active&quot;</span><span class="p">:</span> <span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;active&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
-                    <span class="p">})</span>
+            <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="n">resp</span> <span class="o">=</span> <span class="n">req</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}{</span><span class="n">SCIM_USERS_PATH</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span>
+                    <span class="n">params</span><span class="o">=</span><span class="p">{</span>
+                        <span class="s2">&quot;filter&quot;</span><span class="p">:</span> <span class="n">scim_filter</span><span class="p">,</span>
+                        <span class="s2">&quot;startIndex&quot;</span><span class="p">:</span> <span class="n">start_index</span><span class="p">,</span>
+                        <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="n">page_size</span><span class="p">,</span>
+                    <span class="p">},</span>
+                <span class="p">)</span>
+                <span class="n">resp</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+                <span class="n">data</span> <span class="o">=</span> <span class="n">resp</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+                <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Resources&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+                    <span class="n">email</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;userName&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">email</span><span class="p">:</span>
+                        <span class="n">users</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="p">{</span>
+                                <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">email</span><span class="p">,</span>
+                                <span class="s2">&quot;display_name&quot;</span><span class="p">:</span> <span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;displayName&quot;</span><span class="p">,</span> <span class="n">email</span><span class="p">),</span>
+                                <span class="s2">&quot;active&quot;</span><span class="p">:</span> <span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;active&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
+                            <span class="p">}</span>
+                        <span class="p">)</span>
+                <span class="n">total</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;totalResults&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                <span class="n">start_index</span> <span class="o">+=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;itemsPerPage&quot;</span><span class="p">,</span> <span class="n">page_size</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">start_index</span> <span class="o">&gt;</span> <span class="n">total</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">users</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">max_results</span><span class="p">:</span>
+                    <span class="k">break</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;SCIM user search &#39;</span><span class="si">%s</span><span class="s2">&#39;: </span><span class="si">%d</span><span class="s2"> results&quot;</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">users</span><span class="p">))</span>
             <span class="k">return</span> <span class="n">users</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
@@ -270,8 +295,12 @@
 
 <div class="viewcode-block" id="WorkspaceService.search_groups">
 <a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.WorkspaceService.WorkspaceService.search_groups">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">search_groups</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">max_results</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Search workspace groups via SCIM ``filter``.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">search_groups</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">max_results</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">500</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Search workspace groups via SCIM ``filter``.</span>
+
+<span class="sd">        Paginates through all matching SCIM pages so every workspace</span>
+<span class="sd">        group matching *query* is returned.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">requests</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">req</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">has_valid_auth</span><span class="p">()</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">query</span><span class="p">:</span>
@@ -280,18 +309,31 @@
         <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">host</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
         <span class="n">headers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">get_auth_headers</span><span class="p">()</span>
         <span class="n">scim_filter</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;displayName co &quot;</span><span class="si">{</span><span class="n">query</span><span class="si">}</span><span class="s1">&quot;&#39;</span>
+        <span class="n">groups</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">start_index</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">page_size</span> <span class="o">=</span> <span class="mi">100</span>
+
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">resp</span> <span class="o">=</span> <span class="n">req</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}{</span><span class="n">SCIM_GROUPS_PATH</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span>
-                <span class="n">params</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;filter&quot;</span><span class="p">:</span> <span class="n">scim_filter</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="n">max_results</span><span class="p">},</span>
-            <span class="p">)</span>
-            <span class="n">resp</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
-            <span class="n">groups</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">resp</span><span class="o">.</span><span class="n">json</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Resources&quot;</span><span class="p">,</span> <span class="p">[]):</span>
-                <span class="n">name</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;displayName&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">name</span><span class="p">:</span>
-                    <span class="n">groups</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;display_name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)})</span>
+            <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="n">resp</span> <span class="o">=</span> <span class="n">req</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">host</span><span class="si">}{</span><span class="n">SCIM_GROUPS_PATH</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span>
+                    <span class="n">params</span><span class="o">=</span><span class="p">{</span>
+                        <span class="s2">&quot;filter&quot;</span><span class="p">:</span> <span class="n">scim_filter</span><span class="p">,</span>
+                        <span class="s2">&quot;startIndex&quot;</span><span class="p">:</span> <span class="n">start_index</span><span class="p">,</span>
+                        <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="n">page_size</span><span class="p">,</span>
+                    <span class="p">},</span>
+                <span class="p">)</span>
+                <span class="n">resp</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+                <span class="n">data</span> <span class="o">=</span> <span class="n">resp</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+                <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Resources&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+                    <span class="n">name</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;displayName&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">name</span><span class="p">:</span>
+                        <span class="n">groups</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;display_name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)})</span>
+                <span class="n">total</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;totalResults&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                <span class="n">start_index</span> <span class="o">+=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;itemsPerPage&quot;</span><span class="p">,</span> <span class="n">page_size</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">start_index</span> <span class="o">&gt;</span> <span class="n">total</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">max_results</span><span class="p">:</span>
+                    <span class="k">break</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;SCIM group search &#39;</span><span class="si">%s</span><span class="s2">&#39;: </span><span class="si">%d</span><span class="s2"> results&quot;</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">))</span>
             <span class="k">return</span> <span class="n">groups</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
@@ -325,11 +367,13 @@
                     <span class="ow">or</span> <span class="n">acl</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;service_principal_name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
                 <span class="p">)</span>
                 <span class="k">for</span> <span class="n">perm</span> <span class="ow">in</span> <span class="n">acl</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;all_permissions&quot;</span><span class="p">,</span> <span class="p">[]):</span>
-                    <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                        <span class="s2">&quot;principal&quot;</span><span class="p">:</span> <span class="n">principal</span><span class="p">,</span>
-                        <span class="s2">&quot;permission_level&quot;</span><span class="p">:</span> <span class="n">perm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;permission_level&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                        <span class="s2">&quot;inherited&quot;</span><span class="p">:</span> <span class="n">perm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;inherited&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
-                    <span class="p">})</span>
+                    <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">{</span>
+                            <span class="s2">&quot;principal&quot;</span><span class="p">:</span> <span class="n">principal</span><span class="p">,</span>
+                            <span class="s2">&quot;permission_level&quot;</span><span class="p">:</span> <span class="n">perm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;permission_level&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                            <span class="s2">&quot;inherited&quot;</span><span class="p">:</span> <span class="n">perm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;inherited&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+                        <span class="p">}</span>
+                    <span class="p">)</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;App &#39;</span><span class="si">%s</span><span class="s2">&#39; has </span><span class="si">%d</span><span class="s2"> permission entries&quot;</span><span class="p">,</span> <span class="n">app_name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">))</span>
             <span class="k">return</span> <span class="n">results</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
@@ -372,22 +416,28 @@
 
                 <span class="k">if</span> <span class="n">acl</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;user_name&quot;</span><span class="p">):</span>
                     <span class="n">email</span> <span class="o">=</span> <span class="n">acl</span><span class="p">[</span><span class="s2">&quot;user_name&quot;</span><span class="p">]</span>
-                    <span class="n">users</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                        <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">email</span><span class="p">,</span>
-                        <span class="s2">&quot;display_name&quot;</span><span class="p">:</span> <span class="n">email</span><span class="p">,</span>
-                        <span class="s2">&quot;active&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-                        <span class="s2">&quot;permission_level&quot;</span><span class="p">:</span> <span class="n">level</span><span class="p">,</span>
-                    <span class="p">})</span>
+                    <span class="n">users</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">{</span>
+                            <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">email</span><span class="p">,</span>
+                            <span class="s2">&quot;display_name&quot;</span><span class="p">:</span> <span class="n">email</span><span class="p">,</span>
+                            <span class="s2">&quot;active&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                            <span class="s2">&quot;permission_level&quot;</span><span class="p">:</span> <span class="n">level</span><span class="p">,</span>
+                        <span class="p">}</span>
+                    <span class="p">)</span>
                 <span class="k">elif</span> <span class="n">acl</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;group_name&quot;</span><span class="p">):</span>
-                    <span class="n">groups</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
-                        <span class="s2">&quot;display_name&quot;</span><span class="p">:</span> <span class="n">acl</span><span class="p">[</span><span class="s2">&quot;group_name&quot;</span><span class="p">],</span>
-                        <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">acl</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;group_name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                        <span class="s2">&quot;permission_level&quot;</span><span class="p">:</span> <span class="n">level</span><span class="p">,</span>
-                    <span class="p">})</span>
+                    <span class="n">groups</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">{</span>
+                            <span class="s2">&quot;display_name&quot;</span><span class="p">:</span> <span class="n">acl</span><span class="p">[</span><span class="s2">&quot;group_name&quot;</span><span class="p">],</span>
+                            <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">acl</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;group_name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                            <span class="s2">&quot;permission_level&quot;</span><span class="p">:</span> <span class="n">level</span><span class="p">,</span>
+                        <span class="p">}</span>
+                    <span class="p">)</span>
 
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                 <span class="s2">&quot;App &#39;</span><span class="si">%s</span><span class="s2">&#39; principals: </span><span class="si">%d</span><span class="s2"> users, </span><span class="si">%d</span><span class="s2"> groups&quot;</span><span class="p">,</span>
-                <span class="n">app_name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">users</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">),</span>
+                <span class="n">app_name</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">users</span><span class="p">),</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">),</span>
             <span class="p">)</span>
             <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;users&quot;</span><span class="p">:</span> <span class="n">users</span><span class="p">,</span> <span class="s2">&quot;groups&quot;</span><span class="p">:</span> <span class="n">groups</span><span class="p">}</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>

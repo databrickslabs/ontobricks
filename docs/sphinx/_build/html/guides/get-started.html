@@ -10,7 +10,7 @@
     <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
-    <script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/documentation_options.js?v=a58bc63e"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
@@ -90,6 +90,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
@@ -145,8 +146,8 @@ git<span class="w"> </span>clone<span class="w"> </span>&lt;repository-url&gt;
 <span class="nb">cd</span><span class="w"> </span>OntoBricks
 
 <span class="c1"># Make the setup script executable and run it</span>
-chmod<span class="w"> </span>+x<span class="w"> </span>setup.sh
-./setup.sh
+chmod<span class="w"> </span>+x<span class="w"> </span>scripts/setup.sh
+scripts/setup.sh
 </pre></div>
 </div>
 <p>The setup script will:</p>
@@ -237,10 +238,10 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 <section id="start-the-application">
 <h3>Start the Application<a class="headerlink" href="#start-the-application" title="Link to this heading">¶</a></h3>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Using the start script (recommended)</span>
-./start.sh
+scripts/start.sh
 
 <span class="c1"># Run in background</span>
-./start.sh<span class="w"> </span>--background
+scripts/start.sh<span class="w"> </span>--background
 
 <span class="c1"># Or using make</span>
 make<span class="w"> </span>run
@@ -254,7 +255,7 @@ python<span class="w"> </span>run.py
 <section id="stop-the-application">
 <h3>Stop the Application<a class="headerlink" href="#stop-the-application" title="Link to this heading">¶</a></h3>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Using the stop script</span>
-./stop.sh
+scripts/stop.sh
 
 <span class="c1"># Or press Ctrl+C if running in foreground</span>
 </pre></div>
@@ -444,13 +445,13 @@ python<span class="w"> </span>run.py
 <section id="common-commands">
 <h2>Common Commands<a class="headerlink" href="#common-commands" title="Link to this heading">¶</a></h2>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Start application</span>
-./start.sh
+scripts/start.sh
 
 <span class="c1"># Start in background</span>
-./start.sh<span class="w"> </span>--background
+scripts/start.sh<span class="w"> </span>--background
 
 <span class="c1"># Stop application</span>
-./stop.sh
+scripts/stop.sh
 
 <span class="c1"># Run tests</span>
 make<span class="w"> </span><span class="nb">test</span>
@@ -579,7 +580,7 @@ make<span class="w"> </span><span class="nb">help</span>
 rm<span class="w"> </span>-rf<span class="w"> </span>.venv
 
 <span class="c1"># Run setup again</span>
-./setup.sh
+scripts/setup.sh
 </pre></div>
 </div>
 </section>
@@ -677,15 +678,15 @@ rm<span class="w"> </span>-rf<span class="w"> </span>.venv
 <td><p><em>(from volume resource)</em></p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_CATALOG</span></code></p></td>
-<td><p>Unity Catalog catalog for the project registry (local dev fallback)</p></td>
+<td><p>Unity Catalog catalog for the domain registry (local dev fallback)</p></td>
 <td><p><em>(from session or Settings)</em></p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_SCHEMA</span></code></p></td>
-<td><p>Schema for the project registry (local dev fallback)</p></td>
+<td><p>Schema for the domain registry (local dev fallback)</p></td>
 <td><p><em>(from session or Settings)</em></p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_VOLUME</span></code></p></td>
-<td><p>Volume name for project storage (local dev fallback)</p></td>
+<td><p>Volume name for domain storage (local dev fallback)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">OntoBricksRegistry</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_TRIPLESTORE_TABLE</span></code></p></td>
@@ -771,6 +772,11 @@ rm<span class="w"> </span>-rf<span class="w"> </span>.venv
 <span class="nv">DATABRICKS_SCHEMA</span><span class="o">=</span>default
 <span class="nv">SECRET_KEY</span><span class="o">=</span>your-secret-key-here
 <span class="nv">DATABRICKS_APP_PORT</span><span class="o">=</span><span class="m">8000</span>
+
+<span class="c1">## Performance / Observability (optional)</span>
+<span class="nv">LOG_FORMAT</span><span class="o">=</span>json<span class="w">                        </span><span class="c1"># Structured JSON logging (default: text)</span>
+<span class="nv">LOG_LEVEL</span><span class="o">=</span>INFO<span class="w">                         </span><span class="c1"># DEBUG, INFO, WARNING, ERROR, CRITICAL</span>
+<span class="nv">ONTOBRICKS_THREAD_POOL_SIZE</span><span class="o">=</span><span class="m">20</span><span class="w">         </span><span class="c1"># Max threads for blocking I/O</span>
 </pre></div>
 </div>
 </section>
