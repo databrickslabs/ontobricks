@@ -36,6 +36,7 @@ const Breadcrumb = {
         }).join('');
 
         nav.classList.remove('d-none');
+        this._updateChromeHeight();
 
         document.addEventListener('sidebarSectionChanged', (e) => this._updateSection(e.detail.section));
 
@@ -74,6 +75,15 @@ const Breadcrumb = {
         if (!el) return '';
         const text = el.textContent.trim();
         return (text && text !== 'Domain') ? text : '';
+    },
+
+    _updateChromeHeight() {
+        const nav = document.getElementById('obBreadcrumb');
+        if (!nav || nav.classList.contains('d-none')) return;
+        const bcHeight = nav.offsetHeight;
+        const base = document.body.classList.contains('read-only-mode') ? 100 : 60;
+        document.documentElement.style.setProperty('--ob-chrome-height', (base + bcHeight) + 'px');
+        document.documentElement.style.setProperty('--ob-chrome-height-ro', (100 + bcHeight) + 'px');
     },
 
     _updateSection(sectionName) {

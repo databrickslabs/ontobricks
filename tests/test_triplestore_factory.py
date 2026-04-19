@@ -78,3 +78,4 @@ class TestGetTriplestore:
             mock_client_cls.return_value = MagicMock()
             mock_delta_cls.return_value = MagicMock()
             result = get_triplestore(domain, settings=settings, backend="view")
+            assert result is not None

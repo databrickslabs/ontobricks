@@ -46,8 +46,8 @@ body.full-width-layout {
    ========================================================================== */
 .sidebar-layout {
     display: flex;
-    height: calc(100vh - 60px);
-    max-height: calc(100vh - 60px);
+    height: calc(100vh - var(--ob-chrome-height, 60px));
+    max-height: calc(100vh - var(--ob-chrome-height, 60px));
     gap: 0;
     width: 100%;
     max-width: 100vw;
@@ -218,7 +218,7 @@ body.full-width-layout {
     padding: 1rem;
     overflow-y: auto;
     overflow-x: hidden;
-    max-height: calc(100vh - 60px);
+    max-height: calc(100vh - var(--ob-chrome-height, 60px));
     transition: width 0.25s ease;
 }
 
@@ -328,12 +328,12 @@ body.full-width-layout {
    When the read-only banner is displayed, reduce available height
    ========================================================================== */
 body.read-only-mode .sidebar-layout {
-    height: calc(100vh - 100px);  /* 60px navbar + 40px banner */
-    max-height: calc(100vh - 100px);
+    height: calc(100vh - var(--ob-chrome-height-ro, 100px));
+    max-height: calc(100vh - var(--ob-chrome-height-ro, 100px));
 }
 
 body.read-only-mode .sidebar-content {
-    max-height: calc(100vh - 100px);
+    max-height: calc(100vh - var(--ob-chrome-height-ro, 100px));
 }
 
 body.read-only-mode #sigmagraph-section.active,

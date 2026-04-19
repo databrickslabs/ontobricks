@@ -1,6 +1,6 @@
 /**
  * OntoBricks – ontology-assistant.js
- * AI chat inside the right-side detail panel (AI Assistant tab) for modifying
+ * AI chat inside a floating popup (bottom-left of the canvas) for modifying
  * the ontology via natural language.
  */
 
@@ -31,20 +31,97 @@
     // =====================================================
 
     function el(id)          { return document.getElementById(id); }
+    function popupEl()       { return el('assistantPopup'); }
     function messagesEl()    { return el('assistantMessages'); }
     function inputEl()       { return el('assistantInput'); }
     function sendBtn()       { return el('assistantSendBtn'); }
     function clearBtn()      { return el('assistantClearBtn'); }
     function toggleBtn()     { return el('mapToggleAssistant'); }
+    function closeBtn()      { return el('assistantPopupClose'); }
 
     // =====================================================
-    // Toggle assistant via toolbar button
+    // Toggle floating popup
     // =====================================================
 
     function toggleAssistant() {
-        if (typeof openAssistantPanel === 'function') {
-            openAssistantPanel();
+        const popup = popupEl();
+        if (!popup) return;
+
+        const isVisible = popup.style.display !== 'none';
+        popup.style.display = isVisible ? 'none' : 'flex';
+
+        const btn = toggleBtn();
+        if (btn) btn.classList.toggle('active', !isVisible);
+
+        if (!isVisible) {
+            init();
+            initDrag(popup);
+            const inp = inputEl();
+            if (inp) inp.focus();
         }
+    }
+
+    function closeAssistant() {
+        const popup = popupEl();
+        if (popup) popup.style.display = 'none';
+
+        const btn = toggleBtn();
+        if (btn) btn.classList.remove('active');
+    }
+
+    // =====================================================
+    // Drag-to-move
+    // =====================================================
+
+    function initDrag(popup) {
+        const header = popup.querySelector('.assistant-popup-header');
+        if (!header || header._dragInit) return;
+        header._dragInit = true;
+
+        let dragging = false;
+        let startX, startY, origLeft, origTop;
+
+        header.addEventListener('mousedown', (e) => {
+            if (e.target.closest('button')) return;
+            dragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+
+            const parent = popup.offsetParent || document.body;
+            const rect = popup.getBoundingClientRect();
+            const parentRect = parent.getBoundingClientRect();
+            origLeft = rect.left - parentRect.left;
+            origTop = rect.top - parentRect.top;
+
+            popup.style.left = origLeft + 'px';
+            popup.style.top = origTop + 'px';
+            popup.style.bottom = 'auto';
+            popup.style.right = 'auto';
+
+            header.style.cursor = 'grabbing';
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!dragging) return;
+            const parent = popup.offsetParent || document.body;
+            const parentRect = parent.getBoundingClientRect();
+
+            let newLeft = origLeft + (e.clientX - startX);
+            let newTop = origTop + (e.clientY - startY);
+
+            newLeft = Math.max(0, Math.min(newLeft, parentRect.width - popup.offsetWidth));
+            newTop = Math.max(0, Math.min(newTop, parentRect.height - popup.offsetHeight));
+
+            popup.style.left = newLeft + 'px';
+            popup.style.top = newTop + 'px';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (!dragging) return;
+            dragging = false;
+            header.style.cursor = '';
+        });
     }
 
     // =====================================================
@@ -237,25 +314,13 @@
         conversationHistory = [];
         const container = messagesEl();
         if (!container) return;
-        container.innerHTML = '';
-        container.innerHTML = `
-            <div class="assistant-welcome">
-                <div class="assistant-welcome-icon"><img src="/static/global/img/favicon.svg" alt="OntoBricks" width="40" height="40"></div>
-                <p>Modify your ontology with natural language:</p>
-                <div class="assistant-suggestions">
-                    <button class="btn btn-sm btn-outline-primary assistant-suggestion" data-message="Show me all entities and their attributes">
-                        <i class="bi bi-list-ul me-1"></i>List entities
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary assistant-suggestion" data-message="Show me all relationships">
-                        <i class="bi bi-arrow-left-right me-1"></i>List relationships
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger assistant-suggestion" data-message="Remove all the entities that have no relationship and no inheritance">
-                        <i class="bi bi-trash me-1"></i>Clean orphans
-                    </button>
-                </div>
-            </div>
-        `;
-        bindSuggestions();
+        const welcome = container.querySelector('.assistant-welcome');
+        if (welcome) {
+            welcome.style.display = '';
+        }
+        Array.from(container.children).forEach(child => {
+            if (!child.classList.contains('assistant-welcome')) child.remove();
+        });
     }
 
     // =====================================================
@@ -290,7 +355,7 @@
     }
 
     // =====================================================
-    // Initialization (called once per panel creation)
+    // Initialization (called once)
     // =====================================================
 
     function init() {
@@ -299,9 +364,8 @@
         const inp = inputEl();
         const sBtn = sendBtn();
         const cBtn = clearBtn();
-        const tBtn = toggleBtn();
 
-        if (!inp) return;  // Assistant tab not yet in the DOM
+        if (!inp) return;
         initialized = true;
 
         inp.addEventListener('input', () => { autoResize(); updateSendButton(); });
@@ -326,12 +390,60 @@
         updateSendButton();
     }
 
-    // Wire up the toggle button as soon as the DOM is ready
+    // =====================================================
+    // Keep FAB/popup clear of the right detail panel
+    // =====================================================
+
+    function initPanelOffsetWatcher() {
+        const mapContainer = document.getElementById('ontology-map-container');
+        if (!mapContainer) return;
+
+        const cardBody = mapContainer.closest('.card-body');
+        if (!cardBody) return;
+
+        function updateOffset() {
+            const panel = mapContainer.querySelector('.shared-detail-panel');
+            const handle = mapContainer.querySelector('.detail-panel-resize-handle');
+            if (mapContainer.classList.contains('panel-open') && panel) {
+                const pw = panel.offsetWidth || 0;
+                const hw = (handle && handle.offsetWidth) || 0;
+                cardBody.style.setProperty('--ob-panel-offset', (pw + hw) + 'px');
+            } else {
+                cardBody.style.setProperty('--ob-panel-offset', '0px');
+            }
+        }
+
+        new MutationObserver(updateOffset).observe(mapContainer, {
+            attributes: true, attributeFilter: ['class']
+        });
+
+        new MutationObserver(() => {
+            const panel = mapContainer.querySelector('.shared-detail-panel');
+            if (panel && !panel._resizeObs) {
+                panel._resizeObs = new ResizeObserver(updateOffset);
+                panel._resizeObs.observe(panel);
+            }
+            updateOffset();
+        }).observe(mapContainer, { childList: true });
+
+        updateOffset();
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         const tBtn = toggleBtn();
-        if (tBtn) tBtn.addEventListener('click', toggleAssistant);
+        if (tBtn) {
+            if (window.isActiveVersion === false) {
+                tBtn.style.display = 'none';
+            } else {
+                tBtn.addEventListener('click', toggleAssistant);
+            }
+        }
+
+        const cBtn = closeBtn();
+        if (cBtn) cBtn.addEventListener('click', closeAssistant);
+
+        initPanelOffsetWatcher();
     });
 
-    // Expose globally so the shared panel can call it after creating the assistant tab
     window.initOntologyAssistant = init;
 })();

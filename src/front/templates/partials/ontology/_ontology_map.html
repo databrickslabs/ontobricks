@@ -1,7 +1,7 @@
 <!-- Ontology Model View - D3.js Force-Directed Graph -->
 <!-- CSS: /static/ontology/css/ontology-map.css, /static/ontology/css/ontology-assistant.css -->
 <!-- JS: /static/ontology/js/ontology-map.js, /static/ontology/js/ontology-assistant.js -->
-<div class="section-header d-flex justify-content-between align-items-center mb-4">
+<div class="section-header d-flex justify-content-between align-items-center">
     <div>
         <h4 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>Ontology Model</h4>
         <p class="text-muted mb-0 small">Interactive force-directed graph of your ontology</p>
@@ -23,17 +23,13 @@
             <button class="btn btn-sm btn-outline-secondary" id="mapAutoAssignIcons" title="Auto-map icons based on entity names">
                 <i class="bi bi-emoji-smile"></i>
             </button>
-            <div class="vr mx-1"></div>
-            <button class="btn btn-sm btn-outline-primary" id="mapToggleAssistant" title="Toggle AI Assistant">
-                <i class="bi bi-chat-dots me-1"></i>Assistant
-            </button>
         </div>
 </div>
 <div class="card border-0 shadow-sm h-100">
-    <div class="card-body p-0" style="height: calc(100vh - 200px); min-height: 500px; position: relative;">
+    <div class="card-body p-0 position-relative">
         <div id="ontology-map-wrapper" class="ontology-map-wrapper">
             <!-- Main map container -->
-            <div id="ontology-map-container" style="flex: 1; min-width: 0; height: 100%; background: #fafafa; position: relative; overflow: hidden;">
+            <div id="ontology-map-container">
                 <!-- Loading Overlay -->
                 <div id="ontologyMapLoading" class="designer-loading-overlay">
                     <div class="ob-loading-spinner">
@@ -60,6 +56,53 @@
                         </svg>
                         <span class="ob-spinner-label">Loading ontology model...</span>
                     </div>
+                </div>
+            </div>
+        </div>
+        <!-- Floating AI Assistant FAB (bottom-right of canvas) -->
+        <button id="mapToggleAssistant" class="assistant-fab" title="AI Assistant">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" width="28" height="28">
+                <line x1="6" y1="26" x2="22" y2="10" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+                <rect x="20" y="6" width="6" height="6" rx="1" transform="rotate(45 23 9)" fill="#fff"/>
+                <path d="M10 4 l.7-2 .7 2 2 .7-2 .7-.7 2-.7-2-2-.7Z" fill="#fff"/>
+                <path d="M4 14 l.5-1.5.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5Z" fill="#fff" opacity=".7"/>
+                <path d="M18 2 l.4-1.2.4 1.2 1.2.4-1.2.4-.4 1.2-.4-1.2-1.2-.4Z" fill="#fff" opacity=".6"/>
+            </svg>
+        </button>
+        <!-- Floating AI Assistant Popup -->
+        <div id="assistantPopup" class="assistant-popup" style="display:none;">
+            <div class="assistant-popup-header">
+                <span class="assistant-popup-title"><i class="bi bi-chat-dots me-1"></i>AI Assistant</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary assistant-popup-close" id="assistantPopupClose" title="Close">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="assistant-messages" id="assistantMessages">
+                <div class="assistant-welcome">
+                    <div class="assistant-welcome-icon"><img src="/static/global/img/favicon.svg" alt="OntoBricks" width="40" height="40"></div>
+                    <p>Modify your ontology with natural language:</p>
+                    <div class="assistant-suggestions">
+                        <button class="btn btn-sm btn-outline-primary assistant-suggestion" data-message="Show me all entities and their attributes">
+                            <i class="bi bi-list-ul me-1"></i>List entities
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary assistant-suggestion" data-message="Show me all relationships">
+                            <i class="bi bi-arrow-left-right me-1"></i>List relationships
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger assistant-suggestion" data-message="Remove all the entities that have no relationship and no inheritance">
+                            <i class="bi bi-trash me-1"></i>Clean orphans
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="assistant-input-area">
+                <div class="assistant-input-wrapper">
+                    <textarea id="assistantInput" class="form-control" placeholder="Ask me to modify your ontology…" rows="1"></textarea>
+                    <button id="assistantSendBtn" class="btn btn-primary" title="Send message" disabled>
+                        <i class="bi bi-send-fill"></i>
+                    </button>
+                </div>
+                <div class="assistant-input-hint text-muted small mt-1">
+                    <kbd>Enter</kbd> to send &middot; <button class="btn btn-link btn-sm p-0 text-muted assistant-clear-btn" id="assistantClearBtn">Clear chat</button>
                 </div>
             </div>
         </div>

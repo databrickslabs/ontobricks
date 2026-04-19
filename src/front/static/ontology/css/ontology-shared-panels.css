@@ -150,74 +150,6 @@
     min-width: 280px;
 }
 
-/* ---- Tabbed panel header (map section) ---- */
-.panel-tabs-header {
-    display: flex;
-    align-items: center;
-    background: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
-    flex-shrink: 0;
-    padding: 0;
-    gap: 0;
-}
-
-.panel-tabs-header .panel-nav-tabs {
-    flex: 1;
-    border-bottom: none;
-    margin: 0;
-    padding-left: 0.25rem;
-}
-
-.panel-tabs-header .panel-nav-tabs .nav-item {
-    margin-bottom: -1px;
-}
-
-.panel-tabs-header .panel-nav-tabs .nav-link {
-    font-size: 0.78rem;
-    font-weight: 500;
-    color: #6c757d;
-    padding: 0.45rem 0.65rem;
-    border: 1px solid transparent;
-    border-top-left-radius: 0.375rem;
-    border-top-right-radius: 0.375rem;
-    cursor: pointer;
-    transition: color 0.15s, background-color 0.15s;
-}
-
-.panel-tabs-header .panel-nav-tabs .nav-link:hover {
-    color: #1e293b;
-    background: rgba(0, 0, 0, 0.03);
-    border-color: transparent;
-}
-
-.panel-tabs-header .panel-nav-tabs .nav-link.active {
-    color: #1e293b;
-    background: #fff;
-    border-color: #dee2e6 #dee2e6 #fff;
-    font-weight: 600;
-}
-
-.panel-tabs-header .panel-close-btn {
-    padding: 0.2rem 0.4rem;
-    font-size: 0.75rem;
-    line-height: 1;
-    flex-shrink: 0;
-    margin-right: 0.4rem;
-}
-
-/* ---- Tab pane containers ---- */
-.panel-tab-pane {
-    display: none;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-}
-
-.panel-tab-pane.active {
-    display: flex;
-}
-
 /* Panel Header */
 .shared-detail-panel .panel-header {
     display: flex;
@@ -255,27 +187,67 @@
     flex-direction: column;
 }
 
-/* Entity form - make it fill the panel body */
-.shared-detail-panel .panel-body #sharedEntityForm {
+/* Entity / Relationship forms - fill the panel body */
+.shared-detail-panel .panel-body #sharedEntityForm,
+.shared-detail-panel .panel-body #sharedRelationshipForm {
     display: flex;
     flex-direction: column;
     flex: 1;
     min-height: 0;
-}
-
-/* Attributes section - expand to fill remaining space */
-.shared-detail-panel .panel-body #sharedEntityForm > .mb-3:last-child {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    margin-bottom: 0 !important;
 }
 
 .shared-detail-panel .panel-body #sharedEntityAttributes {
-    flex: 1;
-    min-height: 100px;
+    min-height: 60px;
     max-height: none !important;
+}
+
+/* ---- Form tabs inside panel body ---- */
+.form-tabs-nav {
+    display: flex;
+    list-style: none;
+    margin: 0 0 0.6rem;
+    padding: 0;
+    border-bottom: 2px solid var(--bs-border-color, #dee2e6);
+    gap: 0;
+    flex-shrink: 0;
+}
+
+.form-tabs-nav li {
+    margin-bottom: -2px;
+}
+
+.form-tab-link {
+    display: inline-block;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #6c757d;
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+
+.form-tab-link:hover {
+    color: #1e293b;
+}
+
+.form-tab-link.active {
+    color: var(--bs-primary, #0d6efd);
+    border-bottom-color: var(--bs-primary, #0d6efd);
+    font-weight: 600;
+}
+
+.form-tab-pane {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.form-tab-pane.active {
+    display: flex;
 }
 
 /* Panel Footer */
@@ -317,8 +289,3 @@
 }
 
 /* Emoji picker styles moved to global/css/emoji-picker.css */
-
-/* Attributes container */
-.shared-detail-panel #sharedEntityAttributes {
-    max-height: 150px;
-}

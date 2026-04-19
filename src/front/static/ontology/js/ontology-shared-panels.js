@@ -145,89 +145,21 @@ function getOrCreateDetailPanel() {
     const panelDiv = document.createElement('div');
     panelDiv.className = 'shared-detail-panel';
     
-    const isMapSection = activeSection.id === 'map-section';
-    
-    if (isMapSection) {
-        const hideAssistant = window.isActiveVersion === false;
-        panelDiv.classList.add('shared-detail-panel-tabbed');
-        panelDiv.innerHTML = `
-            <div class="panel-tabs-header">
-                <ul class="nav nav-tabs panel-nav-tabs" role="tablist">
-                    <li class="nav-item">
-                        <a class="nav-link active" data-panel-tab="details" role="tab" href="#">
-                            <i class="bi bi-info-circle me-1"></i>Details
-                        </a>
-                    </li>
-                    <li class="nav-item" ${hideAssistant ? 'style="display:none"' : ''}>
-                        <a class="nav-link" data-panel-tab="assistant" role="tab" href="#">
-                            <i class="bi bi-chat-dots me-1"></i>AI Assistant
-                        </a>
-                    </li>
-                </ul>
-                <button type="button" class="btn btn-outline-secondary btn-sm panel-close-btn" id="sharedClosePanelBtn" title="Close">
-                    <i class="bi bi-x-lg"></i>
-                </button>
-            </div>
-            <div class="panel-tab-pane active" data-panel-tab-content="details">
-                <div class="panel-header">
-                    <h6 id="sharedPanelTitle"><i class="bi bi-box"></i> <span id="sharedPanelItemName">Edit</span></h6>
-                </div>
-                <div class="panel-body" id="sharedPanelBody"></div>
-                <div class="panel-footer" id="sharedPanelFooter">
-                    <button type="button" class="btn btn-secondary btn-sm" id="sharedCancelPanelBtn">Cancel</button>
-                    <button type="button" class="btn btn-dark btn-sm" id="sharedSavePanelBtn">
-                        <i class="bi bi-check-circle"></i> Save
-                    </button>
-                </div>
-            </div>
-            <div class="panel-tab-pane" data-panel-tab-content="assistant">
-                <div class="assistant-messages" id="assistantMessages">
-                    <div class="assistant-welcome">
-                        <div class="assistant-welcome-icon"><img src="/static/global/img/favicon.svg" alt="OntoBricks" width="40" height="40"></div>
-                        <p>Modify your ontology with natural language:</p>
-                        <div class="assistant-suggestions">
-                            <button class="btn btn-sm btn-outline-primary assistant-suggestion" data-message="Show me all entities and their attributes">
-                                <i class="bi bi-list-ul me-1"></i>List entities
-                            </button>
-                            <button class="btn btn-sm btn-outline-primary assistant-suggestion" data-message="Show me all relationships">
-                                <i class="bi bi-arrow-left-right me-1"></i>List relationships
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger assistant-suggestion" data-message="Remove all the entities that have no relationship and no inheritance">
-                                <i class="bi bi-trash me-1"></i>Clean orphans
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="assistant-input-area">
-                    <div class="assistant-input-wrapper">
-                        <textarea id="assistantInput" class="form-control" placeholder="Ask me to modify your ontology…" rows="1"></textarea>
-                        <button id="assistantSendBtn" class="btn btn-primary" title="Send message" disabled>
-                            <i class="bi bi-send-fill"></i>
-                        </button>
-                    </div>
-                    <div class="assistant-input-hint text-muted small mt-1">
-                        <kbd>Enter</kbd> to send &middot; <button class="btn btn-link btn-sm p-0 text-muted" id="assistantClearBtn" style="font-size: 0.75rem; text-decoration: none;">Clear chat</button>
-                    </div>
-                </div>
-            </div>
-        `;
-    } else {
-        panelDiv.innerHTML = `
-            <div class="panel-header">
-                <h6 id="sharedPanelTitle"><i class="bi bi-box"></i> <span id="sharedPanelItemName">Edit</span></h6>
-                <button type="button" class="btn btn-outline-secondary btn-sm panel-close-btn" id="sharedClosePanelBtn" title="Close">
-                    <i class="bi bi-x-lg"></i>
-                </button>
-            </div>
-            <div class="panel-body" id="sharedPanelBody"></div>
-            <div class="panel-footer" id="sharedPanelFooter">
-                <button type="button" class="btn btn-secondary btn-sm" id="sharedCancelPanelBtn">Cancel</button>
-                <button type="button" class="btn btn-dark btn-sm" id="sharedSavePanelBtn">
-                    <i class="bi bi-check-circle"></i> Save
-                </button>
-            </div>
-        `;
-    }
+    panelDiv.innerHTML = `
+        <div class="panel-header">
+            <h6 id="sharedPanelTitle"><i class="bi bi-box"></i> <span id="sharedPanelItemName">Edit</span></h6>
+            <button type="button" class="btn btn-outline-secondary btn-sm panel-close-btn" id="sharedClosePanelBtn" title="Close">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="panel-body" id="sharedPanelBody"></div>
+        <div class="panel-footer" id="sharedPanelFooter">
+            <button type="button" class="btn btn-secondary btn-sm" id="sharedCancelPanelBtn">Cancel</button>
+            <button type="button" class="btn btn-dark btn-sm" id="sharedSavePanelBtn">
+                <i class="bi bi-check-circle"></i> Save
+            </button>
+        </div>
+    `;
     
     // Append to container (either section or ontology-map-container for Map)
     panelContainer.appendChild(resizeHandle);
@@ -250,87 +182,22 @@ function setupPanelListeners(section) {
     section.querySelector('#sharedClosePanelBtn')?.addEventListener('click', guardedCloseSharedPanel);
     section.querySelector('#sharedCancelPanelBtn')?.addEventListener('click', guardedCloseSharedPanel);
     section.querySelector('#sharedSavePanelBtn')?.addEventListener('click', saveSharedPanelItem);
-    
-    // Tab switching for tabbed panels (map section)
-    section.querySelectorAll('[data-panel-tab]').forEach(tabLink => {
-        if (tabLink.tagName === 'A') {
-            tabLink.addEventListener('click', (e) => {
-                e.preventDefault();
-                switchPanelTab(section, tabLink.dataset.panelTab);
-            });
-        }
-    });
 }
 
 /**
- * Switch between tabs in a tabbed panel.
+ * Switch between form tabs inside the panel body.
  */
-function switchPanelTab(container, tabName) {
-    const panel = container.querySelector('.shared-detail-panel-tabbed');
-    if (!panel) return;
-    
-    panel.querySelectorAll('.panel-nav-tabs .nav-link').forEach(link => {
-        link.classList.toggle('active', link.dataset.panelTab === tabName);
-    });
-    
-    panel.querySelectorAll('.panel-tab-pane').forEach(pane => {
-        pane.classList.toggle('active', pane.dataset.panelTabContent === tabName);
-    });
-    
-    // Update toggle button state
-    const toggleBtn = document.getElementById('mapToggleAssistant');
-    if (toggleBtn) {
-        toggleBtn.classList.toggle('active', tabName === 'assistant');
-    }
-    
-    // Re-initialize assistant when switching to its tab
-    if (tabName === 'assistant' && typeof window.initOntologyAssistant === 'function') {
-        window.initOntologyAssistant();
-    }
-}
+function switchFormTab(tabLink) {
+    const form = tabLink.closest('form') || tabLink.closest('.panel-body');
+    if (!form) return;
+    const tabName = tabLink.dataset.formTab;
 
-/**
- * Open the right panel on the AI Assistant tab (called from toolbar button).
- */
-function openAssistantPanel() {
-    const mapContainer = document.getElementById('ontology-map-container');
-    if (!mapContainer) return;
-    
-    const panel = mapContainer.querySelector('.shared-detail-panel-tabbed');
-    const isOpen = mapContainer.classList.contains('panel-open');
-    
-    if (isOpen && panel) {
-        const assistantTab = panel.querySelector('.panel-nav-tabs .nav-link[data-panel-tab="assistant"]');
-        if (assistantTab && assistantTab.classList.contains('active')) {
-            guardedCloseSharedPanel();
-            return;
-        }
-        switchPanelTab(mapContainer, 'assistant');
-        return;
-    }
-    
-    // Panel doesn't exist yet or isn't open — create/open it
-    // Temporarily set sharedPanelEditType so the panel opens properly
-    const prevType = sharedPanelEditType;
-    sharedPanelEditType = sharedPanelEditType || '_assistant';
-    openSharedPanel();
-    sharedPanelEditType = prevType;
-    
-    // Switch to assistant tab
-    const freshPanel = mapContainer.querySelector('.shared-detail-panel-tabbed');
-    if (freshPanel) {
-        switchPanelTab(mapContainer, 'assistant');
-        
-        // Set empty state on details tab when opened directly to assistant
-        const body = freshPanel.querySelector('#sharedPanelBody');
-        if (body && !body.innerHTML.trim()) {
-            body.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-hand-index fs-3 d-block mb-2 opacity-50"></i><p class="small mb-0">Click an entity or relationship on the map to see its details here.</p></div>';
-        }
-    }
-    
-    if (typeof window.initOntologyAssistant === 'function') {
-        window.initOntologyAssistant();
-    }
+    form.querySelectorAll('.form-tabs-nav .form-tab-link').forEach(link => {
+        link.classList.toggle('active', link.dataset.formTab === tabName);
+    });
+    form.querySelectorAll('.form-tab-pane').forEach(pane => {
+        pane.classList.toggle('active', pane.dataset.formTabContent === tabName);
+    });
 }
 
 /**
@@ -466,15 +333,9 @@ function openSharedPanel() {
     
     // Get the container (either section or map-container for Map section)
     const container = panel.parentElement;
-    // For tabbed panels the details tab content is a child, so walk up
     const effectiveContainer = panel.closest('.has-detail-panel') || container;
     console.log('[SharedPanel] Adding panel-open class to container:', effectiveContainer?.id || effectiveContainer?.className);
     effectiveContainer?.classList.add('panel-open');
-    
-    // If this is a tabbed panel and we're opening for entity/relationship details, switch to Details tab
-    if (panel.classList.contains('shared-detail-panel-tabbed') && sharedPanelEditType && sharedPanelEditType !== '_assistant') {
-        switchPanelTab(effectiveContainer, 'details');
-    }
 }
 
 /**
@@ -494,10 +355,6 @@ function closeSharedPanel() {
             container.classList.remove('panel-open');
         }
     });
-    
-    // Reset assistant toggle button state
-    const toggleBtn = document.getElementById('mapToggleAssistant');
-    if (toggleBtn) toggleBtn.classList.remove('active');
     
     // Reset state
     sharedPanelEditType = null;
@@ -698,87 +555,85 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
     body.innerHTML = `
         <div id="sharedEntityAssignmentLink"></div>
         <form id="sharedEntityForm">
-            <div class="mb-3 p-2 bg-light rounded border">
-                <label for="sharedEntityParent" class="form-label"><i class="bi bi-diagram-2"></i> Inherits From</label>
-                <select class="form-select form-select-sm" id="sharedEntityParent" ${disabled} onchange="onSharedEntityParentChange()">
-                    <option value="">-- None --</option>
-                    ${parentOptions}
-                </select>
-            </div>
-            <div class="mb-3 p-2 bg-light rounded border">
-                <label for="sharedEntityGroup" class="form-label"><i class="bi bi-collection"></i> Group</label>
-                <select class="form-select form-select-sm" id="sharedEntityGroup" ${disabled}
-                    data-entity="${(cls?.name || '').replace(/"/g, '&quot;')}"
-                    data-prev-group="${currentGroup.replace(/"/g, '&quot;')}"
-                    onchange="onSharedEntityGroupChange(this.dataset.entity, this.value, this.dataset.prevGroup)">
-                    ${groupOptions}
-                </select>
-            </div>
-            
-            <div class="mb-3">
-                <label for="sharedEntityName" class="form-label">Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control form-control-sm" id="sharedEntityName" value="${cls?.name || ''}" ${disabled} required>
-            </div>
-            
-            <div class="mb-3">
-                <label class="form-label">Icon</label>
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text" id="sharedEntityEmojiPreview">${emoji}</span>
-                    <input type="text" class="form-control" id="sharedEntityIcon" value="${emoji}" ${disabled} maxlength="2" style="width: 45px;">
-                    <button type="button" class="btn btn-outline-secondary" id="sharedEntityEmojiBtn" ${disabled}><i class="bi bi-emoji-smile"></i></button>
+            <ul class="form-tabs-nav">
+                <li><a class="form-tab-link active" data-form-tab="details" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-info-circle me-1"></i>Details</a></li>
+                <li><a class="form-tab-link" data-form-tab="attributes" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-tags me-1"></i>Attributes</a></li>
+                <li><a class="form-tab-link" data-form-tab="actions" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-lightning me-1"></i>Actions</a></li>
+                <li><a class="form-tab-link" data-form-tab="constraints" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-sliders me-1"></i>Constraints</a></li>
+            </ul>
+
+            <div class="form-tab-pane active" data-form-tab-content="details">
+                <div class="mb-3 p-2 bg-light rounded border">
+                    <label for="sharedEntityParent" class="form-label"><i class="bi bi-diagram-2"></i> Inherits From</label>
+                    <select class="form-select form-select-sm" id="sharedEntityParent" ${disabled} onchange="onSharedEntityParentChange()">
+                        <option value="">-- None --</option>
+                        ${parentOptions}
+                    </select>
                 </div>
-                <div id="sharedEntityEmojiPickerMount"></div>
+                <div class="mb-3 p-2 bg-light rounded border">
+                    <label for="sharedEntityGroup" class="form-label"><i class="bi bi-collection"></i> Group</label>
+                    <select class="form-select form-select-sm" id="sharedEntityGroup" ${disabled}
+                        data-entity="${(cls?.name || '').replace(/"/g, '&quot;')}"
+                        data-prev-group="${currentGroup.replace(/"/g, '&quot;')}"
+                        onchange="onSharedEntityGroupChange(this.dataset.entity, this.value, this.dataset.prevGroup)">
+                        ${groupOptions}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="sharedEntityName" class="form-label">Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm" id="sharedEntityName" value="${cls?.name || ''}" ${disabled} required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Icon</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text" id="sharedEntityEmojiPreview">${emoji}</span>
+                        <input type="text" class="form-control" id="sharedEntityIcon" value="${emoji}" ${disabled} maxlength="2" style="width: 45px;">
+                        <button type="button" class="btn btn-outline-secondary" id="sharedEntityEmojiBtn" ${disabled}><i class="bi bi-emoji-smile"></i></button>
+                    </div>
+                    <div id="sharedEntityEmojiPickerMount"></div>
+                </div>
+                <div class="mb-3">
+                    <label for="sharedEntityDescription" class="form-label">Description</label>
+                    <textarea class="form-control form-control-sm" id="sharedEntityDescription" rows="2" ${disabled}>${cls?.comment || cls?.description || ''}</textarea>
+                </div>
             </div>
-            
-            <div class="mb-3">
-                <label for="sharedEntityDescription" class="form-label">Description</label>
-                <textarea class="form-control form-control-sm" id="sharedEntityDescription" rows="2" ${disabled}>${cls?.comment || cls?.description || ''}</textarea>
-            </div>
-            
-            <div class="mb-3">
-                <label class="form-label d-flex justify-content-between align-items-center">
-                    <span>Attributes</span>
-                    ${!viewOnly ? `<div class="d-flex gap-1">
+
+            <div class="form-tab-pane" data-form-tab-content="attributes">
+                <div class="d-flex justify-content-end gap-1 mb-2">
+                    ${!viewOnly ? `
                         <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="openMetadataAttributePicker()" title="Add from data sources"><i class="bi bi-database"></i></button>
                         <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="addSharedEntityAttribute()" title="Add manually"><i class="bi bi-plus"></i></button>
-                    </div>` : ''}
-                </label>
+                    ` : ''}
+                </div>
                 <div id="sharedEntityAttributes" class="border rounded p-2" style="background: #f8f9fa; overflow-y: auto;"></div>
             </div>
-            
-            <!-- Dashboard Section -->
-            <div class="mb-3">
-                <label class="form-label d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-speedometer2 me-1"></i>Dashboard</span>
-                    ${!viewOnly ? '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openDashboardSelectorModal()"><i class="bi bi-link-45deg"></i> Assign</button>' : ''}
-                </label>
-                <div id="sharedEntityDashboard" class="border rounded p-2" style="background: #f8f9fa;">
-                    <div id="sharedEntityDashboardContent">
-                        <small class="text-muted">No dashboard assigned</small>
+
+            <div class="form-tab-pane" data-form-tab-content="actions">
+                <div class="mb-3">
+                    <label class="form-label d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-speedometer2 me-1"></i>Dashboard</span>
+                        ${!viewOnly ? '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openDashboardSelectorModal()"><i class="bi bi-link-45deg"></i> Assign</button>' : ''}
+                    </label>
+                    <div id="sharedEntityDashboard" class="border rounded p-2" style="background: #f8f9fa;">
+                        <div id="sharedEntityDashboardContent">
+                            <small class="text-muted">No dashboard assigned</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-signpost-2 me-1"></i>Bridges</span>
+                        ${!viewOnly ? '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openBridgeSelectorModal()"><i class="bi bi-plus"></i> Add</button>' : ''}
+                    </label>
+                    <div id="sharedEntityBridges" class="border rounded p-2" style="background: #f8f9fa;">
+                        <div id="sharedEntityBridgesContent">
+                            <small class="text-muted">No bridges to other domains</small>
+                        </div>
                     </div>
                 </div>
             </div>
-            
-            <!-- Cross-Project Bridges Section -->
-            <div class="mb-3">
-                <label class="form-label d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-signpost-2 me-1"></i>Bridges</span>
-                    ${!viewOnly ? '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openBridgeSelectorModal()"><i class="bi bi-plus"></i> Add</button>' : ''}
-                </label>
-                <div id="sharedEntityBridges" class="border rounded p-2" style="background: #f8f9fa;">
-                    <div id="sharedEntityBridgesContent">
-                        <small class="text-muted">No bridges to other domains</small>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Constraints Section -->
-            <div class="mt-4 pt-3 border-top">
-                <label class="form-label fw-semibold">
-                    <i class="bi bi-sliders me-1"></i>Constraints
-                </label>
-                
-                <!-- Disjoint With -->
+
+            <div class="form-tab-pane" data-form-tab-content="constraints">
                 <div class="mb-3">
                     <label class="form-label small text-muted mb-1" title="Classes that share no instances with this class">
                         <i class="bi bi-x-circle me-1"></i>Disjoint With
@@ -789,8 +644,6 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                     </select>
                     <div class="form-text small">No instance can belong to both this class and the selected classes</div>
                 </div>
-                
-                <!-- Equivalent To -->
                 <div class="mb-3">
                     <label class="form-label small text-muted mb-1" title="Classes that have exactly the same instances as this class">
                         <i class="bi bi-arrows-angle-expand me-1"></i>Equivalent To
@@ -1931,41 +1784,42 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
     body.innerHTML = `
         <div id="sharedRelAssignmentLink"></div>
         <form id="sharedRelationshipForm">
-            <div class="mb-3">
-                <label for="sharedRelName" class="form-label">Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control form-control-sm" id="sharedRelName" value="${prop?.name || ''}" ${disabled} required>
+            <ul class="form-tabs-nav">
+                <li><a class="form-tab-link active" data-form-tab="details" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-info-circle me-1"></i>Details</a></li>
+                <li><a class="form-tab-link" data-form-tab="constraints" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-sliders me-1"></i>Constraints</a></li>
+            </ul>
+
+            <div class="form-tab-pane active" data-form-tab-content="details">
+                <div class="mb-3">
+                    <label for="sharedRelName" class="form-label">Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm" id="sharedRelName" value="${prop?.name || ''}" ${disabled} required>
+                </div>
+                <div class="mb-3">
+                    <label for="sharedRelDomain" class="form-label">Source (Domain) <span class="text-danger">*</span></label>
+                    <select class="form-select form-select-sm" id="sharedRelDomain" ${disabled} required>
+                        <option value="">-- Select --</option>${classOptions}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="sharedRelRange" class="form-label">Target (Range) <span class="text-danger">*</span></label>
+                    <select class="form-select form-select-sm" id="sharedRelRange" ${disabled} required>
+                        <option value="">-- Select --</option>${classOptions}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="sharedRelDirection" class="form-label">Direction</label>
+                    <select class="form-select form-select-sm" id="sharedRelDirection" ${disabled}>
+                        <option value="forward">Forward →</option>
+                        <option value="reverse">Reverse ←</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="sharedRelDescription" class="form-label">Description</label>
+                    <textarea class="form-control form-control-sm" id="sharedRelDescription" rows="2" ${disabled}>${prop?.comment || prop?.description || ''}</textarea>
+                </div>
             </div>
-            <div class="mb-3">
-                <label for="sharedRelDomain" class="form-label">Source (Domain) <span class="text-danger">*</span></label>
-                <select class="form-select form-select-sm" id="sharedRelDomain" ${disabled} required>
-                    <option value="">-- Select --</option>${classOptions}
-                </select>
-            </div>
-            <div class="mb-3">
-                <label for="sharedRelRange" class="form-label">Target (Range) <span class="text-danger">*</span></label>
-                <select class="form-select form-select-sm" id="sharedRelRange" ${disabled} required>
-                    <option value="">-- Select --</option>${classOptions}
-                </select>
-            </div>
-            <div class="mb-3">
-                <label for="sharedRelDirection" class="form-label">Direction</label>
-                <select class="form-select form-select-sm" id="sharedRelDirection" ${disabled}>
-                    <option value="forward">Forward →</option>
-                    <option value="reverse">Reverse ←</option>
-                </select>
-            </div>
-            <div class="mb-3">
-                <label for="sharedRelDescription" class="form-label">Description</label>
-                <textarea class="form-control form-control-sm" id="sharedRelDescription" rows="2" ${disabled}>${prop?.comment || prop?.description || ''}</textarea>
-            </div>
-            
-            <!-- Constraints Section -->
-            <div class="mt-4 pt-3 border-top">
-                <label class="form-label fw-semibold">
-                    <i class="bi bi-sliders me-1"></i>Constraints
-                </label>
-                
-                <!-- Cardinality -->
+
+            <div class="form-tab-pane" data-form-tab-content="constraints">
                 <div class="mb-3">
                     <label class="form-label small text-muted mb-1">Cardinality</label>
                     <div class="row g-2">
@@ -1986,8 +1840,6 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
                     </div>
                     <div class="form-text small">Leave Max empty for unlimited (*)</div>
                 </div>
-                
-                <!-- Property Characteristics -->
                 <div class="mb-2">
                     <label class="form-label small text-muted mb-1">Property Characteristics</label>
                     <div class="d-flex flex-wrap gap-2">

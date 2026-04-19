@@ -1,6 +1,44 @@
 /* =====================================================
-   Ontology Assistant – Right Panel Tab
+   Ontology Assistant – FAB + Floating Popup (bottom-right)
    ===================================================== */
+
+/* ---- FAB trigger button (bottom-right of canvas) ---- */
+.assistant-fab {
+    position: absolute;
+    bottom: 20px;
+    right: calc(20px + var(--ob-panel-offset, 0px));
+    z-index: 1040;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    background: #FF3621;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(255, 54, 33, 0.4), 0 2px 6px rgba(0, 0, 0, 0.12);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, right 0.3s ease;
+}
+
+.assistant-fab:hover {
+    transform: scale(1.08);
+    box-shadow: 0 6px 24px rgba(255, 54, 33, 0.5), 0 3px 10px rgba(0, 0, 0, 0.15);
+}
+
+.assistant-fab:active {
+    transform: scale(0.96);
+}
+
+.assistant-fab.active {
+    background: #c42a16;
+    box-shadow: 0 4px 20px rgba(196, 42, 22, 0.5), 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.assistant-fab svg {
+    pointer-events: none;
+}
 
 /* Wrapper: simple flex row for map */
 .ontology-map-wrapper {
@@ -12,17 +50,64 @@
     overflow: hidden;
 }
 
-/* ---- Assistant tab pane layout ---- */
-.panel-tab-pane[data-panel-tab-content="assistant"] {
+/* ---- Floating popup container (anchored above the FAB) ---- */
+.assistant-popup {
     display: none;
     flex-direction: column;
-    flex: 1;
-    min-height: 0;
+    position: absolute;
+    bottom: 88px;
+    right: calc(16px + var(--ob-panel-offset, 0px));
+    width: 400px;
+    max-width: calc(100% - 32px);
+    height: 480px;
+    max-height: calc(100% - 100px);
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+    z-index: 1050;
     overflow: hidden;
+    animation: assistantPopupIn 0.2s ease-out;
 }
 
-.panel-tab-pane.active[data-panel-tab-content="assistant"] {
+@keyframes assistantPopupIn {
+    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---- Popup header (drag handle) ---- */
+.assistant-popup-header {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+    background: var(--bs-light, #f8f9fa);
+    flex-shrink: 0;
+    border-radius: 12px 12px 0 0;
+    cursor: grab;
+    user-select: none;
+}
+
+.assistant-popup-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--bs-body-color, #212529);
+}
+
+.assistant-popup-close {
+    border: none;
+    background: none;
+    padding: 0.15rem 0.35rem;
+    font-size: 0.7rem;
+    line-height: 1;
+    border-radius: 4px;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+.assistant-popup-close:hover {
+    background: var(--bs-border-color, #dee2e6);
+    color: var(--bs-body-color, #212529);
 }
 
 /* ---- Messages area ---- */
@@ -198,6 +283,7 @@
     border-top: 1px solid var(--bs-border-color, #dee2e6);
     background: var(--bs-body-bg, #fff);
     flex-shrink: 0;
+    border-radius: 0 0 12px 12px;
 }
 
 .assistant-input-wrapper {
@@ -240,12 +326,12 @@
     padding: 0.05rem 0.2rem;
 }
 
-/* ---- Toggle button active state ---- */
-#mapToggleAssistant.active {
-    background: var(--bs-primary, #0d6efd);
-    color: #fff;
-    border-color: var(--bs-primary, #0d6efd);
+.assistant-clear-btn {
+    font-size: 0.75rem;
+    text-decoration: none;
 }
+
+/* ---- Toggle button active state (handled by .assistant-fab.active above) ---- */
 
 /* ---- Markdown content inside bot messages ---- */
 .bot-msg .assistant-msg-body p {

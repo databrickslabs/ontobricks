@@ -4,6 +4,8 @@ Internal API -- Ontology JSON endpoints.
 Moved from app/frontend/ontology/routes.py during the front/back split.
 """
 
+import asyncio
+
 from fastapi import APIRouter, Request, Depends
 
 from api.routers.internal._helpers import map_route_errors
@@ -1316,7 +1318,8 @@ async def ontology_assistant_chat(
     )
 
     with map_route_errors("Ontology assistant request failed", logger):
-        agent_result = run_assistant(
+        agent_result = await asyncio.to_thread(
+            run_assistant,
             host=host,
             token=token,
             endpoint_name=llm_endpoint,

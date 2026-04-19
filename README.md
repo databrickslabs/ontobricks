@@ -119,6 +119,10 @@ git push origin main --tags
 - **Data quality violation limits** — cap the number of violations displayed per rule (configurable via dropdown, default 10) for faster quality checks
 - **Per-rule progress tracking** — SWRL inference and data quality checks report progress for each individual rule
 
+### AI Assistant
+
+The Ontology Model view includes a floating AI Assistant (bottom-right of the canvas) that lets you modify your ontology through natural language commands — add entities, remove orphans, list relationships, and more. Conversation history is maintained within the session.
+
 ### Navigation & Performance
 
 - **Deep-linked sidebar sections** — shareable URLs, browser Back/Forward support
