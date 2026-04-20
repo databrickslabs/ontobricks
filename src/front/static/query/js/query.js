@@ -129,6 +129,7 @@ async function _initQueryPage(initialSection, focusEntityUri, bridgeDomain) {
 }
 
 async function _switchDomainForBridge(domainName, focusUri) {
+    if (typeof showDomainLoading === 'function') showDomainLoading('Loading ' + domainName + '...');
     try {
         const resp = await fetch('/domain/load-from-uc', {
             method: 'POST',
@@ -144,9 +145,11 @@ async function _switchDomainForBridge(domainName, focusUri) {
             if (focusUri) target += '&focus=' + encodeURIComponent(focusUri);
             window.location.replace(target);
         } else {
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
             console.warn('[Bridge] Failed to switch domain:', data.message || data);
         }
     } catch (err) {
+        if (typeof hideDomainLoading === 'function') hideDomainLoading();
         console.error('[Bridge] Error switching domain:', err);
     }
 }

@@ -415,9 +415,10 @@ async function showEntityDetails(entity) {
             const resolveUrl = '/resolve?uri=' + encodeURIComponent(targetEntityUri) +
                 '&domain=' + encodeURIComponent(tgtDom);
             const tooltip = escapeHtml(bridge.label || 'Navigate to ' + bridge.target_class_name + ' in ' + tgtDom);
+            const onClickSpinner = "if(typeof showDomainLoading==='function'){showDomainLoading('Loading " + escapeHtml(tgtDom).replace(/'/g, "\\'") + "...');}";
             html += `
                 <div class="entity-detail-item">
-                    <a href="${escapeHtml(resolveUrl)}" class="btn btn-sm btn-outline-primary w-100 text-start" title="${tooltip}">
+                    <a href="${escapeHtml(resolveUrl)}" onclick="${onClickSpinner}" class="btn btn-sm btn-outline-primary w-100 text-start" title="${tooltip}">
                         <i class="bi bi-signpost-2 me-1"></i>
                         <span class="fw-semibold">${escapeHtml(bridge.target_class_name || '')}</span>
                         <small class="text-muted ms-1"><i class="bi bi-folder2-open ms-1 me-1"></i>${escapeHtml(tgtDom)}</small>

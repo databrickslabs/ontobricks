@@ -1371,8 +1371,10 @@ var SigmaGraph = (function () {
                 var resolveUrl = '/resolve?uri=' + encodeURIComponent(targetEntityUri) +
                     '&domain=' + encodeURIComponent(tgtDom);
                 var tooltip = bridge.label || ('Navigate to ' + (bridge.target_class_name || '') + ' in ' + tgtDom);
+                var safeDom = esc(tgtDom).replace(/'/g, "\\'");
+                var onClickSpinner = "if(typeof showDomainLoading===&#39;function&#39;){showDomainLoading(&#39;Loading " + safeDom + "...&#39;);}";
                 bridgeBody += '<div class="entity-detail-item">' +
-                    '<a href="' + esc(resolveUrl) + '" class="btn btn-sm btn-outline-primary w-100 text-start" title="' + esc(tooltip) + '">' +
+                    '<a href="' + esc(resolveUrl) + '" onclick="' + onClickSpinner + '" class="btn btn-sm btn-outline-primary w-100 text-start" title="' + esc(tooltip) + '">' +
                     '<i class="bi bi-signpost-2 me-1"></i>' +
                     '<span class="fw-semibold">' + esc(bridge.target_class_name || '') + '</span>' +
                     '<small class="text-muted ms-1"><i class="bi bi-folder2-open ms-1 me-1"></i>' + esc(tgtDom) + '</small>' +
@@ -2778,6 +2780,7 @@ async function _graphSwitcherSelect(domainName, version) {
             '<span class="ms-2">Loading <strong>' + esc(domainName) + '</strong> v' + esc(version) + '...</span>' +
             '</div>';
     }
+    if (typeof showDomainLoading === 'function') showDomainLoading('Loading ' + domainName + '...');
 
     try {
         var resp = await fetch('/domain/load-from-uc', {
@@ -2792,10 +2795,12 @@ async function _graphSwitcherSelect(domainName, version) {
             _closeGraphSwitcherModal();
             window.location.href = '/dtwin/?section=sigmagraph';
         } else {
+            if (typeof hideDomainLoading === 'function') hideDomainLoading();
             if (list) list.innerHTML = '<div class="text-danger p-3"><i class="bi bi-exclamation-triangle me-1"></i>' +
                 esc(data.message || 'Failed to load domain') + '</div>';
         }
     } catch (err) {
+        if (typeof hideDomainLoading === 'function') hideDomainLoading();
         console.error('[GraphSwitcher] Load error:', err);
         if (list) list.innerHTML = '<div class="text-danger p-3"><i class="bi bi-exclamation-triangle me-1"></i>Failed to load domain</div>';
     }
@@ -2874,7 +2879,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (url && typeof openDashboardModal === 'function') openDashboardModal(url, cls, id);
             } else if (action === 'bridge') {
                 var url = nodeItem.getAttribute('data-url');
-                if (url) window.location.href = url;
+                if (url) {
+                    try {
+                        var qs = url.split('?')[1] || '';
+                        var params = new URLSearchParams(qs);
+                        var tgtDom = params.get('domain') || params.get('project') || '';
+                        if (typeof showDomainLoading === 'function') {
+                            showDomainLoading('Loading ' + (tgtDom || 'domain') + '...');
+                        }
+                    } catch (_) { /* ignore */ }
+                    window.location.href = url;
+                }
             }
             return;
         }

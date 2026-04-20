@@ -20,6 +20,7 @@ content hashes, but they are stored explicitly: updating the stamp and flags on
 save is cheap and avoids recomputing hashes on every read.
 """
 
+import copy
 import re
 from datetime import datetime, timezone
 from typing import Dict, Any, List
@@ -1296,6 +1297,21 @@ class DomainSession:
 
         empty = get_empty_domain()
 
+        # Reset all content sections to empty defaults so that switching
+        # between domains never leaks groups, layout, mappings, or other
+        # characteristics from the previously loaded domain.
+        self._data["ontology"] = copy.deepcopy(empty["ontology"])
+        self._data["assignment"] = copy.deepcopy(empty["assignment"])
+        self._data["design_layout"] = copy.deepcopy(empty["design_layout"])
+        self._data["domain"]["info"] = copy.deepcopy(empty["domain"]["info"])
+        self._data["domain"]["metadata"] = {}
+        self._data["domain"]["triplestore"] = copy.deepcopy(
+            empty["domain"]["triplestore"]
+        )
+        self._data["domain"]["domain_folder"] = ""
+        self._data["domain"]["last_update"] = ""
+        self._data["domain"]["last_build"] = ""
+
         # Import info into domain.info
         if "info" in data:
             info = data["info"]
@@ -1417,18 +1433,13 @@ class DomainSession:
             else:
                 self._data["domain"]["metadata"] = {}
 
-        # Import delta into domain.triplestore
-        empty_ts = get_empty_domain()["domain"]["triplestore"]
-        ts = self._data["domain"].setdefault("triplestore", empty_ts.copy())
+        # Import delta into domain.triplestore (already reset to empty above)
         if "delta" in data:
-            ts["delta"] = {**empty_ts["delta"], **data["delta"]}
-        ts.pop("lakebase", None)
-        ts.pop("backend", None)
-
-        # Clear cached triplestore stats — they belong to the previous project
-        ts.pop("stats", None)
-        ts.pop("build_last_update", None)
-        ts.pop("_ts_cache_timestamp", None)
+            empty_ts_delta = get_empty_domain()["domain"]["triplestore"]["delta"]
+            self._data["domain"]["triplestore"]["delta"] = {
+                **empty_ts_delta,
+                **data["delta"],
+            }
 
         # Ensure inherited dataProperties are propagated for saved domains
         # whose classes may have been stored before inheritance resolution.
