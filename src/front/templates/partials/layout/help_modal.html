@@ -1,0 +1,541 @@
+<!-- JS: /static/global/js/help-modal.js -->
+<!-- CSS: /static/global/css/help-modal.css -->
+<!-- OntoBricks Help Center – comprehensive in-app documentation -->
+<div class="modal fade help-modal" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header help-modal-header">
+                <h5 class="modal-title" id="helpModalLabel">
+                    <i class="bi bi-life-preserver me-2"></i>OntoBricks Help Center
+                </h5>
+                <div class="help-modal-search ms-auto me-3 flex-grow-1" style="max-width: 320px;">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="search" id="helpSearchInput" class="form-control" placeholder="Search help...">
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="help-modal-body d-flex">
+                    <!-- Sidebar navigation -->
+                    <nav class="help-sidebar">
+                        <ul class="nav flex-column help-nav" role="tablist">
+                            <li class="nav-item"><a class="nav-link active" data-help-section="welcome" href="#help-welcome"><i class="bi bi-stars"></i> Welcome</a></li>
+                            <li class="nav-item"><a class="nav-link" data-help-section="starter" href="#help-starter"><i class="bi bi-rocket-takeoff"></i> Starter Guide</a></li>
+                            <li class="nav-item"><a class="nav-link" data-help-section="workflow" href="#help-workflow"><i class="bi bi-signpost-2"></i> Step-by-Step Workflow</a></li>
+                            <li class="nav-item"><a class="nav-link" data-help-section="features" href="#help-features"><i class="bi bi-stars"></i> Feature Guide</a></li>
+                            <li class="nav-item"><a class="nav-link" data-help-section="faq" href="#help-faq"><i class="bi bi-question-circle"></i> FAQ</a></li>
+                            <li class="nav-item"><a class="nav-link" data-help-section="troubleshoot" href="#help-troubleshoot"><i class="bi bi-tools"></i> Troubleshooting</a></li>
+                            <li class="nav-item"><a class="nav-link" data-help-section="shortcuts" href="#help-shortcuts"><i class="bi bi-keyboard"></i> Keyboard Shortcuts</a></li>
+                            <li class="nav-item"><a class="nav-link" data-help-section="glossary" href="#help-glossary"><i class="bi bi-book"></i> Glossary</a></li>
+                            <li class="nav-item"><a class="nav-link" data-help-section="resources" href="#help-resources"><i class="bi bi-box-arrow-up-right"></i> Resources</a></li>
+                        </ul>
+                    </nav>
+
+                    <!-- Content -->
+                    <div class="help-content">
+                        <!-- WELCOME -->
+                        <section class="help-section active" id="help-welcome" data-help-section-panel="welcome">
+                            <div class="help-hero">
+                                <div class="help-hero-icon"><i class="bi bi-life-preserver"></i></div>
+                                <div>
+                                    <h2>Welcome to OntoBricks</h2>
+                                    <p class="lead mb-0">The Digital Twin Builder for Databricks &mdash; design an ontology, map Databricks tables to it, materialize a knowledge graph, and explore it visually.</p>
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mt-2">
+                                <div class="col-md-6">
+                                    <div class="help-card">
+                                        <div class="help-card-icon bg-soft-primary"><i class="bi bi-rocket-takeoff"></i></div>
+                                        <h5>New here?</h5>
+                                        <p>Follow the <a href="#help-starter" data-help-jump="starter">Starter Guide</a> &mdash; build a full knowledge graph in four clicks using the LLM-powered automation pipeline.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-card">
+                                        <div class="help-card-icon bg-soft-success"><i class="bi bi-signpost-2"></i></div>
+                                        <h5>Want the full flow?</h5>
+                                        <p>Read the <a href="#help-workflow" data-help-jump="workflow">Step-by-Step Workflow</a> to master ontology design, mapping, synchronization and exploration.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-card">
+                                        <div class="help-card-icon bg-soft-warning"><i class="bi bi-question-circle"></i></div>
+                                        <h5>Stuck?</h5>
+                                        <p>Check the <a href="#help-faq" data-help-jump="faq">FAQ</a> and <a href="#help-troubleshoot" data-help-jump="troubleshoot">Troubleshooting</a> sections for common questions and fixes.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-card">
+                                        <div class="help-card-icon bg-soft-info"><i class="bi bi-keyboard"></i></div>
+                                        <h5>Power user?</h5>
+                                        <p>Speed up your workflow with <a href="#help-shortcuts" data-help-jump="shortcuts">Keyboard Shortcuts</a> and advanced features.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h4 class="mt-4"><i class="bi bi-diagram-3 me-2"></i>The OntoBricks pipeline</h4>
+                            <div class="help-pipeline">
+                                <div class="help-step"><span class="help-step-num">1</span><div><strong>Registry</strong><br><small>Browse and select a domain</small></div></div>
+                                <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
+                                <div class="help-step"><span class="help-step-num">2</span><div><strong>Domain</strong><br><small>Define metadata, documents, data sources</small></div></div>
+                                <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
+                                <div class="help-step"><span class="help-step-num">3</span><div><strong>Ontology</strong><br><small>Design entities &amp; relationships (OWL)</small></div></div>
+                                <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
+                                <div class="help-step"><span class="help-step-num">4</span><div><strong>Mapping</strong><br><small>Map ontology to UC tables (R2RML)</small></div></div>
+                                <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
+                                <div class="help-step"><span class="help-step-num">5</span><div><strong>Digital Twin</strong><br><small>Synchronize, explore, query</small></div></div>
+                            </div>
+                        </section>
+
+                        <!-- STARTER GUIDE -->
+                        <section class="help-section" id="help-starter" data-help-section-panel="starter">
+                            <h2><i class="bi bi-rocket-takeoff me-2"></i>Starter Guide &mdash; Build a Digital Twin in 4 Clicks</h2>
+                            <p class="text-muted">OntoBricks can generate an end-to-end knowledge graph from your Databricks tables using LLM-powered automation. Here is the fastest path from zero to a queryable graph.</p>
+
+                            <h5 class="mt-4"><i class="bi bi-check2-circle me-2"></i>Prerequisites</h5>
+                            <ul>
+                                <li>A Databricks workspace with Unity Catalog enabled</li>
+                                <li>A running SQL Warehouse</li>
+                                <li>A UC Volume for the domain registry (configure via <em>Settings &rarr; Registry &rarr; Initialize</em> if empty)</li>
+                                <li>A Databricks Model Serving endpoint (for LLM-powered automation)</li>
+                            </ul>
+
+                            <div class="help-steps">
+                                <div class="help-step-card">
+                                    <div class="help-step-badge">1</div>
+                                    <div>
+                                        <h5><i class="bi bi-plus-circle me-2"></i>Create a Domain</h5>
+                                        <p>Open <strong>Registry</strong> &rarr; click <em>New Domain</em>. Give it a name (e.g. <code>sales_demo</code>), then open the <strong>Domain</strong> tab and click <em>Save Domain</em> (<kbd>Cmd/Ctrl+S</kbd>). The domain must be saved before ontology, mapping and digital-twin features unlock.</p>
+                                    </div>
+                                </div>
+                                <div class="help-step-card">
+                                    <div class="help-step-badge">2</div>
+                                    <div>
+                                        <h5><i class="bi bi-database me-2"></i>Import Metadata</h5>
+                                        <p>Go to <strong>Domain &rarr; Data Sources</strong>, pick your <em>catalog</em> and <em>schema</em>, then click <em>Import Metadata</em>. OntoBricks fetches table and column metadata from Unity Catalog.</p>
+                                    </div>
+                                </div>
+                                <div class="help-step-card">
+                                    <div class="help-step-badge">3</div>
+                                    <div>
+                                        <h5><i class="bi bi-magic me-2"></i>Generate the Ontology</h5>
+                                        <p>Open <strong>Ontology &rarr; Generate</strong> (AI Wizard), select your LLM endpoint, optionally choose a <em>Quick Template</em> (CRM, IoT, Healthcare, Energy, ...) and click <em>Generate</em>. The LLM produces entities, relationships and attributes. Review in the <strong>Model</strong> tab.</p>
+                                    </div>
+                                </div>
+                                <div class="help-step-card">
+                                    <div class="help-step-badge">4</div>
+                                    <div>
+                                        <h5><i class="bi bi-lightning-charge me-2"></i>Auto-Map &amp; Sync</h5>
+                                        <p>Open <strong>Mapping &rarr; Auto-Map</strong> &rarr; click <em>Start Auto-Map</em>. Once complete, go to <strong>Digital Twin &rarr; Sync</strong> and click <em>Synchronize</em>. Triples are materialized into your triple store.</p>
+                                    </div>
+                                </div>
+                                <div class="help-step-card">
+                                    <div class="help-step-badge"><i class="bi bi-check2"></i></div>
+                                    <div>
+                                        <h5><i class="bi bi-eye me-2"></i>Explore</h5>
+                                        <p>Head to <strong>Digital Twin &rarr; Knowledge Graph</strong> to browse your data as an interactive graph, or use <strong>GraphQL</strong> for programmatic access.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info mt-3">
+                                <i class="bi bi-lightbulb me-2"></i><strong>Tip:</strong> You can navigate away from long-running tasks (Auto-Map, Sync, Data Quality) &mdash; they run in the background and their progress is tracked in the <i class="bi bi-hourglass-split"></i> <strong>Background Tasks</strong> panel in the navbar.
+                            </div>
+                        </section>
+
+                        <!-- WORKFLOW -->
+                        <section class="help-section" id="help-workflow" data-help-section-panel="workflow">
+                            <h2><i class="bi bi-signpost-2 me-2"></i>Step-by-Step Workflow</h2>
+                            <p class="text-muted">The full OntoBricks workflow, in detail. Each step corresponds to a main navbar item.</p>
+
+                            <div class="accordion help-accordion" id="helpWorkflowAccordion">
+                                <!-- Registry -->
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#hw1">
+                                            <i class="bi bi-archive me-2"></i><strong>1. Registry</strong> &mdash; manage domains
+                                        </button>
+                                    </h2>
+                                    <div id="hw1" class="accordion-collapse collapse show" data-bs-parent="#helpWorkflowAccordion">
+                                        <div class="accordion-body">
+                                            <p>The Registry is the central index of all domains (ontology + mapping + triple store) stored in your Unity Catalog Volume.</p>
+                                            <ul>
+                                                <li><strong>Browse</strong> &mdash; list and open existing domains</li>
+                                                <li><strong>New Domain</strong> (navbar) &mdash; create a fresh domain</li>
+                                                <li><strong>Load Domain</strong> (navbar) &mdash; open an existing domain from UC</li>
+                                                <li><strong>Bridges</strong> &mdash; cross-domain links that allow navigating from one knowledge graph to another</li>
+                                                <li><strong>Schedule</strong> &mdash; automation / recurring sync jobs</li>
+                                                <li><strong>API</strong> &mdash; REST API reference for developers</li>
+                                                <li><strong>Registry Location</strong> &mdash; UC Volume where domains are persisted</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Domain -->
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw2">
+                                            <i class="bi bi-folder2 me-2"></i><strong>2. Domain</strong> &mdash; configure metadata, sources, documents
+                                        </button>
+                                    </h2>
+                                    <div id="hw2" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
+                                        <div class="accordion-body">
+                                            <ul>
+                                                <li><strong>Information</strong> &mdash; name, description, base URI, custom URI override</li>
+                                                <li><strong>Versions</strong> &mdash; manage snapshots of your domain</li>
+                                                <li><strong>Cockpit</strong> &mdash; overall readiness dashboard (ontology &check;, mapping &check;, sync &check;)</li>
+                                                <li><strong>Data Sources</strong> &mdash; import Unity Catalog metadata (catalog, schema, tables, columns)</li>
+                                                <li><strong>Documents</strong> &mdash; attach PDFs, schemas and other references for context</li>
+                                            </ul>
+                                            <p><strong>Save</strong> your domain (<kbd>Cmd/Ctrl+S</kbd>) before moving to Ontology or Mapping.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Ontology -->
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw3">
+                                            <i class="bi bi-bezier2 me-2"></i><strong>3. Ontology</strong> &mdash; design your OWL model
+                                        </button>
+                                    </h2>
+                                    <div id="hw3" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
+                                        <div class="accordion-body">
+                                            <p>Four ways to build an ontology:</p>
+                                            <ol>
+                                                <li><strong>Model (Designer)</strong> &mdash; drag &amp; drop entities, relationships, inheritance arrows on the OntoViz canvas. Auto-save. Click the smiley face (<i class="bi bi-emoji-smile"></i>) to auto-assign emoji icons via LLM.</li>
+                                                <li><strong>Generate (Wizard)</strong> &mdash; AI generates the full ontology from your UC metadata. Pick a Quick Template or write custom guidelines.</li>
+                                                <li><strong>Import</strong> &mdash; load OWL/RDFS files, or pull industry standards: <em>FIBO</em>, <em>CDISC</em>, <em>IOF</em>.</li>
+                                                <li><strong>Form-based</strong> &mdash; use the <strong>Entities</strong> and <strong>Relationships</strong> sidebar sections to add classes and object properties manually.</li>
+                                            </ol>
+                                            <p><strong>Advanced features</strong> (Advanced section):</p>
+                                            <ul>
+                                                <li><strong>Data Quality (SHACL)</strong> &mdash; define shapes for completeness, cardinality, pattern, consistency...</li>
+                                                <li><strong>Business Rules (SWRL)</strong> &mdash; author inference rules using the graphical D3 editor</li>
+                                                <li><strong>Expr. &amp; Axioms</strong> &mdash; equivalent, disjoint, union, inverse, property chains...</li>
+                                                <li><strong>Groups</strong> &mdash; organize entities logically for readability</li>
+                                                <li><strong>Business Views</strong> &mdash; curated subsets for end-users</li>
+                                            </ul>
+                                            <p>Preview the generated OWL/Turtle under <strong>W3C Standards &rarr; OWL</strong>.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Mapping -->
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw4">
+                                            <i class="bi bi-shuffle me-2"></i><strong>4. Mapping</strong> &mdash; connect ontology to Databricks tables
+                                        </button>
+                                    </h2>
+                                    <div id="hw4" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
+                                        <div class="accordion-body">
+                                            <p>Several complementary interfaces:</p>
+                                            <ul>
+                                                <li><strong>Designer</strong> &mdash; force-directed graph of your ontology. Click nodes to open the mapping panel (Wizard / SQL / Mapping tabs).</li>
+                                                <li><strong>Manual</strong> &mdash; tree grouped by mapping status (unmapped, partial, mapped)</li>
+                                                <li><strong>Auto-Map</strong> &mdash; LLM generates SQL mappings for every entity and relationship in one shot</li>
+                                                <li><strong>Import</strong> &mdash; load mappings from a file</li>
+                                                <li><strong>Diagnostics</strong> &mdash; consistency checks on the mapping</li>
+                                                <li><strong>R2RML / Spark SQL</strong> &mdash; preview generated code</li>
+                                            </ul>
+                                            <p>In the mapping panel, the <em>Mapping</em> tab lets you assign columns as <strong>ID</strong>, <strong>Label</strong> or a specific <strong>attribute</strong>, with a live data preview.</p>
+                                            <div class="alert alert-warning small mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Mappings store the query <em>without</em> a <code>LIMIT</code> &mdash; the preview limit only affects the UI.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Digital Twin -->
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw5">
+                                            <i class="bi bi-box-fill me-2"></i><strong>5. Digital Twin</strong> &mdash; materialize &amp; explore
+                                        </button>
+                                    </h2>
+                                    <div id="hw5" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
+                                        <div class="accordion-body">
+                                            <ul>
+                                                <li><strong>Overview</strong> &mdash; insight dashboard: entity counts, relationship counts, last sync timestamp, quality status</li>
+                                                <li><strong>Knowledge Graph</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, detect clusters (Louvain / Label Propagation / Greedy Modularity), color-by-cluster, collapse into super-nodes</li>
+                                                <li><strong>GraphQL</strong> &mdash; auto-generated GraphQL playground for programmatic access</li>
+                                                <li><strong>Data Quality</strong> &mdash; run SHACL / constraint validation against the triple store</li>
+                                                <li><strong>Inference</strong> &mdash; OWL 2 RL &amp; SWRL reasoning on Delta (SQL) or LadybugDB (Cypher)</li>
+                                            </ul>
+                                            <p>A <em>Readiness Status</em> indicator tells you when ontology &amp; mapping are both ready to sync.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- FEATURES -->
+                        <section class="help-section" id="help-features" data-help-section-panel="features">
+                            <h2><i class="bi bi-stars me-2"></i>Feature Guide</h2>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-robot"></i></div>
+                                        <h5>AI Assistant</h5>
+                                        <p>A floating assistant in the <em>Model</em> view lets you edit the ontology with natural-language commands (&ldquo;add entity Customer&rdquo;, &ldquo;remove orphans&rdquo;, &ldquo;list relationships&rdquo;...).</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-layers-half"></i></div>
+                                        <h5>Interactive Knowledge Graph</h5>
+                                        <p>Two-phase search, configurable depth, cross-domain bridges, cluster detection (client-side Graphology / server-side NetworkX), color-by-cluster, super-nodes.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-bar-chart-line"></i></div>
+                                        <h5>Dashboard embedding</h5>
+                                        <p>Assign a Databricks dashboard to an entity type; parameters are auto-populated from entity attributes when viewed in the Digital Twin.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-shield-check"></i></div>
+                                        <h5>SHACL Data Quality</h5>
+                                        <p>Six categories (Completeness, Cardinality, Uniqueness, Consistency, Conformance, Structural) executed as SQL or PySHACL. Per-rule progress, violation caps, severity levels.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-lightning"></i></div>
+                                        <h5>SWRL Reasoning</h5>
+                                        <p>Graphical D3 rule editor. Rules compile to SQL (Delta) or Cypher (LadybugDB). Per-rule progress tracking during inference.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-signpost-split"></i></div>
+                                        <h5>Cross-domain Bridges</h5>
+                                        <p>Link entities from different domains. The navbar bridges navigation automatically switches domains and focuses the target entity.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-plug"></i></div>
+                                        <h5>MCP Integration</h5>
+                                        <p>Expose the knowledge graph to LLM agents through the Model Context Protocol. Deploy the companion <code>mcp-ontobricks</code> app and connect from Cursor, Claude Desktop or the Databricks Playground.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-cloud-arrow-up"></i></div>
+                                        <h5>Unity Catalog first</h5>
+                                        <p>All domains are stored in UC volumes; triples land in Delta tables (or LadybugDB triple store). Incremental sync by default.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- FAQ -->
+                        <section class="help-section" id="help-faq" data-help-section-panel="faq">
+                            <h2><i class="bi bi-question-circle me-2"></i>Frequently Asked Questions</h2>
+
+                            <div class="accordion help-accordion" id="helpFaqAccordion">
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">What is an ontology, really?</button></h2>
+                                    <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">An ontology is a formal description of the concepts (classes/entities), their properties (attributes), and the relationships between them in a domain. OntoBricks expresses ontologies in the W3C <strong>OWL</strong> standard and materializes data as RDF triples.</div></div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">Do I have to write OWL or SPARQL by hand?</button></h2>
+                                    <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">No. The visual <em>Model</em> designer and the <em>AI Wizard</em> generate OWL automatically. For querying, use the <strong>GraphQL</strong> endpoint or the interactive Knowledge Graph &mdash; SPARQL is optional.</div></div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">Which triple store backends are supported?</button></h2>
+                                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Two backends: <strong>Delta</strong> (native Unity Catalog, best for large volumes and SQL integration) and <strong>LadybugDB</strong> (property graph, supports Cypher). Pick the backend in <em>Settings</em>.</div></div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">Why do I see grey/disabled menu items?</button></h2>
+                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved domain</em>. Create/load a domain from the Registry, then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology, Mapping and Digital Twin then become enabled.</div></div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">Auto-Map is running &mdash; can I leave the page?</button></h2>
+                                    <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Auto-Map, Sync, Data Quality and Inference all run as <em>background tasks</em>. Their progress is tracked in the <i class="bi bi-hourglass-split"></i> navbar icon &mdash; you can navigate anywhere and come back.</div></div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">How does the LLM automation pick the right model?</button></h2>
+                                    <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">You select a Databricks Model Serving endpoint in <em>Settings</em>. The Wizard and Auto-Map features call this endpoint with prompts that include your UC metadata, documents and ontology context.</div></div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq7">Can I version my ontology?</button></h2>
+                                    <div id="faq7" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Use <strong>Domain &rarr; Versions</strong> to snapshot the current state. You can roll back or fork a version at any time.</div></div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq8">How do I share a link to a specific section?</button></h2>
+                                    <div id="faq8" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Every sidebar section is deep-linkable. Simply copy the current URL &mdash; it already contains the <code>?section=...</code> parameter. Back/Forward in the browser works as expected.</div></div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq9">How are bridges between domains defined?</button></h2>
+                                    <div id="faq9" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Go to <strong>Registry &rarr; Bridges</strong> to declare cross-domain links. In the Knowledge Graph, right-clicking an entity exposes available bridges; clicking one switches domains and focuses the target entity.</div></div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq10">Is CSRF protection enabled?</button></h2>
+                                    <div id="faq10" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. A double-submit cookie guards every state-changing request. This is transparent to users of the web UI.</div></div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- TROUBLESHOOT -->
+                        <section class="help-section" id="help-troubleshoot" data-help-section-panel="troubleshoot">
+                            <h2><i class="bi bi-tools me-2"></i>Troubleshooting</h2>
+
+                            <div class="help-trouble">
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;The warehouse icon is grey/yellow.&rdquo;</h5>
+                                <p>Your SQL Warehouse is not yet configured or is starting. Click the <i class="bi bi-server"></i> icon (admin-only) or go to <strong>Settings</strong> to pick a warehouse and wait for it to reach the <em>running</em> state.</p>
+                            </div>
+                            <div class="help-trouble">
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Registry is empty / no domains shown.&rdquo;</h5>
+                                <p>Open <strong>Settings &rarr; Registry</strong> and click <em>Initialize</em>. This creates the required folder structure in your Unity Catalog Volume.</p>
+                            </div>
+                            <div class="help-trouble">
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Auto-Map failed on some entities.&rdquo;</h5>
+                                <p>Open <strong>Mapping &rarr; Auto-Map</strong> &mdash; the report table shows which entities failed and why. For entities with missing attribute mappings only, click <em>Re-Assign Missing Attributes</em> to retry just those.</p>
+                            </div>
+                            <div class="help-trouble">
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Sync is very slow.&rdquo;</h5>
+                                <p>Large mappings benefit from a larger SQL Warehouse. Also check that your mappings are reasonable SQL (avoid unnecessary cross-joins). Sync is incremental by default &mdash; only changed data is materialized.</p>
+                            </div>
+                            <div class="help-trouble">
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Session state leaked after switching domains.&rdquo;</h5>
+                                <p>Refresh the browser once. The latest version resets all per-domain state on switch &mdash; if you still see staleness, report it with a changelog reference.</p>
+                            </div>
+                            <div class="help-trouble">
+                                <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;I see &lsquo;requires domain saved&rsquo; tooltips everywhere.&rdquo;</h5>
+                                <p>You must first create and save a domain. Registry &rarr; <em>New Domain</em> &rarr; then on the Domain page press <kbd>Cmd/Ctrl+S</kbd>.</p>
+                            </div>
+                        </section>
+
+                        <!-- SHORTCUTS -->
+                        <section class="help-section" id="help-shortcuts" data-help-section-panel="shortcuts">
+                            <h2><i class="bi bi-keyboard me-2"></i>Keyboard Shortcuts</h2>
+                            <p class="text-muted">On macOS use <kbd>Cmd</kbd>; on Windows/Linux use <kbd>Ctrl</kbd>.</p>
+                            <table class="table table-sm table-striped help-table">
+                                <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
+                                <tbody>
+                                    <tr><td><kbd>Cmd/Ctrl</kbd> + <kbd>S</kbd></td><td>Save the current domain</td></tr>
+                                    <tr><td><kbd>Cmd/Ctrl</kbd> + <kbd>K</kbd></td><td>Focus the sidebar search (when available)</td></tr>
+                                    <tr><td><kbd>?</kbd></td><td>Toggle the compact keyboard-shortcut overlay</td></tr>
+                                    <tr><td><kbd>Esc</kbd></td><td>Close the active overlay/modal</td></tr>
+                                    <tr><td><kbd>&larr;</kbd> / <kbd>&rarr;</kbd></td><td>Back / Forward in breadcrumb navigation</td></tr>
+                                </tbody>
+                            </table>
+                            <h5 class="mt-4">Graph interactions (Knowledge Graph / Model)</h5>
+                            <table class="table table-sm table-striped help-table">
+                                <tbody>
+                                    <tr><td>Scroll</td><td>Zoom in/out</td></tr>
+                                    <tr><td>Click + drag background</td><td>Pan</td></tr>
+                                    <tr><td>Hover node</td><td>Highlight the node and its neighbors</td></tr>
+                                    <tr><td>Click node</td><td>Select / lock highlight</td></tr>
+                                    <tr><td>Right-click node</td><td>Context menu (bridges, details, filters)</td></tr>
+                                </tbody>
+                            </table>
+                        </section>
+
+                        <!-- GLOSSARY -->
+                        <section class="help-section" id="help-glossary" data-help-section-panel="glossary">
+                            <h2><i class="bi bi-book me-2"></i>Glossary</h2>
+                            <dl class="help-glossary">
+                                <dt>Ontology</dt><dd>Formal model of entities (classes), their attributes (data properties) and relationships (object properties), expressed in OWL.</dd>
+                                <dt>Entity / Class</dt><dd>A concept in the domain (e.g. <em>Customer</em>, <em>Order</em>).</dd>
+                                <dt>Attribute / Data Property</dt><dd>A scalar value attached to an entity (e.g. <em>email</em>, <em>birthDate</em>).</dd>
+                                <dt>Relationship / Object Property</dt><dd>A link between two entities (e.g. <em>Customer placedOrder Order</em>).</dd>
+                                <dt>OWL</dt><dd>W3C Web Ontology Language &mdash; the vocabulary OntoBricks uses to describe the ontology.</dd>
+                                <dt>RDF / Triple</dt><dd>Subject-Predicate-Object statement &mdash; the native data model of the triple store.</dd>
+                                <dt>R2RML</dt><dd>W3C standard for mapping relational data (SQL tables) to RDF triples.</dd>
+                                <dt>SHACL</dt><dd>W3C Shapes Constraint Language &mdash; used for data quality validation.</dd>
+                                <dt>SWRL</dt><dd>Semantic Web Rule Language &mdash; &ldquo;IF ... THEN ...&rdquo; inference rules.</dd>
+                                <dt>Digital Twin</dt><dd>A materialized, queryable knowledge graph representation of your Databricks data.</dd>
+                                <dt>Bridge</dt><dd>Cross-domain link between entities of two different domains.</dd>
+                                <dt>Triple Store</dt><dd>Backend where triples are physically stored (Delta or LadybugDB).</dd>
+                                <dt>Unity Catalog (UC)</dt><dd>Databricks unified governance for catalogs, schemas, tables and volumes.</dd>
+                                <dt>MCP</dt><dd>Model Context Protocol &mdash; exposes the knowledge graph to LLM agents.</dd>
+                            </dl>
+                        </section>
+
+                        <!-- RESOURCES -->
+                        <section class="help-section" id="help-resources" data-help-section-panel="resources">
+                            <h2><i class="bi bi-box-arrow-up-right me-2"></i>Resources</h2>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="help-card">
+                                        <h5><i class="bi bi-book me-2"></i>OntoBricks documentation</h5>
+                                        <ul class="list-unstyled mb-0">
+                                            <li><a href="/about">About OntoBricks</a></li>
+                                            <li><a href="https://github.com/databrickslabs/ontobricks" target="_blank" rel="noopener">GitHub repository <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://github.com/databrickslabs/ontobricks/blob/main/docs/user-guide.md" target="_blank" rel="noopener">Full User Guide <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://github.com/databrickslabs/ontobricks/blob/main/docs/deployment.md" target="_blank" rel="noopener">Deployment Guide <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-card">
+                                        <h5><i class="bi bi-globe me-2"></i>W3C standards</h5>
+                                        <ul class="list-unstyled mb-0">
+                                            <li><a href="https://www.w3.org/TR/owl2-overview/" target="_blank" rel="noopener">OWL 2 <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://www.w3.org/TR/r2rml/" target="_blank" rel="noopener">R2RML <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://www.w3.org/TR/shacl/" target="_blank" rel="noopener">SHACL <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://www.w3.org/submissions/SWRL/" target="_blank" rel="noopener">SWRL <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-card">
+                                        <h5><i class="bi bi-building me-2"></i>Industry standards (importable)</h5>
+                                        <ul class="list-unstyled mb-0">
+                                            <li><a href="https://spec.edmcouncil.org/fibo/" target="_blank" rel="noopener">FIBO &mdash; Financial Industry <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://www.cdisc.org/standards" target="_blank" rel="noopener">CDISC &mdash; Clinical Data <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://www.industrialontologies.org/" target="_blank" rel="noopener">IOF &mdash; Industrial Ontologies <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-card">
+                                        <h5><i class="bi bi-cloud me-2"></i>Databricks</h5>
+                                        <ul class="list-unstyled mb-0">
+                                            <li><a href="https://docs.databricks.com/" target="_blank" rel="noopener">Databricks documentation <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://docs.databricks.com/en/data-governance/unity-catalog/index.html" target="_blank" rel="noopener">Unity Catalog <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://docs.databricks.com/en/machine-learning/model-serving/index.html" target="_blank" rel="noopener">Model Serving <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://modelcontextprotocol.io/" target="_blank" rel="noopener">Model Context Protocol (MCP) <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-primary mt-4 mb-0">
+                                <i class="bi bi-chat-dots me-2"></i>
+                                Found a bug or have a suggestion? Open an issue on the
+                                <a href="https://github.com/databrickslabs/ontobricks/issues" target="_blank" rel="noopener" class="alert-link">GitHub tracker</a>.
+                            </div>
+                        </section>
+
+                        <!-- SEARCH EMPTY STATE -->
+                        <section class="help-section help-search-empty d-none" data-help-section-panel="__empty">
+                            <div class="text-center text-muted py-5">
+                                <i class="bi bi-search fs-1 d-block mb-3"></i>
+                                <h5>No help topic matches your search.</h5>
+                                <p>Try different keywords, or browse the sections on the left.</p>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer help-modal-footer">
+                <small class="text-muted me-auto">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Tip: press <kbd>?</kbd> anywhere for the keyboard-shortcut overlay.
+                </small>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

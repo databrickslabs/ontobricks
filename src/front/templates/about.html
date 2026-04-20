@@ -5,7 +5,7 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-info-circle"></i> About OntoBricks</h1>
-    <p>Visual R2RML mapping tool for Databricks taxonomy integration</p>
+    <p>Digital Twin Builder for Databricks &mdash; from Unity Catalog to a queryable knowledge graph in four clicks</p>
 </div>
 
 <div class="row">
@@ -16,49 +16,113 @@
             </div>
             <div class="card-body">
                 <p>
-                    OntoBricks is a visual tool designed to simplify the creation of R2RML mappings for 
-                    integrating Databricks datasets with ontologies. It provides an intuitive interface for 
-                    mapping relational tables to RDF triples, making semantic data integration accessible.
+                    OntoBricks transforms Databricks tables into a materialized knowledge graph. Design ontologies
+                    (OWL/RDFS/SHACL), map them to Unity Catalog tables via R2RML, materialize triples into a
+                    Delta or LadybugDB triple store, reason over the graph, and query it through an
+                    auto-generated GraphQL API &mdash; all from a single web application running as a
+                    Databricks App.
                 </p>
-                <h6>Key Features:</h6>
-                <ul>
-                    <li>Visual mapping interface for Databricks tables</li>
-                    <li>Automatic R2RML generation</li>
-                    <li>Support for complex relationships and foreign keys</li>
-                    <li>Real-time validation and preview</li>
-                    <li>Built for Databricks Apps deployment</li>
-                </ul>
+                <p class="mb-0">
+                    LLM-powered automation drives the full pipeline: import metadata, generate the ontology,
+                    auto-map entities and relationships, then synchronize the Digital Twin.
+                </p>
             </div>
         </div>
-        
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-stars"></i> Core Capabilities
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-bezier2"></i> Ontology Management</h6>
+                        <ul class="small">
+                            <li>OWL / RDFS / SHACL import &amp; export</li>
+                            <li>Visual OntoViz design canvas</li>
+                            <li>Industry ontologies (FIBO, CDISC, IOF)</li>
+                            <li>URI management &amp; namespaces</li>
+                        </ul>
+                        <h6><i class="bi bi-arrow-left-right"></i> Mapping</h6>
+                        <ul class="small">
+                            <li>Entity &amp; relationship mapping</li>
+                            <li>R2RML generation and parsing</li>
+                            <li>SQL validation &amp; preview</li>
+                            <li>LLM-assisted auto-assign</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-share"></i> Digital Twin</h6>
+                        <ul class="small">
+                            <li>Incremental knowledge graph build</li>
+                            <li>SPARQL endpoint &amp; GraphQL API</li>
+                            <li>Interactive graph visualization</li>
+                            <li>Community detection &amp; clustering</li>
+                        </ul>
+                        <h6><i class="bi bi-lightbulb"></i> Reasoning &amp; Quality</h6>
+                        <ul class="small">
+                            <li>OWL 2 RL inference</li>
+                            <li>SWRL rules &amp; SPARQL CONSTRUCT</li>
+                            <li>SHACL validation &amp; data quality checks</li>
+                            <li>Decision tables &amp; aggregate rules</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-mouse"></i> The 4-Click Pipeline
+            </div>
+            <div class="card-body">
+                <ol class="mb-0">
+                    <li><strong>Import Metadata</strong> &mdash; fetch tables and columns from Unity Catalog.</li>
+                    <li><strong>Generate Ontology</strong> &mdash; the LLM designs entities, relationships, and attributes.</li>
+                    <li><strong>Auto-Map</strong> &mdash; the LLM produces SQL mappings for every entity and relationship.</li>
+                    <li><strong>Synchronize</strong> &mdash; execute mappings and populate the triple store.</li>
+                </ol>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">
-                <i class="bi bi-book"></i> Technologies
+                <i class="bi bi-book"></i> Technology Stack
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
                         <h6>Backend</h6>
-                        <ul>
-                            <li>Python 3.9+</li>
-                            <li>FastAPI 0.109+</li>
-                            <li>RDFLib 7.0</li>
-                            <li>Databricks SQL Connector</li>
+                        <ul class="small">
+                            <li>Python 3.10+ &amp; FastAPI</li>
+                            <li>RDFLib &amp; OWL-RL</li>
+                            <li>Strawberry GraphQL</li>
+                            <li>Databricks SQL Connector &amp; SDK</li>
+                            <li>LadybugDB embedded graph engine</li>
+                            <li>Model Context Protocol (MCP) server</li>
                         </ul>
                     </div>
                     <div class="col-md-6">
                         <h6>Frontend</h6>
-                        <ul>
-                            <li>Bootstrap 5.3</li>
-                            <li>Bootstrap Icons</li>
-                            <li>Vanilla JavaScript</li>
+                        <ul class="small">
+                            <li>Jinja2 templates</li>
+                            <li>Bootstrap 5.3 &amp; Bootstrap Icons</li>
+                            <li>Vanilla JavaScript (no framework)</li>
+                            <li>Graphology &amp; Sigma.js visualizations</li>
+                        </ul>
+                        <h6>Platform</h6>
+                        <ul class="small">
+                            <li>Databricks Apps deployment</li>
+                            <li>Unity Catalog (metadata &amp; Delta triples)</li>
+                            <li>SQL Warehouse query engine</li>
+                            <li>UC Volume-backed domain registry</li>
                         </ul>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <div class="col-lg-4">
         <div class="card mb-4">
             <div class="card-header">
@@ -66,29 +130,72 @@
             </div>
             <div class="card-body">
                 <p><strong>Version:</strong> {{ app_version }}</p>
-                <p><strong>Status:</strong> <span class="badge bg-success">Development</span></p>
+                <p><strong>Status:</strong> <span class="badge bg-success">Active</span></p>
                 <p class="mb-0"><strong>License:</strong> MIT</p>
             </div>
         </div>
-        
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-robot"></i> LLM Agents
+            </div>
+            <div class="card-body">
+                <ul class="small mb-0">
+                    <li>OWL generator (metadata &rarr; ontology)</li>
+                    <li>Auto-assign (entity &amp; relationship mappings)</li>
+                    <li>Icon assign (visual ontology styling)</li>
+                    <li>AI Assistant (natural-language ontology editing)</li>
+                    <li>SQL Wizard (text-to-SQL pipeline)</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-plug"></i> MCP Integration
+            </div>
+            <div class="card-body">
+                <p class="small mb-0">
+                    The companion <code>mcp-ontobricks</code> server exposes the knowledge graph to LLM
+                    agents via the Model Context Protocol &mdash; usable from Cursor, Claude Desktop, or
+                    the Databricks Playground.
+                </p>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">
                 <i class="bi bi-link-45deg"></i> Resources
             </div>
             <div class="card-body">
-                <ul class="list-unstyled">
+                <ul class="list-unstyled mb-0">
                     <li class="mb-2">
-                        <a href="https://www.w3.org/TR/r2rml/" target="_blank" class="text-decoration-none">
+                        <a href="https://www.w3.org/TR/r2rml/" target="_blank" rel="noopener" class="text-decoration-none">
                             <i class="bi bi-box-arrow-up-right"></i> R2RML Specification
                         </a>
                     </li>
                     <li class="mb-2">
-                        <a href="https://docs.databricks.com/" target="_blank" class="text-decoration-none">
+                        <a href="https://www.w3.org/TR/owl2-overview/" target="_blank" rel="noopener" class="text-decoration-none">
+                            <i class="bi bi-box-arrow-up-right"></i> OWL 2 Overview
+                        </a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="https://www.w3.org/TR/shacl/" target="_blank" rel="noopener" class="text-decoration-none">
+                            <i class="bi bi-box-arrow-up-right"></i> SHACL Specification
+                        </a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="https://docs.databricks.com/" target="_blank" rel="noopener" class="text-decoration-none">
                             <i class="bi bi-box-arrow-up-right"></i> Databricks Documentation
                         </a>
                     </li>
                     <li class="mb-2">
-                        <a href="https://rdflib.readthedocs.io/" target="_blank" class="text-decoration-none">
+                        <a href="https://modelcontextprotocol.io/" target="_blank" rel="noopener" class="text-decoration-none">
+                            <i class="bi bi-box-arrow-up-right"></i> Model Context Protocol
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://rdflib.readthedocs.io/" target="_blank" rel="noopener" class="text-decoration-none">
                             <i class="bi bi-box-arrow-up-right"></i> RDFLib Documentation
                         </a>
                     </li>
@@ -98,4 +205,3 @@
     </div>
 </div>
 {% endblock %}
-
