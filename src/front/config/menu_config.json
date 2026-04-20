@@ -506,6 +506,13 @@
             "tooltip": "Background tasks"
         },
         {
+            "id": "help",
+            "label": "Help",
+            "icon": "bi-question-circle",
+            "element_id": "helpCenterToggle",
+            "tooltip": "Help & documentation"
+        },
+        {
             "id": "settings",
             "label": "Settings",
             "icon": "bi-gear-fill",

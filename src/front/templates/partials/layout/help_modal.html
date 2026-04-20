@@ -2,11 +2,14 @@
 <!-- CSS: /static/global/css/help-modal.css -->
 <!-- OntoBricks Help Center – comprehensive in-app documentation -->
 <div class="modal fade help-modal" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header help-modal-header">
-                <h5 class="modal-title" id="helpModalLabel">
-                    <i class="bi bi-life-preserver me-2"></i>OntoBricks Help Center
+                <h5 class="modal-title d-flex align-items-center" id="helpModalLabel">
+                    <span class="help-title-logo me-2">
+                        <img src="{{ url_for('static', filename='global/img/favicon.svg') }}?v=2" alt="" width="22" height="22">
+                    </span>
+                    OntoBricks Help Center
                 </h5>
                 <div class="help-modal-search ms-auto me-3 flex-grow-1" style="max-width: 320px;">
                     <div class="input-group input-group-sm">
@@ -38,7 +41,9 @@
                         <!-- WELCOME -->
                         <section class="help-section active" id="help-welcome" data-help-section-panel="welcome">
                             <div class="help-hero">
-                                <div class="help-hero-icon"><i class="bi bi-life-preserver"></i></div>
+                                <div class="help-hero-icon">
+                                    <img src="{{ url_for('static', filename='global/img/favicon.svg') }}?v=2" alt="OntoBricks" width="48" height="48">
+                                </div>
                                 <div>
                                     <h2>Welcome to OntoBricks</h2>
                                     <p class="lead mb-0">The Digital Twin Builder for Databricks &mdash; design an ontology, map Databricks tables to it, materialize a knowledge graph, and explore it visually.</p>
@@ -118,18 +123,25 @@
                                         <p>Go to <strong>Domain &rarr; Data Sources</strong>, pick your <em>catalog</em> and <em>schema</em>, then click <em>Import Metadata</em>. OntoBricks fetches table and column metadata from Unity Catalog.</p>
                                     </div>
                                 </div>
+                                <div class="help-step-card help-step-optional">
+                                    <div class="help-step-badge help-step-badge-optional"><i class="bi bi-plus-lg"></i></div>
+                                    <div>
+                                        <h5><i class="bi bi-file-earmark-text me-2"></i>Import Documents <span class="help-optional-tag">Optional</span></h5>
+                                        <p>Before generating, open <strong>Domain &rarr; Documents</strong> and attach any reference material (PDFs, schemas, data dictionaries, glossaries, &hellip;). The LLM uses these documents as additional context when producing the ontology &mdash; improving entity names, descriptions, and relationships.</p>
+                                    </div>
+                                </div>
                                 <div class="help-step-card">
                                     <div class="help-step-badge">3</div>
                                     <div>
                                         <h5><i class="bi bi-magic me-2"></i>Generate the Ontology</h5>
-                                        <p>Open <strong>Ontology &rarr; Generate</strong> (AI Wizard), select your LLM endpoint, optionally choose a <em>Quick Template</em> (CRM, IoT, Healthcare, Energy, ...) and click <em>Generate</em>. The LLM produces entities, relationships and attributes. Review in the <strong>Model</strong> tab.</p>
+                                        <p>Open <strong>Ontology &rarr; Generate</strong> (AI Wizard), select your LLM endpoint, optionally choose a <em>Quick Template</em> (CRM, IoT, Healthcare, Energy, ...) and click <em>Generate</em>. The LLM produces entities, relationships and attributes &mdash; grounded in the metadata and any documents you imported. Review in the <strong>Model</strong> tab.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
                                     <div class="help-step-badge">4</div>
                                     <div>
-                                        <h5><i class="bi bi-lightning-charge me-2"></i>Auto-Map &amp; Sync</h5>
-                                        <p>Open <strong>Mapping &rarr; Auto-Map</strong> &rarr; click <em>Start Auto-Map</em>. Once complete, go to <strong>Digital Twin &rarr; Sync</strong> and click <em>Synchronize</em>. Triples are materialized into your triple store.</p>
+                                        <h5><i class="bi bi-shuffle me-2"></i>Map your data &amp; Sync</h5>
+                                        <p>Open <strong>Mapping</strong> to connect your ontology to Databricks tables. You can either <strong>map manually</strong> using the <em>Designer</em> or <em>Manual</em> views (click each entity / relationship, write or tweak the SQL, assign columns), or <strong>let an agent do it for you</strong> via <em>Auto-Map</em> &rarr; <em>Start Auto-Map</em>. Once mappings are in place, go to <strong>Digital Twin &rarr; Sync</strong> and click <em>Synchronize</em> &mdash; triples are materialized into your triple store.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">

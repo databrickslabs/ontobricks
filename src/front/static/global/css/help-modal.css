@@ -1,0 +1,681 @@
+/**
+ * OntoBricks - Help Center Modal
+ * Styles for the in-app Help Center (base.html navbar → ? icon).
+ */
+
+/* ==========================================================================
+   Modal shell
+   ========================================================================== */
+.help-modal .modal-dialog {
+    max-width: 1100px;
+}
+
+.help-modal .modal-content {
+    border-radius: 12px;
+    overflow: hidden;
+    height: 88vh;
+    max-height: 88vh;
+}
+
+/* Only the inner .help-content scrolls — prevent Bootstrap from adding a
+   second overflow on .modal-body (happens with modal-dialog-scrollable or
+   certain Bootstrap versions). */
+.help-modal .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden !important;
+}
+
+.help-modal .modal-body,
+.help-modal .help-modal-body {
+    overflow-y: hidden !important;
+    overflow-x: hidden !important;
+}
+
+.help-modal-header {
+    background: #b91c1c;
+    color: #fff;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.help-modal-header .modal-title {
+    color: #fff;
+    font-weight: 600;
+}
+
+.help-modal-header .btn-close {
+    filter: invert(1) grayscale(1) brightness(2);
+}
+
+.help-modal-header .help-modal-search .input-group-text {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.help-modal-header .help-modal-search .form-control {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.help-modal-header .help-modal-search .form-control::placeholder {
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.help-modal-header .help-modal-search .form-control:focus {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.45);
+    box-shadow: none;
+}
+
+.help-modal-footer {
+    background: #fafafa;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* ==========================================================================
+   Body / two-pane layout
+   ========================================================================== */
+.help-modal-body {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.help-sidebar {
+    flex: 0 0 230px;
+    background: #fafafa;
+    border-right: 1px solid #e5e7eb;
+    padding: 1rem 0.5rem;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.help-nav .nav-link {
+    color: #3f3f46;
+    padding: 0.55rem 0.85rem;
+    margin-bottom: 0.15rem;
+    border-radius: 8px;
+    font-size: 0.92rem;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    transition: background 0.15s, color 0.15s;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+}
+
+.help-nav .nav-link i {
+    font-size: 1rem;
+    color: #71717a;
+}
+
+.help-nav .nav-link:hover {
+    background: #f4e4e4;
+    color: #111;
+}
+
+.help-nav .nav-link:hover i {
+    color: #b91c1c;
+}
+
+.help-nav .nav-link.active {
+    background: #1a1a1a;
+    color: #fff;
+    font-weight: 500;
+    border-left-color: #dc2626;
+}
+
+.help-nav .nav-link.active i {
+    color: #fca5a5;
+}
+
+.help-content {
+    flex: 1 1 auto;
+    padding: 1.75rem 2rem;
+    overflow-y: auto;
+    background: #ffffff;
+    min-height: 0;
+}
+
+/* ==========================================================================
+   Sections
+   ========================================================================== */
+.help-section {
+    display: none;
+    animation: helpFadeIn 0.2s ease-out;
+}
+
+.help-section.active {
+    display: block;
+}
+
+@keyframes helpFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.help-section h2 {
+    font-size: 1.45rem;
+    font-weight: 600;
+    color: #111;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #dc2626;
+    display: inline-block;
+    padding-right: 1rem;
+}
+
+.help-section h4,
+.help-section h5 {
+    color: #111;
+    font-weight: 600;
+}
+
+.help-content a {
+    color: #b91c1c;
+}
+
+.help-content a:hover {
+    color: #7f1d1d;
+}
+
+/* ==========================================================================
+   Hero block (Welcome)
+   ========================================================================== */
+.help-hero {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 1.25rem 1.5rem;
+    border-radius: 12px;
+    background: #b91c1c;
+    border: 1px solid #7f1d1d;
+    color: #fff;
+    margin-bottom: 1rem;
+}
+
+.help-hero h2 {
+    color: #fff;
+    border-bottom-color: #dc2626;
+}
+
+.help-hero .lead {
+    color: #fff;
+    opacity: 0.92;
+}
+
+.help-hero-icon {
+    width: 62px;
+    height: 62px;
+    border-radius: 14px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.18);
+}
+
+.help-hero-icon img {
+    width: 48px;
+    height: 48px;
+    display: block;
+}
+
+.help-title-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.help-title-logo img {
+    display: block;
+}
+
+.help-hero h2 {
+    border: none;
+    padding: 0;
+    margin: 0 0 0.25rem 0;
+    font-size: 1.6rem;
+}
+
+/* ==========================================================================
+   Quick-access cards
+   ========================================================================== */
+.help-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    height: 100%;
+    background: #fff;
+    transition: box-shadow 0.15s, transform 0.15s;
+}
+
+.help-card:hover {
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.12);
+    border-color: #fecaca;
+    transform: translateY(-1px);
+}
+
+.help-card h5 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+}
+
+.help-card p {
+    font-size: 0.9rem;
+    color: #4b5563;
+    margin-bottom: 0;
+}
+
+.help-card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.bg-soft-primary { background: #fee2e2; color: #b91c1c; }
+.bg-soft-success { background: #1a1a1a; color: #fca5a5; }
+.bg-soft-warning { background: #fef3c7; color: #b45309; }
+.bg-soft-info    { background: #fecaca; color: #7f1d1d; }
+
+/* ==========================================================================
+   Pipeline diagram (Welcome)
+   ========================================================================== */
+.help-pipeline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.4rem;
+    padding: 0.75rem 0 0.25rem;
+    overflow-x: hidden;
+}
+
+.help-step {
+    flex: 1 1 140px;
+    min-width: 0;
+    background: #fafafa;
+    border: 1px solid #e5e7eb;
+    border-top: 3px solid #dc2626;
+    border-radius: 10px;
+    padding: 0.6rem 0.7rem;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 0.82rem;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.help-step > div {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.help-step small {
+    font-size: 0.72rem;
+    color: #52525b;
+}
+
+.help-step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    border: 2px solid #dc2626;
+}
+
+.help-step-arrow {
+    display: flex;
+    align-items: center;
+    color: #dc2626;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Starter-guide step cards
+   ========================================================================== */
+.help-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    margin-top: 1rem;
+}
+
+.help-step-card {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem 1.2rem;
+    border-left: 4px solid #dc2626;
+    background: #fafafa;
+    border-radius: 8px;
+    align-items: flex-start;
+}
+
+.help-step-badge {
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    color: #fff;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    border: 2px solid #dc2626;
+}
+
+.help-step-optional {
+    border-left-style: dashed;
+    background: #fafafa;
+    opacity: 0.97;
+}
+
+.help-step-badge-optional {
+    background: #fff;
+    color: #dc2626;
+    border: 2px dashed #dc2626;
+}
+
+.help-optional-tag {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.1rem 0.55rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #b91c1c;
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    border-radius: 999px;
+    vertical-align: middle;
+}
+
+.help-step-card h5 {
+    margin-bottom: 0.3rem;
+    font-size: 1rem;
+}
+
+.help-step-card p {
+    margin-bottom: 0;
+    color: #475569;
+    font-size: 0.92rem;
+}
+
+/* ==========================================================================
+   Feature cards
+   ========================================================================== */
+.help-feature {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 1.1rem 1.15rem;
+    background: #fff;
+    height: 100%;
+}
+
+.help-feature-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: #dc2626;
+    color: #fff;
+    font-size: 1.2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.6rem;
+}
+
+.help-feature h5 {
+    font-size: 1rem;
+    margin-bottom: 0.3rem;
+}
+
+.help-feature p {
+    font-size: 0.88rem;
+    color: #475569;
+    margin-bottom: 0;
+}
+
+/* ==========================================================================
+   Accordions (Workflow, FAQ)
+   ========================================================================== */
+.help-accordion {
+    --bs-accordion-border-color: transparent;
+    --bs-accordion-border-width: 0;
+    border: 0;
+}
+
+.help-accordion .accordion-item {
+    border: 0;
+    background: transparent;
+    margin-bottom: 0.4rem;
+}
+
+.help-accordion .accordion-item:first-of-type,
+.help-accordion .accordion-item:last-of-type {
+    border-radius: 8px;
+}
+
+.help-accordion .accordion-item:first-of-type .accordion-button,
+.help-accordion .accordion-item:last-of-type .accordion-button.collapsed {
+    border-radius: 8px;
+}
+
+.help-accordion .accordion-button {
+    font-weight: 500;
+    border: 0;
+    border-radius: 8px;
+}
+
+.help-accordion .accordion-collapse {
+    border: 0;
+}
+
+.help-accordion .accordion-button:not(.collapsed) {
+    background: #1a1a1a;
+    color: #fff;
+    box-shadow: inset 0 -2px 0 #dc2626;
+}
+
+.help-accordion .accordion-button:not(.collapsed)::after {
+    filter: invert(1) grayscale(1) brightness(2);
+}
+
+.help-accordion .accordion-button:focus {
+    box-shadow: none;
+    border-color: #fecaca;
+}
+
+.help-accordion .accordion-body {
+    font-size: 0.92rem;
+    color: #27272a;
+    background: #fafafa;
+    border-left: 3px solid #dc2626;
+}
+
+/* ==========================================================================
+   Troubleshooting entries
+   ========================================================================== */
+.help-trouble {
+    padding: 0.85rem 1rem;
+    border-left: 3px solid #dc2626;
+    background: #fef2f2;
+    border-radius: 6px;
+    margin-bottom: 0.75rem;
+}
+
+.help-trouble .text-warning {
+    color: #dc2626 !important;
+}
+
+.help-trouble h5 {
+    font-size: 0.95rem;
+    margin-bottom: 0.3rem;
+}
+
+.help-trouble p {
+    font-size: 0.9rem;
+    color: #475569;
+    margin-bottom: 0;
+}
+
+/* ==========================================================================
+   Glossary
+   ========================================================================== */
+.help-glossary dt {
+    color: #111;
+    font-weight: 600;
+    margin-top: 0.6rem;
+}
+
+.help-glossary dt::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #dc2626;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+}
+
+.help-glossary dd {
+    color: #3f3f46;
+    font-size: 0.92rem;
+    margin-bottom: 0.4rem;
+    padding-left: 0.85rem;
+    border-left: 2px solid #dc2626;
+}
+
+/* ==========================================================================
+   Tables
+   ========================================================================== */
+.help-table kbd,
+.help-section kbd {
+    background: #1a1a1a;
+    color: #fff;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    border-bottom: 2px solid #dc2626;
+}
+
+/* ==========================================================================
+   Search highlights
+   ========================================================================== */
+.help-search-match {
+    background: #fecaca;
+    color: #7f1d1d;
+    border-radius: 3px;
+    padding: 0 2px;
+    font-weight: 600;
+}
+
+/* Dim non-matching cards/sections when searching */
+.help-content[data-help-searching="1"] .help-section:not(.active) {
+    display: none;
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+@media (max-width: 768px) {
+    .help-modal-body {
+        flex-direction: column;
+    }
+    .help-sidebar {
+        flex: 0 0 auto;
+        width: 100%;
+        border-right: 0;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 0.5rem;
+    }
+    .help-nav {
+        flex-direction: row !important;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+    }
+    .help-nav .nav-link {
+        white-space: nowrap;
+    }
+    .help-content {
+        padding: 1.25rem 1rem;
+    }
+    .help-hero {
+        flex-direction: column;
+        text-align: center;
+    }
+}
+
+/* ==========================================================================
+   Alerts inside the Help Center (keep on-theme)
+   ========================================================================== */
+.help-content .alert-info {
+    background: #1a1a1a;
+    color: #fca5a5;
+    border: 1px solid #7f1d1d;
+    border-left: 4px solid #dc2626;
+}
+
+.help-content .alert-info a,
+.help-content .alert-info .alert-link {
+    color: #fecaca;
+}
+
+.help-content .alert-primary {
+    background: #fef2f2;
+    color: #7f1d1d;
+    border: 1px solid #fecaca;
+    border-left: 4px solid #dc2626;
+}
+
+.help-content .alert-primary .alert-link {
+    color: #b91c1c;
+}
+
+.help-content .alert-warning {
+    background: #fef2f2;
+    color: #7f1d1d;
+    border-color: #fecaca;
+}
+
+/* ==========================================================================
+   Navbar Help icon
+   ========================================================================== */
+#helpCenterToggle i {
+    transition: transform 0.15s ease, color 0.15s ease;
+}
+
+#helpCenterToggle:hover i {
+    transform: scale(1.12);
+    color: #fca5a5;
+}

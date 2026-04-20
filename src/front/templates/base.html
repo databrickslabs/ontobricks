@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/pages.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/sidebar-layout.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/emoji-picker.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='global/css/help-modal.css') }}?v={{ asset_version }}">
     
     <!-- OntoBricks JS Utilities (defer: non-blocking, executed after HTML parse) -->
     <script defer src="{{ url_for('static', filename='global/js/utils.js') }}?v={{ asset_version }}"></script>
@@ -32,6 +33,7 @@
     <script defer src="{{ url_for('static', filename='global/js/base-ui-handlers.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/breadcrumb.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/emoji-picker.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='global/js/help-modal.js') }}?v={{ asset_version }}"></script>
     
     {% block extra_css %}{% endblock %}
 </head>
@@ -180,6 +182,12 @@
                             </div>
                         </div>
                     </li>
+                    <!-- Help Center -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="helpCenterToggle" title="Help &amp; documentation" aria-label="Open help center">
+                            <i class="bi bi-question-circle"></i>
+                        </a>
+                    </li>
                     {% for link in menu_config.utility_links %}
                     {% if link.id == 'settings' %}
                     <li class="nav-item">
@@ -234,6 +242,9 @@
     
     <!-- Shared UC File Browser Modal -->
     {% include "partials/layout/uc_file_browser_modal.html" %}
+
+    <!-- Help Center Modal -->
+    {% include "partials/layout/help_modal.html" %}
     
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
