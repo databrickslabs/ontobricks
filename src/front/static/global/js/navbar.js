@@ -358,11 +358,6 @@ async function saveDomainInfoBeforeSave() {
 
     // If any form fields exist, save the domain info
     if (nameEl || descEl || authorEl || baseUriEl || llmEndpointEl) {
-        const deltaCatalog = document.getElementById('triplestoreLocationWidget_catalog')?.value || '';
-        const deltaSchema = document.getElementById('triplestoreLocationWidget_schema')?.value || '';
-        const deltaTableName = document.getElementById('domainTriplestoreTableName')?.value.trim() || '';
-        const hasDelta = deltaCatalog || deltaSchema || deltaTableName;
-
         const domainInfoPayload = {
             name: nameEl ? nameEl.value.trim() : undefined,
             description: descEl ? descEl.value.trim() : undefined,
@@ -370,13 +365,7 @@ async function saveDomainInfoBeforeSave() {
             base_uri: baseUriEl ? baseUriEl.value.trim() : undefined,
             base_uri_auto: (typeof _baseUriAutoMode !== 'undefined') ? _baseUriAutoMode : undefined,
             llm_endpoint: llmEndpointEl ? llmEndpointEl.value : undefined,
-            
             version: versionEl ? versionEl.value : undefined,
-            delta: hasDelta ? {
-                catalog: deltaCatalog,
-                schema: deltaSchema,
-                table_name: deltaTableName,
-            } : undefined,
         };
         
         // Remove undefined values

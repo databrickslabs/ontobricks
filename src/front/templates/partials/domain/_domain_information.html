@@ -159,46 +159,22 @@
                             </ul>
                         </div>
 
-                        <!-- Triple-Store configuration -->
+                        <!-- Triple-Store configuration (read-only, derived from registry) -->
                         <div class="mb-4">
                             <label class="form-label fw-semibold">
                                 <i class="bi bi-eye me-1"></i> Triple-Store <small class="text-muted">(Unity Catalog)</small>
                             </label>
-                            <div class="row g-2 align-items-end">
-                                <div class="col-md-5">
-                                    <label class="form-label small text-muted mb-1">Catalog.Schema</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-light"><i class="bi bi-database"></i></span>
-                                        <input type="text" class="form-control" id="triplestoreCatalogSchemaDisplay"
-                                               value="{{ domain.delta.catalog ~ '.' ~ domain.delta.schema if domain.delta.catalog else '' }}"
-                                               readonly placeholder="No location set"
-                                               style="background-color: #f8f9fa; cursor: pointer;"
-                                               onclick="openTriplestoreLocationModal()">
-                                        <button type="button" class="btn btn-outline-secondary"
-                                                onclick="openTriplestoreLocationModal()"
-                                                title="Change Catalog.Schema">
-                                            <i class="bi bi-pencil-square"></i>
-                                        </button>
-                                    </div>
-                                    <input type="hidden" id="triplestoreLocationWidget_catalog" value="{{ domain.delta.catalog or '' }}">
-                                    <input type="hidden" id="triplestoreLocationWidget_schema" value="{{ domain.delta.schema or '' }}">
-                                    <div id="triplestoreLocationWidget" style="display:none;"></div>
-                                </div>
-                                <div class="col-md-7">
-                                    <label class="form-label small text-muted mb-1">View name <i class="bi bi-lock-fill" title="Auto-generated from domain name"></i></label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-light">.</span>
-                                        <input type="text" class="form-control" id="domainTriplestoreTableName"
-                                               placeholder="triplestore_domain_name"
-                                               value="{{ domain.delta.table_name or '' }}"
-                                               readonly
-                                               style="background-color: #e9ecef;">
-                                    </div>
-                                </div>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="bi bi-database"></i></span>
+                                <input type="text" class="form-control font-monospace" id="domainTriplestoreFullName"
+                                       value="{% if domain.delta.catalog and domain.delta.schema and domain.delta.table_name %}{{ domain.delta.catalog }}.{{ domain.delta.schema }}.{{ domain.delta.table_name }}{% endif %}"
+                                       readonly placeholder="Configure the registry in Settings to enable the Triple-Store"
+                                       style="background-color: #e9ecef;">
                             </div>
                             <small class="text-muted">
-                                <i class="bi bi-info-circle me-1"></i>Select <strong>catalog.schema</strong> where the VIEW will be created.
-                                The view name is derived from the domain name and version (<code>triplestore_&lt;domain&gt;_V&lt;version&gt;</code>).
+                                <i class="bi bi-info-circle me-1"></i>The Triple-Store VIEW is always created in the
+                                registry's <strong>catalog.schema</strong>.  Its name is derived from the domain
+                                name and version (<code>triplestore_&lt;domain&gt;_V&lt;version&gt;</code>).
                             </small>
                         </div>
 
@@ -209,10 +185,11 @@
                             </label>
                             <div class="input-group">
                                 <span class="input-group-text bg-light"><i class="bi bi-table"></i></span>
-                                <input type="text" class="form-control" id="domainSnapshotTableName"
+                                <input type="text" class="form-control font-monospace" id="domainSnapshotTableName"
+                                       value="{{ domain.snapshot_table or '' }}"
                                        readonly
                                        style="background-color: #e9ecef;"
-                                       placeholder="Set catalog.schema and domain name first">
+                                       placeholder="Configure the registry in Settings first">
                             </div>
                             <small class="text-muted">
                                 <i class="bi bi-info-circle me-1"></i>A managed Delta table that stores the triple set from the previous build.

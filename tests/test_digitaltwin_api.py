@@ -27,26 +27,32 @@ from back.core.triplestore import TripleStoreBackend
 class TestEffectiveViewTable:
     def test_fully_qualified(self):
         domain = MagicMock()
-        domain.delta = {"catalog": "cat", "schema": "sch", "table_name": "triples"}
-        domain.info = {"name": ""}
+        domain.delta = {
+            "catalog": "cat",
+            "schema": "sch",
+            "table_name": "triplestore_mydomain_V1",
+        }
+        domain.info = {"name": "MyDomain"}
         domain.current_version = "1"
-        assert effective_view_table(domain) == "cat.sch.triples"
+        assert effective_view_table(domain) == "cat.sch.triplestore_mydomain_V1"
 
-    def test_partial_with_fallback(self):
+    def test_without_registry_returns_bare_view_name(self):
+        """With a domain name but no registry catalog/schema, return the bare derived view name."""
         domain = MagicMock()
         domain.delta = {"catalog": "", "schema": "", "table_name": ""}
-        domain.info = {"name": ""}
+        domain.info = {"name": "MyDomain"}
         domain.current_version = "1"
-        settings = MagicMock()
-        settings.databricks_triplestore_table = "fallback.table"
-        assert effective_view_table(domain, settings) == "fallback.table"
+        assert effective_view_table(domain) == "triplestore_mydomain_V1"
 
-    def test_no_settings(self):
+    def test_empty_name_raises(self):
+        from back.core.errors import ValidationError
+
         domain = MagicMock()
-        domain.delta = {"catalog": "c", "schema": "s", "table_name": "t"}
+        domain.delta = {"catalog": "c", "schema": "s", "table_name": ""}
         domain.info = {"name": ""}
         domain.current_version = "1"
-        assert effective_view_table(domain) == "c.s.t"
+        with pytest.raises(ValidationError):
+            effective_view_table(domain)
 
 
 class TestEffectiveGraphName:

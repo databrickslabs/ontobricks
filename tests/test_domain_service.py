@@ -29,7 +29,13 @@ def _mock_domain(
         "volume": "OntoBricksRegistry",
     }
     domain.domain_folder = "test_domain"
-    domain.delta = {"catalog": "cat", "schema": "sch", "table_name": "triples"}
+    safe = name.lower().replace(" ", "_")
+    domain.delta = {
+        "catalog": "cat",
+        "schema": "sch",
+        "table_name": f"triplestore_{safe}_V1",
+    }
+    domain.snapshot_table = f"cat.sch._ob_snapshot_{safe}_v1"
     domain.design_layout = {"views": {}, "map": {}}
     domain.ladybug = {}
     domain.save = MagicMock()

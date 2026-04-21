@@ -82,26 +82,27 @@ class TestSQLHelpers:
         result = SQLHelpers.effective_view_table(FakeDomain())
         assert result == "cat.sch.triplestore_mydomain_V2"
 
-    def test_effective_view_table_no_name(self):
+    def test_effective_view_table_no_name_raises(self):
+        from back.core.errors import ValidationError
+
         class FakeDomain:
-            delta = {"catalog": "cat", "schema": "sch", "table_name": "fallback"}
+            delta = {"catalog": "cat", "schema": "sch"}
             info = {}
+            current_version = "1"
+
+        with pytest.raises(ValidationError):
+            SQLHelpers.effective_view_table(FakeDomain())
+
+    def test_effective_view_table_without_registry(self):
+        """With a domain name but no registry, return the bare derived view name."""
+
+        class FakeDomain:
+            delta = {"catalog": "", "schema": ""}
+            info = {"name": "MyDomain"}
             current_version = "1"
 
         result = SQLHelpers.effective_view_table(FakeDomain())
-        assert result == "cat.sch.fallback"
-
-    def test_effective_view_table_settings_fallback(self):
-        class FakeDomain:
-            delta = {}
-            info = {}
-            current_version = "1"
-
-        class FakeSettings:
-            databricks_triplestore_table = "s.t.v"
-
-        result = SQLHelpers.effective_view_table(FakeDomain(), FakeSettings())
-        assert result == "s.t.v"
+        assert result == "triplestore_mydomain_V1"
 
     def test_effective_graph_name(self):
         class FakeDomain:

@@ -283,8 +283,7 @@ function updateRegistryLocationDisplay(registry, domainFolder) {
 // Fetch and update version status on page load
 document.addEventListener('DOMContentLoaded', async function() {
     try {
-        // Initialize triplestore widget immediately (no API calls, values from template)
-        initTriplestoreWidget();
+        updateGraphPaths();
 
         // Update derived graph paths when the Triple Store tab is shown
         const tsTab = document.getElementById('tab-triplestore');
@@ -302,7 +301,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (statusData && statusData.success) {
             updateVersionStatusUI(statusData.is_active, statusData.version, statusData.has_registry);
             populateVersionDropdown(statusData.available_versions, statusData.version);
-            syncDerivedTriplestoreNames();
             const sf = statusData.domain_folder || statusData.project_folder;
             if (sf) {
                 currentDomainFolder = sf;
@@ -317,10 +315,6 @@ document.addEventListener('DOMContentLoaded', async function() {
             if (infoData.info && infoData.info.llm_endpoint) {
                 setSelectedLlmEndpoint(infoData.info.llm_endpoint);
             }
-            if (infoData.registry) {
-                window._domainRegistry = infoData.registry;
-                applyRegistryAsTriplestoreDefault();
-            }
         }
         
         // Re-enable version selector after a short delay to override any global disabling
@@ -330,53 +324,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 });
 
-
-/**
- * Sanitize a name for use as a Delta table identifier.
- */
-function sanitizeTableName(name) {
-    return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-}
-
-/**
- * Initialize the triplestore display from template-rendered values.
- * The view name is always derived from the domain name (read-only).
- */
-function initTriplestoreWidget() {
-    syncDerivedTriplestoreNames();
-    updateGraphPaths();
-}
-
-/**
- * Recompute the VIEW name and snapshot table name from the current
- * domain name and catalog.schema.  Both fields are read-only.
- */
-function syncDerivedTriplestoreNames() {
-    var nameEl = document.getElementById('domainName');
-    var domainName = nameEl ? nameEl.value.trim() : '';
-    var safeName = domainName ? sanitizeTableName(domainName) : '';
-
-    var versionEl = document.getElementById('domainVersionSelect');
-    var version = versionEl ? versionEl.value.trim() : '1';
-    var versionSuffix = '_V' + (version || '1');
-
-    var tableNameEl = document.getElementById('domainTriplestoreTableName');
-    if (tableNameEl && safeName) {
-        tableNameEl.value = 'triplestore_' + safeName + versionSuffix;
-    }
-
-    var catalog = (document.getElementById('triplestoreLocationWidget_catalog') || {}).value || '';
-    var schema  = (document.getElementById('triplestoreLocationWidget_schema')  || {}).value || '';
-
-    var snapshotEl = document.getElementById('domainSnapshotTableName');
-    if (snapshotEl) {
-        if (catalog && schema && safeName) {
-            snapshotEl.value = catalog + '.' + schema + '._ob_snapshot_' + safeName + versionSuffix;
-        } else {
-            snapshotEl.value = '';
-        }
-    }
-}
 
 function updateGraphPaths() {
     const nameEl = document.getElementById('domainName');
@@ -388,70 +335,4 @@ function updateGraphPaths() {
     if (localEl && domainSlug) {
         localEl.textContent = '/tmp/ontobricks/' + domainSlug + versionSuffix + '.lbug';
     }
-    syncDerivedTriplestoreNames();
-}
-
-/**
- * Open the UCLocationWidget modal to change catalog.schema for the triplestore.
- * The widget is initialized lazily on first click (no SQL warehouse call at page load).
- */
-let triplestoreWidgetReady = false;
-async function openTriplestoreLocationModal() {
-    if (!triplestoreWidgetReady) {
-        // Lazy-register the widget so UCLocationWidget.openModal can find it
-        if (typeof UCLocationWidget !== 'undefined') {
-            // Register widget without auto-loading domain registry location
-            UCLocationWidget.init('triplestoreLocationWidget', {
-                label: '',
-                showLabel: false,
-                autoLoadDomain: false,
-                onSelect: function(catalog, schema) {
-                    var display = document.getElementById('triplestoreCatalogSchemaDisplay');
-                    if (display) display.value = catalog + '.' + schema;
-                    document.getElementById('triplestoreLocationWidget_catalog').value = catalog;
-                    document.getElementById('triplestoreLocationWidget_schema').value = schema;
-                    syncDerivedTriplestoreNames();
-                }
-            });
-        }
-        triplestoreWidgetReady = true;
-    }
-    UCLocationWidget.openModal('triplestoreLocationWidget');
-}
-
-/**
- * No-op kept for backward compatibility (modal callback references it).
- * Delta catalog, schema, and table_name are read directly from their
- * respective form fields when saving.
- */
-function updateTriplestoreHiddenField() {
-    // Values are read directly from the individual form elements at save time.
-}
-
-/**
- * Generate the default triplestore table name from the domain name.
- */
-function generateDefaultTriplestoreTableName() {
-    applyRegistryAsTriplestoreDefault();
-    syncDerivedTriplestoreNames();
-}
-
-/**
- * If the triplestore catalog.schema is not set, copy from the registry location.
- * Always refreshes derived names (view + snapshot) afterwards.
- */
-function applyRegistryAsTriplestoreDefault() {
-    const catalog = document.getElementById('triplestoreLocationWidget_catalog')?.value || '';
-
-    if (!catalog) {
-        const reg = window._domainRegistry;
-        if (reg && reg.catalog && reg.schema) {
-            document.getElementById('triplestoreLocationWidget_catalog').value = reg.catalog;
-            document.getElementById('triplestoreLocationWidget_schema').value = reg.schema;
-            const display = document.getElementById('triplestoreCatalogSchemaDisplay');
-            if (display) display.value = reg.catalog + '.' + reg.schema;
-        }
-    }
-
-    syncDerivedTriplestoreNames();
 }

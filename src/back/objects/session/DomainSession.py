@@ -69,7 +69,6 @@ def get_empty_domain() -> Dict[str, Any]:
             },
             "triplestore": {
                 "stats": {},
-                "delta": {"catalog": "", "schema": "", "table_name": ""},
                 "source_versions": {},
             },
             "current_version": "1",
@@ -264,9 +263,9 @@ class DomainSession:
 
         info = data["domain"].get("info", {})
 
-        # Migrate domain.delta -> domain.triplestore.delta
-        if "delta" in data["domain"] and data["domain"]["delta"]:
-            ts["delta"].update(data["domain"].pop("delta"))
+        # Strip any persisted triplestore.delta (now derived from registry)
+        ts.pop("delta", None)
+        data["domain"].pop("delta", None)
 
         # Drop legacy lakebase data (backend removed)
         if "lakebase" in data["domain"]:
@@ -288,18 +287,8 @@ class DomainSession:
         if "triplestore_stats" in info:
             ts["stats"] = info.pop("triplestore_stats")
 
-        # Migrate legacy domain.info.triplestore_table -> domain.triplestore.delta
-        if "triplestore_table" in info:
-            ts_full = info.pop("triplestore_table", "")
-            delta = ts["delta"]
-            if ts_full and not delta.get("catalog") and not delta.get("table_name"):
-                parts = ts_full.split(".")
-                if len(parts) >= 3:
-                    delta["catalog"] = parts[0]
-                    delta["schema"] = parts[1]
-                    delta["table_name"] = ".".join(parts[2:])
-                else:
-                    delta["table_name"] = ts_full
+        # Drop legacy domain.info.triplestore_table (now derived from registry)
+        info.pop("triplestore_table", None)
 
         # Migrate root-level constraints/swrl_rules/axioms into ontology (legacy fix)
         if "constraints" in data and data["constraints"]:
@@ -1047,13 +1036,33 @@ class DomainSession:
 
     @property
     def triplestore(self) -> Dict[str, Any]:
-        """Get the triplestore configuration node (stats, delta, ladybug)."""
+        """Get the triplestore configuration node (stats, source_versions)."""
         return self._data["domain"].get("triplestore", {})
 
     @property
     def delta(self) -> Dict[str, str]:
-        """Get Delta triplestore settings (catalog, schema, table_name)."""
-        return self.triplestore.get("delta", {})
+        """Derived Delta triplestore location (catalog, schema, table_name).
+
+        The Delta VIEW always lives in the same Unity Catalog catalog.schema
+        as the domain registry, and the view name is computed from the
+        domain name and current version.  Returns a fresh dict on every
+        access; mutations are not persisted.
+        """
+        reg = self._data["settings"].get("registry", {}) or {}
+        catalog = reg.get("catalog", "") or ""
+        schema = reg.get("schema", "") or ""
+        name = (self.info or {}).get("name", "") or ""
+        version = self.current_version or "1"
+        if name:
+            safe = re.sub(r"[^a-z0-9_]", "_", name.lower())
+            table_name = f"triplestore_{safe}_V{version}"
+        else:
+            table_name = ""
+        return {
+            "catalog": catalog,
+            "schema": schema,
+            "table_name": table_name,
+        }
 
     @property
     def ladybug(self) -> Dict[str, str]:
@@ -1266,11 +1275,6 @@ class DomainSession:
 
         export = {"info": info_export, "versions": {version: version_data}}
 
-        ts = self.triplestore
-        delta = ts.get("delta", {})
-        if any(v for v in delta.values()):
-            export["delta"] = delta
-
         return export
 
     def import_from_file(self, data: Dict[str, Any], version: str = None):
@@ -1326,18 +1330,7 @@ class DomainSession:
                 "triplestore", get_empty_domain()["domain"]["triplestore"].copy()
             )
             ts.pop("backend", None)
-            # Migrate legacy triplestore_table into triplestore.delta
-            ts_full = info.get("triplestore_table", "")
-            if ts_full:
-                parts = ts_full.split(".")
-                d = ts.setdefault(
-                    "delta", get_empty_domain()["domain"]["triplestore"]["delta"].copy()
-                )
-                if len(parts) >= 3:
-                    d["catalog"], d["schema"] = parts[0], parts[1]
-                    d["table_name"] = ".".join(parts[2:])
-                else:
-                    d["table_name"] = ts_full
+            ts.pop("delta", None)
 
         # Check for new versioned format
         if "versions" in data:
@@ -1433,13 +1426,8 @@ class DomainSession:
             else:
                 self._data["domain"]["metadata"] = {}
 
-        # Import delta into domain.triplestore (already reset to empty above)
-        if "delta" in data:
-            empty_ts_delta = get_empty_domain()["domain"]["triplestore"]["delta"]
-            self._data["domain"]["triplestore"]["delta"] = {
-                **empty_ts_delta,
-                **data["delta"],
-            }
+        # Strip any persisted delta from legacy files — it is now derived
+        self._data["domain"]["triplestore"].pop("delta", None)
 
         # Ensure inherited dataProperties are propagated for saved domains
         # whose classes may have been stored before inheritance resolution.

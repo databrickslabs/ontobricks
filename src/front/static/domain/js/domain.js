@@ -114,33 +114,6 @@ async function loadDomainInfo() {
             
             applyBaseUriMode();
             
-            // Cache registry for triplestore defaults
-            if (data.registry) {
-                window._domainRegistry = data.registry;
-            }
-
-            // Populate triplestore hidden fields from API response
-            if (data.delta) {
-                var catEl = document.getElementById('triplestoreLocationWidget_catalog');
-                var schEl = document.getElementById('triplestoreLocationWidget_schema');
-                var dispEl = document.getElementById('triplestoreCatalogSchemaDisplay');
-                if (catEl && data.delta.catalog) catEl.value = data.delta.catalog;
-                if (schEl && data.delta.schema) schEl.value = data.delta.schema;
-                if (dispEl && data.delta.catalog && data.delta.schema) {
-                    dispEl.value = data.delta.catalog + '.' + data.delta.schema;
-                }
-            }
-
-            // Apply registry catalog.schema as triplestore default (only if not already set)
-            if (typeof applyRegistryAsTriplestoreDefault === 'function') {
-                applyRegistryAsTriplestoreDefault();
-            }
-            
-            // Compute derived triplestore names (view + snapshot)
-            if (typeof syncDerivedTriplestoreNames === 'function') {
-                syncDerivedTriplestoreNames();
-            }
-            
             if (nameEl) {
                 let _nameCheckTimer = null;
                 nameEl.addEventListener('input', function() {
@@ -154,9 +127,6 @@ async function loadDomainInfo() {
                         );
                     }
                     if (_baseUriAutoMode) updateAutoBaseUri();
-                    if (typeof syncDerivedTriplestoreNames === 'function') {
-                        syncDerivedTriplestoreNames();
-                    }
                     clearTimeout(_nameCheckTimer);
                     _nameCheckTimer = setTimeout(() => checkDomainNameAvailability(nameEl), 500);
                 });
@@ -300,12 +270,6 @@ async function saveDomainInfo() {
         base_uri: baseUriEl ? baseUriEl.value.trim() : '',
         base_uri_auto: _baseUriAutoMode,
         llm_endpoint: llmEndpointEl ? llmEndpointEl.value : '',
-        
-        delta: {
-            catalog: document.getElementById('triplestoreLocationWidget_catalog')?.value || '',
-            schema: document.getElementById('triplestoreLocationWidget_schema')?.value || '',
-            table_name: document.getElementById('domainTriplestoreTableName')?.value.trim() || '',
-        },
     };
     
     try {

@@ -614,8 +614,7 @@ The **Global** tab in the Domain Information section contains the main domain se
 | Field | Description |
 |-------|-------------|
 | **Backend** | Select the triple store engine: **Delta** (Databricks SQL Warehouse) or **LadybugDB** (embedded graph database). |
-| **Catalog.Schema** | *(Delta only)* Defaults to the same catalog and schema as the domain's registry location. Click the pencil icon to change. |
-| **Table Name** | *(Delta only)* Defaults to `triplestore_<domain_name>` (sanitized lowercase). Updated automatically when the domain name changes. |
+| **Triple-Store** | *(Delta only)* Read-only. The Delta VIEW is always created in the domain's registry `catalog.schema`, and its name is derived as `triplestore_<domain>_V<version>`. |
 | **Graph Name** | *(LadybugDB)* Logical name for the embedded graph database (defaults to domain name). |
 
 **Backend details:**

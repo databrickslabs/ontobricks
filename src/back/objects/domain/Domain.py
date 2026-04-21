@@ -136,14 +136,12 @@ class Domain:
         """
         delta = self._s.delta
 
-        _name = self._s.info.get("name", "")
         _version = getattr(self._s, "current_version", "1") or "1"
-        if _name:
-            _safe = re.sub(r"[^a-z0-9_]", "_", _name.lower())
-            _view_name = f"triplestore_{_safe}_V{_version}"
-        else:
-            _view_name = delta.get("table_name", "")
-        parts = [delta.get("catalog", ""), delta.get("schema", ""), _view_name]
+        parts = [
+            delta.get("catalog", ""),
+            delta.get("schema", ""),
+            delta.get("table_name", ""),
+        ]
         view_table = ".".join(p for p in parts if p)
         graph_name = f"{self._s.info.get('name', DEFAULT_GRAPH_NAME)}_V{_version}"
 
@@ -271,14 +269,6 @@ class Domain:
 
         self._s.ontology["name"] = domain_name.lower()
 
-        # Update delta sub-node (view location)
-        delta_data = data.get("delta") or {}
-        if delta_data:
-            cur = self._s.delta
-            for key in ("catalog", "schema", "table_name"):
-                if key in delta_data:
-                    cur[key] = delta_data[key]
-
         # Update ontology base_uri if provided
         base_uri = data.get("base_uri") or data.get("uri")
         if base_uri:
@@ -315,6 +305,7 @@ class Domain:
         """
         delta = self._s.delta
         reg = self._s.registry
+        snapshot_table = self._s.snapshot_table
 
         return {
             "name": self._s.info.get("name", "NewDomain"),
@@ -326,6 +317,7 @@ class Domain:
             "llm_endpoint": self._s.info.get("llm_endpoint", ""),
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "delta": delta,
+            "snapshot_table": snapshot_table,
             "ladybug": self._s.ladybug,
             "has_ontology": len(self._s.get_classes()) > 0,
             "has_mapping": len(self._s.get_entity_mappings()) > 0,

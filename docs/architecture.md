@@ -2407,9 +2407,10 @@ Phase 5: Update State
 
 #### 1. Snapshot Table
 
-A managed Delta table in the same catalog/schema as the VIEW:
+A managed Delta table in the same catalog/schema as the VIEW — both of which
+are always the registry `catalog.schema` for the active domain:
 
-- **Name:** `_ob_snapshot_{project_name}`
+- **Name:** `_ob_snapshot_{safe_domain}_v{version}` (derived; never stored)
 - **Schema:** `(subject STRING, predicate STRING, object STRING)`
 - **Lifecycle:** Created on first incremental build; dropped on domain delete
   or forced full rebuild.
@@ -2457,11 +2458,9 @@ Returns the latest `version` number (monotonically increasing). Stored as:
 }
 ```
 
-Also store the snapshot table name:
-
-```json
-"domain.triplestore.snapshot_table": "catalog.schema._ob_snapshot_my_domain"
-```
+The snapshot table name is not stored; it is computed on the fly from the
+registry catalog/schema, the domain name and the current version
+(`{registry.catalog}.{registry.schema}._ob_snapshot_<domain>_v<version>`).
 
 #### 3. New Components
 
@@ -2497,8 +2496,9 @@ def delete_triples(self, table_name, triples, batch_size=500, on_progress=None) 
 
 #### 4. Modified Files
 
-- **`src/back/objects/session/DomainSession.py`** — add `source_versions` and `snapshot_table` to
-  `domain.triplestore` in the empty domain template and properties.
+- **`src/back/objects/session/DomainSession.py`** — add `source_versions` to `domain.triplestore`
+  in the empty domain template and expose `snapshot_table`/`delta` as computed read-only
+  properties derived from the registry.
 - **`TripleStoreBackend.py`** — add abstract `delete_triples` method.
 - **`LadybugFlatStore.py`** — implement `delete_triples` for flat model.
 - **`LadybugGraphStore.py`** — implement `delete_triples` for graph model.

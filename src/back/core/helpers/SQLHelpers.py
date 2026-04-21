@@ -36,11 +36,15 @@ class SQLHelpers:
 
     @staticmethod
     def effective_view_table(domain, settings=None) -> str:
-        """Fully-qualified VIEW name derived from domain name, version, and delta location.
+        """Fully-qualified VIEW name derived from the registry location and the domain name.
 
-        When *settings* is provided and the composed name is empty, falls back
-        to ``settings.databricks_triplestore_table``.
+        The Delta VIEW always lives in the registry's ``catalog.schema`` and
+        its name is ``triplestore_<safe_name>_V<version>``.  When *settings*
+        is provided and the composed name is empty, falls back to
+        ``settings.databricks_triplestore_table``.
         """
+        from back.core.errors import ValidationError
+
         delta = getattr(domain, "delta", None) or {}
         catalog = delta.get("catalog", "")
         schema = delta.get("schema", "")
@@ -49,11 +53,12 @@ class SQLHelpers:
             getattr(domain, "current_version", DEFAULT_GRAPH_VERSION)
             or DEFAULT_GRAPH_VERSION
         )
-        if name:
-            safe = re.sub(r"[^a-z0-9_]", "_", name.lower())
-            view_name = f"triplestore_{safe}_V{version}"
-        else:
-            view_name = delta.get("table_name", "")
+        if not name:
+            raise ValidationError(
+                "Domain name is required to derive the triple-store view name"
+            )
+        safe = re.sub(r"[^a-z0-9_]", "_", name.lower())
+        view_name = f"triplestore_{safe}_V{version}"
         parts = [catalog, schema, view_name]
         table = ".".join(p for p in parts if p)
         if not table and settings:
