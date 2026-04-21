@@ -1003,8 +1003,10 @@ async function updateMetadataFromUC() {
         return;
     }
     
-    // Update all loaded tables
-    const tablesToUpdate = (metadataCache.tables || []).map(t => t.name);
+    const allTableNames = (metadataCache.tables || []).map(t => t.name);
+    const selectedNames = allTableNames.filter(n => tableSelections[n] === true);
+    const tablesToUpdate = selectedNames.length > 0 ? selectedNames : allTableNames;
+    const isSelectionUpdate = selectedNames.length > 0;
     
     if (tablesToUpdate.length === 0) {
         showNotification('No tables to update', 'warning');
@@ -1037,7 +1039,12 @@ async function updateMetadataFromUC() {
         const taskId = startResult.task_id;
         sessionStorage.setItem(METADATA_UPDATE_TASK_KEY, taskId);
         
-        showNotification(`Updating ${tablesToUpdate.length} table(s)...`, 'info');
+        showNotification(
+            isSelectionUpdate
+                ? `Updating ${tablesToUpdate.length} selected table(s)...`
+                : `Updating all ${tablesToUpdate.length} table(s)...`,
+            'info'
+        );
         
         // Trigger refresh of task tracker
         if (typeof refreshTasks === 'function') refreshTasks();

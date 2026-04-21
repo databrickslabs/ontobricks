@@ -59,22 +59,83 @@ function setupTaskTrackerEvents() {
 // =====================================================
 
 /**
- * Fetch all tasks from server
+ * Fetch all tasks from the server.
+ *
+ * The panel only displays active (pending/running) tasks.  Terminal tasks
+ * (completed / failed / cancelled) are converted to notifications the very
+ * first time we observe the transition, then dropped from the in-memory
+ * active list.
  */
 async function fetchTasks() {
     try {
         const response = await fetch('/tasks/', { credentials: 'same-origin' });
         const data = await response.json();
-        
-        if (data.success) {
-            trackedTasks = data.tasks || [];
-            updateTaskTrackerUI();
-            
-            // Adjust polling interval based on active tasks
-            adjustPollingInterval(data.active_count || 0);
-        }
+
+        if (!data.success) return;
+
+        const incoming = data.tasks || [];
+
+        // Detect active → terminal transitions by comparing the previous
+        // active snapshot with the fresh payload.  A task that we were
+        // tracking as active and is now terminal triggers a notification.
+        const previousById = new Map(trackedTasks.map(t => [t.id, t]));
+        incoming.forEach(task => {
+            const prev = previousById.get(task.id);
+            const wasActive = prev && (prev.status === 'pending' || prev.status === 'running');
+            const isTerminal = task.status === 'completed'
+                || task.status === 'failed'
+                || task.status === 'cancelled';
+            if (wasActive && isTerminal) {
+                notifyTaskTransition(task);
+            }
+        });
+
+        // Keep only active tasks in local state; the dropdown renders from this.
+        trackedTasks = incoming.filter(
+            t => t.status === 'pending' || t.status === 'running'
+        );
+        updateTaskTrackerUI();
+
+        // Adjust polling interval based on active tasks reported by the server.
+        adjustPollingInterval(data.active_count || 0);
     } catch (error) {
         console.error('[TaskTracker] Error fetching tasks:', error);
+    }
+}
+
+/**
+ * Push a notification describing a task's final state.
+ * Terminal status drives both the bell's type and icon.
+ */
+function notifyTaskTransition(task) {
+    const name = escapeHtml(task.name || 'Task');
+    let type = 'info';
+    let body;
+    if (task.status === 'completed') {
+        type = 'success';
+        body = `Task <strong>${name}</strong> completed`;
+    } else if (task.status === 'failed') {
+        type = 'error';
+        const err = task.error || task.message || 'Unknown error';
+        body = `Task <strong>${name}</strong> failed: ${escapeHtml(err)}`;
+    } else if (task.status === 'cancelled') {
+        type = 'warning';
+        body = `Task <strong>${name}</strong> cancelled`;
+    } else {
+        return;
+    }
+
+    // If a known page exists for this task type, make the notification
+    // clickable so the user can jump straight to the result.
+    const url = TASK_TYPE_URLS[task.task_type];
+    if (url) {
+        body += ` <a href="${url}" class="ms-1">Open</a>`;
+    }
+
+    if (typeof NotificationCenter !== 'undefined' && NotificationCenter.add) {
+        NotificationCenter.add(body, type);
+    } else if (typeof showNotification === 'function') {
+        showNotification(body, type);
     }
 }
 
@@ -98,45 +159,6 @@ async function cancelTask(taskId) {
     } catch (error) {
         console.error('[TaskTracker] Error cancelling task:', error);
         showNotification('Error cancelling task', 'error');
-    }
-}
-
-/**
- * Delete a task from history
- */
-async function deleteTask(taskId) {
-    try {
-        const response = await fetch(`/tasks/${taskId}`, {
-            method: 'DELETE',
-            credentials: 'same-origin'
-        });
-        const data = await response.json();
-        
-        if (data.success) {
-            fetchTasks();
-        }
-    } catch (error) {
-        console.error('[TaskTracker] Error deleting task:', error);
-    }
-}
-
-/**
- * Clear all completed tasks
- */
-async function clearCompletedTasks() {
-    try {
-        const response = await fetch('/tasks/clear-completed', {
-            method: 'POST',
-            credentials: 'same-origin'
-        });
-        const data = await response.json();
-        
-        if (data.success) {
-            showNotification(`Cleared ${data.cleared_count} tasks`, 'success');
-            fetchTasks();
-        }
-    } catch (error) {
-        console.error('[TaskTracker] Error clearing tasks:', error);
     }
 }
 
@@ -209,109 +231,72 @@ function updateTaskBadge() {
 }
 
 /**
- * Update the dropdown content
+ * Update the dropdown content.
+ *
+ * Only active (pending / running) tasks are rendered.  Finished tasks
+ * live in the Notification Center (see ``notifyTaskTransition``).
  */
 function updateTaskDropdown() {
     const container = document.getElementById('taskTrackerList');
     if (!container) return;
-    
+
     if (trackedTasks.length === 0) {
         container.innerHTML = `
             <div class="text-center text-muted py-4">
                 <i class="bi bi-inbox fs-3 d-block mb-2"></i>
-                <small>No tasks</small>
+                <small>No active tasks</small>
             </div>
         `;
         return;
     }
-    
-    // Build task list HTML
-    let html = '';
-    
-    // Active tasks first
-    const activeTasks = trackedTasks.filter(t => t.status === 'pending' || t.status === 'running');
-    const completedTasks = trackedTasks.filter(t => t.status !== 'pending' && t.status !== 'running');
-    
-    if (activeTasks.length > 0) {
-        html += '<div class="task-section mb-2">';
-        html += '<div class="px-3 py-1 bg-light border-bottom"><small class="text-muted fw-semibold">Active</small></div>';
-        activeTasks.forEach(task => {
-            html += renderTaskItem(task);
-        });
-        html += '</div>';
-    }
-    
-    if (completedTasks.length > 0) {
-        html += '<div class="task-section">';
-        html += `<div class="px-3 py-1 bg-light border-bottom d-flex justify-content-between align-items-center">
-            <small class="text-muted fw-semibold">Recent</small>
-            <button class="btn btn-link btn-sm p-0 text-muted" onclick="clearCompletedTasks()">Clear all</button>
-        </div>`;
-        // Show max 5 completed tasks
-        completedTasks.slice(0, 5).forEach(task => {
-            html += renderTaskItem(task);
-        });
-        html += '</div>';
-    }
-    
+
+    let html = '<div class="task-section">';
+    html += '<div class="px-3 py-1 bg-light border-bottom"><small class="text-muted fw-semibold">Active</small></div>';
+    trackedTasks.forEach(task => {
+        html += renderTaskItem(task);
+    });
+    html += '</div>';
+
     container.innerHTML = html;
 }
 
 /**
- * Render a single task item
+ * Render a single active task item (pending or running).
+ *
+ * Terminal tasks are never rendered — they are surfaced as notifications
+ * by ``notifyTaskTransition``.
  */
 function renderTaskItem(task) {
     const statusConfig = getTaskStatusConfig(task.status);
     const timeAgo = getTimeAgo(task.created_at);
-    
+
     let progressHtml = '';
     if (task.status === 'running') {
         progressHtml = `
             <div class="progress mt-2" style="height: 4px;">
-                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                <div class="progress-bar progress-bar-striped progress-bar-animated"
                      style="width: ${task.progress}%"></div>
             </div>
         `;
-        
-        // Show current step if available
         if (task.steps && task.steps.length > 0 && task.current_step < task.steps.length) {
             const currentStep = task.steps[task.current_step];
             progressHtml += `<small class="text-muted d-block mt-1">${currentStep.description}</small>`;
         }
     }
-    
-    let actionsHtml = '';
-    if (task.status === 'running') {
-        actionsHtml = `<button class="btn btn-link btn-sm p-0 text-danger" onclick="event.stopPropagation(); cancelTask('${task.id}')" title="Cancel">
+
+    const actionsHtml = task.status === 'running'
+        ? `<button class="btn btn-link btn-sm p-0 text-danger" onclick="event.stopPropagation(); cancelTask('${task.id}')" title="Cancel">
             <i class="bi bi-x-circle"></i>
-        </button>`;
-    } else if (task.status !== 'pending') {
-        actionsHtml = `<button class="btn btn-link btn-sm p-0 text-muted" onclick="event.stopPropagation(); deleteTask('${task.id}')" title="Remove">
-            <i class="bi bi-trash"></i>
-        </button>`;
-    }
-    
-    // Check if task is clickable (completed/failed tasks with a known URL)
-    const taskUrl = TASK_TYPE_URLS[task.task_type];
-    const isClickable = taskUrl && (task.status === 'completed' || task.status === 'failed');
-    const clickHandler = isClickable ? `onclick="navigateToTask('${task.task_type}')"` : '';
-    const cursorStyle = isClickable ? 'cursor: pointer;' : '';
-    const hoverClass = isClickable ? 'task-item-clickable' : '';
-    
-    // Add navigate hint for clickable items
-    let navigateHint = '';
-    if (isClickable) {
-        navigateHint = `<small class="text-primary ms-2"><i class="bi bi-box-arrow-up-right"></i></small>`;
-    }
-    
+        </button>`
+        : '';
+
     return `
-        <div class="task-item px-3 py-2 border-bottom ${hoverClass}" data-task-id="${task.id}" ${clickHandler} style="${cursorStyle}">
+        <div class="task-item px-3 py-2 border-bottom" data-task-id="${task.id}">
             <div class="d-flex justify-content-between align-items-start">
                 <div class="flex-grow-1">
                     <div class="d-flex align-items-center gap-2">
                         <i class="bi ${statusConfig.icon} ${statusConfig.colorClass}"></i>
                         <span class="fw-medium">${escapeHtml(task.name)}</span>
-                        ${navigateHint}
                     </div>
                     <small class="text-muted">${escapeHtml(task.message || statusConfig.label)}</small>
                     ${progressHtml}
@@ -323,23 +308,6 @@ function renderTaskItem(task) {
             </div>
         </div>
     `;
-}
-
-/**
- * Navigate to the page associated with a task type
- */
-function navigateToTask(taskType) {
-    const url = TASK_TYPE_URLS[taskType];
-    if (url) {
-        // Close the dropdown
-        const dropdown = document.getElementById('taskTrackerDropdown');
-        if (dropdown) {
-            dropdown.classList.remove('show');
-        }
-        
-        // Navigate to the URL
-        window.location.href = url;
-    }
 }
 
 /**
@@ -484,12 +452,9 @@ function getTimeAgo(isoString) {
 window.initTaskTracker = initTaskTracker;
 window.toggleTaskDropdown = toggleTaskDropdown;
 window.cancelTask = cancelTask;
-window.deleteTask = deleteTask;
-window.clearCompletedTasks = clearCompletedTasks;
 window.refreshTasks = refreshTasks;
 window.waitForTask = waitForTask;
 window.trackedTasks = trackedTasks;
-window.navigateToTask = navigateToTask;
 
 // Auto-initialize when DOM is ready
 if (document.readyState === 'loading') {

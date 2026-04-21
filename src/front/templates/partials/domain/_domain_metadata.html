@@ -55,7 +55,7 @@
                             title="Push catalog.schema from data sources into entity/relationship mappings">
                         <i class="bi bi-arrow-right-circle me-1"></i> Update Mappings
                     </button>
-                    <button type="button" class="btn btn-sm btn-outline-primary" data-meta-action="update-from-uc" id="updateMetadataBtn" title="Refresh column information from Unity Catalog">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-meta-action="update-from-uc" id="updateMetadataBtn" title="Refresh column information from Unity Catalog (selected tables only, or all tables if none are checked)">
                         <i class="bi bi-arrow-repeat"></i> Update from UC
                     </button>
                 </div>
@@ -64,7 +64,7 @@
                 <table class="table table-sm table-bordered table-hover" id="metadataTablesTable">
                     <thead class="table-light sticky-top">
                         <tr>
-                            <th class="dm-th-select" title="Select tables to remove">
+                            <th class="dm-th-select" title="Select tables for Update from UC or Remove">
                                 <input type="checkbox" class="form-check-input" id="selectAllTablesCheckbox" 
                                        title="Select/Deselect all">
                             </th>
@@ -80,7 +80,8 @@
                 </table>
             </div>
             <div class="mt-2 text-muted small">
-                <i class="bi bi-info-circle"></i> Check tables to select them for removal, then click "Remove Selected Tables". 
+                <i class="bi bi-info-circle"></i> Check tables to target them with "Update from UC" (refresh columns) or "Remove Selected Tables".
+                If no tables are checked, "Update from UC" refreshes all loaded tables.
                 Click on a table name to view/edit column details. Click on "Data Source" to change catalog.schema per table.
                 Use "Update Mappings" to push catalog.schema into entity/relationship mappings.
 
