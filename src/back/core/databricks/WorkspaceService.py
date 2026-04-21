@@ -23,6 +23,7 @@ class WorkspaceService:
 
     def __init__(self, auth: DatabricksAuth) -> None:
         self._auth = auth
+        self._last_app_permissions_status: int = 0
 
     def get_current_user_email(self) -> str:
         """Return the authenticated user's e-mail via SCIM ``/Me``."""
@@ -251,12 +252,27 @@ class WorkspaceService:
             logger.warning("Error getting app permissions for '%s': %s", app_name, exc)
             return []
 
+    @property
+    def last_app_permissions_status(self) -> int:
+        """HTTP status of the most recent ``list_app_principals`` call.
+
+        ``0`` means "never called or unknown error", ``200`` means success,
+        ``403`` indicates the caller lacks ``CAN_VIEW_PERMISSIONS`` on the
+        app (typical first-deploy bootstrap failure).
+        """
+        return self._last_app_permissions_status
+
     def list_app_principals(self, app_name: str) -> Dict[str, List[Dict[str, Any]]]:
         """Return ``{'users': [...], 'groups': [...]}`` for a Databricks App.
 
-        Service principals are excluded.
+        Service principals are excluded.  On HTTP failure the call is
+        swallowed and an empty result is returned; inspect
+        :attr:`last_app_permissions_status` to distinguish ``403``
+        (bootstrap / permission) from other failure modes.
         """
         import requests as req
+
+        self._last_app_permissions_status = 0
 
         if not self._auth.host or not self._auth.has_valid_auth() or not app_name:
             return {"users": [], "groups": []}
@@ -269,6 +285,7 @@ class WorkspaceService:
                 headers=headers,
                 timeout=5,
             )
+            self._last_app_permissions_status = resp.status_code
             resp.raise_for_status()
 
             users: List[Dict[str, Any]] = []

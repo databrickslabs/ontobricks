@@ -102,7 +102,23 @@ print(f'{state}  {url}')
     printf "  %-20s %s\n" "$APP" "$STATUS"
 done
 
-## ── 7. Cross-app permissions (MCP → main app) ──────────────────────
+## ── 7. App self-permissions (first-deploy bootstrap) ───────────────
+# Each app's service principal needs CAN_MANAGE on its OWN app so the
+# middleware can read the ACL to resolve admin/app-user roles.  Without
+# this, the first request hits /access-denied even for CAN_MANAGE users.
+# Safe to re-run — it's idempotent.
+echo ""
+echo "--- App self-permissions ---"
+chmod +x scripts/bootstrap-app-permissions.sh
+if $RUN_MAIN && $RUN_MCP; then
+    scripts/bootstrap-app-permissions.sh ontobricks mcp-ontobricks || true
+elif $RUN_MAIN; then
+    scripts/bootstrap-app-permissions.sh ontobricks || true
+elif $RUN_MCP; then
+    scripts/bootstrap-app-permissions.sh mcp-ontobricks || true
+fi
+
+## ── 8. Cross-app permissions (MCP → main app) ──────────────────────
 # The MCP server's service principal needs CAN_USE on the main app to
 # call its REST API.  Attempt to discover and grant automatically.
 if $RUN_MCP || [[ "$RUN_MAIN" == "true" && "$RUN_MCP" == "false" ]]; then

@@ -853,75 +853,14 @@ class SettingsService:
         return diag
 
     @staticmethod
-    def list_permissions_result(
+    def list_app_principals_result(
         session_mgr: SessionManager, settings: Settings
     ) -> Dict[str, Any]:
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        entries = permission_service.list_entries(host, token, registry_cfg)
-        return {"success": True, "permissions": entries}
+        """Return the Databricks App principals (users + groups).
 
-    @staticmethod
-    def add_permission_result(
-        data: Dict[str, Any],
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        principal = data.get("principal", "").strip()
-        principal_type = data.get("principal_type", "user")
-        display_name = data.get("display_name", principal)
-        role = data.get("role", "viewer")
-
-        if not principal:
-            raise ValidationError("Principal (email or group name) is required")
-        if role not in ASSIGNABLE_ROLES:
-            raise ValidationError('Role must be "viewer", "editor", or "builder"')
-
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        if not registry_cfg.get("catalog") or not registry_cfg.get("schema"):
-            raise ValidationError(
-                "Registry not configured. Initialize the registry in Settings first.",
-            )
-
-        ok, msg = permission_service.add_or_update_entry(
-            host,
-            token,
-            registry_cfg,
-            principal,
-            principal_type,
-            display_name,
-            role,
-        )
-        if not ok:
-            raise InfrastructureError("Failed to add or update permission", detail=msg)
-        return {"success": ok, "message": msg}
-
-    @staticmethod
-    def delete_permission_result(
-        principal: str,
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        if not registry_cfg.get("catalog") or not registry_cfg.get("schema"):
-            raise ValidationError(
-                "Registry not configured. Initialize the registry in Settings first.",
-            )
-
-        ok, msg = permission_service.remove_entry(host, token, registry_cfg, principal)
-        if not ok:
-            raise InfrastructureError("Failed to remove permission", detail=msg)
-        return {"success": ok, "message": msg}
-
-    @staticmethod
-    def list_principals_result(
-        session_mgr: SessionManager, settings: Settings
-    ) -> Dict[str, Any]:
+        Used by Settings → Permissions (read-only view) and as the row
+        source for the Registry → Teams matrix picker.
+        """
         _, host, token, _ = SettingsService._resolve_context(session_mgr, settings)
         app_name = settings.ontobricks_app_name
         permission_service.clear_principals_cache()
@@ -931,6 +870,13 @@ class SettingsService:
             "users": result.get("users", []),
             "groups": result.get("groups", []),
         }
+
+    @staticmethod
+    def list_principals_result(
+        session_mgr: SessionManager, settings: Settings
+    ) -> Dict[str, Any]:
+        """Alias kept for the Teams picker dropdown."""
+        return SettingsService.list_app_principals_result(session_mgr, settings)
 
     @staticmethod
     def search_workspace_principals(
@@ -1047,6 +993,185 @@ class SettingsService:
         if not ok:
             raise InfrastructureError("Failed to remove domain permission", detail=msg)
         return {"success": ok, "message": msg}
+
+    # ------------------------------------------------------------------
+    # Teams matrix (Registry → Teams)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def build_teams_matrix_result(
+        session_mgr: SessionManager, settings: Settings
+    ) -> Dict[str, Any]:
+        """Return the Teams matrix payload: domains, principals, assignments.
+
+        Payload shape::
+
+            {
+              "success": true,
+              "domains": ["acme", "beta", ...],
+              "principals": [
+                {"principal": "alice@acme", "principal_type": "user",
+                 "display_name": "Alice"},
+                {"principal": "data-eng", "principal_type": "group",
+                 "display_name": "data-eng"}
+              ],
+              "assignments": {
+                "acme": {"alice@acme": "editor"},
+                "beta": {"data-eng": "viewer"}
+              }
+            }
+        """
+        domain_obj, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        app_name = settings.ontobricks_app_name
+
+        # Domains
+        domains: List[str] = []
+        try:
+            svc = RegistryService.from_context(domain_obj, settings)
+            ok, names, _msg = svc.list_domains_cached()
+            if ok:
+                domains = sorted(names)
+        except Exception as exc:
+            logger.warning("Teams matrix: failed to list domains: %s", exc)
+
+        # Principals from Databricks App ACL
+        permission_service.clear_principals_cache()
+        app_principals = permission_service.list_app_principals(host, token, app_name)
+
+        principals: List[Dict[str, Any]] = []
+        for u in app_principals.get("users", []):
+            email = u.get("email") or ""
+            if not email:
+                continue
+            principals.append(
+                {
+                    "principal": email,
+                    "principal_type": "user",
+                    "display_name": u.get("display_name") or email,
+                }
+            )
+        for g in app_principals.get("groups", []):
+            name = g.get("display_name") or g.get("id") or ""
+            if not name:
+                continue
+            principals.append(
+                {
+                    "principal": name,
+                    "principal_type": "group",
+                    "display_name": name,
+                }
+            )
+
+        # Assignments per domain (key: domain -> {principal: role})
+        assignments: Dict[str, Dict[str, str]] = {}
+        for domain_name in domains:
+            try:
+                entries = permission_service.list_domain_entries(
+                    host, token, registry_cfg, domain_name
+                )
+                row: Dict[str, str] = {}
+                for e in entries:
+                    principal = e.get("principal", "")
+                    role = e.get("role", "")
+                    if principal and role:
+                        row[principal] = role
+                if row:
+                    assignments[domain_name] = row
+            except Exception as exc:
+                logger.warning(
+                    "Teams matrix: failed to read team for %s: %s", domain_name, exc
+                )
+
+        return {
+            "success": True,
+            "domains": domains,
+            "principals": principals,
+            "assignments": assignments,
+        }
+
+    @staticmethod
+    def save_teams_batch_result(
+        data: Dict[str, Any],
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Persist a batch of team changes across multiple domains.
+
+        Body shape::
+
+            {
+              "changes": [
+                {"domain_folder": "acme",
+                 "principal": "alice@acme",
+                 "principal_type": "user",
+                 "display_name": "Alice",
+                 "role": "editor"},
+                {"domain_folder": "beta",
+                 "principal": "bob@acme",
+                 "principal_type": "user",
+                 "display_name": "Bob",
+                 "role": null}           # null = remove
+              ]
+            }
+        """
+        changes = data.get("changes") or []
+        if not isinstance(changes, list):
+            raise ValidationError("Body must include a 'changes' array")
+
+        validated: List[Dict[str, Any]] = []
+        for idx, ch in enumerate(changes):
+            if not isinstance(ch, dict):
+                raise ValidationError(f"Change #{idx} is not an object")
+            domain_folder = (ch.get("domain_folder") or "").strip()
+            principal = (ch.get("principal") or "").strip()
+            principal_type = ch.get("principal_type") or "user"
+            display_name = ch.get("display_name") or principal
+            role = ch.get("role")
+
+            if not domain_folder:
+                raise ValidationError(
+                    f"Change #{idx}: 'domain_folder' is required"
+                )
+            if not principal:
+                raise ValidationError(f"Change #{idx}: 'principal' is required")
+            if principal_type not in ("user", "group"):
+                raise ValidationError(
+                    f"Change #{idx}: 'principal_type' must be 'user' or 'group'"
+                )
+            if role is not None and role not in ASSIGNABLE_ROLES:
+                raise ValidationError(
+                    f"Change #{idx}: 'role' must be one of "
+                    f"{list(ASSIGNABLE_ROLES)} or null"
+                )
+
+            validated.append(
+                {
+                    "domain_folder": domain_folder,
+                    "principal": principal,
+                    "principal_type": principal_type,
+                    "display_name": display_name,
+                    "role": role,
+                }
+            )
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        if not registry_cfg.get("catalog") or not registry_cfg.get("schema"):
+            raise ValidationError("Registry not configured")
+
+        saved, failed = permission_service.save_domain_permissions_batch(
+            host, token, registry_cfg, validated
+        )
+
+        return {
+            "success": len(failed) == 0,
+            "saved": saved,
+            "failed": failed,
+            "total_changes": len(validated),
+        }
 
     @staticmethod
     def human_size(nbytes: int) -> str:

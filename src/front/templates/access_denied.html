@@ -10,12 +10,25 @@
 </head>
 <body class="bg-light">
     <div class="d-flex justify-content-center align-items-center" style="min-height: 100vh;">
-        <div class="text-center" style="max-width: 480px;">
+        <div class="text-center" style="max-width: 520px;">
             <i class="bi bi-shield-lock text-danger" style="font-size: 4rem;"></i>
             <h3 class="mt-3 mb-2">Access Denied</h3>
+
+            {% if reason == 'domain' %}
+            <p class="text-muted mb-4">
+                You are signed in to OntoBricks but have no role on the
+                domain you tried to open.
+            </p>
+            {% elif reason == 'bootstrap' %}
+            <p class="text-muted mb-4">
+                OntoBricks has just been deployed and its service principal
+                is not yet allowed to read its own permissions.
+            </p>
+            {% else %}
             <p class="text-muted mb-4">
                 You do not have permission to access OntoBricks.
             </p>
+            {% endif %}
 
             {% if user_email %}
             <div class="card border-0 bg-white mb-4">
@@ -26,10 +39,38 @@
             </div>
             {% endif %}
 
+            {% if reason == 'domain' %}
             <p class="small text-muted">
                 Ask an OntoBricks administrator to add your account to the
-                permission list in <strong>Settings &rarr; Permissions</strong>.
+                domain's team list in
+                <strong>Registry &rarr; Teams</strong>.
             </p>
+            {% elif reason == 'bootstrap' %}
+            <div class="alert alert-warning text-start small mb-3">
+                <p class="mb-2 fw-semibold">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    First-deploy bootstrap required
+                </p>
+                <p class="mb-2">
+                    The app's own service principal needs
+                    <code>CAN_MANAGE</code> on this app so the middleware can
+                    resolve who is an admin and who is a regular user.
+                </p>
+                <p class="mb-1">Run once from the project root:</p>
+                <pre class="bg-light border rounded p-2 mb-2 small"><code>make bootstrap-perms</code></pre>
+                <p class="mb-0">
+                    or equivalently
+                    <code>scripts/bootstrap-app-permissions.sh</code>.
+                    You can reload this page afterwards.
+                </p>
+            </div>
+            {% else %}
+            <p class="small text-muted">
+                Ask your Databricks workspace administrator to grant your
+                account a permission on the OntoBricks app (in
+                <strong>Databricks &rarr; Apps &rarr; Permissions</strong>).
+            </p>
+            {% endif %}
         </div>
     </div>
 </body>

@@ -141,14 +141,43 @@ _PERM_BYPASS_PREFIXES = (
 
 _VIEWER_BLOCKED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
-_PERM_ADMIN_ONLY_PREFIXES = ("/settings/permissions", "/settings/domain-permissions")
+_PERM_ADMIN_ONLY_PREFIXES = (
+    "/settings/permissions",
+    "/settings/domain-permissions",
+    "/settings/teams",
+)
+
+# Routes that operate on a specific domain (the session's current domain).
+# Non-admin users need a team entry on that domain (user_domain_role != NONE)
+# to access these.
+_DOMAIN_SCOPED_PREFIXES = (
+    "/domain/",
+    "/ontology/",
+    "/mapping/",
+    "/dtwin/",
+)
 
 
 class PermissionMiddleware(BaseHTTPMiddleware):
-    """Enforce Viewer / Editor / Builder / Admin access rules.
+    """Enforce app- and domain-level access rules.
+
+    New model:
+
+    - **App access** requires the caller to be either an admin
+      (CAN_MANAGE on the Databricks App) or an app user (present in the
+      App's ACL, directly or via group).  Users with ``ROLE_NONE`` are
+      redirected to ``/access-denied``.
+    - **Domain access** (routes under ``/domain``, ``/ontology``,
+      ``/mapping``, ``/dtwin``) additionally requires a non-empty entry
+      in the domain's ``.domain_permissions.json``.  Admins bypass this.
+    - **Viewer write-block**: a viewer team entry allows GETs on domain
+      routes but not writes.
+    - **Admin-only prefixes** (`/settings/permissions`,
+      `/settings/domain-permissions`, `/settings/teams`) are gated to
+      admins even for app users.
 
     Only active when running as a Databricks App (``DATABRICKS_APP_PORT``
-    is set).  In local-dev mode every request passes through.
+    is set).  In local-dev mode every request passes through as admin.
 
     Sets ``request.state.user_role`` (app-level) and
     ``request.state.user_domain_role`` (effective role for the loaded domain).
@@ -156,7 +185,12 @@ class PermissionMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         from back.core.databricks import is_databricks_app
-        from back.objects.registry import ROLE_NONE, ROLE_VIEWER
+        from back.objects.registry import (
+            ROLE_NONE,
+            ROLE_VIEWER,
+            ROLE_ADMIN,
+            permission_service,
+        )
 
         email = request.headers.get("x-forwarded-email", "")
         request.state.user_email = email
@@ -198,16 +232,47 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         )
 
         if role == ROLE_NONE:
+            # First-deploy bootstrap: the app's service principal is not
+            # allowed to read its own ACL, so *nobody* — not even CAN_MANAGE
+            # users — can be resolved as admin/app-user.  Surface that as a
+            # distinct reason so the access-denied page shows the fix.
+            reason = "app"
+            if permission_service.is_app_principals_forbidden():
+                reason = "bootstrap"
+                logger.warning(
+                    "PermissionMiddleware: first-deploy bootstrap detected "
+                    "(app SP cannot read its own ACL). Run "
+                    "scripts/bootstrap-app-permissions.sh to fix."
+                )
             if self._wants_json(request):
                 return self._forbidden_json(request, "Access denied")
-            return RedirectResponse("/access-denied", status_code=302)
-
-        if role == ROLE_VIEWER and request.method in _VIEWER_BLOCKED_METHODS:
-            return self._forbidden_json(
-                request, "Viewer role does not allow write operations"
+            return RedirectResponse(
+                f"/access-denied?reason={reason}", status_code=302
             )
 
-        if request.state.user_role != "admin":
+        if role != ROLE_ADMIN:
+            is_domain_scoped = any(
+                path.startswith(p) for p in _DOMAIN_SCOPED_PREFIXES
+            )
+            if is_domain_scoped and domain_role == ROLE_NONE:
+                if self._wants_json(request):
+                    return self._forbidden_json(
+                        request,
+                        "You are not a member of this domain's team",
+                    )
+                return RedirectResponse(
+                    "/access-denied?reason=domain", status_code=302
+                )
+
+            if (
+                is_domain_scoped
+                and domain_role == ROLE_VIEWER
+                and request.method in _VIEWER_BLOCKED_METHODS
+            ):
+                return self._forbidden_json(
+                    request, "Viewer role does not allow write operations"
+                )
+
             for prefix in _PERM_ADMIN_ONLY_PREFIXES:
                 if path.startswith(prefix):
                     if self._wants_json(request):

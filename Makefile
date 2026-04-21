@@ -1,6 +1,6 @@
 # Makefile for OntoBricks (FastAPI)
 
-.PHONY: help install test run clean format lint deploy deploy-all deploy-mcp deploy-prod deploy-no-run bundle-validate bundle-summary
+.PHONY: help install test run clean format lint deploy deploy-all deploy-mcp deploy-prod deploy-no-run bundle-validate bundle-summary bootstrap-perms
 
 help:
 	@echo "OntoBricks (FastAPI) - Available commands:"
@@ -25,6 +25,7 @@ help:
 	@echo "    make deploy-mcp          - Deploy + start MCP server only"
 	@echo "    make deploy-prod         - Deploy both apps (prod)"
 	@echo "    make deploy-no-run       - Deploy without starting apps"
+	@echo "    make bootstrap-perms     - Grant each app's SP CAN_MANAGE on itself (first-run fix)"
 	@echo "    make bundle-validate     - Validate the bundle config"
 	@echo "    make bundle-summary      - Show bundle summary"
 	@echo ""
@@ -104,6 +105,11 @@ deploy-no-run:
 	@echo "Deploying without starting apps..."
 	chmod +x scripts/deploy.sh
 	scripts/deploy.sh --no-run
+
+bootstrap-perms:
+	@echo "Bootstrapping app self-permissions..."
+	chmod +x scripts/bootstrap-app-permissions.sh
+	scripts/bootstrap-app-permissions.sh
 
 bundle-validate:
 	@echo "Validating Databricks Asset Bundle..."

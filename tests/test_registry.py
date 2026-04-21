@@ -193,12 +193,6 @@ class TestPathBuilders:
             self._svc().config_file_path() == "/Volumes/cat/sch/vol/.global_config.json"
         )
 
-    def test_permissions_file_path(self):
-        assert (
-            self._svc().permissions_file_path()
-            == "/Volumes/cat/sch/vol/.permissions.json"
-        )
-
     def test_history_file_path(self):
         assert (
             self._svc().history_file_path("p")

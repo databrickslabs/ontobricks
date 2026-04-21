@@ -417,33 +417,16 @@ async def permissions_diag(
 
 
 @router.get("/permissions")
-async def list_permissions(
+async def list_app_permissions(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """List all permission entries (admin only)."""
-    return config_service.list_permissions_result(session_mgr, settings)
+    """Return the Databricks App principals (users + groups).
 
-
-@router.post("/permissions")
-async def add_permission(
-    request: Request,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Add or update a permission entry (admin only)."""
-    data = await request.json()
-    return config_service.add_permission_result(data, session_mgr, settings)
-
-
-@router.delete("/permissions/{principal:path}")
-async def delete_permission(
-    principal: str,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Remove a permission entry (admin only)."""
-    return config_service.delete_permission_result(principal, session_mgr, settings)
+    Read-only mirror of the App's ACL.  Used by Settings → Permissions
+    and as the row source for Registry → Teams.
+    """
+    return config_service.list_app_principals_result(session_mgr, settings)
 
 
 @router.get("/permissions/principals")
@@ -520,6 +503,31 @@ async def delete_domain_permission(
     return config_service.delete_domain_permission_result(
         domain_name, principal, session_mgr, settings
     )
+
+
+# ===========================================
+# Teams (Registry → Teams matrix)
+# ===========================================
+
+
+@router.get("/teams")
+async def teams_matrix(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the Teams matrix payload: domains, principals, and assignments."""
+    return config_service.build_teams_matrix_result(session_mgr, settings)
+
+
+@router.post("/teams")
+async def teams_save_batch(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Persist a batch of team changes across multiple domains (admin only)."""
+    data = await request.json()
+    return config_service.save_teams_batch_result(data, session_mgr, settings)
 
 
 # ===========================================

@@ -5,6 +5,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry-teams.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-api.css') }}?v={{ asset_version }}">
 {% endblock %}
 
@@ -29,6 +30,11 @@
                 {% include "partials/registry/_registry_bridges.html" %}
             </div>
 
+            <!-- Teams section -->
+            <div id="teams-section" class="sidebar-section">
+                {% include "partials/registry/_registry_teams.html" %}
+            </div>
+
             <!-- Schedule Section -->
             <div id="schedule-section" class="sidebar-section">
                 {% include "partials/registry/_registry_schedule.html" %}
@@ -50,6 +56,7 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='registry/js/registry.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='registry/js/registry-teams.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/schedule.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='query/js/query-api.js') }}?v={{ asset_version }}"></script>
 {% endblock %}

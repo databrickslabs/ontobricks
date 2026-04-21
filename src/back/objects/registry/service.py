@@ -213,9 +213,6 @@ class RegistryService:
     def config_file_path(self) -> str:
         return f"{self.volume_root()}/.global_config.json"
 
-    def permissions_file_path(self) -> str:
-        return f"{self.volume_root()}/.permissions.json"
-
     def history_file_path(self, folder: str) -> str:
         return f"{self.domain_path(folder)}/.schedule_history.json"
 

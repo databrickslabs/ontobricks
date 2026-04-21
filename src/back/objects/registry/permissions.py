@@ -1,12 +1,18 @@
 """
 Permission Service for OntoBricks.
 
-Manages application-level permissions (Viewer / Editor / Builder roles)
-stored in the registry UC Volume, plus optional per-domain overrides.
-Admin status is derived from the Databricks App CAN_MANAGE permission.
+New permission model:
 
-Active only in Databricks App mode (DATABRICKS_APP_PORT is set).
-In local mode every user has unrestricted access.
+- **App-level access** is driven entirely by the Databricks App permissions
+  (``list_app_principals``).  A user either has CAN_MANAGE (admin) or appears
+  (directly or via a group) in the App's ACL (``ROLE_APP_USER``).  There is
+  no local ``.permissions.json`` file anymore.
+- **Domain-level access** (Viewer / Editor / Builder) is managed per-domain
+  in ``.domain_permissions.json`` files inside each domain folder.  Non-admin
+  users with no entry on a given domain have **no access** to it.
+
+Active only in Databricks App mode (DATABRICKS_APP_PORT is set).  In local
+mode every user has unrestricted access.
 """
 
 import json
@@ -23,6 +29,7 @@ ROLE_ADMIN = "admin"
 ROLE_BUILDER = "builder"
 ROLE_EDITOR = "editor"
 ROLE_VIEWER = "viewer"
+ROLE_APP_USER = "app_user"
 ROLE_NONE = "none"
 
 ROLE_HIERARCHY: Dict[str, int] = {
@@ -46,21 +53,17 @@ def min_role(a: str, b: str) -> str:
     return a if role_level(a) <= role_level(b) else b
 
 
-_PERMISSIONS_FILENAME = ".permissions.json"
 _DOMAIN_PERMISSIONS_FILENAME = ".domain_permissions.json"
-_CACHE_TTL_PERMS = 300  # 5 min
 _CACHE_TTL_DOMAIN_PERMS = 120  # 2 min – per-domain permission cache
 _CACHE_TTL_ADMIN = 60  # 1 min – keep short to pick up permission changes quickly
 _CACHE_TTL_PRINCIPALS = 600  # 10 min
+_CACHE_TTL_USER_GROUPS = 300  # 5 min – SCIM group membership
 
 
 class PermissionService:
-    """Loads, caches and manages the registry permission list."""
+    """Resolve App-level access and per-domain roles, plus manage team files."""
 
     def __init__(self):
-        self._perm_cache: Optional[Dict[str, Any]] = None
-        self._perm_cache_ts: float = 0.0
-
         self._admin_cache: Dict[str, Tuple[bool, float]] = {}
 
         self._users_cache: Optional[List[Dict[str, Any]]] = None
@@ -72,86 +75,13 @@ class PermissionService:
         # Per-domain permission cache: keyed by domain folder name
         self._domain_perm_cache: Dict[str, Tuple[Dict[str, Any], float]] = {}
 
-    # ------------------------------------------------------------------
-    # Permission file I/O
-    # ------------------------------------------------------------------
+        # Per-user SCIM group membership cache
+        self._user_groups_cache: Dict[str, Tuple[List[str], float]] = {}
 
-    def _permissions_path(self, registry_cfg: Dict[str, str]) -> str:
-        from back.objects.registry.service import RegistryCfg
-
-        c = RegistryCfg.from_dict(registry_cfg)
-        return f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/{_PERMISSIONS_FILENAME}"
-
-    def _new_uc(self, host: str, token: str) -> VolumeFileService:
-        return VolumeFileService(host=host, token=token)
-
-    def load_permissions(
-        self,
-        host: str,
-        token: str,
-        registry_cfg: Dict[str, str],
-        *,
-        force: bool = False,
-    ) -> Dict[str, Any]:
-        """Load and cache the permission file from the registry volume."""
-        now = time.time()
-        if (
-            not force
-            and self._perm_cache is not None
-            and (now - self._perm_cache_ts) < _CACHE_TTL_PERMS
-        ):
-            return self._perm_cache
-
-        path = self._permissions_path(registry_cfg)
-        try:
-            uc = self._new_uc(host, token)
-            ok, content, msg = uc.read_file(path)
-            if ok and content:
-                data = json.loads(content)
-                self._perm_cache = data
-                self._perm_cache_ts = now
-                logger.info(
-                    "Loaded %d permission entries from %s",
-                    len(data.get("permissions", [])),
-                    path,
-                )
-                return data
-            logger.debug("Permission file not found or empty at %s: %s", path, msg)
-        except Exception as e:
-            logger.warning("Error loading permission file: %s", e)
-
-        empty: Dict[str, Any] = {"version": 1, "permissions": []}
-        self._perm_cache = empty
-        self._perm_cache_ts = now
-        return empty
-
-    def save_permissions(
-        self, host: str, token: str, registry_cfg: Dict[str, str], data: Dict[str, Any]
-    ) -> Tuple[bool, str]:
-        """Write the permission file back to the registry volume."""
-        if not registry_cfg.get("catalog") or not registry_cfg.get("schema"):
-            return (
-                False,
-                "Registry not configured — set catalog and schema in Settings first",
-            )
-        path = self._permissions_path(registry_cfg)
-        try:
-            uc = self._new_uc(host, token)
-            ok, msg = uc.write_file(path, json.dumps(data, indent=2), overwrite=True)
-            if not ok:
-                logger.error("Failed to write permission file to %s: %s", path, msg)
-                return False, f"Failed to save permissions: {msg}"
-            self._perm_cache = data
-            self._perm_cache_ts = time.time()
-            logger.info(
-                "Saved %d permission entries to %s",
-                len(data.get("permissions", [])),
-                path,
-            )
-            return True, "Permissions saved"
-        except Exception as e:
-            logger.error("Error saving permission file: %s", e)
-            return False, str(e)
+        # First-deploy bootstrap signal: True when the last call to
+        # list_app_principals came back 403, meaning the caller (usually the
+        # app's own service principal) lacks CAN_VIEW_PERMISSIONS on the app.
+        self._app_principals_forbidden: bool = False
 
     # ------------------------------------------------------------------
     # Role resolution
@@ -162,47 +92,48 @@ class PermissionService:
         email: str,
         host: str,
         token: str,
-        registry_cfg: Dict[str, str],
+        registry_cfg: Dict[str, str],  # kept for signature compat
         app_name: str,
         *,
         user_token: str = "",
     ) -> str:
-        """Resolve the effective role for *email*.
+        """Resolve the app-level access for *email*.
 
-        Priority: admin (CAN_MANAGE) > explicit entry > ROLE_NONE.
-        Group membership is also checked.
+        Returns:
+            ``ROLE_ADMIN``   -- user has CAN_MANAGE on the Databricks App.
+            ``ROLE_APP_USER`` -- user (or a group they belong to) appears in
+                                 the App's ACL.
+            ``ROLE_NONE``    -- otherwise.
 
-        When the permission list is empty, only users with CAN_MANAGE
-        on the Databricks App have access. Everyone else is blocked.
+        ``registry_cfg`` is accepted for backward compatibility with the
+        previous signature but is no longer used.
         """
+        _ = registry_cfg  # unused; kept for signature compatibility
+
         if not email:
             return ROLE_NONE
 
         if self.is_admin(email, host, token, app_name, user_token=user_token):
             return ROLE_ADMIN
 
-        data = self.load_permissions(host, token, registry_cfg)
-        entries = data.get("permissions", [])
-
-        if not entries:
-            logger.info(
-                "No permission entries yet — only admins (CAN_MANAGE) have access"
-            )
+        if not app_name:
             return ROLE_NONE
 
-        for entry in entries:
-            if (
-                entry.get("principal_type") == "user"
-                and entry.get("principal", "").lower() == email.lower()
-            ):
-                return entry.get("role", ROLE_VIEWER)
+        principals = self.list_app_principals(host, token, app_name)
+        users = principals.get("users", [])
+        email_l = email.lower()
+        for u in users:
+            if (u.get("email") or "").lower() == email_l:
+                return ROLE_APP_USER
 
-        user_groups = self._get_user_groups(email, host, token)
-        for entry in entries:
-            if entry.get("principal_type") == "group" and entry.get(
-                "principal", ""
-            ).lower() in (g.lower() for g in user_groups):
-                return entry.get("role", ROLE_VIEWER)
+        groups = principals.get("groups", [])
+        if groups:
+            user_groups = self._get_user_groups(email, host, token)
+            user_group_names_l = {g.lower() for g in user_groups}
+            for g in groups:
+                name = (g.get("display_name") or g.get("id") or "").lower()
+                if name and name in user_group_names_l:
+                    return ROLE_APP_USER
 
         return ROLE_NONE
 
@@ -212,6 +143,11 @@ class PermissionService:
 
         if not host or not token:
             return []
+
+        now = time.time()
+        cached = self._user_groups_cache.get(email.lower())
+        if cached and (now - cached[1]) < _CACHE_TTL_USER_GROUPS:
+            return cached[0]
 
         try:
             h = host.rstrip("/")
@@ -227,12 +163,21 @@ class PermissionService:
             resp.raise_for_status()
             resources = resp.json().get("Resources", [])
             if not resources:
+                self._user_groups_cache[email.lower()] = ([], now)
                 return []
             groups = resources[0].get("groups", [])
-            return [g.get("display", "") for g in groups if g.get("display")]
+            names = [g.get("display", "") for g in groups if g.get("display")]
+            self._user_groups_cache[email.lower()] = (names, now)
+            return names
         except Exception as e:
             logger.debug("Could not resolve groups for %s: %s", email, e)
             return []
+
+    def clear_user_groups_cache(self, email: str = ""):
+        if email:
+            self._user_groups_cache.pop(email.lower(), None)
+        else:
+            self._user_groups_cache.clear()
 
     # ------------------------------------------------------------------
     # Admin detection via Databricks App Permissions API
@@ -373,63 +318,11 @@ class PermissionService:
             return None
 
     # ------------------------------------------------------------------
-    # CRUD helpers
-    # ------------------------------------------------------------------
-
-    def list_entries(
-        self, host: str, token: str, registry_cfg: Dict[str, str]
-    ) -> List[Dict[str, Any]]:
-        data = self.load_permissions(host, token, registry_cfg)
-        return data.get("permissions", [])
-
-    def add_or_update_entry(
-        self,
-        host: str,
-        token: str,
-        registry_cfg: Dict[str, str],
-        principal: str,
-        principal_type: str,
-        display_name: str,
-        role: str,
-    ) -> Tuple[bool, str]:
-        data = self.load_permissions(host, token, registry_cfg, force=True)
-        entries = data.get("permissions", [])
-
-        for entry in entries:
-            if entry["principal"].lower() == principal.lower():
-                entry["role"] = role
-                entry["display_name"] = display_name
-                entry["principal_type"] = principal_type
-                return self.save_permissions(host, token, registry_cfg, data)
-
-        entries.append(
-            {
-                "principal": principal,
-                "principal_type": principal_type,
-                "display_name": display_name,
-                "role": role,
-            }
-        )
-        data["permissions"] = entries
-        return self.save_permissions(host, token, registry_cfg, data)
-
-    def remove_entry(
-        self, host: str, token: str, registry_cfg: Dict[str, str], principal: str
-    ) -> Tuple[bool, str]:
-        data = self.load_permissions(host, token, registry_cfg, force=True)
-        before = len(data.get("permissions", []))
-        data["permissions"] = [
-            e
-            for e in data.get("permissions", [])
-            if e["principal"].lower() != principal.lower()
-        ]
-        if len(data["permissions"]) == before:
-            return False, f"Principal '{principal}' not found"
-        return self.save_permissions(host, token, registry_cfg, data)
-
-    # ------------------------------------------------------------------
     # Domain-level permission file I/O
     # ------------------------------------------------------------------
+
+    def _new_uc(self, host: str, token: str) -> VolumeFileService:
+        return VolumeFileService(host=host, token=token)
 
     def _domain_permissions_path(
         self,
@@ -440,7 +333,10 @@ class PermissionService:
         from back.objects.registry.service import RegistryCfg
 
         c = RegistryCfg.from_dict(registry_cfg)
-        return f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/domains/{domain_folder}/{_DOMAIN_PERMISSIONS_FILENAME}"
+        return (
+            f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/domains/"
+            f"{domain_folder}/{_DOMAIN_PERMISSIONS_FILENAME}"
+        )
 
     def load_domain_permissions(
         self,
@@ -565,13 +461,18 @@ class PermissionService:
     ) -> str:
         """Resolve the effective role for *email* on a specific domain.
 
-        Admins always keep admin status.  For other users the effective
-        role is ``min(app_role, domain_role)`` when a domain-level entry
-        exists, otherwise the app-level role is used as-is.
+        Strict model:
 
-        When *app_role* is provided the caller has already resolved it
-        and the redundant ``get_user_role`` call is skipped.
+        - Admins → ``ROLE_ADMIN``.
+        - Otherwise the domain role comes *only* from
+          ``.domain_permissions.json``. No entry → ``ROLE_NONE``.
+
+        ``app_role`` is honoured as an optimization: the caller may pass the
+        already-resolved app role to avoid a redundant admin lookup.
         """
+        if app_role == ROLE_ADMIN:
+            return ROLE_ADMIN
+
         if not app_role:
             app_role = self.get_user_role(
                 email,
@@ -581,11 +482,11 @@ class PermissionService:
                 app_name,
                 user_token=user_token,
             )
-        if app_role == ROLE_ADMIN:
-            return ROLE_ADMIN
+            if app_role == ROLE_ADMIN:
+                return ROLE_ADMIN
 
         if not domain_folder:
-            return app_role
+            return ROLE_NONE
 
         domain_entry = self._resolve_domain_entry_role(
             email,
@@ -595,9 +496,8 @@ class PermissionService:
             domain_folder,
         )
         if domain_entry is None:
-            return app_role
-
-        return min_role(app_role, domain_entry)
+            return ROLE_NONE
+        return domain_entry
 
     # ------------------------------------------------------------------
     # Domain-level CRUD helpers
@@ -702,6 +602,113 @@ class PermissionService:
             self._domain_perm_cache.clear()
 
     # ------------------------------------------------------------------
+    # Batch domain-permission save (matrix UI)
+    # ------------------------------------------------------------------
+
+    def save_domain_permissions_batch(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        changes: List[Dict[str, Any]],
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Apply a batch of team changes across several domains in one pass.
+
+        Each change is a dict::
+
+            {
+              "domain_folder": "acme",
+              "principal": "alice@example.com",
+              "principal_type": "user" | "group",
+              "display_name": "Alice",
+              "role": "viewer" | "editor" | "builder" | None,  # None == remove
+            }
+
+        The function groups changes by domain, re-reads each file fresh,
+        applies all operations, and writes the file back once per domain.
+
+        Returns ``(saved, failed)`` where each element is a dict like
+        ``{"domain": str, "count": int, "message": str}``.
+        """
+        if not registry_cfg.get("catalog") or not registry_cfg.get("schema"):
+            return [], [{"domain": "", "count": 0, "message": "Registry not configured"}]
+
+        saved: List[Dict[str, Any]] = []
+        failed: List[Dict[str, Any]] = []
+
+        by_domain: Dict[str, List[Dict[str, Any]]] = {}
+        for ch in changes:
+            df = (ch.get("domain_folder") or "").strip()
+            if not df:
+                failed.append(
+                    {"domain": "", "count": 0, "message": "missing domain_folder"}
+                )
+                continue
+            by_domain.setdefault(df, []).append(ch)
+
+        for domain_folder, ops in by_domain.items():
+            try:
+                data = self.load_domain_permissions(
+                    host, token, registry_cfg, domain_folder, force=True
+                )
+                entries: List[Dict[str, Any]] = data.get("permissions", [])
+
+                for op in ops:
+                    principal = (op.get("principal") or "").strip()
+                    if not principal:
+                        continue
+                    role = op.get("role")
+                    pl = principal.lower()
+
+                    if role is None:
+                        entries = [e for e in entries if e["principal"].lower() != pl]
+                        continue
+
+                    found = False
+                    for e in entries:
+                        if e["principal"].lower() == pl:
+                            e["role"] = role
+                            e["display_name"] = op.get("display_name", principal)
+                            e["principal_type"] = op.get("principal_type", "user")
+                            found = True
+                            break
+                    if not found:
+                        entries.append(
+                            {
+                                "principal": principal,
+                                "principal_type": op.get("principal_type", "user"),
+                                "display_name": op.get("display_name", principal),
+                                "role": role,
+                            }
+                        )
+
+                data["permissions"] = entries
+                ok, msg = self.save_domain_permissions(
+                    host, token, registry_cfg, domain_folder, data
+                )
+                if ok:
+                    saved.append(
+                        {"domain": domain_folder, "count": len(ops), "message": msg}
+                    )
+                else:
+                    failed.append(
+                        {"domain": domain_folder, "count": len(ops), "message": msg}
+                    )
+            except Exception as exc:
+                logger.error(
+                    "Batch save failed for domain %s: %s", domain_folder, exc
+                )
+                failed.append(
+                    {
+                        "domain": domain_folder,
+                        "count": len(ops),
+                        "message": f"{type(exc).__name__}: {exc}",
+                    }
+                )
+
+        return saved, failed
+
+    # ------------------------------------------------------------------
     # App principal listing (cached)
     # ------------------------------------------------------------------
 
@@ -716,15 +723,23 @@ class PermissionService:
         else:
             self._admin_cache.clear()
 
-    def clear_principals_cache(self):
+    def clear_principals_cache(self):  # noqa: D401
         """Invalidate the cached users/groups so the next call fetches fresh data."""
         self._users_cache = None
         self._groups_cache = None
+        self._app_principals_forbidden = False
 
     def list_app_principals(
         self, host: str, token: str, app_name: str
     ) -> Dict[str, List[Dict[str, Any]]]:
-        """Return users and groups that have permissions on the Databricks App."""
+        """Return users and groups that have permissions on the Databricks App.
+
+        Also captures whether the underlying REST call came back 403, which
+        indicates the app's own service principal is not allowed to read its
+        own ACL (first-deploy bootstrap).  The flag is exposed via
+        :meth:`is_app_principals_forbidden` and consumed by the permission
+        middleware to render a targeted access-denied page.
+        """
         now = time.time()
         if (
             self._users_cache is not None
@@ -735,11 +750,22 @@ class PermissionService:
 
         client = DatabricksClient(host=host, token=token)
         result = client.list_app_principals(app_name)
+        status = getattr(client, "last_app_permissions_status", 0)
+        self._app_principals_forbidden = status == 403
         self._users_cache = result.get("users", [])
         self._groups_cache = result.get("groups", [])
         self._users_cache_ts = now
         self._groups_cache_ts = now
         return result
+
+    def is_app_principals_forbidden(self) -> bool:
+        """Return True if the last ``list_app_principals`` call was denied.
+
+        Used by the middleware to detect the first-deploy chicken-and-egg:
+        the app service principal has no permission on its own app, so the
+        ACL can't be read and every user ends up as ``ROLE_NONE``.
+        """
+        return self._app_principals_forbidden
 
     def list_users(self, host: str, token: str) -> List[Dict[str, Any]]:
         now = time.time()

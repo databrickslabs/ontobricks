@@ -111,164 +111,29 @@
             {% if user_role == 'admin' %}
             <!-- ==================== PERMISSIONS TAB ==================== -->
             <div class="tab-pane fade" id="pane-permissions" role="tabpanel" aria-labelledby="tab-permissions">
-                <p class="text-muted small mb-3">
-                    Manage who can access OntoBricks and what they can do.
-                    <strong>Viewers</strong> have read-only access; <strong>Editors</strong> can create and modify domains;
-                    <strong>Builders</strong> have editor access plus the ability to build digital twins.
-                </p>
+                <div class="alert alert-info small d-flex align-items-start mb-3" role="alert">
+                    <i class="bi bi-info-circle me-2 mt-1"></i>
+                    <div>
+                        App-level access is managed in
+                        <strong>Databricks &rarr; App permissions</strong>. This list
+                        mirrors the principals that currently have a permission on the
+                        OntoBricks app. To grant per-domain roles (Viewer / Editor /
+                        Builder), use <strong>Registry &rarr; Teams</strong>.
+                    </div>
+                </div>
 
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0"><i class="bi bi-people me-1"></i> Permission List</h6>
+                    <h6 class="mb-0"><i class="bi bi-people me-1"></i> App Principals</h6>
                     <div class="d-flex gap-2">
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshPermissions" title="Refresh">
                             <i class="bi bi-arrow-clockwise"></i>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-primary" id="btnAddPermission">
-                            <i class="bi bi-plus-lg me-1"></i> Add
                         </button>
                     </div>
                 </div>
 
                 <div id="permissionsTableContainer">
                     <div class="text-center text-muted small py-4">
-                        <span class="spinner-border spinner-border-sm me-1"></span> Loading permissions...
-                    </div>
-                </div>
-
-                <hr class="my-4">
-
-                <h6 class="mb-2"><i class="bi bi-folder-lock me-1"></i> Domain-Level Permissions</h6>
-                <p class="text-muted small mb-3">
-                    Override app-level roles per domain. Domain-level roles can only <strong>restrict</strong> (not elevate) the app-level role.
-                    Users without a domain entry inherit their app-level role.
-                </p>
-
-                <div class="d-flex align-items-center gap-2 mb-3">
-                    <select class="form-select form-select-sm" id="domainPermDomainSelect" style="max-width:300px;">
-                        <option value="">Select a domain...</option>
-                    </select>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshDomainPerms" title="Refresh">
-                        <i class="bi bi-arrow-clockwise"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-primary" id="btnAddDomainPerm" disabled>
-                        <i class="bi bi-plus-lg me-1"></i> Add
-                    </button>
-                </div>
-
-                <div id="domainPermTableContainer">
-                    <div class="text-muted small py-3 text-center">
-                        <i class="bi bi-arrow-up me-1"></i> Select a domain above to manage its permissions.
-                    </div>
-                </div>
-
-                <!-- Add Domain Permission Modal -->
-                <div class="modal fade" id="addDomainPermModal" tabindex="-1" aria-hidden="true">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h6 class="modal-title"><i class="bi bi-folder-plus me-2"></i>Add Domain Permission</h6>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                            </div>
-                            <div class="modal-body">
-                                <div class="mb-3">
-                                    <label class="form-label fw-semibold small mb-1">Type</label>
-                                    <select class="form-select form-select-sm" id="dpPermPrincipalType">
-                                        <option value="user" selected>User</option>
-                                        <option value="group">Group</option>
-                                    </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label fw-semibold small mb-1">Search Workspace</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="text" class="form-control" id="dpPermSearch"
-                                               placeholder="Type a name or email (min 2 chars)..." autocomplete="off">
-                                        <button class="btn btn-outline-primary" type="button" id="btnDpSearchPrincipals" title="Search">
-                                            <i class="bi bi-search"></i>
-                                        </button>
-                                    </div>
-                                    <div id="dpPermSearchResults" class="border rounded mt-2" style="display:none; max-height:200px; overflow-y:auto;"></div>
-                                    <div id="dpPermSelected" class="mt-2" style="display:none;">
-                                        <span class="badge bg-primary fs-6 px-2 py-1" id="dpPermSelectedBadge"></span>
-                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1" id="btnDpClearSelection" title="Clear">
-                                            <i class="bi bi-x-circle"></i>
-                                        </button>
-                                    </div>
-                                    <input type="hidden" id="dpPermPrincipalValue">
-                                    <input type="hidden" id="dpPermDisplayName">
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label fw-semibold small mb-1">Role</label>
-                                    <select class="form-select form-select-sm" id="dpPermRole">
-                                        <option value="viewer">Viewer (read-only)</option>
-                                        <option value="editor">Editor (edit, no build)</option>
-                                        <option value="builder">Builder (edit + build)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="button" class="btn btn-sm btn-primary" id="btnApplyDomainPerm">
-                                    <i class="bi bi-check-circle me-1"></i> Add
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Add Permission Modal -->
-            <div class="modal fade" id="addPermissionModal" tabindex="-1" aria-labelledby="addPermissionModalLabel" aria-hidden="true">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h6 class="modal-title" id="addPermissionModalLabel">
-                                <i class="bi bi-person-plus me-2"></i>Add Permission
-                            </h6>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold small mb-1">Type</label>
-                                <select class="form-select form-select-sm" id="permPrincipalType">
-                                    <option value="user" selected>User</option>
-                                    <option value="group">Group</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold small mb-1">Search Workspace</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control" id="permPrincipalSearch"
-                                           placeholder="Type a name or email (min 2 chars)..." autocomplete="off">
-                                    <button class="btn btn-outline-primary" type="button" id="btnSearchPrincipals" title="Search">
-                                        <i class="bi bi-search"></i>
-                                    </button>
-                                </div>
-                                <div id="permSearchResults" class="border rounded mt-2" style="display:none; max-height:200px; overflow-y:auto;">
-                                </div>
-                                <div id="permSelectedPrincipal" class="mt-2" style="display:none;">
-                                    <span class="badge bg-primary fs-6 px-2 py-1" id="permSelectedBadge"></span>
-                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1" id="btnClearSelection" title="Clear">
-                                        <i class="bi bi-x-circle"></i>
-                                    </button>
-                                </div>
-                                <input type="hidden" id="permPrincipalValue">
-                                <input type="hidden" id="permDisplayName">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold small mb-1">Role</label>
-                                <select class="form-select form-select-sm" id="permRole">
-                                    <option value="viewer">Viewer (read-only)</option>
-                                    <option value="editor">Editor (edit, no build)</option>
-                                    <option value="builder">Builder (edit + build)</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="button" class="btn btn-sm btn-primary" id="btnApplyPermission">
-                                <i class="bi bi-check-circle me-1"></i> Add
-                            </button>
-                        </div>
+                        <span class="spinner-border spinner-border-sm me-1"></span> Loading app principals...
                     </div>
                 </div>
             </div>

@@ -222,17 +222,141 @@ class TestDeleteDomainPermission:
             )
 
 
-class TestAppLevelRoleValidation:
-    """add_permission_result now accepts the builder role."""
+class TestListAppPrincipals:
+    """Settings → Permissions is a read-only mirror of App principals."""
 
-    @pytest.mark.parametrize("role", ["viewer", "editor", "builder"])
-    def test_accepted_roles(self, role):
+    def test_returns_users_and_groups(self):
         session_mgr, settings = _mock_context()
-        data = {
-            "principal": "a@b.com",
-            "principal_type": "user",
-            "display_name": "A",
-            "role": role,
+        settings.ontobricks_app_name = "myapp"
+        principals = {
+            "users": [{"email": "alice@acme.com"}],
+            "groups": [{"display_name": "eng"}],
+        }
+        with (
+            patch.object(
+                SettingsService,
+                "_resolve_context",
+                return_value=(MagicMock(), "h", "t", REGISTRY_CFG),
+            ),
+            patch.object(_svc_module, "permission_service") as ps,
+        ):
+            ps.list_app_principals.return_value = principals
+            result = SettingsService.list_app_principals_result(session_mgr, settings)
+
+        assert result["success"]
+        assert result["users"][0]["email"] == "alice@acme.com"
+        assert result["groups"][0]["display_name"] == "eng"
+
+
+class TestBuildTeamsMatrix:
+    """Teams matrix payload combines domains, principals and assignments."""
+
+    def test_builds_payload(self):
+        session_mgr, settings = _mock_context()
+        settings.ontobricks_app_name = "myapp"
+
+        principals = {
+            "users": [{"email": "alice@acme.com", "display_name": "Alice"}],
+            "groups": [{"display_name": "eng"}],
+        }
+
+        registry_svc = MagicMock()
+        registry_svc.list_domains_cached.return_value = (True, ["acme", "beta"], "")
+
+        with (
+            patch.object(
+                SettingsService,
+                "_resolve_context",
+                return_value=(MagicMock(), "h", "t", REGISTRY_CFG),
+            ),
+            patch.object(_svc_module, "permission_service") as ps,
+            patch.object(_svc_module, "RegistryService") as rs_cls,
+        ):
+            ps.list_app_principals.return_value = principals
+            ps.list_domain_entries.side_effect = [
+                [
+                    {
+                        "principal": "alice@acme.com",
+                        "principal_type": "user",
+                        "display_name": "Alice",
+                        "role": "editor",
+                    }
+                ],
+                [
+                    {
+                        "principal": "eng",
+                        "principal_type": "group",
+                        "display_name": "eng",
+                        "role": "viewer",
+                    }
+                ],
+            ]
+            rs_cls.from_context.return_value = registry_svc
+
+            result = SettingsService.build_teams_matrix_result(session_mgr, settings)
+
+        assert result["success"] is True
+        assert result["domains"] == ["acme", "beta"]
+        principals_out = {p["principal"] for p in result["principals"]}
+        assert principals_out == {"alice@acme.com", "eng"}
+        assert result["assignments"]["acme"]["alice@acme.com"] == "editor"
+        assert result["assignments"]["beta"]["eng"] == "viewer"
+
+
+class TestSaveTeamsBatch:
+    """POST /settings/teams batch-saves changes across multiple domains."""
+
+    def test_invalid_payload_raises(self):
+        session_mgr, settings = _mock_context()
+        with pytest.raises(ValidationError):
+            SettingsService.save_teams_batch_result(
+                {"changes": "not-a-list"}, session_mgr, settings
+            )
+
+    def test_missing_domain_raises(self):
+        session_mgr, settings = _mock_context()
+        body = {
+            "changes": [
+                {"principal": "a@b.com", "principal_type": "user", "role": "viewer"}
+            ]
+        }
+        with pytest.raises(ValidationError, match="domain_folder"):
+            SettingsService.save_teams_batch_result(body, session_mgr, settings)
+
+    def test_invalid_role_raises(self):
+        session_mgr, settings = _mock_context()
+        body = {
+            "changes": [
+                {
+                    "domain_folder": "acme",
+                    "principal": "a@b.com",
+                    "principal_type": "user",
+                    "role": "superuser",
+                }
+            ]
+        }
+        with pytest.raises(ValidationError, match="role"):
+            SettingsService.save_teams_batch_result(body, session_mgr, settings)
+
+    def test_valid_payload_delegates(self):
+        session_mgr, settings = _mock_context()
+        body = {
+            "changes": [
+                {
+                    "domain_folder": "acme",
+                    "principal": "a@b.com",
+                    "principal_type": "user",
+                    "display_name": "A",
+                    "role": "editor",
+                },
+                {
+                    "domain_folder": "beta",
+                    "principal": "b@b.com",
+                    "principal_type": "user",
+                    "display_name": "B",
+                    "role": None,
+                },
+            ]
         }
 
         with (
@@ -243,25 +367,43 @@ class TestAppLevelRoleValidation:
             ),
             patch.object(_svc_module, "permission_service") as ps,
         ):
-            ps.add_or_update_entry.return_value = (True, "ok")
-            result = SettingsService.add_permission_result(data, session_mgr, settings)
+            ps.save_domain_permissions_batch.return_value = (
+                [
+                    {"domain": "acme", "count": 1, "message": "ok"},
+                    {"domain": "beta", "count": 1, "message": "ok"},
+                ],
+                [],
+            )
+            result = SettingsService.save_teams_batch_result(
+                body, session_mgr, settings
+            )
 
-        assert result["success"]
+        assert result["success"] is True
+        assert result["total_changes"] == 2
+        ps.save_domain_permissions_batch.assert_called_once()
 
-    def test_admin_role_rejected(self):
-        data = {"principal": "a@b.com", "role": "admin"}
-        with pytest.raises(ValidationError, match="Role must be"):
-            SettingsService.add_permission_result(data, MagicMock(), MagicMock())
-
-    def test_none_role_rejected(self):
-        data = {"principal": "a@b.com", "role": "none"}
-        with pytest.raises(ValidationError, match="Role must be"):
-            SettingsService.add_permission_result(data, MagicMock(), MagicMock())
-
-    def test_missing_principal_rejected(self):
-        data = {"principal": "", "role": "viewer"}
-        with pytest.raises(ValidationError, match="Principal"):
-            SettingsService.add_permission_result(data, MagicMock(), MagicMock())
+    def test_no_registry_raises(self):
+        session_mgr, settings = _mock_context()
+        body = {
+            "changes": [
+                {
+                    "domain_folder": "acme",
+                    "principal": "a@b.com",
+                    "principal_type": "user",
+                    "display_name": "A",
+                    "role": "editor",
+                }
+            ]
+        }
+        with (
+            patch.object(
+                SettingsService,
+                "_resolve_context",
+                return_value=(MagicMock(), "h", "t", EMPTY_REGISTRY),
+            ),
+            pytest.raises(ValidationError, match="Registry"),
+        ):
+            SettingsService.save_teams_batch_result(body, session_mgr, settings)
 
 
 class TestSearchWorkspacePrincipals:

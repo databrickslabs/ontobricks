@@ -134,6 +134,11 @@ class DatabricksClient:
     def list_app_principals(self, app_name):
         return self.workspace.list_app_principals(app_name)
 
+    @property
+    def last_app_permissions_status(self) -> int:
+        """Expose the HTTP status of the last ``list_app_principals`` call."""
+        return self.workspace.last_app_permissions_status
+
     def get_oauth_token(self):
         """Return an OAuth token from the Databricks auth layer."""
         return self.auth.get_oauth_token()

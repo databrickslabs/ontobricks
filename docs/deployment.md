@@ -374,9 +374,22 @@ When no permissions are configured yet, only users with **CAN_MANAGE** on the Da
 
 At runtime, the app checks whether the logged-in user has `CAN_MANAGE` on the Databricks App by calling the Permissions API. The check uses the **user's own OAuth token** (forwarded by the Databricks Apps proxy via `x-forwarded-access-token`). This means:
 
-- **No special SP setup is needed** — admin detection works out of the box on a fresh deployment.
-- The app's service principal does not need `CAN_MANAGE` on itself.
-- If the user's forwarded token is not available (e.g., local dev), the app falls back to the SDK (service principal) and then a REST call with the SP token.
+- Admin detection uses the user's OAuth token when the Apps runtime forwards one.
+- If the user's forwarded token is not available or lacks scope for `/api/2.0/permissions/apps/*`, the app falls back to the SDK (service principal) and then a REST call with the SP token.
+- Those fallbacks require the app's service principal to have at least `CAN_VIEW_PERMISSIONS` on its **own app**, which is **not granted automatically** when the app is created.
+
+### First-Deploy Bootstrap (required once per workspace)
+
+Databricks Apps do not grant the freshly-created service principal any permission on the app it runs. Until that is fixed, `list_app_principals` returns `403`, the middleware cannot resolve any user (including `CAN_MANAGE` deployers), and the access-denied page appears on the very first request.
+
+`make deploy` (via `scripts/deploy.sh`) runs the fix automatically. For manual deploys:
+
+```bash
+make bootstrap-perms
+# equivalent to: scripts/bootstrap-app-permissions.sh ontobricks mcp-ontobricks
+```
+
+The script is idempotent. It discovers each app's service principal via `databricks apps get` and grants it `CAN_MANAGE` on itself. If the first post-deploy page load shows a **"First-deploy bootstrap required"** banner, that is exactly the situation — run the command and reload.
 
 ### Managing Permissions
 

@@ -45,6 +45,13 @@
                             "icon": "bi-signpost-split",
                             "default": false,
                             "requires": null
+                        },
+                        {
+                            "id": "teams",
+                            "label": "Teams",
+                            "icon": "bi-people",
+                            "default": false,
+                            "requires": null
                         }
                     ]
                 },

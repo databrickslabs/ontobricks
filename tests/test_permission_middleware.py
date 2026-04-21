@@ -12,6 +12,7 @@ from starlette.datastructures import State
 
 from back.objects.registry.permissions import (
     ROLE_ADMIN,
+    ROLE_APP_USER,
     ROLE_BUILDER,
     ROLE_EDITOR,
     ROLE_VIEWER,
@@ -166,6 +167,62 @@ class TestRoleEnforcement:
         assert resp.status_code == 403
         assert not result.get("passed")
 
+    def test_none_role_html_redirects_to_reason_app(self):
+        """HTML request → 302 to /access-denied?reason=app by default."""
+        from shared.fastapi.main import PermissionMiddleware
+
+        req = _make_request(headers={"accept": "text/html"})
+        middleware = PermissionMiddleware(MagicMock())
+
+        async def call_next(_):
+            return MagicMock(status_code=200)
+
+        with (
+            patch("back.core.databricks.is_databricks_app", return_value=True),
+            patch.object(
+                PermissionMiddleware,
+                "_resolve_roles",
+                return_value=(ROLE_NONE, ROLE_NONE),
+            ),
+            patch(
+                "back.objects.registry.permission_service"
+                ".is_app_principals_forbidden",
+                return_value=False,
+            ),
+        ):
+            resp = _run(middleware.dispatch(req, call_next))
+
+        assert resp.status_code == 302
+        assert "reason=app" in resp.headers["location"]
+
+    def test_bootstrap_redirect_on_forbidden_principals(self):
+        """When list_app_principals came back 403, use reason=bootstrap."""
+        from shared.fastapi.main import PermissionMiddleware
+
+        req = _make_request(headers={"accept": "text/html"})
+        middleware = PermissionMiddleware(MagicMock())
+
+        async def call_next(_):
+            return MagicMock(status_code=200)
+
+        with (
+            patch("back.core.databricks.is_databricks_app", return_value=True),
+            patch.object(
+                PermissionMiddleware,
+                "_resolve_roles",
+                return_value=(ROLE_NONE, ROLE_NONE),
+            ),
+            patch(
+                "back.objects.registry.permission_service"
+                ".is_app_principals_forbidden",
+                return_value=True,
+            ),
+        ):
+            resp = _run(middleware.dispatch(req, call_next))
+
+        assert resp.status_code == 302
+        assert "reason=bootstrap" in resp.headers["location"]
+
     def test_viewer_get_allowed(self):
         _, _, result = _dispatch_with_roles(ROLE_VIEWER, ROLE_VIEWER, method="GET")
         assert result.get("passed")
@@ -244,6 +301,70 @@ class TestAdminOnlyPaths:
         )
         assert resp.status_code == 403
         assert not result.get("passed")
+
+    def test_admin_can_access_teams(self):
+        _, _, result = _dispatch_with_roles(
+            ROLE_ADMIN, ROLE_ADMIN, path="/settings/teams"
+        )
+        assert result.get("passed")
+
+    def test_app_user_blocked_from_teams(self):
+        _, resp, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_NONE, path="/settings/teams"
+        )
+        assert resp.status_code == 403
+        assert not result.get("passed")
+
+
+# ------------------------------------------------------------------
+# Domain-scoped routes require a team entry (new strict model)
+# ------------------------------------------------------------------
+
+
+class TestDomainScopedRoutes:
+    """App users without a team entry on a domain are blocked there."""
+
+    @pytest.mark.parametrize(
+        "path",
+        ["/domain/", "/ontology/", "/mapping/", "/dtwin/"],
+    )
+    def test_app_user_no_team_blocked(self, path):
+        _, resp, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_NONE, method="GET", path=path
+        )
+        assert resp.status_code == 403
+        assert not result.get("passed")
+
+    def test_app_user_viewer_can_get(self):
+        _, _, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_VIEWER, method="GET", path="/ontology/"
+        )
+        assert result.get("passed")
+
+    def test_app_user_viewer_cannot_write(self):
+        _, resp, _ = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_VIEWER, method="POST", path="/ontology/"
+        )
+        assert resp.status_code == 403
+
+    def test_app_user_editor_can_write(self):
+        _, _, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_EDITOR, method="POST", path="/ontology/"
+        )
+        assert result.get("passed")
+
+    def test_admin_bypasses_domain_gate(self):
+        _, _, result = _dispatch_with_roles(
+            ROLE_ADMIN, ROLE_NONE, method="GET", path="/ontology/"
+        )
+        assert result.get("passed")
+
+    def test_app_user_can_hit_non_domain_routes(self):
+        # Non-domain-scoped paths should be reachable with no team entry
+        _, _, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_NONE, method="GET", path="/registry/"
+        )
+        assert result.get("passed")
 
 
 # ------------------------------------------------------------------
