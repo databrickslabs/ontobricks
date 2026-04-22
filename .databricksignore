@@ -37,12 +37,15 @@ logs/
 .ontobricks.log
 mlflow.db
 
-# ── Documentation (not needed at runtime) ────────────────────
+# ── Documentation ─────────────────────────────────────────────
+# docs/*.md are served by the in-app Help Center (see
+# src/front/routes/help.py → /api/help/docs/*), so they MUST be
+# shipped with the app. We still exclude the Sphinx build output
+# and any auxiliary folders that aren't needed at runtime.
 data/
-docs/
 licenses/
 dab/
-*.md
+docs/sphinx/
 documentation.html
 
 # ── DAB config (not needed at runtime) ───────────────────────
@@ -67,5 +70,11 @@ pytest.ini
 scripts/
 .cursorrules
 .gitignore
-features.md
 LICENSE
+
+# ── Internal-only docs / repo meta (not shipped) ────────────
+# WARNING: do NOT use a bare "internal/" pattern here — it would
+# also match src/api/routers/internal/, which is a required module
+# and its absence breaks app startup (ModuleNotFoundError).
+CONTRIBUTING.md
+README.md

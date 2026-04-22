@@ -18,7 +18,6 @@ bundle:
 sync:
   exclude:
     - tests/
-    - docs/
     - data/
     - .venv/
     - .git/
@@ -34,8 +33,15 @@ sync:
     - ".env"
     - scripts/
     - Makefile
-    - docs/INFO.md
     - CHANGELOG.md
+    # docs/*.md are served by the in-app Help Center
+    # (see src/front/routes/help.py → /api/help/docs/*), so the docs/
+    # folder itself must stay in the bundle. Only strip the Sphinx
+    # build output, which is not needed at runtime.
+    - docs/sphinx/
+    # NOTE: do NOT add un-anchored "internal/" here — the pattern
+    # would also match src/api/routers/internal/, which is a required
+    # module and its absence breaks app startup (ModuleNotFoundError).
 
 variables:
   warehouse_id:

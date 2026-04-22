@@ -108,6 +108,40 @@ def _docs_dir() -> str:
     return os.path.join(repo_root, "docs")
 
 
+def _audit_docs_on_disk() -> None:
+    """Log a loud warning at boot if any catalogued doc is missing on disk.
+
+    Prevents the class of bug where ``.databricksignore`` (or any other
+    deploy-time filter) silently drops the ``docs/`` folder and every
+    Help Center entry starts 404'ing in production.
+    """
+    docs_dir = _docs_dir()
+    if not os.path.isdir(docs_dir):
+        logger.warning(
+            "Help Center docs directory is missing at %s — the deployed "
+            "bundle is likely excluding docs/*.md (check .databricksignore). "
+            "All /api/help/docs/* endpoints will return 404.",
+            docs_dir,
+        )
+        return
+
+    missing = [
+        doc["file"]
+        for doc in _DOC_INDEX.values()
+        if not os.path.isfile(os.path.join(docs_dir, doc["file"]))
+    ]
+    if missing:
+        logger.warning(
+            "Help Center: %d catalogued doc file(s) missing on disk under %s: %s",
+            len(missing),
+            docs_dir,
+            ", ".join(sorted(missing)),
+        )
+
+
+_audit_docs_on_disk()
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
