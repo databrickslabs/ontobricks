@@ -304,6 +304,12 @@
         const inp = inputEl();
         if (inp) inp.disabled = true;
 
+        // Snapshot the PRIOR history (exclusive of the current message)
+        // so the backend can rebuild its stored transcript without
+        // double-counting the message already passed via the "message"
+        // field.
+        const priorHistory = conversationHistory.slice(-(MAX_HISTORY * 2));
+
         appendMessage('user', text);
         conversationHistory.push({ role: 'user', content: text });
 
@@ -315,8 +321,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     message: text,
-                    // send last N turns (user + assistant = 2 entries per turn)
-                    history: conversationHistory.slice(-(MAX_HISTORY * 2)),
+                    history: priorHistory,
                 }),
                 credentials: 'same-origin',
             });

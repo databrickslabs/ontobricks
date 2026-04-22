@@ -1437,8 +1437,35 @@ def _chat_save_cache(session_mgr: SessionManager, cache: dict) -> None:
     session_mgr.set(_CHAT_SESSION_KEY, cache)
 
 
+def _chat_resolve_domain_name(domain) -> str:
+    """Return the active domain's name, falling back through the
+    common locations used by :class:`DomainSession` / session payloads.
+
+    ``DomainSession`` does **not** expose a ``.name`` property; the name
+    is stored under ``domain.info["name"]`` (and historically also under
+    ``domain.domain["name"]`` / ``domain.domain_folder``).  Using a
+    blind ``getattr(domain, "name", "")`` silently returns ``""`` and
+    then the Graph Chat agent thinks no domain is selected.
+    """
+    if domain is None:
+        return ""
+    info = getattr(domain, "info", None) or {}
+    name = (info.get("name") or "").strip() if isinstance(info, dict) else ""
+    if name:
+        return name
+    d = getattr(domain, "domain", None) or {}
+    if isinstance(d, dict):
+        name = (d.get("name") or "").strip()
+        if name:
+            return name
+    folder = getattr(domain, "domain_folder", "") or ""
+    if isinstance(folder, str) and folder.strip():
+        return folder.strip()
+    return ""
+
+
 def _chat_domain_key(domain) -> str:
-    return (getattr(domain, "name", "") or "__default__").strip() or "__default__"
+    return _chat_resolve_domain_name(domain) or "__default__"
 
 
 def _chat_clamp_limit(limit) -> int:
@@ -1585,7 +1612,7 @@ async def dtwin_assistant_chat(
     # resolve the same user session and active domain.
     session_cookies = dict(request.cookies or {})
 
-    domain_name = getattr(domain, "name", "") or ""
+    domain_name = _chat_resolve_domain_name(domain)
 
     logger.info(
         "GraphChat: user_message=%s, domain=%s, endpoint=%s",
@@ -1625,10 +1652,18 @@ async def dtwin_assistant_chat(
 
     # Persist the exchange in the session cache (per-domain, trimmed to
     # the configured limit) so the discussion survives page navigation.
-    updated = list(history)
-    updated.append({"role": "user", "content": user_message})
-    updated.append({"role": "assistant", "content": agent_result.reply or ""})
-    chat_cache["history"][domain_key] = _chat_trim(updated, limit)
+    # ``history`` is expected to hold PRIOR turns only; drop a trailing
+    # entry that accidentally echoes the current user_message so we
+    # never double-record the same question (also self-heals any pre-
+    # existing sessions that were written with the old contract).
+    prior = list(history)
+    if prior and prior[-1].get("role") == "user" and (
+        prior[-1].get("content") or ""
+    ).strip() == user_message.strip():
+        prior = prior[:-1]
+    prior.append({"role": "user", "content": user_message})
+    prior.append({"role": "assistant", "content": agent_result.reply or ""})
+    chat_cache["history"][domain_key] = _chat_trim(prior, limit)
     _chat_save_cache(session_mgr, chat_cache)
 
     return {
@@ -1683,6 +1718,129 @@ async def dtwin_assistant_history_clear(
         cache["history"].pop(domain_key, None)
         _chat_save_cache(session_mgr, cache)
     return {"success": True}
+
+
+@router.get("/graphql/schema")
+async def dtwin_graphql_schema(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the GraphQL SDL built from the CURRENT session's domain.
+
+    Unlike the public ``/graphql/{domain}/schema`` route, this endpoint
+    does **not** require the domain to be published in the registry.
+    It works purely from the in-session ontology so Graph Chat can
+    introspect the schema even while the user is still building the
+    domain.
+    """
+    from back.core.graphql import build_schema_for_domain
+    from strawberry.printer import print_schema
+
+    domain = get_domain(session_mgr)
+    display_name = _chat_resolve_domain_name(domain)
+    if not display_name:
+        raise ValidationError("No domain selected in the current session.")
+
+    ontology = domain.ontology or {}
+    classes = ontology.get("classes", []) or []
+    properties_list = ontology.get("properties", []) or []
+    base_uri = ontology.get("base_uri", DEFAULT_BASE_URI)
+
+    if not classes:
+        return {
+            "success": False,
+            "domain": display_name,
+            "message": "Ontology is empty — add at least one class to generate a GraphQL schema.",
+        }
+
+    result = build_schema_for_domain(classes, properties_list, base_uri, display_name)
+    if not result:
+        raise ValidationError(
+            "Could not generate GraphQL schema from the current ontology."
+        )
+    schema, _metadata = result
+    return {
+        "success": True,
+        "domain": display_name,
+        "sdl": print_schema(schema),
+    }
+
+
+@router.post("/graphql/execute")
+async def dtwin_graphql_execute(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Execute a GraphQL query against the CURRENT session's domain.
+
+    Session-aware counterpart of ``POST /graphql/{domain}`` used by the
+    Graph Chat agent.  Requires a configured graph backend (LadybugDB)
+    to resolve the query.
+    """
+    from back.core.graphql import build_schema_for_domain, DEFAULT_DEPTH, MAX_DEPTH
+    from back.core.triplestore import get_triplestore
+    from back.core.helpers import effective_graph_name
+
+    domain = get_domain(session_mgr)
+    display_name = _chat_resolve_domain_name(domain)
+    if not display_name:
+        raise ValidationError("No domain selected in the current session.")
+
+    body = await request.json()
+    query = (body.get("query") or "").strip()
+    if not query:
+        raise ValidationError("Missing 'query' in request body.")
+    variables = body.get("variables") or None
+    operation_name = body.get("operationName")
+    depth = body.get("depth")
+
+    ontology = domain.ontology or {}
+    classes = ontology.get("classes", []) or []
+    properties_list = ontology.get("properties", []) or []
+    base_uri = ontology.get("base_uri", DEFAULT_BASE_URI)
+
+    result = build_schema_for_domain(classes, properties_list, base_uri, display_name)
+    if not result:
+        raise ValidationError(
+            "Could not generate GraphQL schema from the current ontology."
+        )
+    schema, _metadata = result
+
+    store = get_triplestore(domain, settings, backend="graph")
+    if not store:
+        raise InfrastructureError(
+            "Graph backend (LadybugDB) not configured or unreachable."
+        )
+
+    context = {
+        "triplestore": store,
+        "table_name": effective_graph_name(domain),
+        "base_uri": base_uri,
+    }
+    if depth is not None:
+        try:
+            context["depth"] = min(max(int(depth), 1), MAX_DEPTH)
+        except (TypeError, ValueError):
+            context["depth"] = DEFAULT_DEPTH
+
+    exec_result = schema.execute_sync(
+        query,
+        variable_values=variables,
+        operation_name=operation_name,
+        context_value=context,
+    )
+
+    response: dict = {"success": True, "domain": display_name}
+    if exec_result.data is not None:
+        response["data"] = exec_result.data
+    if exec_result.errors:
+        response["success"] = False
+        response["errors"] = [
+            {"message": str(e), "path": getattr(e, "path", None)}
+            for e in exec_result.errors
+        ]
+    return response
 
 
 @router.post("/assistant/history/limit")

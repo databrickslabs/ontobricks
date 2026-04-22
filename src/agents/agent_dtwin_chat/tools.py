@@ -11,8 +11,12 @@ Tools:
     * ``list_entity_types``   -- GET  /api/v1/digitaltwin/stats
     * ``describe_entity``     -- GET  /api/v1/digitaltwin/triples/find
     * ``get_status``          -- GET  /api/v1/digitaltwin/status
-    * ``get_graphql_schema``  -- GET  /graphql/{domain}/schema
-    * ``query_graphql``       -- POST /graphql/{domain}
+    * ``get_graphql_schema``  -- GET  /dtwin/graphql/schema   (internal,
+                                   session-aware: works even when the
+                                   domain has not been published yet)
+    * ``query_graphql``       -- POST /dtwin/graphql/execute  (internal,
+                                   session-aware counterpart to the
+                                   public ``/graphql/{domain}`` route)
     * ``run_sparql``          -- POST /dtwin/execute   (internal route;
                                    same session cookies are forwarded)
 """
@@ -215,16 +219,20 @@ def tool_get_status(ctx: ToolContext, **_kwargs) -> str:
 
 
 def tool_get_graphql_schema(ctx: ToolContext, **_kwargs) -> str:
-    """Return the domain's auto-generated GraphQL schema (SDL)."""
+    """Return the domain's auto-generated GraphQL schema (SDL).
+
+    Uses the internal, session-aware ``/dtwin/graphql/schema`` endpoint
+    so this works even when the domain has never been saved / published
+    to the registry — the schema is generated on the fly from the
+    in-session ontology.
+    """
     domain = ctx.dtwin_domain_name
     if not domain:
         return _error("No domain selected in the current session.")
 
     try:
         with _client(ctx) as c:
-            resp = c.get(
-                f"/graphql/{domain}/schema", params=_registry_params(ctx)
-            )
+            resp = c.get("/dtwin/graphql/schema")
             resp.raise_for_status()
             data = resp.json()
     except httpx.HTTPStatusError as exc:
@@ -234,6 +242,9 @@ def tool_get_graphql_schema(ctx: ToolContext, **_kwargs) -> str:
         )
     except Exception as exc:
         return _error(f"GraphQL schema error: {exc}")
+
+    if not data.get("success"):
+        return data.get("message") or "Could not build GraphQL schema."
 
     sdl = data.get("sdl", "")
     if not sdl:
@@ -274,11 +285,7 @@ def tool_query_graphql(
 
     try:
         with _client(ctx) as c:
-            resp = c.post(
-                f"/graphql/{domain}",
-                json=body,
-                params=_registry_params(ctx),
-            )
+            resp = c.post("/dtwin/graphql/execute", json=body)
             resp.raise_for_status()
             data = resp.json()
     except httpx.HTTPStatusError as exc:
