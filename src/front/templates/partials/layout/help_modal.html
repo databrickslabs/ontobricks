@@ -33,6 +33,7 @@
                             <li class="nav-item"><a class="nav-link" data-help-section="shortcuts" href="#help-shortcuts"><i class="bi bi-keyboard"></i> Keyboard Shortcuts</a></li>
                             <li class="nav-item"><a class="nav-link" data-help-section="glossary" href="#help-glossary"><i class="bi bi-book"></i> Glossary</a></li>
                             <li class="nav-item"><a class="nav-link" data-help-section="resources" href="#help-resources"><i class="bi bi-box-arrow-up-right"></i> Resources</a></li>
+                            <li class="nav-item"><a class="nav-link" data-help-section="docs" href="#help-docs"><i class="bi bi-file-earmark-text"></i> Documentation</a></li>
                         </ul>
                     </nav>
 
@@ -481,11 +482,20 @@
                                 <div class="col-md-6">
                                     <div class="help-card">
                                         <h5><i class="bi bi-book me-2"></i>OntoBricks documentation</h5>
-                                        <ul class="list-unstyled mb-0">
+                                        <p class="text-muted small mb-2">Read the full docs directly in-app:</p>
+                                        <ul class="list-unstyled mb-2">
+                                            <li><a href="#help-docs/get-started" data-help-jump="docs" data-help-doc="get-started"><i class="bi bi-rocket-takeoff me-1"></i>Get Started</a></li>
+                                            <li><a href="#help-docs/user-guide" data-help-jump="docs" data-help-doc="user-guide"><i class="bi bi-journal-text me-1"></i>User Guide</a></li>
+                                            <li><a href="#help-docs/examples" data-help-jump="docs" data-help-doc="examples"><i class="bi bi-lightbulb me-1"></i>Examples</a></li>
+                                            <li><a href="#help-docs/architecture" data-help-jump="docs" data-help-doc="architecture"><i class="bi bi-diagram-3 me-1"></i>Architecture</a></li>
+                                            <li><a href="#help-docs/deployment" data-help-jump="docs" data-help-doc="deployment"><i class="bi bi-cloud-arrow-up me-1"></i>Deployment</a></li>
+                                            <li><a href="#help-docs/api" data-help-jump="docs" data-help-doc="api"><i class="bi bi-braces me-1"></i>API Reference</a></li>
+                                            <li><a href="#help-docs" data-help-jump="docs"><i class="bi bi-collection me-1"></i>Browse all docs</a></li>
+                                        </ul>
+                                        <hr class="my-2">
+                                        <ul class="list-unstyled mb-0 small">
                                             <li><a href="/about">About OntoBricks</a></li>
                                             <li><a href="https://github.com/databrickslabs/ontobricks" target="_blank" rel="noopener">GitHub repository <i class="bi bi-box-arrow-up-right small"></i></a></li>
-                                            <li><a href="https://github.com/databrickslabs/ontobricks/blob/main/docs/user-guide.md" target="_blank" rel="noopener">Full User Guide <i class="bi bi-box-arrow-up-right small"></i></a></li>
-                                            <li><a href="https://github.com/databrickslabs/ontobricks/blob/main/docs/deployment.md" target="_blank" rel="noopener">Deployment Guide <i class="bi bi-box-arrow-up-right small"></i></a></li>
                                         </ul>
                                     </div>
                                 </div>
@@ -527,6 +537,43 @@
                                 <i class="bi bi-chat-dots me-2"></i>
                                 Found a bug or have a suggestion? Open an issue on the
                                 <a href="https://github.com/databrickslabs/ontobricks/issues" target="_blank" rel="noopener" class="alert-link">GitHub tracker</a>.
+                            </div>
+                        </section>
+
+                        <!-- DOCUMENTATION (dynamic, from /docs/*.md) -->
+                        <section class="help-section help-docs-section" id="help-docs" data-help-section-panel="docs" data-help-skip-search="1">
+                            <div class="help-docs-layout">
+                                <aside class="help-docs-index" aria-label="Documentation index">
+                                    <div class="help-docs-index-header">
+                                        <h6 class="mb-2"><i class="bi bi-journals me-2"></i>Documentation</h6>
+                                        <p class="text-muted small mb-0">Full docs rendered from the project's <code>docs/</code> folder.</p>
+                                    </div>
+                                    <nav class="help-docs-nav" id="helpDocsNav" aria-label="Documentation list">
+                                        <div class="help-docs-loading text-muted small p-2">
+                                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                            Loading index...
+                                        </div>
+                                    </nav>
+                                </aside>
+
+                                <div class="help-docs-viewer" id="helpDocsViewer">
+                                    <header class="help-docs-viewer-header">
+                                        <div>
+                                            <h4 class="help-docs-viewer-title mb-0" id="helpDocsTitle">Select a document</h4>
+                                            <div class="help-docs-viewer-meta text-muted small" id="helpDocsMeta"></div>
+                                        </div>
+                                        <a class="btn btn-sm btn-outline-secondary help-docs-github-link d-none" id="helpDocsGithub" href="#" target="_blank" rel="noopener">
+                                            <i class="bi bi-github me-1"></i>View on GitHub
+                                        </a>
+                                    </header>
+                                    <article class="help-docs-rendered markdown-body" id="helpDocsBody">
+                                        <div class="help-docs-placeholder text-center text-muted py-5">
+                                            <i class="bi bi-journal-text fs-1 d-block mb-3"></i>
+                                            <h5>Browse the full documentation</h5>
+                                            <p class="mb-0">Pick a document on the left to start reading.</p>
+                                        </div>
+                                    </article>
+                                </div>
                             </div>
                         </section>
 

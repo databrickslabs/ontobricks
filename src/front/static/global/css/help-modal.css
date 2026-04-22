@@ -679,3 +679,314 @@
     transform: scale(1.12);
     color: #fca5a5;
 }
+
+/* ==========================================================================
+   Documentation panel (dynamic /docs browser)
+   ========================================================================== */
+
+/* The docs panel needs to fill the entire content column so its two
+   children can scroll independently. */
+.help-section.help-docs-section.active {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0;
+}
+
+.help-docs-layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+}
+
+.help-docs-index {
+    border-right: 1px solid #e5e7eb;
+    background: #fafbfc;
+    overflow-y: auto;
+    padding: 1rem 0.75rem;
+}
+
+.help-docs-index-header {
+    padding: 0 0.25rem 0.75rem;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 0.75rem;
+}
+
+.help-docs-index-header h6 {
+    color: #b91c1c;
+    font-weight: 600;
+    margin: 0;
+}
+
+.help-docs-nav .help-docs-cat {
+    margin-bottom: 1rem;
+}
+
+.help-docs-nav .help-docs-cat-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6b7280;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.help-docs-nav .help-docs-cat-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.help-docs-nav .help-docs-cat-list li {
+    margin: 0;
+}
+
+.help-docs-nav .help-docs-link {
+    display: block;
+    padding: 0.4rem 0.6rem;
+    margin-bottom: 0.1rem;
+    color: #374151;
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 0.88rem;
+    line-height: 1.2;
+    transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.help-docs-nav .help-docs-link:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+.help-docs-nav .help-docs-link.active {
+    background: #b91c1c;
+    color: #fff;
+    font-weight: 500;
+}
+
+.help-docs-viewer {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.help-docs-viewer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.25rem;
+    border-bottom: 1px solid #e5e7eb;
+    background: #fff;
+    flex: 0 0 auto;
+}
+
+.help-docs-viewer-title {
+    font-weight: 600;
+    color: #111827;
+    font-size: 1.1rem;
+}
+
+.help-docs-viewer-meta {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.help-docs-rendered {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 1.25rem 1.5rem 2rem;
+    background: #fff;
+    color: #111827;
+    font-size: 0.95rem;
+    line-height: 1.65;
+}
+
+.help-docs-placeholder {
+    padding: 3rem 1rem;
+}
+
+/* ---- Markdown typography inside the viewer -------------------------------- */
+
+.help-docs-rendered h1,
+.help-docs-rendered h2,
+.help-docs-rendered h3,
+.help-docs-rendered h4,
+.help-docs-rendered h5,
+.help-docs-rendered h6 {
+    color: #111827;
+    font-weight: 600;
+    margin-top: 1.6em;
+    margin-bottom: 0.6em;
+    line-height: 1.25;
+}
+
+.help-docs-rendered h1 {
+    font-size: 1.6rem;
+    padding-bottom: 0.3em;
+    border-bottom: 2px solid #fecaca;
+    color: #b91c1c;
+    margin-top: 0;
+}
+
+.help-docs-rendered h2 {
+    font-size: 1.3rem;
+    padding-bottom: 0.25em;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.help-docs-rendered h3 {
+    font-size: 1.12rem;
+}
+
+.help-docs-rendered h4 {
+    font-size: 1rem;
+    color: #374151;
+}
+
+.help-docs-rendered p {
+    margin: 0.6em 0 0.9em;
+}
+
+.help-docs-rendered ul,
+.help-docs-rendered ol {
+    padding-left: 1.5em;
+    margin: 0.5em 0 0.9em;
+}
+
+.help-docs-rendered li {
+    margin: 0.15em 0;
+}
+
+.help-docs-rendered li > p {
+    margin: 0.2em 0;
+}
+
+.help-docs-rendered a {
+    color: #b91c1c;
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(185, 28, 28, 0.4);
+}
+
+.help-docs-rendered a:hover {
+    color: #7f1d1d;
+    border-bottom-style: solid;
+}
+
+.help-docs-rendered code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    background: #f3f4f6;
+    color: #b91c1c;
+    padding: 0.12em 0.4em;
+    border-radius: 4px;
+}
+
+.help-docs-rendered pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 0.9rem 1rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 0.9em 0 1.1em;
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.help-docs-rendered pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    font-size: inherit;
+    border-radius: 0;
+}
+
+.help-docs-rendered blockquote {
+    margin: 0.9em 0;
+    padding: 0.4em 1rem;
+    border-left: 4px solid #fca5a5;
+    background: #fef2f2;
+    color: #7f1d1d;
+    border-radius: 0 6px 6px 0;
+}
+
+.help-docs-rendered blockquote > :first-child {
+    margin-top: 0;
+}
+
+.help-docs-rendered blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+.help-docs-rendered table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.9em 0 1.1em;
+    font-size: 0.88rem;
+}
+
+.help-docs-rendered th,
+.help-docs-rendered td {
+    border: 1px solid #e5e7eb;
+    padding: 0.45em 0.7em;
+    text-align: left;
+    vertical-align: top;
+}
+
+.help-docs-rendered thead th {
+    background: #f9fafb;
+    font-weight: 600;
+}
+
+.help-docs-rendered tbody tr:nth-child(even) {
+    background: #fafbfc;
+}
+
+.help-docs-rendered img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 1em auto;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.help-docs-rendered hr {
+    border: 0;
+    border-top: 1px solid #e5e7eb;
+    margin: 1.5em 0;
+}
+
+.help-docs-rendered kbd {
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8em;
+    padding: 0.05em 0.4em;
+    color: #374151;
+}
+
+/* Loading spinner alignment */
+.help-docs-index .help-docs-loading .spinner-border {
+    width: 1rem;
+    height: 1rem;
+    border-width: 0.15em;
+}
+
+/* Responsive collapse for narrow modals */
+@media (max-width: 820px) {
+    .help-docs-layout {
+        grid-template-columns: 1fr;
+    }
+    .help-docs-index {
+        max-height: 180px;
+        border-right: none;
+        border-bottom: 1px solid #e5e7eb;
+    }
+}

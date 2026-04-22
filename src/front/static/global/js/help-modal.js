@@ -43,6 +43,11 @@
 
         var content = document.querySelector('.help-content');
         if (content) content.scrollTop = 0;
+
+        // Documentation panel is driven by help-docs.js (dynamic markdown).
+        if (sectionId === 'docs' && window.HelpDocs && typeof window.HelpDocs.activate === 'function') {
+            window.HelpDocs.activate();
+        }
     }
 
     function _initSidebarNav() {
@@ -65,7 +70,13 @@
             if (!jump) return;
             e.preventDefault();
             var id = jump.getAttribute('data-help-jump');
-            if (id) _activateSection(id);
+            if (!id) return;
+            _activateSection(id);
+            // Optional deep-link into a specific document slug (Documentation panel)
+            var docSlug = jump.getAttribute('data-help-doc');
+            if (docSlug && window.HelpDocs && typeof window.HelpDocs.activate === 'function') {
+                window.HelpDocs.activate(docSlug);
+            }
         });
     }
 
@@ -121,6 +132,13 @@
 
         sections.forEach(function (section) {
             if (section.getAttribute('data-help-section-panel') === '__empty') return;
+            // Dynamic docs panel is not part of the static search corpus;
+            // its content is fetched on demand and searched in-doc.
+            if (section.getAttribute('data-help-skip-search') === '1') {
+                section.style.display = 'none';
+                section.classList.remove('active');
+                return;
+            }
             var text = section.textContent.toLowerCase();
             if (text.indexOf(q.toLowerCase()) === -1) {
                 section.style.display = 'none';

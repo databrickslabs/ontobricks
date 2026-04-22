@@ -33,7 +33,10 @@
     <script defer src="{{ url_for('static', filename='global/js/base-ui-handlers.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/breadcrumb.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/emoji-picker.js') }}?v={{ asset_version }}"></script>
+    <!-- Markdown renderer (used by the Help Center Documentation tab) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script defer src="{{ url_for('static', filename='global/js/help-modal.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='global/js/help-docs.js') }}?v={{ asset_version }}"></script>
     
     {% block extra_css %}{% endblock %}
 </head>
