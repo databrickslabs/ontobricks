@@ -58,6 +58,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
@@ -430,6 +431,12 @@ client.dashboards.get_dashboards()
 <dt class="sig sig-object py" id="back.core.databricks.DatabricksClient.DatabricksClient.list_app_principals">
 <span class="sig-name descname"><span class="pre">list_app_principals</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/databricks/DatabricksClient.html#DatabricksClient.list_app_principals"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.databricks.DatabricksClient.DatabricksClient.list_app_principals" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.core.databricks.DatabricksClient.DatabricksClient.last_app_permissions_status">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">last_app_permissions_status</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#back.core.databricks.DatabricksClient.DatabricksClient.last_app_permissions_status" title="Link to this definition">¶</a></dt>
+<dd><p>Expose the HTTP status of the last <code class="docutils literal notranslate"><span class="pre">list_app_principals</span></code> call.</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.databricks.DatabricksClient.DatabricksClient.get_oauth_token">
@@ -1033,11 +1040,23 @@ group matching <em>query</em> is returned.</p>
 </dl>
 </dd></dl>
 
+<dl class="py property">
+<dt class="sig sig-object py" id="back.core.databricks.WorkspaceService.WorkspaceService.last_app_permissions_status">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">last_app_permissions_status</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#back.core.databricks.WorkspaceService.WorkspaceService.last_app_permissions_status" title="Link to this definition">¶</a></dt>
+<dd><p>HTTP status of the most recent <code class="docutils literal notranslate"><span class="pre">list_app_principals</span></code> call.</p>
+<p><code class="docutils literal notranslate"><span class="pre">0</span></code> means “never called or unknown error”, <code class="docutils literal notranslate"><span class="pre">200</span></code> means success,
+<code class="docutils literal notranslate"><span class="pre">403</span></code> indicates the caller lacks <code class="docutils literal notranslate"><span class="pre">CAN_VIEW_PERMISSIONS</span></code> on the
+app (typical first-deploy bootstrap failure).</p>
+</dd></dl>
+
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.databricks.WorkspaceService.WorkspaceService.list_app_principals">
 <span class="sig-name descname"><span class="pre">list_app_principals</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/databricks/WorkspaceService.html#WorkspaceService.list_app_principals"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.databricks.WorkspaceService.WorkspaceService.list_app_principals" title="Link to this definition">¶</a></dt>
 <dd><p>Return <code class="docutils literal notranslate"><span class="pre">{'users':</span> <span class="pre">[...],</span> <span class="pre">'groups':</span> <span class="pre">[...]}</span></code> for a Databricks App.</p>
-<p>Service principals are excluded.</p>
+<p>Service principals are excluded.  On HTTP failure the call is
+swallowed and an empty result is returned; inspect
+<a class="reference internal" href="#back.core.databricks.WorkspaceService.WorkspaceService.last_app_permissions_status" title="back.core.databricks.WorkspaceService.WorkspaceService.last_app_permissions_status"><code class="xref py py-attr docutils literal notranslate"><span class="pre">last_app_permissions_status</span></code></a> to distinguish <code class="docutils literal notranslate"><span class="pre">403</span></code>
+(bootstrap / permission) from other failure modes.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>app_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>

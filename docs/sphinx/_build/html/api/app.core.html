@@ -58,6 +58,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
@@ -326,9 +327,11 @@ backslashes, which is the superset behaviour needed by all callers.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.helpers.SQLHelpers.effective_view_table">
 <span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">effective_view_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/SQLHelpers.html#SQLHelpers.effective_view_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.SQLHelpers.effective_view_table" title="Link to this definition">¶</a></dt>
-<dd><p>Fully-qualified VIEW name derived from domain name, version, and delta location.</p>
-<p>When <em>settings</em> is provided and the composed name is empty, falls back
-to <code class="docutils literal notranslate"><span class="pre">settings.databricks_triplestore_table</span></code>.</p>
+<dd><p>Fully-qualified VIEW name derived from the registry location and the domain name.</p>
+<p>The Delta VIEW always lives in the registry’s <code class="docutils literal notranslate"><span class="pre">catalog.schema</span></code> and
+its name is <code class="docutils literal notranslate"><span class="pre">triplestore_&lt;safe_name&gt;_V&lt;version&gt;</span></code>.  When <em>settings</em>
+is provided and the composed name is empty, falls back to
+<code class="docutils literal notranslate"><span class="pre">settings.databricks_triplestore_table</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
@@ -626,9 +629,11 @@ backslashes, which is the superset behaviour needed by all callers.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="back.core.helpers.effective_view_table">
 <span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">effective_view_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.effective_view_table" title="Link to this definition">¶</a></dt>
-<dd><p>Fully-qualified VIEW name derived from domain name, version, and delta location.</p>
-<p>When <em>settings</em> is provided and the composed name is empty, falls back
-to <code class="docutils literal notranslate"><span class="pre">settings.databricks_triplestore_table</span></code>.</p>
+<dd><p>Fully-qualified VIEW name derived from the registry location and the domain name.</p>
+<p>The Delta VIEW always lives in the registry’s <code class="docutils literal notranslate"><span class="pre">catalog.schema</span></code> and
+its name is <code class="docutils literal notranslate"><span class="pre">triplestore_&lt;safe_name&gt;_V&lt;version&gt;</span></code>.  When <em>settings</em>
+is provided and the composed name is empty, falls back to
+<code class="docutils literal notranslate"><span class="pre">settings.databricks_triplestore_table</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>

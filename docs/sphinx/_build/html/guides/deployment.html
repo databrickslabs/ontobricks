@@ -72,6 +72,7 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="development.html">Development</a></li>
@@ -566,10 +567,20 @@ scripts/deploy.sh<span class="w"> </span>--bind<span class="w">           </span
 <h3>How Admin Detection Works<a class="headerlink" href="#how-admin-detection-works" title="Link to this heading">¶</a></h3>
 <p>At runtime, the app checks whether the logged-in user has <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> on the Databricks App by calling the Permissions API. The check uses the <strong>user’s own OAuth token</strong> (forwarded by the Databricks Apps proxy via <code class="docutils literal notranslate"><span class="pre">x-forwarded-access-token</span></code>). This means:</p>
 <ul class="simple">
-<li><p><strong>No special SP setup is needed</strong> — admin detection works out of the box on a fresh deployment.</p></li>
-<li><p>The app’s service principal does not need <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> on itself.</p></li>
-<li><p>If the user’s forwarded token is not available (e.g., local dev), the app falls back to the SDK (service principal) and then a REST call with the SP token.</p></li>
+<li><p>Admin detection uses the user’s OAuth token when the Apps runtime forwards one.</p></li>
+<li><p>If the user’s forwarded token is not available or lacks scope for <code class="docutils literal notranslate"><span class="pre">/api/2.0/permissions/apps/*</span></code>, the app falls back to the SDK (service principal) and then a REST call with the SP token.</p></li>
+<li><p>Those fallbacks require the app’s service principal to have at least <code class="docutils literal notranslate"><span class="pre">CAN_VIEW_PERMISSIONS</span></code> on its <strong>own app</strong>, which is <strong>not granted automatically</strong> when the app is created.</p></li>
 </ul>
+</section>
+<section id="first-deploy-bootstrap-required-once-per-workspace">
+<h3>First-Deploy Bootstrap (required once per workspace)<a class="headerlink" href="#first-deploy-bootstrap-required-once-per-workspace" title="Link to this heading">¶</a></h3>
+<p>Databricks Apps do not grant the freshly-created service principal any permission on the app it runs. Until that is fixed, <code class="docutils literal notranslate"><span class="pre">list_app_principals</span></code> returns <code class="docutils literal notranslate"><span class="pre">403</span></code>, the middleware cannot resolve any user (including <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> deployers), and the access-denied page appears on the very first request.</p>
+<p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">deploy</span></code> (via <code class="docutils literal notranslate"><span class="pre">scripts/deploy.sh</span></code>) runs the fix automatically. For manual deploys:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>bootstrap-perms
+<span class="c1"># equivalent to: scripts/bootstrap-app-permissions.sh ontobricks mcp-ontobricks</span>
+</pre></div>
+</div>
+<p>The script is idempotent. It discovers each app’s service principal via <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">apps</span> <span class="pre">get</span></code> and grants it <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> on itself. If the first post-deploy page load shows a <strong>“First-deploy bootstrap required”</strong> banner, that is exactly the situation — run the command and reload.</p>
 </section>
 <section id="managing-permissions">
 <h3>Managing Permissions<a class="headerlink" href="#managing-permissions" title="Link to this heading">¶</a></h3>

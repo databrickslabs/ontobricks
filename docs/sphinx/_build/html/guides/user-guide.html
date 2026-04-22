@@ -15,7 +15,7 @@
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="OntoBricks External REST API" href="api.html" />
+    <link rel="next" title="Registry Import / Export (CLI)" href="import-export.html" />
     <link rel="prev" title="OntoBricks Architecture" href="architecture.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -78,6 +78,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#importing-ontologies">Importing Ontologies</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="development.html">Development</a></li>
@@ -118,7 +119,7 @@
 <ul>
   <li><a href="../index.html">Documentation overview</a><ul>
       <li>Previous: <a href="architecture.html" title="previous chapter">OntoBricks Architecture</a></li>
-      <li>Next: <a href="api.html" title="next chapter">OntoBricks External REST API</a></li>
+      <li>Next: <a href="import-export.html" title="next chapter">Registry Import / Export (CLI)</a></li>
   </ul></li>
 </ul>
 </div>
@@ -925,13 +926,10 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <tr class="row-even"><td><p><strong>Backend</strong></p></td>
 <td><p>Select the triple store engine: <strong>Delta</strong> (Databricks SQL Warehouse) or <strong>LadybugDB</strong> (embedded graph database).</p></td>
 </tr>
-<tr class="row-odd"><td><p><strong>Catalog.Schema</strong></p></td>
-<td><p><em>(Delta only)</em> Defaults to the same catalog and schema as the domain’s registry location. Click the pencil icon to change.</p></td>
+<tr class="row-odd"><td><p><strong>Triple-Store</strong></p></td>
+<td><p><em>(Delta only)</em> Read-only. The Delta VIEW is always created in the domain’s registry <code class="docutils literal notranslate"><span class="pre">catalog.schema</span></code>, and its name is derived as <code class="docutils literal notranslate"><span class="pre">triplestore_&lt;domain&gt;_V&lt;version&gt;</span></code>.</p></td>
 </tr>
-<tr class="row-even"><td><p><strong>Table Name</strong></p></td>
-<td><p><em>(Delta only)</em> Defaults to <code class="docutils literal notranslate"><span class="pre">triplestore_&lt;domain_name&gt;</span></code> (sanitized lowercase). Updated automatically when the domain name changes.</p></td>
-</tr>
-<tr class="row-odd"><td><p><strong>Graph Name</strong></p></td>
+<tr class="row-even"><td><p><strong>Graph Name</strong></p></td>
 <td><p><em>(LadybugDB)</em> Logical name for the embedded graph database (defaults to domain name).</p></td>
 </tr>
 </tbody>

@@ -55,6 +55,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
@@ -111,12 +112,18 @@
 <span></span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">Permission Service for OntoBricks.</span>
 
-<span class="sd">Manages application-level permissions (Viewer / Editor / Builder roles)</span>
-<span class="sd">stored in the registry UC Volume, plus optional per-domain overrides.</span>
-<span class="sd">Admin status is derived from the Databricks App CAN_MANAGE permission.</span>
+<span class="sd">New permission model:</span>
 
-<span class="sd">Active only in Databricks App mode (DATABRICKS_APP_PORT is set).</span>
-<span class="sd">In local mode every user has unrestricted access.</span>
+<span class="sd">- **App-level access** is driven entirely by the Databricks App permissions</span>
+<span class="sd">  (``list_app_principals``).  A user either has CAN_MANAGE (admin) or appears</span>
+<span class="sd">  (directly or via a group) in the App&#39;s ACL (``ROLE_APP_USER``).  There is</span>
+<span class="sd">  no local ``.permissions.json`` file anymore.</span>
+<span class="sd">- **Domain-level access** (Viewer / Editor / Builder) is managed per-domain</span>
+<span class="sd">  in ``.domain_permissions.json`` files inside each domain folder.  Non-admin</span>
+<span class="sd">  users with no entry on a given domain have **no access** to it.</span>
+
+<span class="sd">Active only in Databricks App mode (DATABRICKS_APP_PORT is set).  In local</span>
+<span class="sd">mode every user has unrestricted access.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
@@ -133,6 +140,7 @@
 <span class="n">ROLE_BUILDER</span> <span class="o">=</span> <span class="s2">&quot;builder&quot;</span>
 <span class="n">ROLE_EDITOR</span> <span class="o">=</span> <span class="s2">&quot;editor&quot;</span>
 <span class="n">ROLE_VIEWER</span> <span class="o">=</span> <span class="s2">&quot;viewer&quot;</span>
+<span class="n">ROLE_APP_USER</span> <span class="o">=</span> <span class="s2">&quot;app_user&quot;</span>
 <span class="n">ROLE_NONE</span> <span class="o">=</span> <span class="s2">&quot;none&quot;</span>
 
 <span class="n">ROLE_HIERARCHY</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
@@ -162,23 +170,19 @@
 
 
 
-<span class="n">_PERMISSIONS_FILENAME</span> <span class="o">=</span> <span class="s2">&quot;.permissions.json&quot;</span>
 <span class="n">_DOMAIN_PERMISSIONS_FILENAME</span> <span class="o">=</span> <span class="s2">&quot;.domain_permissions.json&quot;</span>
-<span class="n">_CACHE_TTL_PERMS</span> <span class="o">=</span> <span class="mi">300</span>  <span class="c1"># 5 min</span>
 <span class="n">_CACHE_TTL_DOMAIN_PERMS</span> <span class="o">=</span> <span class="mi">120</span>  <span class="c1"># 2 min – per-domain permission cache</span>
 <span class="n">_CACHE_TTL_ADMIN</span> <span class="o">=</span> <span class="mi">60</span>  <span class="c1"># 1 min – keep short to pick up permission changes quickly</span>
 <span class="n">_CACHE_TTL_PRINCIPALS</span> <span class="o">=</span> <span class="mi">600</span>  <span class="c1"># 10 min</span>
+<span class="n">_CACHE_TTL_USER_GROUPS</span> <span class="o">=</span> <span class="mi">300</span>  <span class="c1"># 5 min – SCIM group membership</span>
 
 
 <div class="viewcode-block" id="PermissionService">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.permissions.PermissionService">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">PermissionService</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Loads, caches and manages the registry permission list.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve App-level access and per-domain roles, plus manage team files.&quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_perm_cache</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_perm_cache_ts</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
-
         <span class="bp">self</span><span class="o">.</span><span class="n">_admin_cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_users_cache</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span>
@@ -190,92 +194,13 @@
         <span class="c1"># Per-domain permission cache: keyed by domain folder name</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_domain_perm_cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
 
-    <span class="c1"># ------------------------------------------------------------------</span>
-    <span class="c1"># Permission file I/O</span>
-    <span class="c1"># ------------------------------------------------------------------</span>
+        <span class="c1"># Per-user SCIM group membership cache</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_user_groups_cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_permissions_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.service</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
-
-        <span class="n">c</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">registry_cfg</span><span class="p">)</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;/Volumes/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">_PERMISSIONS_FILENAME</span><span class="si">}</span><span class="s2">&quot;</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">_new_uc</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">VolumeFileService</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
-
-<div class="viewcode-block" id="PermissionService.load_permissions">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.load_permissions">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">load_permissions</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
-        <span class="o">*</span><span class="p">,</span>
-        <span class="n">force</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load and cache the permission file from the registry volume.&quot;&quot;&quot;</span>
-        <span class="n">now</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-        <span class="k">if</span> <span class="p">(</span>
-            <span class="ow">not</span> <span class="n">force</span>
-            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_perm_cache</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-            <span class="ow">and</span> <span class="p">(</span><span class="n">now</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_perm_cache_ts</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">_CACHE_TTL_PERMS</span>
-        <span class="p">):</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_perm_cache</span>
-
-        <span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_permissions_path</span><span class="p">(</span><span class="n">registry_cfg</span><span class="p">)</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">uc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_new_uc</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
-            <span class="n">ok</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">uc</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">ok</span> <span class="ow">and</span> <span class="n">content</span><span class="p">:</span>
-                <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_perm_cache</span> <span class="o">=</span> <span class="n">data</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_perm_cache_ts</span> <span class="o">=</span> <span class="n">now</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                    <span class="s2">&quot;Loaded </span><span class="si">%d</span><span class="s2"> permission entries from </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;permissions&quot;</span><span class="p">,</span> <span class="p">[])),</span>
-                    <span class="n">path</span><span class="p">,</span>
-                <span class="p">)</span>
-                <span class="k">return</span> <span class="n">data</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Permission file not found or empty at </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Error loading permission file: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-
-        <span class="n">empty</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;permissions&quot;</span><span class="p">:</span> <span class="p">[]}</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_perm_cache</span> <span class="o">=</span> <span class="n">empty</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_perm_cache_ts</span> <span class="o">=</span> <span class="n">now</span>
-        <span class="k">return</span> <span class="n">empty</span></div>
-
-
-<div class="viewcode-block" id="PermissionService.save_permissions">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.save_permissions">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">save_permissions</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write the permission file back to the registry volume.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">):</span>
-            <span class="k">return</span> <span class="p">(</span>
-                <span class="kc">False</span><span class="p">,</span>
-                <span class="s2">&quot;Registry not configured — set catalog and schema in Settings first&quot;</span><span class="p">,</span>
-            <span class="p">)</span>
-        <span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_permissions_path</span><span class="p">(</span><span class="n">registry_cfg</span><span class="p">)</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">uc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_new_uc</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
-            <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">uc</span><span class="o">.</span><span class="n">write_file</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Failed to write permission file to </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
-                <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Failed to save permissions: </span><span class="si">{</span><span class="n">msg</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_perm_cache</span> <span class="o">=</span> <span class="n">data</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_perm_cache_ts</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                <span class="s2">&quot;Saved </span><span class="si">%d</span><span class="s2"> permission entries to </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;permissions&quot;</span><span class="p">,</span> <span class="p">[])),</span>
-                <span class="n">path</span><span class="p">,</span>
-            <span class="p">)</span>
-            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;Permissions saved&quot;</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Error saving permission file: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span></div>
-
+        <span class="c1"># First-deploy bootstrap signal: True when the last call to</span>
+        <span class="c1"># list_app_principals came back 403, meaning the caller (usually the</span>
+        <span class="c1"># app&#39;s own service principal) lacks CAN_VIEW_PERMISSIONS on the app.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_app_principals_forbidden</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
 
     <span class="c1"># ------------------------------------------------------------------</span>
     <span class="c1"># Role resolution</span>
@@ -288,47 +213,48 @@
         <span class="n">email</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>  <span class="c1"># kept for signature compat</span>
         <span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
         <span class="n">user_token</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the effective role for *email*.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the app-level access for *email*.</span>
 
-<span class="sd">        Priority: admin (CAN_MANAGE) &gt; explicit entry &gt; ROLE_NONE.</span>
-<span class="sd">        Group membership is also checked.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            ``ROLE_ADMIN``   -- user has CAN_MANAGE on the Databricks App.</span>
+<span class="sd">            ``ROLE_APP_USER`` -- user (or a group they belong to) appears in</span>
+<span class="sd">                                 the App&#39;s ACL.</span>
+<span class="sd">            ``ROLE_NONE``    -- otherwise.</span>
 
-<span class="sd">        When the permission list is empty, only users with CAN_MANAGE</span>
-<span class="sd">        on the Databricks App have access. Everyone else is blocked.</span>
+<span class="sd">        ``registry_cfg`` is accepted for backward compatibility with the</span>
+<span class="sd">        previous signature but is no longer used.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">registry_cfg</span>  <span class="c1"># unused; kept for signature compatibility</span>
+
         <span class="k">if</span> <span class="ow">not</span> <span class="n">email</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">ROLE_NONE</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_admin</span><span class="p">(</span><span class="n">email</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">app_name</span><span class="p">,</span> <span class="n">user_token</span><span class="o">=</span><span class="n">user_token</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">ROLE_ADMIN</span>
 
-        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_permissions</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">)</span>
-        <span class="n">entries</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;permissions&quot;</span><span class="p">,</span> <span class="p">[])</span>
-
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">entries</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                <span class="s2">&quot;No permission entries yet — only admins (CAN_MANAGE) have access&quot;</span>
-            <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">app_name</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">ROLE_NONE</span>
 
-        <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">entries</span><span class="p">:</span>
-            <span class="k">if</span> <span class="p">(</span>
-                <span class="n">entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;principal_type&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;user&quot;</span>
-                <span class="ow">and</span> <span class="n">entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;principal&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="n">email</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
-            <span class="p">):</span>
-                <span class="k">return</span> <span class="n">entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;role&quot;</span><span class="p">,</span> <span class="n">ROLE_VIEWER</span><span class="p">)</span>
+        <span class="n">principals</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">list_app_principals</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">app_name</span><span class="p">)</span>
+        <span class="n">users</span> <span class="o">=</span> <span class="n">principals</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;users&quot;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">email_l</span> <span class="o">=</span> <span class="n">email</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">users</span><span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;email&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="n">email_l</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">ROLE_APP_USER</span>
 
-        <span class="n">user_groups</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_user_groups</span><span class="p">(</span><span class="n">email</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">entries</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;principal_type&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;group&quot;</span> <span class="ow">and</span> <span class="n">entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
-                <span class="s2">&quot;principal&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
-            <span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="p">(</span><span class="n">g</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">user_groups</span><span class="p">):</span>
-                <span class="k">return</span> <span class="n">entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;role&quot;</span><span class="p">,</span> <span class="n">ROLE_VIEWER</span><span class="p">)</span>
+        <span class="n">groups</span> <span class="o">=</span> <span class="n">principals</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;groups&quot;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">if</span> <span class="n">groups</span><span class="p">:</span>
+            <span class="n">user_groups</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_user_groups</span><span class="p">(</span><span class="n">email</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">)</span>
+            <span class="n">user_group_names_l</span> <span class="o">=</span> <span class="p">{</span><span class="n">g</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">user_groups</span><span class="p">}</span>
+            <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">groups</span><span class="p">:</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="p">(</span><span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;display_name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">and</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">user_group_names_l</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">ROLE_APP_USER</span>
 
         <span class="k">return</span> <span class="n">ROLE_NONE</span></div>
 
@@ -339,6 +265,11 @@
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="n">now</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">cached</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_user_groups_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">email</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
+        <span class="k">if</span> <span class="n">cached</span> <span class="ow">and</span> <span class="p">(</span><span class="n">now</span> <span class="o">-</span> <span class="n">cached</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">_CACHE_TTL_USER_GROUPS</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">cached</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 
         <span class="k">try</span><span class="p">:</span>
             <span class="n">h</span> <span class="o">=</span> <span class="n">host</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
@@ -354,12 +285,24 @@
             <span class="n">resp</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
             <span class="n">resources</span> <span class="o">=</span> <span class="n">resp</span><span class="o">.</span><span class="n">json</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Resources&quot;</span><span class="p">,</span> <span class="p">[])</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">resources</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_user_groups_cache</span><span class="p">[</span><span class="n">email</span><span class="o">.</span><span class="n">lower</span><span class="p">()]</span> <span class="o">=</span> <span class="p">([],</span> <span class="n">now</span><span class="p">)</span>
                 <span class="k">return</span> <span class="p">[]</span>
             <span class="n">groups</span> <span class="o">=</span> <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;groups&quot;</span><span class="p">,</span> <span class="p">[])</span>
-            <span class="k">return</span> <span class="p">[</span><span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;display&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">groups</span> <span class="k">if</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;display&quot;</span><span class="p">)]</span>
+            <span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;display&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">groups</span> <span class="k">if</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;display&quot;</span><span class="p">)]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_user_groups_cache</span><span class="p">[</span><span class="n">email</span><span class="o">.</span><span class="n">lower</span><span class="p">()]</span> <span class="o">=</span> <span class="p">(</span><span class="n">names</span><span class="p">,</span> <span class="n">now</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">names</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not resolve groups for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">email</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
             <span class="k">return</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="PermissionService.clear_user_groups_cache">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.clear_user_groups_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">clear_user_groups_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">email</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">email</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_user_groups_cache</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">email</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_user_groups_cache</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+
 
     <span class="c1"># ------------------------------------------------------------------</span>
     <span class="c1"># Admin detection via Databricks App Permissions API</span>
@@ -503,72 +446,11 @@
             <span class="k">return</span> <span class="kc">None</span>
 
     <span class="c1"># ------------------------------------------------------------------</span>
-    <span class="c1"># CRUD helpers</span>
-    <span class="c1"># ------------------------------------------------------------------</span>
-
-<div class="viewcode-block" id="PermissionService.list_entries">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.list_entries">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">list_entries</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_permissions</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;permissions&quot;</span><span class="p">,</span> <span class="p">[])</span></div>
-
-
-<div class="viewcode-block" id="PermissionService.add_or_update_entry">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.add_or_update_entry">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">add_or_update_entry</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
-        <span class="n">principal</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">principal_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">display_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">role</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
-        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_permissions</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-        <span class="n">entries</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;permissions&quot;</span><span class="p">,</span> <span class="p">[])</span>
-
-        <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">entries</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;principal&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="n">principal</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
-                <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;role&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">role</span>
-                <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;display_name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">display_name</span>
-                <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;principal_type&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">principal_type</span>
-                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">save_permissions</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
-
-        <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-            <span class="p">{</span>
-                <span class="s2">&quot;principal&quot;</span><span class="p">:</span> <span class="n">principal</span><span class="p">,</span>
-                <span class="s2">&quot;principal_type&quot;</span><span class="p">:</span> <span class="n">principal_type</span><span class="p">,</span>
-                <span class="s2">&quot;display_name&quot;</span><span class="p">:</span> <span class="n">display_name</span><span class="p">,</span>
-                <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="n">role</span><span class="p">,</span>
-            <span class="p">}</span>
-        <span class="p">)</span>
-        <span class="n">data</span><span class="p">[</span><span class="s2">&quot;permissions&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">entries</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">save_permissions</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="PermissionService.remove_entry">
-<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.remove_entry">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">remove_entry</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">principal</span><span class="p">:</span> <span class="nb">str</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
-        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_permissions</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-        <span class="n">before</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;permissions&quot;</span><span class="p">,</span> <span class="p">[]))</span>
-        <span class="n">data</span><span class="p">[</span><span class="s2">&quot;permissions&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="n">e</span>
-            <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;permissions&quot;</span><span class="p">,</span> <span class="p">[])</span>
-            <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;principal&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">!=</span> <span class="n">principal</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
-        <span class="p">]</span>
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;permissions&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="n">before</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Principal &#39;</span><span class="si">{</span><span class="n">principal</span><span class="si">}</span><span class="s2">&#39; not found&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">save_permissions</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span></div>
-
-
-    <span class="c1"># ------------------------------------------------------------------</span>
     <span class="c1"># Domain-level permission file I/O</span>
     <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_new_uc</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">VolumeFileService</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_domain_permissions_path</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -579,7 +461,10 @@
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.service</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
 
         <span class="n">c</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">registry_cfg</span><span class="p">)</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;/Volumes/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">/domains/</span><span class="si">{</span><span class="n">domain_folder</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">_DOMAIN_PERMISSIONS_FILENAME</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;/Volumes/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">/domains/&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">domain_folder</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">_DOMAIN_PERMISSIONS_FILENAME</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
 
 <div class="viewcode-block" id="PermissionService.load_domain_permissions">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.load_domain_permissions">[docs]</a>
@@ -712,13 +597,18 @@
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the effective role for *email* on a specific domain.</span>
 
-<span class="sd">        Admins always keep admin status.  For other users the effective</span>
-<span class="sd">        role is ``min(app_role, domain_role)`` when a domain-level entry</span>
-<span class="sd">        exists, otherwise the app-level role is used as-is.</span>
+<span class="sd">        Strict model:</span>
 
-<span class="sd">        When *app_role* is provided the caller has already resolved it</span>
-<span class="sd">        and the redundant ``get_user_role`` call is skipped.</span>
+<span class="sd">        - Admins → ``ROLE_ADMIN``.</span>
+<span class="sd">        - Otherwise the domain role comes *only* from</span>
+<span class="sd">          ``.domain_permissions.json``. No entry → ``ROLE_NONE``.</span>
+
+<span class="sd">        ``app_role`` is honoured as an optimization: the caller may pass the</span>
+<span class="sd">        already-resolved app role to avoid a redundant admin lookup.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">app_role</span> <span class="o">==</span> <span class="n">ROLE_ADMIN</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">ROLE_ADMIN</span>
+
         <span class="k">if</span> <span class="ow">not</span> <span class="n">app_role</span><span class="p">:</span>
             <span class="n">app_role</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_user_role</span><span class="p">(</span>
                 <span class="n">email</span><span class="p">,</span>
@@ -728,11 +618,11 @@
                 <span class="n">app_name</span><span class="p">,</span>
                 <span class="n">user_token</span><span class="o">=</span><span class="n">user_token</span><span class="p">,</span>
             <span class="p">)</span>
-        <span class="k">if</span> <span class="n">app_role</span> <span class="o">==</span> <span class="n">ROLE_ADMIN</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">ROLE_ADMIN</span>
+            <span class="k">if</span> <span class="n">app_role</span> <span class="o">==</span> <span class="n">ROLE_ADMIN</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">ROLE_ADMIN</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">domain_folder</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">app_role</span>
+            <span class="k">return</span> <span class="n">ROLE_NONE</span>
 
         <span class="n">domain_entry</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_domain_entry_role</span><span class="p">(</span>
             <span class="n">email</span><span class="p">,</span>
@@ -742,9 +632,8 @@
             <span class="n">domain_folder</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">if</span> <span class="n">domain_entry</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">app_role</span>
-
-        <span class="k">return</span> <span class="n">min_role</span><span class="p">(</span><span class="n">app_role</span><span class="p">,</span> <span class="n">domain_entry</span><span class="p">)</span></div>
+            <span class="k">return</span> <span class="n">ROLE_NONE</span>
+        <span class="k">return</span> <span class="n">domain_entry</span></div>
 
 
     <span class="c1"># ------------------------------------------------------------------</span>
@@ -862,6 +751,116 @@
 
 
     <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Batch domain-permission save (matrix UI)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="PermissionService.save_domain_permissions_batch">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.save_domain_permissions_batch">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">save_domain_permissions_batch</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="n">changes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Apply a batch of team changes across several domains in one pass.</span>
+
+<span class="sd">        Each change is a dict::</span>
+
+<span class="sd">            {</span>
+<span class="sd">              &quot;domain_folder&quot;: &quot;acme&quot;,</span>
+<span class="sd">              &quot;principal&quot;: &quot;alice@example.com&quot;,</span>
+<span class="sd">              &quot;principal_type&quot;: &quot;user&quot; | &quot;group&quot;,</span>
+<span class="sd">              &quot;display_name&quot;: &quot;Alice&quot;,</span>
+<span class="sd">              &quot;role&quot;: &quot;viewer&quot; | &quot;editor&quot; | &quot;builder&quot; | None,  # None == remove</span>
+<span class="sd">            }</span>
+
+<span class="sd">        The function groups changes by domain, re-reads each file fresh,</span>
+<span class="sd">        applies all operations, and writes the file back once per domain.</span>
+
+<span class="sd">        Returns ``(saved, failed)`` where each element is a dict like</span>
+<span class="sd">        ``{&quot;domain&quot;: str, &quot;count&quot;: int, &quot;message&quot;: str}``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">[],</span> <span class="p">[{</span><span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Registry not configured&quot;</span><span class="p">}]</span>
+
+        <span class="n">saved</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">failed</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">by_domain</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="n">changes</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="p">(</span><span class="n">ch</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domain_folder&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">df</span><span class="p">:</span>
+                <span class="n">failed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="p">{</span><span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;missing domain_folder&quot;</span><span class="p">}</span>
+                <span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="n">by_domain</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">domain_folder</span><span class="p">,</span> <span class="n">ops</span> <span class="ow">in</span> <span class="n">by_domain</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_domain_permissions</span><span class="p">(</span>
+                    <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">domain_folder</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span>
+                <span class="p">)</span>
+                <span class="n">entries</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;permissions&quot;</span><span class="p">,</span> <span class="p">[])</span>
+
+                <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">ops</span><span class="p">:</span>
+                    <span class="n">principal</span> <span class="o">=</span> <span class="p">(</span><span class="n">op</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;principal&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">principal</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="n">role</span> <span class="o">=</span> <span class="n">op</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;role&quot;</span><span class="p">)</span>
+                    <span class="n">pl</span> <span class="o">=</span> <span class="n">principal</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+                    <span class="k">if</span> <span class="n">role</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">entries</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entries</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;principal&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">!=</span> <span class="n">pl</span><span class="p">]</span>
+                        <span class="k">continue</span>
+
+                    <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+                    <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entries</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;principal&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="n">pl</span><span class="p">:</span>
+                            <span class="n">e</span><span class="p">[</span><span class="s2">&quot;role&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">role</span>
+                            <span class="n">e</span><span class="p">[</span><span class="s2">&quot;display_name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">op</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;display_name&quot;</span><span class="p">,</span> <span class="n">principal</span><span class="p">)</span>
+                            <span class="n">e</span><span class="p">[</span><span class="s2">&quot;principal_type&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">op</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;principal_type&quot;</span><span class="p">,</span> <span class="s2">&quot;user&quot;</span><span class="p">)</span>
+                            <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+                            <span class="k">break</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+                        <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="p">{</span>
+                                <span class="s2">&quot;principal&quot;</span><span class="p">:</span> <span class="n">principal</span><span class="p">,</span>
+                                <span class="s2">&quot;principal_type&quot;</span><span class="p">:</span> <span class="n">op</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;principal_type&quot;</span><span class="p">,</span> <span class="s2">&quot;user&quot;</span><span class="p">),</span>
+                                <span class="s2">&quot;display_name&quot;</span><span class="p">:</span> <span class="n">op</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;display_name&quot;</span><span class="p">,</span> <span class="n">principal</span><span class="p">),</span>
+                                <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="n">role</span><span class="p">,</span>
+                            <span class="p">}</span>
+                        <span class="p">)</span>
+
+                <span class="n">data</span><span class="p">[</span><span class="s2">&quot;permissions&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">entries</span>
+                <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">save_domain_permissions</span><span class="p">(</span>
+                    <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">domain_folder</span><span class="p">,</span> <span class="n">data</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">ok</span><span class="p">:</span>
+                    <span class="n">saved</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">{</span><span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="n">domain_folder</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">ops</span><span class="p">),</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">}</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">failed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">{</span><span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="n">domain_folder</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">ops</span><span class="p">),</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">}</span>
+                    <span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                    <span class="s2">&quot;Batch save failed for domain </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_folder</span><span class="p">,</span> <span class="n">exc</span>
+                <span class="p">)</span>
+                <span class="n">failed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="p">{</span>
+                        <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="n">domain_folder</span><span class="p">,</span>
+                        <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">ops</span><span class="p">),</span>
+                        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="p">}</span>
+                <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">saved</span><span class="p">,</span> <span class="n">failed</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
     <span class="c1"># App principal listing (cached)</span>
     <span class="c1"># ------------------------------------------------------------------</span>
 
@@ -881,10 +880,11 @@
 
 <div class="viewcode-block" id="PermissionService.clear_principals_cache">
 <a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.clear_principals_cache">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">clear_principals_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">clear_principals_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>  <span class="c1"># noqa: D401</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Invalidate the cached users/groups so the next call fetches fresh data.&quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_users_cache</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_groups_cache</span> <span class="o">=</span> <span class="kc">None</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_groups_cache</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_app_principals_forbidden</span> <span class="o">=</span> <span class="kc">False</span></div>
 
 
 <div class="viewcode-block" id="PermissionService.list_app_principals">
@@ -892,7 +892,14 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">list_app_principals</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return users and groups that have permissions on the Databricks App.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return users and groups that have permissions on the Databricks App.</span>
+
+<span class="sd">        Also captures whether the underlying REST call came back 403, which</span>
+<span class="sd">        indicates the app&#39;s own service principal is not allowed to read its</span>
+<span class="sd">        own ACL (first-deploy bootstrap).  The flag is exposed via</span>
+<span class="sd">        :meth:`is_app_principals_forbidden` and consumed by the permission</span>
+<span class="sd">        middleware to render a targeted access-denied page.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">now</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
         <span class="k">if</span> <span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_users_cache</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
@@ -903,11 +910,25 @@
 
         <span class="n">client</span> <span class="o">=</span> <span class="n">DatabricksClient</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
         <span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_app_principals</span><span class="p">(</span><span class="n">app_name</span><span class="p">)</span>
+        <span class="n">status</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="s2">&quot;last_app_permissions_status&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_app_principals_forbidden</span> <span class="o">=</span> <span class="n">status</span> <span class="o">==</span> <span class="mi">403</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_users_cache</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;users&quot;</span><span class="p">,</span> <span class="p">[])</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_groups_cache</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;groups&quot;</span><span class="p">,</span> <span class="p">[])</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_users_cache_ts</span> <span class="o">=</span> <span class="n">now</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_groups_cache_ts</span> <span class="o">=</span> <span class="n">now</span>
         <span class="k">return</span> <span class="n">result</span></div>
+
+
+<div class="viewcode-block" id="PermissionService.is_app_principals_forbidden">
+<a class="viewcode-back" href="../../../../api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.is_app_principals_forbidden">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_app_principals_forbidden</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True if the last ``list_app_principals`` call was denied.</span>
+
+<span class="sd">        Used by the middleware to detect the first-deploy chicken-and-egg:</span>
+<span class="sd">        the app service principal has no permission on its own app, so the</span>
+<span class="sd">        ACL can&#39;t be read and every user ends up as ``ROLE_NONE``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_app_principals_forbidden</span></div>
 
 
 <div class="viewcode-block" id="PermissionService.list_users">

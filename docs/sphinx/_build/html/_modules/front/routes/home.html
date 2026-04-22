@@ -55,6 +55,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
@@ -158,12 +159,35 @@
 <a class="viewcode-back" href="../../../api/app.frontend.html#front.routes.home.access_denied_page">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/access-denied&quot;</span><span class="p">,</span> <span class="n">response_class</span><span class="o">=</span><span class="n">HTMLResponse</span><span class="p">,</span> <span class="n">include_in_schema</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">access_denied_page</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Access denied page shown when user has no permission.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Access denied page shown when user has no permission.</span>
+
+<span class="sd">    Accepts a ``reason`` query parameter that tailors the wording:</span>
+
+<span class="sd">    - ``app`` (default) — user has no Databricks App permission; point them</span>
+<span class="sd">      at their Databricks admin.</span>
+<span class="sd">    - ``domain`` — user is signed in but lacks a team entry on the current</span>
+<span class="sd">      domain; point them at the OntoBricks admin (Registry → Teams).</span>
+<span class="sd">    - ``bootstrap`` — first-deploy chicken-and-egg: the app&#39;s service</span>
+<span class="sd">      principal cannot read its own ACL yet.  Instruct the deployer to run</span>
+<span class="sd">      ``scripts/bootstrap-app-permissions.sh`` (or ``make bootstrap-perms``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">email</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="s2">&quot;user_email&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
         <span class="s2">&quot;x-forwarded-email&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
     <span class="p">)</span>
+    <span class="n">reason</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">query_params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reason&quot;</span><span class="p">,</span> <span class="s2">&quot;app&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">reason</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">{</span><span class="s2">&quot;app&quot;</span><span class="p">,</span> <span class="s2">&quot;domain&quot;</span><span class="p">,</span> <span class="s2">&quot;bootstrap&quot;</span><span class="p">}:</span>
+        <span class="n">reason</span> <span class="o">=</span> <span class="s2">&quot;app&quot;</span>
+    <span class="n">user_role</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="s2">&quot;user_role&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="n">user_domain_role</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="s2">&quot;user_domain_role&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">templates</span><span class="o">.</span><span class="n">TemplateResponse</span><span class="p">(</span>
-        <span class="n">request</span><span class="p">,</span> <span class="s2">&quot;access_denied.html&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;user_email&quot;</span><span class="p">:</span> <span class="n">email</span><span class="p">}</span>
+        <span class="n">request</span><span class="p">,</span>
+        <span class="s2">&quot;access_denied.html&quot;</span><span class="p">,</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;user_email&quot;</span><span class="p">:</span> <span class="n">email</span><span class="p">,</span>
+            <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="n">reason</span><span class="p">,</span>
+            <span class="s2">&quot;user_role&quot;</span><span class="p">:</span> <span class="n">user_role</span><span class="p">,</span>
+            <span class="s2">&quot;user_domain_role&quot;</span><span class="p">:</span> <span class="n">user_domain_role</span><span class="p">,</span>
+        <span class="p">},</span>
     <span class="p">)</span></div>
 
 </pre></div>

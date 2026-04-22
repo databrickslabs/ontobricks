@@ -55,6 +55,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
@@ -130,6 +131,7 @@
 <span class="sd">save is cheap and avoids recomputing hashes on every read.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">copy</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span>
@@ -183,7 +185,6 @@
             <span class="p">},</span>
             <span class="s2">&quot;triplestore&quot;</span><span class="p">:</span> <span class="p">{</span>
                 <span class="s2">&quot;stats&quot;</span><span class="p">:</span> <span class="p">{},</span>
-                <span class="s2">&quot;delta&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;catalog&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;schema&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;table_name&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">},</span>
                 <span class="s2">&quot;source_versions&quot;</span><span class="p">:</span> <span class="p">{},</span>
             <span class="p">},</span>
             <span class="s2">&quot;current_version&quot;</span><span class="p">:</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span>
@@ -384,9 +385,9 @@
 
         <span class="n">info</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="p">{})</span>
 
-        <span class="c1"># Migrate domain.delta -&gt; domain.triplestore.delta</span>
-        <span class="k">if</span> <span class="s2">&quot;delta&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;delta&quot;</span><span class="p">]:</span>
-            <span class="n">ts</span><span class="p">[</span><span class="s2">&quot;delta&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;delta&quot;</span><span class="p">))</span>
+        <span class="c1"># Strip any persisted triplestore.delta (now derived from registry)</span>
+        <span class="n">ts</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;delta&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;delta&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
 
         <span class="c1"># Drop legacy lakebase data (backend removed)</span>
         <span class="k">if</span> <span class="s2">&quot;lakebase&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">]:</span>
@@ -408,18 +409,8 @@
         <span class="k">if</span> <span class="s2">&quot;triplestore_stats&quot;</span> <span class="ow">in</span> <span class="n">info</span><span class="p">:</span>
             <span class="n">ts</span><span class="p">[</span><span class="s2">&quot;stats&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;triplestore_stats&quot;</span><span class="p">)</span>
 
-        <span class="c1"># Migrate legacy domain.info.triplestore_table -&gt; domain.triplestore.delta</span>
-        <span class="k">if</span> <span class="s2">&quot;triplestore_table&quot;</span> <span class="ow">in</span> <span class="n">info</span><span class="p">:</span>
-            <span class="n">ts_full</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;triplestore_table&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-            <span class="n">delta</span> <span class="o">=</span> <span class="n">ts</span><span class="p">[</span><span class="s2">&quot;delta&quot;</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">ts_full</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">delta</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">delta</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;table_name&quot;</span><span class="p">):</span>
-                <span class="n">parts</span> <span class="o">=</span> <span class="n">ts_full</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span>
-                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">3</span><span class="p">:</span>
-                    <span class="n">delta</span><span class="p">[</span><span class="s2">&quot;catalog&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-                    <span class="n">delta</span><span class="p">[</span><span class="s2">&quot;schema&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-                    <span class="n">delta</span><span class="p">[</span><span class="s2">&quot;table_name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">2</span><span class="p">:])</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="n">delta</span><span class="p">[</span><span class="s2">&quot;table_name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ts_full</span>
+        <span class="c1"># Drop legacy domain.info.triplestore_table (now derived from registry)</span>
+        <span class="n">info</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;triplestore_table&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
 
         <span class="c1"># Migrate root-level constraints/swrl_rules/axioms into ontology (legacy fix)</span>
         <span class="k">if</span> <span class="s2">&quot;constraints&quot;</span> <span class="ow">in</span> <span class="n">data</span> <span class="ow">and</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;constraints&quot;</span><span class="p">]:</span>
@@ -1191,13 +1182,33 @@
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">triplestore</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the triplestore configuration node (stats, delta, ladybug).&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the triplestore configuration node (stats, source_versions).&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;triplestore&quot;</span><span class="p">,</span> <span class="p">{})</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">delta</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get Delta triplestore settings (catalog, schema, table_name).&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">triplestore</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;delta&quot;</span><span class="p">,</span> <span class="p">{})</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Derived Delta triplestore location (catalog, schema, table_name).</span>
+
+<span class="sd">        The Delta VIEW always lives in the same Unity Catalog catalog.schema</span>
+<span class="sd">        as the domain registry, and the view name is computed from the</span>
+<span class="sd">        domain name and current version.  Returns a fresh dict on every</span>
+<span class="sd">        access; mutations are not persisted.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">reg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;settings&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;registry&quot;</span><span class="p">,</span> <span class="p">{})</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="n">catalog</span> <span class="o">=</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">schema</span> <span class="o">=</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">info</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">version</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_version</span> <span class="ow">or</span> <span class="s2">&quot;1&quot;</span>
+        <span class="k">if</span> <span class="n">name</span><span class="p">:</span>
+            <span class="n">safe</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^a-z0-9_]&quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
+            <span class="n">table_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;triplestore_</span><span class="si">{</span><span class="n">safe</span><span class="si">}</span><span class="s2">_V</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">table_name</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;catalog&quot;</span><span class="p">:</span> <span class="n">catalog</span><span class="p">,</span>
+            <span class="s2">&quot;schema&quot;</span><span class="p">:</span> <span class="n">schema</span><span class="p">,</span>
+            <span class="s2">&quot;table_name&quot;</span><span class="p">:</span> <span class="n">table_name</span><span class="p">,</span>
+        <span class="p">}</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">ladybug</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
@@ -1436,11 +1447,6 @@
 
         <span class="n">export</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;info&quot;</span><span class="p">:</span> <span class="n">info_export</span><span class="p">,</span> <span class="s2">&quot;versions&quot;</span><span class="p">:</span> <span class="p">{</span><span class="n">version</span><span class="p">:</span> <span class="n">version_data</span><span class="p">}}</span>
 
-        <span class="n">ts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">triplestore</span>
-        <span class="n">delta</span> <span class="o">=</span> <span class="n">ts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;delta&quot;</span><span class="p">,</span> <span class="p">{})</span>
-        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">delta</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
-            <span class="n">export</span><span class="p">[</span><span class="s2">&quot;delta&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delta</span>
-
         <span class="k">return</span> <span class="n">export</span></div>
 
 
@@ -1470,6 +1476,21 @@
 
         <span class="n">empty</span> <span class="o">=</span> <span class="n">get_empty_domain</span><span class="p">()</span>
 
+        <span class="c1"># Reset all content sections to empty defaults so that switching</span>
+        <span class="c1"># between domains never leaks groups, layout, mappings, or other</span>
+        <span class="c1"># characteristics from the previously loaded domain.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">empty</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;assignment&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">empty</span><span class="p">[</span><span class="s2">&quot;assignment&quot;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;design_layout&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">empty</span><span class="p">[</span><span class="s2">&quot;design_layout&quot;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;info&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">empty</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;info&quot;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;metadata&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;triplestore&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span>
+            <span class="n">empty</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;triplestore&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;domain_folder&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;last_update&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;last_build&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
         <span class="c1"># Import info into domain.info</span>
         <span class="k">if</span> <span class="s2">&quot;info&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
             <span class="n">info</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;info&quot;</span><span class="p">]</span>
@@ -1484,18 +1505,7 @@
                 <span class="s2">&quot;triplestore&quot;</span><span class="p">,</span> <span class="n">get_empty_domain</span><span class="p">()[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;triplestore&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
             <span class="p">)</span>
             <span class="n">ts</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;backend&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-            <span class="c1"># Migrate legacy triplestore_table into triplestore.delta</span>
-            <span class="n">ts_full</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;triplestore_table&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">ts_full</span><span class="p">:</span>
-                <span class="n">parts</span> <span class="o">=</span> <span class="n">ts_full</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span>
-                <span class="n">d</span> <span class="o">=</span> <span class="n">ts</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
-                    <span class="s2">&quot;delta&quot;</span><span class="p">,</span> <span class="n">get_empty_domain</span><span class="p">()[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;triplestore&quot;</span><span class="p">][</span><span class="s2">&quot;delta&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-                <span class="p">)</span>
-                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">3</span><span class="p">:</span>
-                    <span class="n">d</span><span class="p">[</span><span class="s2">&quot;catalog&quot;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s2">&quot;schema&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-                    <span class="n">d</span><span class="p">[</span><span class="s2">&quot;table_name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">2</span><span class="p">:])</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="n">d</span><span class="p">[</span><span class="s2">&quot;table_name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ts_full</span>
+            <span class="n">ts</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;delta&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
 
         <span class="c1"># Check for new versioned format</span>
         <span class="k">if</span> <span class="s2">&quot;versions&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
@@ -1591,18 +1601,8 @@
             <span class="k">else</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;metadata&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
 
-        <span class="c1"># Import delta into domain.triplestore</span>
-        <span class="n">empty_ts</span> <span class="o">=</span> <span class="n">get_empty_domain</span><span class="p">()[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;triplestore&quot;</span><span class="p">]</span>
-        <span class="n">ts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;triplestore&quot;</span><span class="p">,</span> <span class="n">empty_ts</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
-        <span class="k">if</span> <span class="s2">&quot;delta&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
-            <span class="n">ts</span><span class="p">[</span><span class="s2">&quot;delta&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">empty_ts</span><span class="p">[</span><span class="s2">&quot;delta&quot;</span><span class="p">],</span> <span class="o">**</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;delta&quot;</span><span class="p">]}</span>
-        <span class="n">ts</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;lakebase&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="n">ts</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;backend&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-
-        <span class="c1"># Clear cached triplestore stats — they belong to the previous project</span>
-        <span class="n">ts</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;stats&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="n">ts</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;build_last_update&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="n">ts</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;_ts_cache_timestamp&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="c1"># Strip any persisted delta from legacy files — it is now derived</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">][</span><span class="s2">&quot;triplestore&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;delta&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
 
         <span class="c1"># Ensure inherited dataProperties are propagated for saved domains</span>
         <span class="c1"># whose classes may have been stored before inheritance resolution.</span>

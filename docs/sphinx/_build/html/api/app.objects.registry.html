@@ -58,6 +58,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
@@ -356,16 +357,6 @@ admin-level Databricks App resource configuration always wins.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.config_file_path">
 <span class="sig-name descname"><span class="pre">config_file_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.config_file_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.config_file_path" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.permissions_file_path">
-<span class="sig-name descname"><span class="pre">permissions_file_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.permissions_file_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.permissions_file_path" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
@@ -779,11 +770,18 @@ with <code class="docutils literal notranslate"><span class="pre">source_class</
 <section id="module-back.objects.registry.permissions">
 <span id="permissions"></span><h2>Permissions<a class="headerlink" href="#module-back.objects.registry.permissions" title="Link to this heading">¶</a></h2>
 <p>Permission Service for OntoBricks.</p>
-<p>Manages application-level permissions (Viewer / Editor / Builder roles)
-stored in the registry UC Volume, plus optional per-domain overrides.
-Admin status is derived from the Databricks App CAN_MANAGE permission.</p>
-<p>Active only in Databricks App mode (DATABRICKS_APP_PORT is set).
-In local mode every user has unrestricted access.</p>
+<p>New permission model:</p>
+<ul class="simple">
+<li><p><strong>App-level access</strong> is driven entirely by the Databricks App permissions
+(<code class="docutils literal notranslate"><span class="pre">list_app_principals</span></code>).  A user either has CAN_MANAGE (admin) or appears
+(directly or via a group) in the App’s ACL (<code class="docutils literal notranslate"><span class="pre">ROLE_APP_USER</span></code>).  There is
+no local <code class="docutils literal notranslate"><span class="pre">.permissions.json</span></code> file anymore.</p></li>
+<li><p><strong>Domain-level access</strong> (Viewer / Editor / Builder) is managed per-domain
+in <code class="docutils literal notranslate"><span class="pre">.domain_permissions.json</span></code> files inside each domain folder.  Non-admin
+users with no entry on a given domain have <strong>no access</strong> to it.</p></li>
+</ul>
+<p>Active only in Databricks App mode (DATABRICKS_APP_PORT is set).  In local
+mode every user has unrestricted access.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="back.objects.registry.permissions.role_level">
 <span class="sig-prename descclassname"><span class="pre">back.objects.registry.permissions.</span></span><span class="sig-name descname"><span class="pre">role_level</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">role</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#role_level"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.role_level" title="Link to this definition">¶</a></dt>
@@ -819,56 +817,23 @@ In local mode every user has unrestricted access.</p>
 <dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.registry.permissions.</span></span><span class="sig-name descname"><span class="pre">PermissionService</span></span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
-<p>Loads, caches and manages the registry permission list.</p>
-<dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.load_permissions">
-<span class="sig-name descname"><span class="pre">load_permissions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">force</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.load_permissions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.load_permissions" title="Link to this definition">¶</a></dt>
-<dd><p>Load and cache the permission file from the registry volume.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>registry_cfg</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
-<li><p><strong>force</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.save_permissions">
-<span class="sig-name descname"><span class="pre">save_permissions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.save_permissions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.save_permissions" title="Link to this definition">¶</a></dt>
-<dd><p>Write the permission file back to the registry volume.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>registry_cfg</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
-<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
+<p>Resolve App-level access and per-domain roles, plus manage team files.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.get_user_role">
 <span class="sig-name descname"><span class="pre">get_user_role</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_token</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.get_user_role"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.get_user_role" title="Link to this definition">¶</a></dt>
-<dd><p>Resolve the effective role for <em>email</em>.</p>
-<p>Priority: admin (CAN_MANAGE) &gt; explicit entry &gt; ROLE_NONE.
-Group membership is also checked.</p>
-<p>When the permission list is empty, only users with CAN_MANAGE
-on the Databricks App have access. Everyone else is blocked.</p>
+<dd><p>Resolve the app-level access for <em>email</em>.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><p><code class="docutils literal notranslate"><span class="pre">ROLE_ADMIN</span></code>   – user has CAN_MANAGE on the Databricks App.
+<code class="docutils literal notranslate"><span class="pre">ROLE_APP_USER</span></code> – user (or a group they belong to) appears in</p>
+<blockquote>
+<div><p>the App’s ACL.</p>
+</div></blockquote>
+<p><code class="docutils literal notranslate"><span class="pre">ROLE_NONE</span></code>    – otherwise.</p>
+</p>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
 <li><p><strong>email</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
@@ -877,8 +842,20 @@ on the Databricks App have access. Everyone else is blocked.</p>
 <li><p><strong>user_token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
 </dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+<p><code class="docutils literal notranslate"><span class="pre">registry_cfg</span></code> is accepted for backward compatibility with the
+previous signature but is no longer used.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.clear_user_groups_cache">
+<span class="sig-name descname"><span class="pre">clear_user_groups_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.clear_user_groups_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.clear_user_groups_cache" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>email</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
 </dl>
 </dd></dl>
@@ -904,62 +881,6 @@ the next path is attempted.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.list_entries">
-<span class="sig-name descname"><span class="pre">list_entries</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.list_entries"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.list_entries" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>registry_cfg</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.add_or_update_entry">
-<span class="sig-name descname"><span class="pre">add_or_update_entry</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">principal</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">principal_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">display_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">role</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.add_or_update_entry"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.add_or_update_entry" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>registry_cfg</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
-<li><p><strong>principal</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>principal_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>display_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>role</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.remove_entry">
-<span class="sig-name descname"><span class="pre">remove_entry</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">principal</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.remove_entry"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.remove_entry" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>registry_cfg</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
-<li><p><strong>principal</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1008,11 +929,14 @@ the next path is attempted.</p>
 <dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.get_domain_role">
 <span class="sig-name descname"><span class="pre">get_domain_role</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_token</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_role</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.get_domain_role"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.get_domain_role" title="Link to this definition">¶</a></dt>
 <dd><p>Resolve the effective role for <em>email</em> on a specific domain.</p>
-<p>Admins always keep admin status.  For other users the effective
-role is <code class="docutils literal notranslate"><span class="pre">min(app_role,</span> <span class="pre">domain_role)</span></code> when a domain-level entry
-exists, otherwise the app-level role is used as-is.</p>
-<p>When <em>app_role</em> is provided the caller has already resolved it
-and the redundant <code class="docutils literal notranslate"><span class="pre">get_user_role</span></code> call is skipped.</p>
+<p>Strict model:</p>
+<ul class="simple">
+<li><p>Admins → <code class="docutils literal notranslate"><span class="pre">ROLE_ADMIN</span></code>.</p></li>
+<li><p>Otherwise the domain role comes <em>only</em> from
+<code class="docutils literal notranslate"><span class="pre">.domain_permissions.json</span></code>. No entry → <code class="docutils literal notranslate"><span class="pre">ROLE_NONE</span></code>.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">app_role</span></code> is honoured as an optimization: the caller may pass the
+already-resolved app role to avoid a redundant admin lookup.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1103,6 +1027,39 @@ and the redundant <code class="docutils literal notranslate"><span class="pre">g
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.save_domain_permissions_batch">
+<span class="sig-name descname"><span class="pre">save_domain_permissions_batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changes</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.save_domain_permissions_batch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.save_domain_permissions_batch" title="Link to this definition">¶</a></dt>
+<dd><p>Apply a batch of team changes across several domains in one pass.</p>
+<p>Each change is a dict:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+  <span class="s2">&quot;domain_folder&quot;</span><span class="p">:</span> <span class="s2">&quot;acme&quot;</span><span class="p">,</span>
+  <span class="s2">&quot;principal&quot;</span><span class="p">:</span> <span class="s2">&quot;alice@example.com&quot;</span><span class="p">,</span>
+  <span class="s2">&quot;principal_type&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span> <span class="o">|</span> <span class="s2">&quot;group&quot;</span><span class="p">,</span>
+  <span class="s2">&quot;display_name&quot;</span><span class="p">:</span> <span class="s2">&quot;Alice&quot;</span><span class="p">,</span>
+  <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;viewer&quot;</span> <span class="o">|</span> <span class="s2">&quot;editor&quot;</span> <span class="o">|</span> <span class="s2">&quot;builder&quot;</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>  <span class="c1"># None == remove</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The function groups changes by domain, re-reads each file fresh,
+applies all operations, and writes the file back once per domain.</p>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">(saved,</span> <span class="pre">failed)</span></code> where each element is a dict like
+<code class="docutils literal notranslate"><span class="pre">{&quot;domain&quot;:</span> <span class="pre">str,</span> <span class="pre">&quot;count&quot;:</span> <span class="pre">int,</span> <span class="pre">&quot;message&quot;:</span> <span class="pre">str}</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>registry_cfg</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+<li><p><strong>changes</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]], <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.clear_admin_cache">
 <span class="sig-name descname"><span class="pre">clear_admin_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.clear_admin_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.clear_admin_cache" title="Link to this definition">¶</a></dt>
 <dd><p>Drop cached admin result so the next call hits the API.</p>
@@ -1125,6 +1082,11 @@ entire admin cache is cleared.</p>
 <dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.list_app_principals">
 <span class="sig-name descname"><span class="pre">list_app_principals</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.list_app_principals"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.list_app_principals" title="Link to this definition">¶</a></dt>
 <dd><p>Return users and groups that have permissions on the Databricks App.</p>
+<p>Also captures whether the underlying REST call came back 403, which
+indicates the app’s own service principal is not allowed to read its
+own ACL (first-deploy bootstrap).  The flag is exposed via
+<a class="reference internal" href="#back.objects.registry.permissions.PermissionService.is_app_principals_forbidden" title="back.objects.registry.permissions.PermissionService.is_app_principals_forbidden"><code class="xref py py-meth docutils literal notranslate"><span class="pre">is_app_principals_forbidden()</span></code></a> and consumed by the permission
+middleware to render a targeted access-denied page.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1135,6 +1097,20 @@ entire admin cache is cleared.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.is_app_principals_forbidden">
+<span class="sig-name descname"><span class="pre">is_app_principals_forbidden</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.is_app_principals_forbidden"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.is_app_principals_forbidden" title="Link to this definition">¶</a></dt>
+<dd><p>Return True if the last <code class="docutils literal notranslate"><span class="pre">list_app_principals</span></code> call was denied.</p>
+<p>Used by the middleware to detect the first-deploy chicken-and-egg:
+the app service principal has no permission on its own app, so the
+ACL can’t be read and every user ends up as <code class="docutils literal notranslate"><span class="pre">ROLE_NONE</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
 </dd>
 </dl>
 </dd></dl>

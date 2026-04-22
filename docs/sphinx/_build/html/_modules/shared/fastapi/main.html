@@ -55,6 +55,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
@@ -254,16 +255,45 @@
 
 <span class="n">_VIEWER_BLOCKED_METHODS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;POST&quot;</span><span class="p">,</span> <span class="s2">&quot;PUT&quot;</span><span class="p">,</span> <span class="s2">&quot;PATCH&quot;</span><span class="p">,</span> <span class="s2">&quot;DELETE&quot;</span><span class="p">}</span>
 
-<span class="n">_PERM_ADMIN_ONLY_PREFIXES</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;/settings/permissions&quot;</span><span class="p">,</span> <span class="s2">&quot;/settings/domain-permissions&quot;</span><span class="p">)</span>
+<span class="n">_PERM_ADMIN_ONLY_PREFIXES</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">&quot;/settings/permissions&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;/settings/domain-permissions&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;/settings/teams&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Routes that operate on a specific domain (the session&#39;s current domain).</span>
+<span class="c1"># Non-admin users need a team entry on that domain (user_domain_role != NONE)</span>
+<span class="c1"># to access these.</span>
+<span class="n">_DOMAIN_SCOPED_PREFIXES</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">&quot;/domain/&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;/ontology/&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;/mapping/&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;/dtwin/&quot;</span><span class="p">,</span>
+<span class="p">)</span>
 
 
 <div class="viewcode-block" id="PermissionMiddleware">
 <a class="viewcode-back" href="../../../api/app.fastapi.html#shared.fastapi.main.PermissionMiddleware">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">PermissionMiddleware</span><span class="p">(</span><span class="n">BaseHTTPMiddleware</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Enforce Viewer / Editor / Builder / Admin access rules.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Enforce app- and domain-level access rules.</span>
+
+<span class="sd">    New model:</span>
+
+<span class="sd">    - **App access** requires the caller to be either an admin</span>
+<span class="sd">      (CAN_MANAGE on the Databricks App) or an app user (present in the</span>
+<span class="sd">      App&#39;s ACL, directly or via group).  Users with ``ROLE_NONE`` are</span>
+<span class="sd">      redirected to ``/access-denied``.</span>
+<span class="sd">    - **Domain access** (routes under ``/domain``, ``/ontology``,</span>
+<span class="sd">      ``/mapping``, ``/dtwin``) additionally requires a non-empty entry</span>
+<span class="sd">      in the domain&#39;s ``.domain_permissions.json``.  Admins bypass this.</span>
+<span class="sd">    - **Viewer write-block**: a viewer team entry allows GETs on domain</span>
+<span class="sd">      routes but not writes.</span>
+<span class="sd">    - **Admin-only prefixes** (`/settings/permissions`,</span>
+<span class="sd">      `/settings/domain-permissions`, `/settings/teams`) are gated to</span>
+<span class="sd">      admins even for app users.</span>
 
 <span class="sd">    Only active when running as a Databricks App (``DATABRICKS_APP_PORT``</span>
-<span class="sd">    is set).  In local-dev mode every request passes through.</span>
+<span class="sd">    is set).  In local-dev mode every request passes through as admin.</span>
 
 <span class="sd">    Sets ``request.state.user_role`` (app-level) and</span>
 <span class="sd">    ``request.state.user_domain_role`` (effective role for the loaded domain).</span>
@@ -273,7 +303,12 @@
 <a class="viewcode-back" href="../../../api/app.fastapi.html#shared.fastapi.main.PermissionMiddleware.dispatch">[docs]</a>
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">dispatch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">call_next</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Response</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_databricks_app</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">ROLE_NONE</span><span class="p">,</span> <span class="n">ROLE_VIEWER</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+            <span class="n">ROLE_NONE</span><span class="p">,</span>
+            <span class="n">ROLE_VIEWER</span><span class="p">,</span>
+            <span class="n">ROLE_ADMIN</span><span class="p">,</span>
+            <span class="n">permission_service</span><span class="p">,</span>
+        <span class="p">)</span>
 
         <span class="n">email</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;x-forwarded-email&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">user_email</span> <span class="o">=</span> <span class="n">email</span>
@@ -315,16 +350,47 @@
         <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">role</span> <span class="o">==</span> <span class="n">ROLE_NONE</span><span class="p">:</span>
+            <span class="c1"># First-deploy bootstrap: the app&#39;s service principal is not</span>
+            <span class="c1"># allowed to read its own ACL, so *nobody* — not even CAN_MANAGE</span>
+            <span class="c1"># users — can be resolved as admin/app-user.  Surface that as a</span>
+            <span class="c1"># distinct reason so the access-denied page shows the fix.</span>
+            <span class="n">reason</span> <span class="o">=</span> <span class="s2">&quot;app&quot;</span>
+            <span class="k">if</span> <span class="n">permission_service</span><span class="o">.</span><span class="n">is_app_principals_forbidden</span><span class="p">():</span>
+                <span class="n">reason</span> <span class="o">=</span> <span class="s2">&quot;bootstrap&quot;</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;PermissionMiddleware: first-deploy bootstrap detected &quot;</span>
+                    <span class="s2">&quot;(app SP cannot read its own ACL). Run &quot;</span>
+                    <span class="s2">&quot;scripts/bootstrap-app-permissions.sh to fix.&quot;</span>
+                <span class="p">)</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_wants_json</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
                 <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forbidden_json</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;Access denied&quot;</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="s2">&quot;/access-denied&quot;</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">302</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">role</span> <span class="o">==</span> <span class="n">ROLE_VIEWER</span> <span class="ow">and</span> <span class="n">request</span><span class="o">.</span><span class="n">method</span> <span class="ow">in</span> <span class="n">_VIEWER_BLOCKED_METHODS</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forbidden_json</span><span class="p">(</span>
-                <span class="n">request</span><span class="p">,</span> <span class="s2">&quot;Viewer role does not allow write operations&quot;</span>
+            <span class="k">return</span> <span class="n">RedirectResponse</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;/access-denied?reason=</span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">302</span>
             <span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">user_role</span> <span class="o">!=</span> <span class="s2">&quot;admin&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">role</span> <span class="o">!=</span> <span class="n">ROLE_ADMIN</span><span class="p">:</span>
+            <span class="n">is_domain_scoped</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span>
+                <span class="n">path</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">_DOMAIN_SCOPED_PREFIXES</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">is_domain_scoped</span> <span class="ow">and</span> <span class="n">domain_role</span> <span class="o">==</span> <span class="n">ROLE_NONE</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_wants_json</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forbidden_json</span><span class="p">(</span>
+                        <span class="n">request</span><span class="p">,</span>
+                        <span class="s2">&quot;You are not a member of this domain&#39;s team&quot;</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="k">return</span> <span class="n">RedirectResponse</span><span class="p">(</span>
+                    <span class="s2">&quot;/access-denied?reason=domain&quot;</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">302</span>
+                <span class="p">)</span>
+
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="n">is_domain_scoped</span>
+                <span class="ow">and</span> <span class="n">domain_role</span> <span class="o">==</span> <span class="n">ROLE_VIEWER</span>
+                <span class="ow">and</span> <span class="n">request</span><span class="o">.</span><span class="n">method</span> <span class="ow">in</span> <span class="n">_VIEWER_BLOCKED_METHODS</span>
+            <span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forbidden_json</span><span class="p">(</span>
+                    <span class="n">request</span><span class="p">,</span> <span class="s2">&quot;Viewer role does not allow write operations&quot;</span>
+                <span class="p">)</span>
+
             <span class="k">for</span> <span class="n">prefix</span> <span class="ow">in</span> <span class="n">_PERM_ADMIN_ONLY_PREFIXES</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">path</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">prefix</span><span class="p">):</span>
                     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_wants_json</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>

@@ -55,6 +55,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
@@ -604,42 +605,19 @@
 
 
 
-<div class="viewcode-block" id="list_permissions">
-<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.list_permissions">[docs]</a>
+<div class="viewcode-block" id="list_app_permissions">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.list_app_permissions">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/permissions&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_permissions</span><span class="p">(</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_app_permissions</span><span class="p">(</span>
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
     <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List all permission entries (admin only).&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">list_permissions_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the Databricks App principals (users + groups).</span>
 
-
-
-<div class="viewcode-block" id="add_permission">
-<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.add_permission">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/permissions&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">add_permission</span><span class="p">(</span>
-    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
-    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Add or update a permission entry (admin only).&quot;&quot;&quot;</span>
-    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">add_permission_result</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="delete_permission">
-<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.delete_permission">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="s2">&quot;/permissions/{principal:path}&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_permission</span><span class="p">(</span>
-    <span class="n">principal</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a permission entry (admin only).&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">delete_permission_result</span><span class="p">(</span><span class="n">principal</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+<span class="sd">    Read-only mirror of the App&#39;s ACL.  Used by Settings → Permissions</span>
+<span class="sd">    and as the row source for Registry → Teams.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">list_app_principals_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
 
 
 
@@ -731,6 +709,37 @@
     <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">delete_domain_permission_result</span><span class="p">(</span>
         <span class="n">domain_name</span><span class="p">,</span> <span class="n">principal</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
     <span class="p">)</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Teams (Registry → Teams matrix)</span>
+<span class="c1"># ===========================================</span>
+
+
+<div class="viewcode-block" id="teams_matrix">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.teams_matrix">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/teams&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">teams_matrix</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the Teams matrix payload: domains, principals, and assignments.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">build_teams_matrix_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="teams_save_batch">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.teams_save_batch">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/teams&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">teams_save_batch</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Persist a batch of team changes across multiple domains (admin only).&quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">save_teams_batch_result</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
 
 
 

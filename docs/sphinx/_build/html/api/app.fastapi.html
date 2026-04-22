@@ -58,6 +58,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
@@ -143,9 +144,24 @@ Run with: uvicorn shared.fastapi.main:app –reload –port 8000</p>
 <dt class="sig sig-object py" id="shared.fastapi.main.PermissionMiddleware">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">shared.fastapi.main.</span></span><span class="sig-name descname"><span class="pre">PermissionMiddleware</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">app</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dispatch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/shared/fastapi/main.html#PermissionMiddleware"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#shared.fastapi.main.PermissionMiddleware" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseHTTPMiddleware</span></code></p>
-<p>Enforce Viewer / Editor / Builder / Admin access rules.</p>
+<p>Enforce app- and domain-level access rules.</p>
+<p>New model:</p>
+<ul class="simple">
+<li><p><strong>App access</strong> requires the caller to be either an admin
+(CAN_MANAGE on the Databricks App) or an app user (present in the
+App’s ACL, directly or via group).  Users with <code class="docutils literal notranslate"><span class="pre">ROLE_NONE</span></code> are
+redirected to <code class="docutils literal notranslate"><span class="pre">/access-denied</span></code>.</p></li>
+<li><p><strong>Domain access</strong> (routes under <code class="docutils literal notranslate"><span class="pre">/domain</span></code>, <code class="docutils literal notranslate"><span class="pre">/ontology</span></code>,
+<code class="docutils literal notranslate"><span class="pre">/mapping</span></code>, <code class="docutils literal notranslate"><span class="pre">/dtwin</span></code>) additionally requires a non-empty entry
+in the domain’s <code class="docutils literal notranslate"><span class="pre">.domain_permissions.json</span></code>.  Admins bypass this.</p></li>
+<li><p><strong>Viewer write-block</strong>: a viewer team entry allows GETs on domain
+routes but not writes.</p></li>
+<li><p><strong>Admin-only prefixes</strong> (<cite>/settings/permissions</cite>,
+<cite>/settings/domain-permissions</cite>, <cite>/settings/teams</cite>) are gated to
+admins even for app users.</p></li>
+</ul>
 <p>Only active when running as a Databricks App (<code class="docutils literal notranslate"><span class="pre">DATABRICKS_APP_PORT</span></code>
-is set).  In local-dev mode every request passes through.</p>
+is set).  In local-dev mode every request passes through as admin.</p>
 <p>Sets <code class="docutils literal notranslate"><span class="pre">request.state.user_role</span></code> (app-level) and
 <code class="docutils literal notranslate"><span class="pre">request.state.user_domain_role</span></code> (effective role for the loaded domain).</p>
 <dl class="field-list simple">

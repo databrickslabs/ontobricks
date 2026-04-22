@@ -83,6 +83,7 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="development.html">Development</a></li>
@@ -3765,9 +3766,10 @@ Phase 5: Update State
 <h3>Detailed Design<a class="headerlink" href="#detailed-design" title="Link to this heading">¶</a></h3>
 <section id="snapshot-table">
 <h4>1. Snapshot Table<a class="headerlink" href="#snapshot-table" title="Link to this heading">¶</a></h4>
-<p>A managed Delta table in the same catalog/schema as the VIEW:</p>
+<p>A managed Delta table in the same catalog/schema as the VIEW — both of which
+are always the registry <code class="docutils literal notranslate"><span class="pre">catalog.schema</span></code> for the active domain:</p>
 <ul class="simple">
-<li><p><strong>Name:</strong> <code class="docutils literal notranslate"><span class="pre">_ob_snapshot_{project_name}</span></code></p></li>
+<li><p><strong>Name:</strong> <code class="docutils literal notranslate"><span class="pre">_ob_snapshot_{safe_domain}_v{version}</span></code> (derived; never stored)</p></li>
 <li><p><strong>Schema:</strong> <code class="docutils literal notranslate"><span class="pre">(subject</span> <span class="pre">STRING,</span> <span class="pre">predicate</span> <span class="pre">STRING,</span> <span class="pre">object</span> <span class="pre">STRING)</span></code></p></li>
 <li><p><strong>Lifecycle:</strong> Created on first incremental build; dropped on domain delete
 or forced full rebuild.</p></li>
@@ -3808,10 +3810,9 @@ For each source table:</p>
 <span class="p">}</span>
 </pre></div>
 </div>
-<p>Also store the snapshot table name:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="nt">&quot;domain.triplestore.snapshot_table&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;catalog.schema._ob_snapshot_my_domain&quot;</span>
-</pre></div>
-</div>
+<p>The snapshot table name is not stored; it is computed on the fly from the
+registry catalog/schema, the domain name and the current version
+(<code class="docutils literal notranslate"><span class="pre">{registry.catalog}.{registry.schema}._ob_snapshot_&lt;domain&gt;_v&lt;version&gt;</span></code>).</p>
 </section>
 <section id="new-components">
 <h4>3. New Components<a class="headerlink" href="#new-components" title="Link to this heading">¶</a></h4>
@@ -3850,8 +3851,9 @@ For each source table:</p>
 <section id="modified-files">
 <h4>4. Modified Files<a class="headerlink" href="#modified-files" title="Link to this heading">¶</a></h4>
 <ul class="simple">
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">src/back/objects/session/DomainSession.py</span></code></strong> — add <code class="docutils literal notranslate"><span class="pre">source_versions</span></code> and <code class="docutils literal notranslate"><span class="pre">snapshot_table</span></code> to
-<code class="docutils literal notranslate"><span class="pre">domain.triplestore</span></code> in the empty domain template and properties.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">src/back/objects/session/DomainSession.py</span></code></strong> — add <code class="docutils literal notranslate"><span class="pre">source_versions</span></code> to <code class="docutils literal notranslate"><span class="pre">domain.triplestore</span></code>
+in the empty domain template and expose <code class="docutils literal notranslate"><span class="pre">snapshot_table</span></code>/<code class="docutils literal notranslate"><span class="pre">delta</span></code> as computed read-only
+properties derived from the registry.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">TripleStoreBackend.py</span></code></strong> — add abstract <code class="docutils literal notranslate"><span class="pre">delete_triples</span></code> method.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">LadybugFlatStore.py</span></code></strong> — implement <code class="docutils literal notranslate"><span class="pre">delete_triples</span></code> for flat model.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">LadybugGraphStore.py</span></code></strong> — implement <code class="docutils literal notranslate"><span class="pre">delete_triples</span></code> for graph model.</p></li>

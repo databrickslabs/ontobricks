@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Registry Import / Export (CLI) &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=a58bc63e"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="OntoBricks External REST API" href="api.html" />
+    <link rel="prev" title="OntoBricks User Guide" href="user-guide.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Registry Import / Export (CLI)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#what-the-archive-contains">What the archive contains</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#authentication">Authentication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#script-layout">Script layout</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#subcommands">Subcommands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#examples">Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#conflict-modes">Conflict modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#end-to-end-promotion-workflow">End-to-end promotion workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#things-to-watch-out-for">Things to watch out for</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#comparison-with-the-registry-web-ui">Comparison with the Registry web UI</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="user-guide.html" title="previous chapter">OntoBricks User Guide</a></li>
+      <li>Next: <a href="api.html" title="next chapter">OntoBricks External REST API</a></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="registry-import-export-cli">
+<h1>Registry Import / Export (CLI)<a class="headerlink" href="#registry-import-export-cli" title="Link to this heading">¶</a></h1>
+<p>OntoBricks lets you move a curated subset of a domain registry between
+Databricks environments using a <strong>command-line tool</strong> (<code class="docutils literal notranslate"><span class="pre">scripts/registry_transfer.sh</span></code>).
+There is intentionally <strong>no UI and no HTTP endpoint</strong> for this operation —
+migrations are a deliberate, scripted activity performed by an operator who
+has access to both the source and the target Unity Catalog Volumes.</p>
+<p>Typical use cases:</p>
+<ul class="simple">
+<li><p>Promote a reviewed domain from <code class="docutils literal notranslate"><span class="pre">dev</span></code> → <code class="docutils literal notranslate"><span class="pre">staging</span></code> → <code class="docutils literal notranslate"><span class="pre">prod</span></code>.</p></li>
+<li><p>Archive a snapshot of the registry before a risky change.</p></li>
+<li><p>Seed a brand-new environment with a curated set of domains.</p></li>
+<li><p>Copy a single domain version between teams for collaboration.</p></li>
+</ul>
+<section id="what-the-archive-contains">
+<h2>What the archive contains<a class="headerlink" href="#what-the-archive-contains" title="Link to this heading">¶</a></h2>
+<p>The CLI produces a single <code class="docutils literal notranslate"><span class="pre">.zip</span></code> file that carries the UC-Volume files
+needed to reproduce a domain in another environment:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">manifest</span><span class="o">.</span><span class="n">json</span>
+<span class="n">domains</span><span class="o">/&lt;</span><span class="n">folder</span><span class="o">&gt;/.</span><span class="n">domain_permissions</span><span class="o">.</span><span class="n">json</span>        <span class="p">(</span><span class="n">optional</span><span class="p">,</span> <span class="k">if</span> <span class="o">--</span><span class="n">include</span><span class="o">-</span><span class="n">permissions</span><span class="p">)</span>
+<span class="n">domains</span><span class="o">/&lt;</span><span class="n">folder</span><span class="o">&gt;/</span><span class="n">V1</span><span class="o">/</span><span class="n">V1</span><span class="o">.</span><span class="n">json</span>
+<span class="n">domains</span><span class="o">/&lt;</span><span class="n">folder</span><span class="o">&gt;/</span><span class="n">V1</span><span class="o">/</span><span class="n">documents</span><span class="o">/&lt;</span><span class="n">files</span><span class="o">...&gt;</span>
+<span class="n">domains</span><span class="o">/&lt;</span><span class="n">folder</span><span class="o">&gt;/</span><span class="n">V2</span><span class="o">/</span><span class="n">V2</span><span class="o">.</span><span class="n">json</span>
+<span class="o">...</span>
+</pre></div>
+</div>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Included?</p></th>
+<th class="head"><p>Reason</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">V{n}.json</span></code></p></td>
+<td><p>Yes</p></td>
+<td><p>Ontology, mappings, design layout, metadata</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">V{n}/documents/**</span></code></p></td>
+<td><p>Yes</p></td>
+<td><p>User-uploaded files attached to the version</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">.domain_permissions.json</span></code></p></td>
+<td><p>Optional (<code class="docutils literal notranslate"><span class="pre">--include-permissions</span></code>)</p></td>
+<td><p>Role assignments for the domain</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">manifest.json</span></code></p></td>
+<td><p>Yes</p></td>
+<td><p>Schema version, source env, per-domain/version inventory</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">*.lbug.tar.gz</span></code></p></td>
+<td><p><strong>Never</strong></p></td>
+<td><p>Rebuilt in the target by Digital Twin sync</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">.schedule_history.json</span></code></p></td>
+<td><p><strong>Never</strong></p></td>
+<td><p>Per-env scheduling history, not portable</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">.registry</span></code> marker, <code class="docutils literal notranslate"><span class="pre">.global_config.json</span></code>, cached files</p></td>
+<td><p><strong>Never</strong></p></td>
+<td><p>Env-specific</p></td>
+</tr>
+</tbody>
+</table>
+<p>The resulting archive is named:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ontobricks</span><span class="o">-</span><span class="n">registry</span><span class="o">-&lt;</span><span class="n">source_catalog</span><span class="o">&gt;.&lt;</span><span class="n">source_schema</span><span class="o">&gt;.&lt;</span><span class="n">source_volume</span><span class="o">&gt;-&lt;</span><span class="n">YYYYMMDD</span><span class="o">-</span><span class="n">HHMMSS</span><span class="o">&gt;.</span><span class="n">zip</span>
+</pre></div>
+</div>
+</section>
+<section id="authentication">
+<h2>Authentication<a class="headerlink" href="#authentication" title="Link to this heading">¶</a></h2>
+<p>The shell wrapper honours the standard Databricks SDK environment variables
+and profile selection:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_HOST</span></code> / <code class="docutils literal notranslate"><span class="pre">DATABRICKS_TOKEN</span></code></p></td>
+<td><p>Direct PAT authentication</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DATABRICKS_CONFIG_PROFILE</span></code></p></td>
+<td><p>Pick a profile from <code class="docutils literal notranslate"><span class="pre">~/.databrickscfg</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_PROFILE</span></code></p></td>
+<td><p>Convenience alias — the wrapper exports it as <code class="docutils literal notranslate"><span class="pre">DATABRICKS_CONFIG_PROFILE</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>The registry catalog / schema / volume come from <code class="docutils literal notranslate"><span class="pre">global_config.json</span></code> (the
+same file the web app uses). Override any of them on the command line with
+<code class="docutils literal notranslate"><span class="pre">--catalog</span></code>, <code class="docutils literal notranslate"><span class="pre">--schema</span></code>, <code class="docutils literal notranslate"><span class="pre">--volume</span></code>.</p>
+</section>
+<section id="script-layout">
+<h2>Script layout<a class="headerlink" href="#script-layout" title="Link to this heading">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">scripts</span><span class="o">/</span><span class="n">registry_transfer</span><span class="o">.</span><span class="n">sh</span>       <span class="c1"># thin wrapper — activates .venv, forwards args</span>
+<span class="n">src</span><span class="o">/</span><span class="n">cli</span><span class="o">/</span><span class="n">registry_transfer</span><span class="o">.</span><span class="n">py</span>       <span class="c1"># argparse entrypoint (actual CLI)</span>
+<span class="n">src</span><span class="o">/</span><span class="n">back</span><span class="o">/</span><span class="n">objects</span><span class="o">/</span><span class="n">registry</span><span class="o">/</span><span class="n">transfer</span><span class="o">.</span><span class="n">py</span>  <span class="c1"># pack/unpack library used by the CLI</span>
+</pre></div>
+</div>
+<p>Run <code class="docutils literal notranslate"><span class="pre">scripts/registry_transfer.sh</span> <span class="pre">--help</span></code> at any time to see the available
+subcommands and flags.</p>
+</section>
+<section id="subcommands">
+<h2>Subcommands<a class="headerlink" href="#subcommands" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Subcommand</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">inventory</span></code></p></td>
+<td><p>List domains and their versions in the configured registry</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">export</span></code></p></td>
+<td><p>Pack selected domains/versions into a local <code class="docutils literal notranslate"><span class="pre">.zip</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">import-preview</span></code></p></td>
+<td><p>Read a <code class="docutils literal notranslate"><span class="pre">.zip</span></code> and show what would happen, without writing anything</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">import-commit</span></code></p></td>
+<td><p>Apply a <code class="docutils literal notranslate"><span class="pre">.zip</span></code> into the target registry</p></td>
+</tr>
+</tbody>
+</table>
+<p>Every subcommand supports <code class="docutils literal notranslate"><span class="pre">--help</span></code>, <code class="docutils literal notranslate"><span class="pre">--verbose</span></code>, <code class="docutils literal notranslate"><span class="pre">--json</span></code>, and the config
+overrides <code class="docutils literal notranslate"><span class="pre">--catalog</span></code>, <code class="docutils literal notranslate"><span class="pre">--schema</span></code>, <code class="docutils literal notranslate"><span class="pre">--volume</span></code>.</p>
+<section id="exit-codes">
+<h3>Exit codes<a class="headerlink" href="#exit-codes" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Code</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">0</span></code></p></td>
+<td><p>Success</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">2</span></code></p></td>
+<td><p>Validation error (bad CLI args, unknown domain, invalid manifest)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">3</span></code></p></td>
+<td><p>Conflict detected on <code class="docutils literal notranslate"><span class="pre">import-preview</span></code> / <code class="docutils literal notranslate"><span class="pre">import-commit</span></code> without a resolution mode</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">4</span></code></p></td>
+<td><p>I/O error (UC Volume read/write failed)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<p>All examples below assume you have two Databricks profiles configured in
+<code class="docutils literal notranslate"><span class="pre">~/.databrickscfg</span></code> named <code class="docutils literal notranslate"><span class="pre">src</span></code> (source environment) and <code class="docutils literal notranslate"><span class="pre">dst</span></code> (target).</p>
+<section id="list-what-is-available-in-the-source-registry">
+<h3>1. List what is available in the source registry<a class="headerlink" href="#list-what-is-available-in-the-source-registry" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">ONTOBRICKS_PROFILE</span><span class="o">=</span>src<span class="w"> </span>scripts/registry_transfer.sh<span class="w"> </span>inventory
+</pre></div>
+</div>
+<p>Example output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Catalog</span><span class="o">/</span><span class="n">Schema</span><span class="o">/</span><span class="n">Volume</span><span class="p">:</span> <span class="n">main</span><span class="o">.</span><span class="n">ontobricks</span><span class="o">.</span><span class="n">registry</span>
+<span class="n">Source</span> <span class="n">host</span><span class="p">:</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">src</span><span class="o">-</span><span class="n">workspace</span><span class="o">.</span><span class="n">cloud</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">com</span>
+
+<span class="n">Domain</span>               <span class="n">Versions</span>     <span class="n">Documents</span>
+<span class="o">--------------------</span> <span class="o">------------</span> <span class="o">---------</span>
+<span class="n">CustomerAnalytics</span>    <span class="n">V1</span><span class="p">,</span> <span class="n">V2</span><span class="p">,</span> <span class="n">V3</span>   <span class="mi">12</span>
+<span class="n">EnergyOps</span>            <span class="n">V1</span>           <span class="mi">3</span>
+<span class="n">Finance360</span>           <span class="n">V1</span><span class="p">,</span> <span class="n">V2</span>       <span class="mi">0</span>
+</pre></div>
+</div>
+<p>Add <code class="docutils literal notranslate"><span class="pre">--json</span></code> to get a machine-readable payload suitable for piping into
+<code class="docutils literal notranslate"><span class="pre">jq</span></code> or another script.</p>
+</section>
+<section id="export-every-domain-every-version">
+<h3>2. Export every domain, every version<a class="headerlink" href="#export-every-domain-every-version" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">ONTOBRICKS_PROFILE</span><span class="o">=</span>src<span class="w"> </span>scripts/registry_transfer.sh<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--all<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--include-permissions<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output<span class="w"> </span>/tmp/ontobricks-full.zip
+</pre></div>
+</div>
+</section>
+<section id="export-a-specific-domain-all-versions">
+<h3>3. Export a specific domain, all versions<a class="headerlink" href="#export-a-specific-domain-all-versions" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">ONTOBRICKS_PROFILE</span><span class="o">=</span>src<span class="w"> </span>scripts/registry_transfer.sh<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--domain<span class="w"> </span>CustomerAnalytics:all<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output<span class="w"> </span>/tmp/customer-analytics.zip
+</pre></div>
+</div>
+</section>
+<section id="export-a-specific-domain-only-selected-versions">
+<h3>4. Export a specific domain, only selected versions<a class="headerlink" href="#export-a-specific-domain-only-selected-versions" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">ONTOBRICKS_PROFILE</span><span class="o">=</span>src<span class="w"> </span>scripts/registry_transfer.sh<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--domain<span class="w"> </span>CustomerAnalytics:V2,V3<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--domain<span class="w"> </span>EnergyOps:V1<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output<span class="w"> </span>/tmp/promotion-bundle.zip
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">--domain</span></code> can be passed multiple times. For each one the syntax is
+<code class="docutils literal notranslate"><span class="pre">NAME:all</span></code> or <code class="docutils literal notranslate"><span class="pre">NAME:V1,V2,...</span></code>.</p>
+</section>
+<section id="preview-an-import-in-the-target-environment">
+<h3>5. Preview an import in the target environment<a class="headerlink" href="#preview-an-import-in-the-target-environment" title="Link to this heading">¶</a></h3>
+<p>Always preview before committing — this shows the manifest, the per-version
+status (<code class="docutils literal notranslate"><span class="pre">new</span></code> vs <code class="docutils literal notranslate"><span class="pre">conflict</span></code>), and the list of documents that would be
+written. Nothing is written yet.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">ONTOBRICKS_PROFILE</span><span class="o">=</span>dst<span class="w"> </span>scripts/registry_transfer.sh<span class="w"> </span>import-preview<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--input<span class="w"> </span>/tmp/promotion-bundle.zip
+</pre></div>
+</div>
+<p>Example output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Source</span><span class="p">:</span>   <span class="n">main</span><span class="o">.</span><span class="n">ontobricks</span><span class="o">.</span><span class="n">registry</span> <span class="o">@</span> <span class="n">src</span><span class="o">-</span><span class="n">workspace</span><span class="o">.</span><span class="n">cloud</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">com</span>
+<span class="n">Target</span><span class="p">:</span>   <span class="n">main</span><span class="o">.</span><span class="n">ontobricks</span><span class="o">.</span><span class="n">registry</span> <span class="o">@</span> <span class="n">dst</span><span class="o">-</span><span class="n">workspace</span><span class="o">.</span><span class="n">cloud</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">com</span>
+<span class="n">Created</span><span class="p">:</span>  <span class="mi">2026</span><span class="o">-</span><span class="mi">04</span><span class="o">-</span><span class="mi">22</span><span class="n">T08</span><span class="p">:</span><span class="mi">14</span><span class="p">:</span><span class="mi">03</span><span class="n">Z</span> <span class="n">by</span> <span class="n">alice</span><span class="nd">@example</span><span class="o">.</span><span class="n">com</span>
+<span class="n">Schema</span><span class="p">:</span>   <span class="n">registry</span><span class="o">-</span><span class="n">export</span><span class="o">/</span><span class="n">v1</span>
+
+<span class="n">Domain</span>               <span class="n">Version</span>  <span class="n">Status</span>     <span class="n">Documents</span>
+<span class="o">--------------------</span> <span class="o">--------</span> <span class="o">----------</span> <span class="o">---------</span>
+<span class="n">CustomerAnalytics</span>    <span class="n">V2</span>       <span class="n">conflict</span>   <span class="mi">7</span>
+<span class="n">CustomerAnalytics</span>    <span class="n">V3</span>       <span class="n">new</span>        <span class="mi">5</span>
+<span class="n">EnergyOps</span>            <span class="n">V1</span>       <span class="n">new</span>        <span class="mi">3</span>
+
+<span class="mi">3</span> <span class="n">versions</span> <span class="n">will</span> <span class="n">be</span> <span class="n">written</span> <span class="p">(</span><span class="mi">2</span> <span class="n">new</span><span class="p">,</span> <span class="mi">1</span> <span class="n">conflict</span><span class="p">)</span><span class="o">.</span> <span class="n">Re</span><span class="o">-</span><span class="n">run</span> <span class="k">with</span> <span class="o">--</span><span class="n">conflict</span> <span class="n">to</span> <span class="n">commit</span><span class="o">.</span>
+</pre></div>
+</div>
+</section>
+<section id="commit-an-import-overwrite-on-conflict">
+<h3>6. Commit an import — overwrite on conflict<a class="headerlink" href="#commit-an-import-overwrite-on-conflict" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">ONTOBRICKS_PROFILE</span><span class="o">=</span>dst<span class="w"> </span>scripts/registry_transfer.sh<span class="w"> </span>import-commit<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--input<span class="w"> </span>/tmp/promotion-bundle.zip<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--conflict<span class="w"> </span>overwrite<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--include-permissions<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--yes
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">--yes</span></code> flag skips the interactive confirmation prompt (useful in CI).</p>
+</section>
+<section id="commit-an-import-keep-existing-versions-rename-incoming-ones">
+<h3>7. Commit an import — keep existing versions, rename incoming ones<a class="headerlink" href="#commit-an-import-keep-existing-versions-rename-incoming-ones" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">ONTOBRICKS_PROFILE</span><span class="o">=</span>dst<span class="w"> </span>scripts/registry_transfer.sh<span class="w"> </span>import-commit<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--input<span class="w"> </span>/tmp/promotion-bundle.zip<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--conflict<span class="w"> </span>rename<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--yes
+</pre></div>
+</div>
+<p>With <code class="docutils literal notranslate"><span class="pre">--conflict</span> <span class="pre">rename</span></code>, an incoming <code class="docutils literal notranslate"><span class="pre">V2</span></code> that collides with an existing
+target <code class="docutils literal notranslate"><span class="pre">V2</span></code> is written as <code class="docutils literal notranslate"><span class="pre">V2_imported_&lt;epoch&gt;</span></code> so the source version is
+still traceable while the target’s original version is untouched.</p>
+</section>
+<section id="commit-an-import-skip-anything-that-already-exists">
+<h3>8. Commit an import — skip anything that already exists<a class="headerlink" href="#commit-an-import-skip-anything-that-already-exists" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">ONTOBRICKS_PROFILE</span><span class="o">=</span>dst<span class="w"> </span>scripts/registry_transfer.sh<span class="w"> </span>import-commit<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--input<span class="w"> </span>/tmp/promotion-bundle.zip<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--conflict<span class="w"> </span>skip<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--yes
+</pre></div>
+</div>
+</section>
+</section>
+<section id="conflict-modes">
+<h2>Conflict modes<a class="headerlink" href="#conflict-modes" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Mode</p></th>
+<th class="head"><p>Behavior</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">skip</span></code></p></td>
+<td><p>If the target already has <code class="docutils literal notranslate"><span class="pre">domain/V{n}</span></code>, leave it alone and skip the incoming copy</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">overwrite</span></code></p></td>
+<td><p>Replace the target <code class="docutils literal notranslate"><span class="pre">domain/V{n}</span></code> (and its <code class="docutils literal notranslate"><span class="pre">documents/</span></code>) with the incoming copy</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">rename</span></code></p></td>
+<td><p>Write the incoming version as <code class="docutils literal notranslate"><span class="pre">V{n}_imported_&lt;epoch&gt;</span></code>, preserving the target’s original</p></td>
+</tr>
+</tbody>
+</table>
+<p>If you run <code class="docutils literal notranslate"><span class="pre">import-commit</span></code> without <code class="docutils literal notranslate"><span class="pre">--conflict</span></code> and the archive has any
+conflicts, the CLI exits with code <code class="docutils literal notranslate"><span class="pre">3</span></code> and prints the conflict list instead
+of writing anything. This is deliberate — there is no implicit default.</p>
+</section>
+<section id="end-to-end-promotion-workflow">
+<h2>End-to-end promotion workflow<a class="headerlink" href="#end-to-end-promotion-workflow" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. Inventory source</span>
+<span class="nv">ONTOBRICKS_PROFILE</span><span class="o">=</span>src<span class="w"> </span>scripts/registry_transfer.sh<span class="w"> </span>inventory<span class="w"> </span>--json<span class="w"> </span>&gt;<span class="w"> </span>/tmp/src-inventory.json
+
+<span class="c1"># 2. Export what you want to promote</span>
+<span class="nv">ONTOBRICKS_PROFILE</span><span class="o">=</span>src<span class="w"> </span>scripts/registry_transfer.sh<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--domain<span class="w"> </span>CustomerAnalytics:V3<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--domain<span class="w"> </span>Finance360:V2<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output<span class="w"> </span>/tmp/promotion-<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span>.zip
+
+<span class="c1"># 3. Move the archive to a machine that can reach the target env</span>
+scp<span class="w"> </span>/tmp/promotion-*.zip<span class="w"> </span>user@target-host:/tmp/
+
+<span class="c1"># 4. Preview in the target env</span>
+<span class="nv">ONTOBRICKS_PROFILE</span><span class="o">=</span>dst<span class="w"> </span>scripts/registry_transfer.sh<span class="w"> </span>import-preview<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--input<span class="w"> </span>/tmp/promotion-20260422.zip
+
+<span class="c1"># 5. Commit once the preview looks right</span>
+<span class="nv">ONTOBRICKS_PROFILE</span><span class="o">=</span>dst<span class="w"> </span>scripts/registry_transfer.sh<span class="w"> </span>import-commit<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--input<span class="w"> </span>/tmp/promotion-20260422.zip<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--conflict<span class="w"> </span>rename<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--yes
+
+<span class="c1"># 6. On the target env, rebuild the Digital Twin for each imported domain</span>
+<span class="c1">#    so the .lbug.tar.gz snapshots (which are NOT transferred) get regenerated.</span>
+</pre></div>
+</div>
+</section>
+<section id="things-to-watch-out-for">
+<h2>Things to watch out for<a class="headerlink" href="#things-to-watch-out-for" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>LadybugDB snapshots are not transferred.</strong> The embedded graph archive
+(<code class="docutils literal notranslate"><span class="pre">*.lbug.tar.gz</span></code>) is environment-specific. After an import, open each
+affected domain and re-run <strong>Digital Twin → Synchronize</strong> to rebuild it.</p></li>
+<li><p><strong>The triple-store Delta view is not transferred either.</strong> It is
+re-created on the next synchronize in the target env, using the target’s
+SQL Warehouse.</p></li>
+<li><p><strong>The archive carries no secrets.</strong> Databricks host, PAT, and query
+results are never serialized. Authentication for both sides is handled
+via your Databricks CLI profiles.</p></li>
+<li><p><strong>Schema evolution.</strong> <code class="docutils literal notranslate"><span class="pre">manifest.json</span></code> has a <code class="docutils literal notranslate"><span class="pre">schema_version</span></code> field. If
+you try to import an archive produced by a newer OntoBricks release than
+your target, the CLI refuses to write anything and exits with code <code class="docutils literal notranslate"><span class="pre">2</span></code>.</p></li>
+<li><p><strong>Large document payloads.</strong> The zip is built in-memory. Registries with
+hundreds of MB of attachments may need more RAM on the host running the
+CLI.</p></li>
+</ul>
+</section>
+<section id="comparison-with-the-registry-web-ui">
+<h2>Comparison with the Registry web UI<a class="headerlink" href="#comparison-with-the-registry-web-ui" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Capability</p></th>
+<th class="head"><p>Web UI (Settings → Registry)</p></th>
+<th class="head"><p>CLI</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Initialize a fresh registry</p></td>
+<td><p>Yes</p></td>
+<td><p>No</p></td>
+</tr>
+<tr class="row-odd"><td><p>Grant domain permissions</p></td>
+<td><p>Yes</p></td>
+<td><p>No</p></td>
+</tr>
+<tr class="row-even"><td><p>Browse &amp; load domains</p></td>
+<td><p>Yes</p></td>
+<td><p>No</p></td>
+</tr>
+<tr class="row-odd"><td><p>Export / import between envs</p></td>
+<td><p>No</p></td>
+<td><p><strong>Yes</strong></p></td>
+</tr>
+</tbody>
+</table>
+<p>The web UI and the CLI complement each other — the UI is for day-to-day
+domain authoring, the CLI is for environment-to-environment promotion.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/guides/import-export.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

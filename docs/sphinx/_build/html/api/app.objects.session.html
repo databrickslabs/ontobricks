@@ -58,6 +58,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
@@ -613,13 +614,17 @@ rather than on every request.</p>
 <dl class="py property">
 <dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.triplestore">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">triplestore</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.triplestore" title="Link to this definition">¶</a></dt>
-<dd><p>Get the triplestore configuration node (stats, delta, ladybug).</p>
+<dd><p>Get the triplestore configuration node (stats, source_versions).</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.delta">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">delta</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.delta" title="Link to this definition">¶</a></dt>
-<dd><p>Get Delta triplestore settings (catalog, schema, table_name).</p>
+<dd><p>Derived Delta triplestore location (catalog, schema, table_name).</p>
+<p>The Delta VIEW always lives in the same Unity Catalog catalog.schema
+as the domain registry, and the view name is computed from the
+domain name and current version.  Returns a fresh dict on every
+access; mutations are not persisted.</p>
 </dd></dl>
 
 <dl class="py property">

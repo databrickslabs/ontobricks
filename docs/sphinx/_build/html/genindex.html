@@ -55,6 +55,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/api.html">OntoBricks External REST API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development</a></li>
@@ -194,13 +195,7 @@
 </li>
       <li><a href="api/app.objects.mapping.html#back.objects.mapping.Mapping.Mapping.add_or_update_entity_mapping">add_or_update_entity_mapping() (back.objects.mapping.Mapping.Mapping method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.add_or_update_entry">add_or_update_entry() (back.objects.registry.permissions.PermissionService method)</a>
-</li>
       <li><a href="api/app.objects.mapping.html#back.objects.mapping.Mapping.Mapping.add_or_update_relationship_mapping">add_or_update_relationship_mapping() (back.objects.mapping.Mapping.Mapping method)</a>
-</li>
-      <li><a href="api/app.frontend.html#api.routers.internal.settings.add_permission">add_permission() (in module api.routers.internal.settings)</a>
-</li>
-      <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.add_permission_result">add_permission_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
 </li>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.add_property">add_property() (back.objects.ontology.Ontology.Ontology method)</a>
 
@@ -357,8 +352,6 @@
         <li><a href="api/agents.html#module-agents.tools.metadata">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     agents.tools.ontology
 
@@ -366,6 +359,8 @@
         <li><a href="api/agents.html#module-agents.tools.ontology">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     agents.tools.sql
 
@@ -946,8 +941,6 @@
         <li><a href="api/app.core.triplestore.html#module-back.core.triplestore.constants">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     back.core.triplestore.delta.DeltaTripleStore
 
@@ -955,6 +948,8 @@
         <li><a href="api/app.core.triplestore.html#module-back.core.triplestore.delta.DeltaTripleStore">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     back.core.triplestore.IncrementalBuildService
 
@@ -1273,6 +1268,8 @@
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine.build_sql">build_sql() (back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine method)</a>
 </li>
+      <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.build_teams_matrix_result">build_teams_matrix_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
+</li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.DecisionTableEngine.DecisionTableEngine.build_violation_cypher">build_violation_cypher() (back.core.reasoning.DecisionTableEngine.DecisionTableEngine method)</a>
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.SWRLCypherTranslator.SWRLCypherTranslator.build_violation_query">build_violation_query() (back.core.reasoning.SWRLCypherTranslator.SWRLCypherTranslator method)</a>
@@ -1405,6 +1402,8 @@
 </li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.clear_uc_metadata">clear_uc_metadata() (back.objects.session.DomainSession.DomainSession method)</a>
 </li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.clear_user_groups_cache">clear_user_groups_cache() (back.objects.registry.permissions.PermissionService method)</a>
+</li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.version_status.clear_version_status_cache">clear_version_status_cache() (in module back.objects.domain.version_status)</a>
 </li>
       <li><a href="api/agents.html#agents.tools.context.ToolContext.client">client (agents.tools.context.ToolContext attribute)</a>
@@ -1429,10 +1428,10 @@
 </li>
       <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.complete_dq_task">complete_dq_task() (back.objects.digitaltwin.DigitalTwin.DigitalTwin static method)</a>
 </li>
-      <li><a href="api/app.core.html#back.core.task_manager.TaskManager.complete_task">complete_task() (back.core.task_manager.TaskManager method)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/app.core.html#back.core.task_manager.TaskManager.complete_task">complete_task() (back.core.task_manager.TaskManager method)</a>
+</li>
       <li><a href="api/app.core.html#back.core.task_manager.TaskStatus.COMPLETED">COMPLETED (back.core.task_manager.TaskStatus attribute)</a>
 </li>
       <li><a href="api/app.core.html#back.core.task_manager.Task.completed_at">completed_at (back.core.task_manager.Task attribute)</a>
@@ -1677,10 +1676,6 @@
         <li><a href="api/app.frontend.html#api.routers.internal.settings.delete_ladybugdb_file">(in module api.routers.internal.settings)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.frontend.html#api.routers.internal.settings.delete_permission">delete_permission() (in module api.routers.internal.settings)</a>
-</li>
-      <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.delete_permission_result">delete_permission_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
-</li>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.delete_property">delete_property() (in module api.routers.internal.ontology)</a>
 </li>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.delete_property_by_uri">delete_property_by_uri() (back.objects.ontology.Ontology.Ontology method)</a>
@@ -1723,10 +1718,10 @@
         <li><a href="api/app.core.triplestore.html#back.core.triplestore.TripleStoreBackend.TripleStoreBackend.delete_triples">(back.core.triplestore.TripleStoreBackend.TripleStoreBackend method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.delete_version">delete_version() (back.objects.registry.service.RegistryService method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.delta">delta (back.objects.session.DomainSession.DomainSession property)</a>
 </li>
       <li><a href="api/app.core.triplestore.html#back.core.triplestore.delta.DeltaTripleStore.DeltaTripleStore">DeltaTripleStore (class in back.core.triplestore.delta.DeltaTripleStore)</a>
@@ -2901,6 +2896,8 @@
 </li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.DatabricksClient.DatabricksClient.is_app_mode">is_app_mode (back.core.databricks.DatabricksClient.DatabricksClient property)</a>
 </li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.is_app_principals_forbidden">is_app_principals_forbidden() (back.objects.registry.permissions.PermissionService method)</a>
+</li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.is_builtin">is_builtin() (back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry class method)</a>
 </li>
       <li><a href="api/app.core.html#back.core.logging.LogManager.is_configured">is_configured (back.core.logging.LogManager property)</a>
@@ -2971,6 +2968,12 @@
 </li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugGraphStore.LadybugGraphStore">LadybugGraphStore (class in back.core.graphdb.ladybugdb.LadybugGraphStore)</a>
 </li>
+      <li><a href="api/app.core.databricks.html#back.core.databricks.DatabricksClient.DatabricksClient.last_app_permissions_status">last_app_permissions_status (back.core.databricks.DatabricksClient.DatabricksClient property)</a>
+
+      <ul>
+        <li><a href="api/app.core.databricks.html#back.core.databricks.WorkspaceService.WorkspaceService.last_app_permissions_status">(back.core.databricks.WorkspaceService.WorkspaceService property)</a>
+</li>
+      </ul></li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.last_build">last_build (back.objects.session.DomainSession.DomainSession property)</a>
 </li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.StatusResponse.last_modified">last_modified (api.routers.digitaltwin.StatusResponse attribute)</a>
@@ -2989,6 +2992,8 @@
       </ul></li>
       <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_all_bridges">list_all_bridges() (back.objects.registry.service.RegistryService method)</a>
 </li>
+      <li><a href="api/app.frontend.html#api.routers.internal.settings.list_app_permissions">list_app_permissions() (in module api.routers.internal.settings)</a>
+</li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.DatabricksClient.DatabricksClient.list_app_principals">list_app_principals() (back.core.databricks.DatabricksClient.DatabricksClient method)</a>
 
       <ul>
@@ -2997,6 +3002,8 @@
         <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.list_app_principals">(back.objects.registry.permissions.PermissionService method)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.list_app_principals_result">list_app_principals_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
+</li>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.list_axioms">list_axioms() (in module api.routers.internal.ontology)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.list_bridge_domain_classes">list_bridge_domain_classes() (in module api.routers.internal.ontology)</a>
@@ -3039,8 +3046,6 @@
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.Domain.Domain.list_domains_result">list_domains_result() (back.objects.domain.Domain.Domain static method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.list_entries">list_entries() (back.objects.registry.permissions.PermissionService method)</a>
-</li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.list_files">list_files() (back.core.databricks.VolumeFileService.VolumeFileService method)</a>
 </li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.WorkspaceService.WorkspaceService.list_groups">list_groups() (back.core.databricks.WorkspaceService.WorkspaceService method)</a>
@@ -3057,15 +3062,11 @@
         <li><a href="api/app.frontend.html#api.routers.internal.settings.list_ladybugdb_files">(in module api.routers.internal.settings)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_mcp_domains">list_mcp_domains() (back.objects.registry.service.RegistryService method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.list_owl_files">list_owl_files() (in module api.routers.internal.ontology)</a>
-</li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/app.frontend.html#api.routers.internal.settings.list_permissions">list_permissions() (in module api.routers.internal.settings)</a>
-</li>
-      <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.list_permissions_result">list_permissions_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.list_principals">list_principals() (in module api.routers.internal.settings)</a>
 </li>
@@ -3144,8 +3145,6 @@
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.load_ontology">load_ontology() (in module api.routers.internal.ontology)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.load_owl_file">load_owl_file() (in module api.routers.internal.ontology)</a>
-</li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.load_permissions">load_permissions() (back.objects.registry.permissions.PermissionService method)</a>
 </li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.MetadataService.MetadataService.load_schema_metadata">load_schema_metadata() (back.core.databricks.MetadataService.MetadataService method)</a>
 </li>
@@ -3768,8 +3767,6 @@
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.permissions_diag">permissions_diag() (in module api.routers.internal.settings)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.permissions_file_path">permissions_file_path() (back.objects.registry.service.RegistryService method)</a>
-</li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.permissions_me">permissions_me() (in module api.routers.internal.settings)</a>
 </li>
   </ul></td>
@@ -3941,8 +3938,6 @@
 </li>
       </ul></li>
       <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.remove_domain_entry">remove_domain_entry() (back.objects.registry.permissions.PermissionService method)</a>
-</li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.remove_entry">remove_entry() (back.objects.registry.permissions.PermissionService method)</a>
 </li>
       <li><a href="api/app.objects.registry.html#back.objects.registry.scheduler.BuildScheduler.remove_schedule">remove_schedule() (back.objects.registry.scheduler.BuildScheduler method)</a>
 </li>
@@ -4198,6 +4193,8 @@
       </ul></li>
       <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.save_domain_permissions">save_domain_permissions() (back.objects.registry.permissions.PermissionService method)</a>
 </li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.save_domain_permissions_batch">save_domain_permissions_batch() (back.objects.registry.permissions.PermissionService method)</a>
+</li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.Domain.Domain.save_domain_to_uc">save_domain_to_uc() (back.objects.domain.Domain.Domain method)</a>
 
       <ul>
@@ -4234,8 +4231,6 @@
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.save_ontology_to_uc">save_ontology_to_uc() (in module api.routers.internal.ontology)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.save_permissions">save_permissions() (back.objects.registry.permissions.PermissionService method)</a>
-</li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.save_registry">save_registry() (in module api.routers.internal.settings)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.save_registry_cache_ttl">save_registry_cache_ttl() (in module api.routers.internal.settings)</a>
@@ -4255,6 +4250,8 @@
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.save_shape">save_shape() (in module api.routers.internal.ontology)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.save_swrl_rule">save_swrl_rule() (in module api.routers.internal.ontology)</a>
+</li>
+      <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.save_teams_batch_result">save_teams_batch_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.scheduler_status">scheduler_status() (in module api.routers.internal.settings)</a>
 </li>
@@ -4686,6 +4683,10 @@
 </li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.InferenceRequest.tbox">tbox (api.routers.digitaltwin.InferenceRequest attribute)</a>
 </li>
+      <li><a href="api/app.frontend.html#api.routers.internal.settings.teams_matrix">teams_matrix() (in module api.routers.internal.settings)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.settings.teams_save_batch">teams_save_batch() (in module api.routers.internal.settings)</a>
+</li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.DatabricksClient.DatabricksClient.test_connection">test_connection() (back.core.databricks.DatabricksClient.DatabricksClient method)</a>
 
       <ul>
@@ -4746,10 +4747,10 @@
 </li>
       <li><a href="api/agents.html#agents.tools.documents.tool_get_documents_context">tool_get_documents_context() (in module agents.tools.documents)</a>
 </li>
-      <li><a href="api/agents.html#agents.tools.metadata.tool_get_metadata">tool_get_metadata() (in module agents.tools.metadata)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/agents.html#agents.tools.metadata.tool_get_metadata">tool_get_metadata() (in module agents.tools.metadata)</a>
+</li>
       <li><a href="api/agents.html#agents.tools.ontology.tool_get_ontology">tool_get_ontology() (in module agents.tools.ontology)</a>
 </li>
       <li><a href="api/agents.html#agents.agent_ontology_assistant.tools.tool_get_ontology_classes">tool_get_ontology_classes() (in module agents.agent_ontology_assistant.tools)</a>

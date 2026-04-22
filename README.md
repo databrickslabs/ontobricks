@@ -138,6 +138,15 @@ The Ontology Model view includes a floating AI Assistant (bottom-right of the ca
 
 OntoBricks exposes the knowledge graph to LLM agents via the [Model Context Protocol](https://modelcontextprotocol.io/). Deploy the companion `mcp-ontobricks` app and connect from Cursor, Claude Desktop, or the Databricks Playground.
 
+### Registry Import / Export (CLI)
+
+Promote domains between Databricks environments with the
+`scripts/registry_transfer.sh` command-line tool — export a curated subset
+of domains/versions from a source registry into a `.zip`, then preview and
+commit it into the target registry. No UI, no HTTP endpoint. See
+[Registry Import / Export (CLI)](docs/import-export.md) for the full
+reference and examples.
+
 ### Documentation
 
 Full documentation is available in [`docs/`](docs/README.md). For a comprehensive feature list and architecture details, see [INFO.md](docs/INFO.md).
