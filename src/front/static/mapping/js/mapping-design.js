@@ -1417,7 +1417,8 @@ async function runEntityPanelQuery(options = {}) {
             const epLoading = document.getElementById('epMappingLoading');
             if (epLoading) epLoading.style.display = 'none';
             if (statusEl) statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> Error</span>';
-            showNotification('Query failed: ' + result.message, 'error');
+            const reason = [result.message, result.detail].filter(Boolean).join(' — ');
+            showNotification('Query failed: ' + (reason || 'Unknown error'), 'error');
         }
     } catch (error) {
         if (capturedGeneration !== EntityPanelState._generation) return;
@@ -1674,7 +1675,8 @@ async function runRelPanelQuery(options = {}) {
             const rpLoading = document.getElementById('rpMappingLoading');
             if (rpLoading) rpLoading.style.display = 'none';
             if (statusEl) statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> Error</span>';
-            showNotification('Query failed: ' + result.message, 'error');
+            const reason = [result.message, result.detail].filter(Boolean).join(' — ');
+            showNotification('Query failed: ' + (reason || 'Unknown error'), 'error');
         }
     } catch (error) {
         const rpLoading = document.getElementById('rpMappingLoading');

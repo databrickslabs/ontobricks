@@ -446,8 +446,9 @@ document.getElementById('testEntityQueryBtn')?.addEventListener('click', async f
             document.getElementById('entityQueryStatus').innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> Query successful</span>';
             showNotification(`Query returned ${result.row_count} row(s) with ${result.columns.length} column(s)`, 'success', 3000);
         } else {
-            document.getElementById('entityQueryStatus').innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${result.message}</span>`;
-            showNotification('Query failed: ' + result.message, 'error');
+            const reason = [result.message, result.detail].filter(Boolean).join(' — ');
+            document.getElementById('entityQueryStatus').innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${reason || 'Unknown error'}</span>`;
+            showNotification('Query failed: ' + (reason || 'Unknown error'), 'error');
         }
     } catch (error) {
         document.getElementById('entityQueryStatus').innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> Error: ${error.message}</span>`;

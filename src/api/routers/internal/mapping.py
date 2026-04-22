@@ -225,7 +225,14 @@ async def test_sql_query(
     except OntoBricksError:
         raise
     except Exception as e:
-        logger.warning("test_sql_query failed: %s", e, exc_info=True)
+        sql_preview = sql_query.replace("\n", " ").strip()[:500]
+        logger.warning(
+            "test_sql_query failed (warehouse=%s, sql=%r): %s",
+            warehouse_id if "warehouse_id" in locals() else "?",
+            sql_preview,
+            e,
+            exc_info=True,
+        )
         raise InfrastructureError("SQL query test failed", detail=str(e)) from e
 
 
