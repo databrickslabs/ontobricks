@@ -1,0 +1,728 @@
+/* =====================================================
+   Graph Chat — embedded chat panel inside the Digital Twin page.
+
+   Self-contained stylesheet. Do NOT rely on ontology-assistant.css:
+   that file is only loaded on the ontology page. Everything needed
+   for the Graph Chat layout, bubbles, avatars, input bar, thinking
+   indicator and markdown is defined here.
+   ===================================================== */
+
+
+/* ---------------------------------------------------
+   Root panel
+--------------------------------------------------- */
+
+/* Ensure the chat section fills the sidebar content area so the inner
+   flex layout has a bounded height — otherwise the messages area can't
+   scroll and the whole panel grows to fit its content. */
+#chat-section.sidebar-section.active {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+#chat-section .section-header {
+    flex: 0 0 auto;
+}
+
+/* Top-right actions in the chat section header (e.g. Clear chat) */
+.graph-chat-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 0 0 auto;
+    padding-top: 0.1rem;
+}
+.graph-chat-header-actions .btn-outline-danger {
+    border-color: rgba(255, 54, 33, 0.35);
+    color: #B91C1C;
+    background: #ffffff;
+    font-size: 0.78rem;
+    padding: 0.22rem 0.6rem;
+    border-radius: 999px;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.graph-chat-header-actions .btn-outline-danger:hover {
+    background: #FF3621;
+    border-color: #FF3621;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(255, 54, 33, 0.28);
+}
+.graph-chat-header-actions .btn-outline-danger:focus {
+    box-shadow: 0 0 0 2px rgba(255, 54, 33, 0.20);
+}
+.graph-chat-header-actions .btn-outline-danger i.bi {
+    font-size: 0.85rem;
+}
+
+.graph-chat-container {
+    --gc-user-start: #FF3621;
+    --gc-user-end:   #E5341F;
+    --gc-bot-bg:     #ffffff;
+    --gc-bot-border: #e9ecef;
+    --gc-panel-bg:   linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+    --gc-shadow-sm:  0 1px 2px rgba(15, 23, 42, 0.06);
+    --gc-shadow-md:  0 4px 14px rgba(15, 23, 42, 0.08);
+    --gc-radius:     16px;
+
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;                /* crucial: allow inner overflow:auto */
+    border: 1px solid #e4e8ef;
+    border-radius: var(--gc-radius);
+    background: var(--gc-panel-bg);
+    box-shadow: var(--gc-shadow-md);
+    overflow: hidden;
+    position: relative;
+}
+
+.graph-chat-container::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(
+        90deg, #FF3621 0%, #F59E0B 40%, #6366F1 75%, #4ECDC4 100%
+    );
+    z-index: 2;
+    opacity: 0.9;
+}
+
+
+/* ---------------------------------------------------
+   Messages area (flex column, messages stack top→bottom)
+--------------------------------------------------- */
+
+.graph-chat-messages {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 1.25rem 1.25rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    background: transparent;
+    scroll-behavior: smooth;
+}
+
+.graph-chat-messages::-webkit-scrollbar       { width: 8px; }
+.graph-chat-messages::-webkit-scrollbar-track { background: transparent; }
+.graph-chat-messages::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.12);
+    border-radius: 8px;
+}
+.graph-chat-messages::-webkit-scrollbar-thumb:hover {
+    background: rgba(15, 23, 42, 0.22);
+}
+
+
+/* ---------------------------------------------------
+   Welcome screen (shown before first message)
+--------------------------------------------------- */
+
+.graph-chat-messages .assistant-welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem 1rem 1.5rem;
+    color: #475569;
+    flex: 0 0 auto;
+}
+
+.graph-chat-messages .assistant-welcome-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 0.85rem;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: var(--gc-shadow-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.25s ease;
+}
+.graph-chat-messages .assistant-welcome-icon:hover {
+    transform: translateY(-2px) rotate(-3deg);
+}
+.graph-chat-messages .assistant-welcome-icon img {
+    width: 36px;
+    height: 36px;
+}
+
+.graph-chat-messages .assistant-welcome p {
+    max-width: 520px;
+    margin: 0 auto 1rem;
+    font-size: 0.95rem;
+    line-height: 1.55;
+}
+
+.graph-chat-messages .assistant-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+}
+.graph-chat-messages .assistant-suggestion {
+    font-size: 0.78rem;
+    border-radius: 999px;
+    padding: 0.35rem 0.9rem;
+    background: #ffffff;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+    box-shadow: var(--gc-shadow-sm);
+    transition: all 0.18s ease;
+    cursor: pointer;
+}
+.graph-chat-messages .assistant-suggestion:hover {
+    color: #FF3621;
+    border-color: #FF3621;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(255, 54, 33, 0.15);
+    background: #fff;
+}
+
+
+/* ---------------------------------------------------
+   Message rows (avatar + bubble, side by side)
+--------------------------------------------------- */
+
+.graph-chat-messages .assistant-msg {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0.55rem;
+    max-width: 82%;
+    animation: gcFadeIn 0.2s ease-out;
+}
+
+@keyframes gcFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* User messages: align to the right, avatar on the right */
+.graph-chat-messages .assistant-msg.user-msg {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+/* Bot messages: align to the left, avatar on the left */
+.graph-chat-messages .assistant-msg.bot-msg {
+    align-self: flex-start;
+}
+
+
+/* ---------------------------------------------------
+   Avatars
+--------------------------------------------------- */
+
+.graph-chat-messages .assistant-msg-avatar {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    overflow: hidden;
+    box-shadow: var(--gc-shadow-sm);
+}
+.graph-chat-messages .assistant-msg-avatar svg,
+.graph-chat-messages .assistant-msg-avatar img {
+    width: 18px;
+    height: 18px;
+}
+
+.graph-chat-messages .user-msg .assistant-msg-avatar {
+    background: linear-gradient(135deg, var(--gc-user-start), var(--gc-user-end));
+    color: #fff;
+}
+.graph-chat-messages .bot-msg .assistant-msg-avatar {
+    background: #1e293b;
+    padding: 4px;
+}
+
+
+/* ---------------------------------------------------
+   Message bubbles
+--------------------------------------------------- */
+
+.graph-chat-messages .assistant-msg-body {
+    padding: 0.65rem 0.95rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    border-radius: 14px;
+    box-shadow: var(--gc-shadow-sm);
+    word-break: break-word;
+    /* prevent the bubble from stretching to fill the row */
+    display: inline-block;
+    max-width: 100%;
+}
+
+.graph-chat-messages .user-msg .assistant-msg-body {
+    background: linear-gradient(135deg, var(--gc-user-start), var(--gc-user-end));
+    color: #ffffff;
+    border: none;
+    border-bottom-right-radius: 4px;
+    box-shadow: 0 4px 14px rgba(255, 54, 33, 0.22);
+}
+.graph-chat-messages .user-msg .assistant-msg-body a {
+    color: #fff;
+    text-decoration: underline;
+}
+
+.graph-chat-messages .bot-msg .assistant-msg-body {
+    background: var(--gc-bot-bg);
+    color: #0f172a;
+    border: 1px solid var(--gc-bot-border);
+    border-bottom-left-radius: 4px;
+}
+
+.graph-chat-messages .assistant-msg.error-msg .assistant-msg-body {
+    background: #fff5f5;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+
+/* ---------------------------------------------------
+   Thinking indicator (shown while waiting for reply)
+--------------------------------------------------- */
+
+.graph-chat-messages .assistant-thinking {
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.9rem;
+    background: #ffffff;
+    border: 1px solid var(--gc-bot-border);
+    border-radius: 14px;
+    border-bottom-left-radius: 4px;
+    box-shadow: var(--gc-shadow-sm);
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+.graph-chat-messages .assistant-thinking-dots {
+    display: inline-flex;
+    gap: 4px;
+}
+.graph-chat-messages .assistant-thinking-dots span {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #94a3b8;
+    animation: gcBounce 1.4s ease-in-out infinite;
+}
+.graph-chat-messages .assistant-thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.graph-chat-messages .assistant-thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes gcBounce {
+    0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+    40%           { opacity: 1;   transform: scale(1); }
+}
+
+
+/* ---------------------------------------------------
+   Input area (pill-shaped, send button vertically centered)
+--------------------------------------------------- */
+
+.graph-chat-input-area {
+    padding: 0.75rem 1rem 0.85rem;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    flex-shrink: 0;
+}
+
+.graph-chat-input-area .assistant-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.35rem 0.3rem 0.95rem;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    box-shadow: var(--gc-shadow-sm);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.graph-chat-input-area .assistant-input-wrapper:focus-within {
+    border-color: #FF3621;
+    box-shadow: 0 0 0 3px rgba(255, 54, 33, 0.12);
+}
+
+.graph-chat-input-area .assistant-input-wrapper textarea {
+    flex: 1 1 auto;
+    min-height: 24px;
+    max-height: 140px;
+    padding: 0.4rem 0;
+    border: none !important;
+    background: transparent;
+    resize: none;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    outline: none;
+    box-shadow: none !important;
+    color: #0f172a;
+}
+.graph-chat-input-area .assistant-input-wrapper textarea::placeholder {
+    color: #94a3b8;
+}
+.graph-chat-input-area .assistant-input-wrapper textarea:focus {
+    box-shadow: none !important;
+    border: none !important;
+}
+
+/* Send button: circular gradient, vertically centered */
+.graph-chat-input-area #chatSendBtn {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #fff;
+    background: linear-gradient(135deg, var(--gc-user-start), var(--gc-user-end));
+    box-shadow: 0 3px 10px rgba(255, 54, 33, 0.30);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    font-size: 0.95rem;
+    align-self: center;
+}
+.graph-chat-input-area #chatSendBtn:hover:not(:disabled) {
+    transform: translateY(-1px) scale(1.04);
+    box-shadow: 0 6px 16px rgba(255, 54, 33, 0.40);
+    color: #fff;
+}
+.graph-chat-input-area #chatSendBtn:active:not(:disabled) {
+    transform: scale(0.96);
+}
+.graph-chat-input-area #chatSendBtn:disabled {
+    background: #cbd5e1;
+    box-shadow: none;
+    opacity: 0.85;
+    cursor: not-allowed;
+    color: #fff;
+}
+
+/* Hint row below input */
+.graph-chat-input-area .assistant-input-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    padding: 0 0.35rem;
+    font-size: 0.72rem;
+    color: #64748b;
+    flex-wrap: wrap;
+}
+.graph-chat-input-area .assistant-input-hint kbd {
+    font-size: 0.68rem;
+    padding: 0.08rem 0.35rem;
+    border-radius: 4px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    box-shadow: none;
+    font-family: inherit;
+}
+
+.graph-chat-input-area .graph-chat-hint-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* Small "Keep last N turns" selector */
+.graph-chat-input-area .graph-chat-limit {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+    color: #64748b;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    padding: 0.1rem 0.55rem;
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.graph-chat-input-area .graph-chat-limit:hover {
+    border-color: #FF3621;
+    color: #0f172a;
+}
+.graph-chat-input-area .graph-chat-limit i.bi {
+    font-size: 0.7rem;
+    color: #94a3b8;
+}
+.graph-chat-input-area .graph-chat-limit label {
+    margin: 0;
+    font-size: 0.72rem;
+    color: inherit;
+    cursor: default;
+}
+.graph-chat-input-area .graph-chat-limit select {
+    width: auto;
+    min-width: 52px;
+    padding: 0 1.25rem 0 0.35rem;
+    margin: 0;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    height: 1.4rem;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background-color: #ffffff;
+    color: #0f172a;
+    box-shadow: none;
+    cursor: pointer;
+}
+.graph-chat-input-area .graph-chat-limit select:focus {
+    outline: none;
+    border-color: #FF3621;
+    box-shadow: 0 0 0 2px rgba(255, 54, 33, 0.15);
+}
+
+.graph-chat-input-area .assistant-clear-btn {
+    color: #64748b;
+    text-decoration: none;
+    font-size: 0.72rem;
+    padding: 0;
+    white-space: nowrap;
+}
+.graph-chat-input-area .assistant-clear-btn:hover {
+    color: #FF3621;
+    text-decoration: underline;
+}
+
+
+/* ---------------------------------------------------
+   Tool call trace (collapsible under bot bubble)
+--------------------------------------------------- */
+
+.graph-chat-tools {
+    margin-top: 0.55rem;
+    padding-top: 0.4rem;
+    border-top: 1px dashed #e2e8f0;
+    font-size: 0.72rem;
+    color: #64748b;
+}
+
+.graph-chat-tools-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    background: #f1f5f9;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.graph-chat-tools-title:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+.graph-chat-tools.open .graph-chat-tools-title {
+    background: #FEE2E2;
+    color: #991B1B;
+}
+
+.graph-chat-tools-list {
+    list-style: none;
+    margin: 0.4rem 0 0;
+    padding: 0;
+    display: none;
+}
+.graph-chat-tools.open .graph-chat-tools-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+.graph-chat-tools-list li {
+    margin: 0;
+    padding: 0.12rem 0.5rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+.graph-chat-tools-list code {
+    font-size: 0.7rem;
+    padding: 0;
+    background: transparent;
+    color: #0f172a;
+    font-weight: 500;
+}
+
+
+/* ---------------------------------------------------
+   Entity links: jump to the knowledge-graph viewer
+--------------------------------------------------- */
+
+.graph-chat-messages .graph-chat-entity-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.18rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    background: rgba(255, 54, 33, 0.09);
+    color: #B91C1C;
+    font-weight: 500;
+    text-decoration: none;
+    border: 1px solid rgba(255, 54, 33, 0.22);
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    white-space: nowrap;
+    font-size: 0.86rem;
+    line-height: 1.3;
+}
+.graph-chat-messages .graph-chat-entity-link:hover {
+    background: #FF3621;
+    color: #fff;
+    text-decoration: none;
+    box-shadow: 0 2px 8px rgba(255, 54, 33, 0.28);
+}
+.graph-chat-messages .graph-chat-entity-link i.bi {
+    font-size: 0.72rem;
+    opacity: 0.75;
+}
+.graph-chat-messages .graph-chat-entity-link:hover i.bi {
+    opacity: 1;
+}
+
+/* Keep entity links readable when they happen to land inside a user
+   bubble (unlikely but defensive) */
+.graph-chat-messages .user-msg .graph-chat-entity-link {
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.35);
+}
+.graph-chat-messages .user-msg .graph-chat-entity-link:hover {
+    background: #fff;
+    color: #FF3621;
+}
+
+/* Entity links inside tables: don't add rounded pill in cramped cells */
+.graph-chat-messages .bot-msg .assistant-msg-body table .graph-chat-entity-link {
+    padding: 0 0.2rem;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: #B91C1C;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    box-shadow: none;
+}
+.graph-chat-messages .bot-msg .assistant-msg-body table .graph-chat-entity-link:hover {
+    color: #FF3621;
+    background: transparent;
+    box-shadow: none;
+}
+
+
+/* ---------------------------------------------------
+   Markdown content inside bot bubbles
+--------------------------------------------------- */
+
+.graph-chat-messages .bot-msg .assistant-msg-body p             { margin: 0 0 0.45em; }
+.graph-chat-messages .bot-msg .assistant-msg-body p:last-child  { margin-bottom: 0; }
+
+.graph-chat-messages .bot-msg .assistant-msg-body ul,
+.graph-chat-messages .bot-msg .assistant-msg-body ol {
+    margin: 0.35em 0;
+    padding-left: 1.4em;
+}
+.graph-chat-messages .bot-msg .assistant-msg-body li {
+    margin-bottom: 0.15em;
+}
+.graph-chat-messages .bot-msg .assistant-msg-body strong { font-weight: 600; }
+
+.graph-chat-messages .bot-msg .assistant-msg-body code {
+    font-size: 0.82rem;
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    background: rgba(15, 23, 42, 0.06);
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.graph-chat-messages .bot-msg .assistant-msg-body pre {
+    margin: 0.5em 0;
+    padding: 0.6em 0.75em;
+    border-radius: 8px;
+    background: #0f172a;
+    color: #e2e8f0;
+    overflow-x: auto;
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+.graph-chat-messages .bot-msg .assistant-msg-body pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+}
+
+.graph-chat-messages .bot-msg .assistant-msg-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.5em 0;
+    font-size: 0.82rem;
+}
+.graph-chat-messages .bot-msg .assistant-msg-body th,
+.graph-chat-messages .bot-msg .assistant-msg-body td {
+    padding: 0.35em 0.55em;
+    border: 1px solid #e2e8f0;
+    text-align: left;
+}
+.graph-chat-messages .bot-msg .assistant-msg-body th {
+    background: #f8fafc;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.graph-chat-messages .bot-msg .assistant-msg-body blockquote {
+    margin: 0.5em 0;
+    padding: 0.35em 0.7em;
+    border-left: 3px solid #e2e8f0;
+    color: #64748b;
+}
+
+.graph-chat-messages .bot-msg .assistant-msg-body h1,
+.graph-chat-messages .bot-msg .assistant-msg-body h2,
+.graph-chat-messages .bot-msg .assistant-msg-body h3,
+.graph-chat-messages .bot-msg .assistant-msg-body h4 {
+    margin: 0.6em 0 0.25em;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.graph-chat-messages .bot-msg .assistant-msg-body hr {
+    margin: 0.6em 0;
+    border: none;
+    border-top: 1px solid #e2e8f0;
+}
+
+
+/* ---------------------------------------------------
+   Responsive tweaks
+--------------------------------------------------- */
+
+@media (max-width: 768px) {
+    .graph-chat-container { border-radius: 12px; }
+    .graph-chat-messages { padding: 0.9rem; }
+    .graph-chat-messages .assistant-msg { max-width: 92%; }
+}

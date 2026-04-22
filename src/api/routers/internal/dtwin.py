@@ -1407,3 +1407,300 @@ async def get_inferred_triples(
             "inferred_triples": [],
         },
     }
+
+
+# ===========================================
+# Graph Chat Assistant (LLM over the knowledge graph)
+# ===========================================
+
+
+# Session key for the Graph Chat cache (history + limit).
+# Shape: {"limit": int, "history": {<domain_name>: [{"role", "content"}, ...]}}
+_CHAT_SESSION_KEY = "graph_chat"
+_CHAT_DEFAULT_LIMIT = 20         # number of user+assistant turns kept per domain
+_CHAT_MIN_LIMIT = 5
+_CHAT_MAX_LIMIT = 100
+
+
+def _chat_cache(session_mgr: SessionManager) -> dict:
+    """Return the Graph Chat session cache, creating an empty one if absent."""
+    cache = session_mgr.get(_CHAT_SESSION_KEY)
+    if not isinstance(cache, dict):
+        cache = {"limit": _CHAT_DEFAULT_LIMIT, "history": {}}
+    else:
+        cache.setdefault("limit", _CHAT_DEFAULT_LIMIT)
+        cache.setdefault("history", {})
+    return cache
+
+
+def _chat_save_cache(session_mgr: SessionManager, cache: dict) -> None:
+    session_mgr.set(_CHAT_SESSION_KEY, cache)
+
+
+def _chat_domain_key(domain) -> str:
+    return (getattr(domain, "name", "") or "__default__").strip() or "__default__"
+
+
+def _chat_clamp_limit(limit) -> int:
+    try:
+        value = int(limit)
+    except (TypeError, ValueError):
+        value = _CHAT_DEFAULT_LIMIT
+    return max(_CHAT_MIN_LIMIT, min(_CHAT_MAX_LIMIT, value))
+
+
+def _chat_trim(messages: list, limit: int) -> list:
+    """Keep only the last ``limit`` turns (user + assistant messages).
+
+    A turn is a user message optionally followed by an assistant reply,
+    so we keep the last ``2 * limit`` items.
+    """
+    if limit <= 0 or not messages:
+        return []
+    keep = 2 * limit
+    return messages[-keep:] if len(messages) > keep else list(messages)
+
+
+def _auto_discover_llm_endpoint(domain, settings) -> str:
+    """Best-effort auto-selection of a serving endpoint for Graph Chat.
+
+    Walks the workspace's serving endpoints and returns the first one
+    that looks ready to serve chat completions.  Preference order:
+
+    1. Databricks hosted foundation models (pay-per-token), matched by
+       the ``databricks-`` prefix (e.g. ``databricks-meta-llama-*``).
+    2. Any other ``READY`` endpoint.
+
+    Returns an empty string if nothing usable can be found.
+    """
+    try:
+        from back.core.sqlwizard import SQLWizardService
+
+        client = get_databricks_client(domain, settings)
+        if not client:
+            return ""
+        endpoints = SQLWizardService(client).get_model_serving_endpoints() or []
+    except Exception as exc:
+        logger.debug("GraphChat: auto-discover LLM failed: %s", exc)
+        return ""
+
+    def _is_ready(ep: dict) -> bool:
+        state = (ep.get("state") or "").upper()
+        return state in ("READY", "TRUE", "UP")
+
+    for ep in endpoints:
+        name = ep.get("name") or ""
+        if name.startswith("databricks-") and _is_ready(ep):
+            return name
+    for ep in endpoints:
+        if _is_ready(ep) and ep.get("name"):
+            return ep["name"]
+    return ""
+
+
+@router.post("/assistant/chat")
+async def dtwin_assistant_chat(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Process a single chat turn with the Graph Chat agent.
+
+    Expects JSON body::
+
+        {
+            "message": "List entity types",
+            "history": [{"role": "user"|"assistant", "content": "..."}, ...]
+        }
+
+    Returns::
+
+        {
+            "success": true,
+            "reply": "...markdown...",
+            "tools": [{"name": "list_entity_types", "duration_ms": 123}, ...],
+            "usage": {"prompt_tokens": ..., "completion_tokens": ..., ...}
+        }
+    """
+    import asyncio
+    import os
+
+    from api.routers.internal._helpers import map_route_errors
+    from back.core.helpers import get_databricks_host_and_token
+    from agents.agent_dtwin_chat import run_agent as run_chat_agent
+
+    data = await request.json()
+    user_message = (data.get("message") or "").strip()
+    client_history = data.get("history") or []
+
+    if not user_message:
+        raise ValidationError("No message provided")
+
+    domain = get_domain(session_mgr)
+    domain_key = _chat_domain_key(domain)
+    chat_cache = _chat_cache(session_mgr)
+    limit = _chat_clamp_limit(chat_cache.get("limit", _CHAT_DEFAULT_LIMIT))
+
+    # Prefer the server-side persisted history (survives page navigation)
+    # but fall back to whatever the client sent (legacy / cache miss).
+    saved_history = chat_cache["history"].get(domain_key) or []
+    history = saved_history if saved_history else client_history
+
+    host, token = get_databricks_host_and_token(domain, settings)
+    if not host or not token:
+        raise ValidationError("Databricks credentials not configured")
+
+    # Always use the domain-selected LLM when available. If the domain
+    # hasn't pinned one yet, fall back to auto-discovering the first
+    # READY serving endpoint in the workspace so Graph Chat never hard-
+    # fails just because "llm_endpoint" wasn't saved in Domain Settings.
+    llm_endpoint = (domain.info or {}).get("llm_endpoint", "") or ""
+    if not llm_endpoint:
+        llm_endpoint = _auto_discover_llm_endpoint(domain, settings)
+        if llm_endpoint:
+            logger.info(
+                "GraphChat: auto-selected LLM endpoint '%s' (no domain default)",
+                llm_endpoint,
+            )
+    if not llm_endpoint:
+        raise ValidationError(
+            "No LLM serving endpoint available. Please set one in Domain Settings.",
+        )
+
+    reg = DigitalTwin.resolve_registry(session_mgr, settings)
+    registry_params = {
+        "registry_catalog": reg.get("catalog") or "",
+        "registry_schema": reg.get("schema") or "",
+        "registry_volume": reg.get("volume") or "",
+    }
+
+    # Build the loopback base URL used by the agent's HTTPX client to
+    # reach the external /api/v1/... and internal /dtwin/... routes
+    # running in this same FastAPI process.  On Databricks Apps the port
+    # is exposed as DATABRICKS_APP_PORT; locally it defaults to 8000.
+    app_port = os.environ.get("DATABRICKS_APP_PORT") or os.environ.get("PORT") or "8000"
+    base_url = f"http://localhost:{app_port}"
+
+    # Forward the caller's session cookies so the loopback routes
+    # resolve the same user session and active domain.
+    session_cookies = dict(request.cookies or {})
+
+    domain_name = getattr(domain, "name", "") or ""
+
+    logger.info(
+        "GraphChat: user_message=%s, domain=%s, endpoint=%s",
+        user_message[:80],
+        domain_name,
+        llm_endpoint,
+    )
+
+    with map_route_errors("Graph Chat agent request failed", logger):
+        agent_result = await asyncio.to_thread(
+            run_chat_agent,
+            host=host,
+            token=token,
+            endpoint_name=llm_endpoint,
+            base_url=base_url,
+            domain_name=domain_name,
+            registry_params=registry_params,
+            session_cookies=session_cookies,
+            user_message=user_message,
+            conversation_history=history,
+        )
+
+    if not agent_result.success:
+        raise InfrastructureError(
+            "Graph Chat agent failed",
+            detail=agent_result.error or None,
+        )
+
+    tool_calls = [
+        {
+            "name": step.tool_name,
+            "duration_ms": step.duration_ms,
+        }
+        for step in agent_result.steps
+        if step.step_type == "tool_result"
+    ]
+
+    # Persist the exchange in the session cache (per-domain, trimmed to
+    # the configured limit) so the discussion survives page navigation.
+    updated = list(history)
+    updated.append({"role": "user", "content": user_message})
+    updated.append({"role": "assistant", "content": agent_result.reply or ""})
+    chat_cache["history"][domain_key] = _chat_trim(updated, limit)
+    _chat_save_cache(session_mgr, chat_cache)
+
+    return {
+        "success": True,
+        "reply": agent_result.reply,
+        "tools": tool_calls,
+        "iterations": agent_result.iterations,
+        "usage": agent_result.usage,
+    }
+
+
+@router.get("/assistant/history")
+async def dtwin_assistant_history_get(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Return the persisted Graph Chat history for the active domain.
+
+    Response shape::
+
+        {
+            "success": true,
+            "domain": "<domain name>",
+            "messages": [{"role": "user"|"assistant", "content": "..."}, ...],
+            "limit": <int>,
+            "min_limit": 5,
+            "max_limit": 100
+        }
+    """
+    domain = get_domain(session_mgr)
+    domain_key = _chat_domain_key(domain)
+    cache = _chat_cache(session_mgr)
+    return {
+        "success": True,
+        "domain": getattr(domain, "name", "") or "",
+        "messages": cache["history"].get(domain_key, []),
+        "limit": _chat_clamp_limit(cache.get("limit", _CHAT_DEFAULT_LIMIT)),
+        "min_limit": _CHAT_MIN_LIMIT,
+        "max_limit": _CHAT_MAX_LIMIT,
+        "default_limit": _CHAT_DEFAULT_LIMIT,
+    }
+
+
+@router.delete("/assistant/history")
+async def dtwin_assistant_history_clear(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Clear the persisted Graph Chat history for the active domain."""
+    domain = get_domain(session_mgr)
+    domain_key = _chat_domain_key(domain)
+    cache = _chat_cache(session_mgr)
+    if domain_key in cache["history"]:
+        cache["history"].pop(domain_key, None)
+        _chat_save_cache(session_mgr, cache)
+    return {"success": True}
+
+
+@router.post("/assistant/history/limit")
+async def dtwin_assistant_history_set_limit(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Update the maximum number of turns kept per-domain (session-scoped).
+
+    Body: ``{"limit": <int>}``.  Clamped to ``[5, 100]``.  When the new
+    limit is smaller than the existing history, it is trimmed in place.
+    """
+    data = await request.json()
+    new_limit = _chat_clamp_limit(data.get("limit"))
+    cache = _chat_cache(session_mgr)
+    cache["limit"] = new_limit
+    cache["history"] = {
+        dom: _chat_trim(msgs, new_limit) for dom, msgs in cache["history"].items()
+    }
+    _chat_save_cache(session_mgr, cache)
+    return {"success": True, "limit": new_limit}

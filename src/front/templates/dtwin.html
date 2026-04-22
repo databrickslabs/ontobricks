@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-dataquality.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-reasoning.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-api.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-chat.css') }}?v={{ asset_version }}">
 <!-- Query page specific styles -->
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/query.css') }}">
 <!-- Ontology map styles for read-only viewer modal -->
@@ -50,6 +51,11 @@
             <div id="graphql-section" class="sidebar-section">
                 {% include "partials/dtwin/_query_graphql.html" %}
             </div>
+
+            <!-- Graph Chat Section -->
+            <div id="chat-section" class="sidebar-section">
+                {% include "partials/dtwin/_query_chat.html" %}
+            </div>
         </div>
     </div>
 </div>
@@ -77,6 +83,7 @@
 <script defer src="{{ url_for('static', filename='query/js/query-reasoning.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-sigmagraph.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-graphql.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-chat.js') }}?v={{ asset_version }}"></script>
 <!-- External REST / GraphQL API reference (also used from Settings → Registry) -->
 <script defer src="{{ url_for('static', filename='query/js/query-api.js') }}?v={{ asset_version }}"></script>
 <!-- Read-only ontology model viewer modal (D3.js) -->

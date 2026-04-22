@@ -468,6 +468,13 @@
                             "icon": "bi-braces-asterisk",
                             "default": false,
                             "requires": null
+                        },
+                        {
+                            "id": "chat",
+                            "label": "Graph Chat",
+                            "icon": "bi-chat-dots",
+                            "default": false,
+                            "requires": null
                         }
                     ]
                 },

@@ -1,0 +1,79 @@
+<!-- Graph Chat: conversational UI that talks to the selected domain's knowledge graph -->
+<!-- CSS: /static/query/css/query-chat.css -->
+<!-- JS:  /static/query/js/query-chat.js -->
+
+<div class="section-header d-flex justify-content-between align-items-start mb-2">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-chat-dots me-2"></i>Graph Chat</h4>
+        <p class="text-muted mb-0 small">
+            Chat with your knowledge graph in natural language<br>
+            <i class="bi bi-folder2-open"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50" style="font-size:.65rem">v{{ current_version }}</span><br>
+            <i class="bi bi-diagram-3"></i> Graph DB: <code id="chatGraphDbName" class="text-primary">{{ graph_name or 'Not configured' }}</code>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-1 ms-2" onclick="_openGraphSwitcherModal()" title="Switch to another domain graph">
+                <i class="bi bi-arrow-left-right me-1"></i>Switch domain
+            </button>
+        </p>
+    </div>
+    <div class="graph-chat-header-actions">
+        <button id="chatClearBtnTop" class="btn btn-sm btn-outline-danger" title="Clear the current conversation">
+            <i class="bi bi-trash3 me-1"></i>Clear chat
+        </button>
+    </div>
+</div>
+
+<div class="graph-chat-container">
+    <div class="assistant-messages graph-chat-messages" id="chatMessages">
+        <div class="assistant-welcome">
+            <div class="assistant-welcome-icon">
+                <img src="/static/global/img/favicon.svg" alt="OntoBricks" width="40" height="40">
+            </div>
+            <p>Ask questions about your knowledge graph in natural language.<br>
+               I can list entity types, describe specific entities, run GraphQL or SPARQL queries.</p>
+            <div class="assistant-suggestions">
+                <button class="btn btn-sm btn-outline-primary assistant-suggestion" data-message="List all entity types in this knowledge graph with their instance counts.">
+                    <i class="bi bi-list-ul me-1"></i>List entity types
+                </button>
+                <button class="btn btn-sm btn-outline-primary assistant-suggestion" data-message="Show me the GraphQL schema for this domain.">
+                    <i class="bi bi-braces-asterisk me-1"></i>GraphQL schema
+                </button>
+                <button class="btn btn-sm btn-outline-primary assistant-suggestion" data-message="Give me the current status of the triple store.">
+                    <i class="bi bi-activity me-1"></i>Status
+                </button>
+                <button class="btn btn-sm btn-outline-primary assistant-suggestion" data-message="Pick any entity in the graph and describe it including its attributes and relationships.">
+                    <i class="bi bi-box me-1"></i>Describe an entity
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="assistant-input-area graph-chat-input-area">
+        <div class="assistant-input-wrapper">
+            <textarea id="chatInput" class="form-control border-0" placeholder="Ask a question about your knowledge graph…" rows="1" autocomplete="off"></textarea>
+            <button id="chatSendBtn" class="btn" title="Send message" disabled>
+                <i class="bi bi-send-fill"></i>
+            </button>
+        </div>
+        <div class="assistant-input-hint">
+            <span class="graph-chat-hint-kbds">
+                <kbd>Enter</kbd> to send &middot; <kbd>Shift</kbd>+<kbd>Enter</kbd> for newline
+            </span>
+            <span class="graph-chat-hint-controls">
+                <span class="graph-chat-limit" title="Maximum number of user+assistant turns kept per domain in this session">
+                    <i class="bi bi-gear-fill"></i>
+                    <label for="chatHistoryLimit">Keep last</label>
+                    <select id="chatHistoryLimit" class="form-select form-select-sm">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <span>turns</span>
+                </span>
+                <button class="btn btn-link btn-sm p-0 assistant-clear-btn" id="chatClearBtn">
+                    <i class="bi bi-trash3 me-1"></i>Clear chat
+                </button>
+            </span>
+        </div>
+    </div>
+</div>

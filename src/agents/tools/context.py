@@ -41,3 +41,9 @@ class ToolContext:
     ontology_properties: list = field(default_factory=list)
     ontology_base_uri: str = ""
     ontology_dirty: bool = False
+
+    # Graph Chat agent fields (``agent_dtwin_chat``) – loopback REST caller
+    dtwin_base_url: str = ""
+    dtwin_session_cookies: dict = field(default_factory=dict)
+    dtwin_registry_params: dict = field(default_factory=dict)
+    dtwin_domain_name: str = ""

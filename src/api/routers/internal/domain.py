@@ -227,9 +227,21 @@ async def clear_domain(session_mgr: SessionManager = Depends(get_session_manager
 async def get_session_debug(session_mgr: SessionManager = Depends(get_session_manager)):
     """Get full session data for debugging purposes.
 
+    Returns the ``domain_data`` bucket (shaped by :class:`DomainSession`)
+    plus every other top-level key present in the raw FastAPI session
+    (e.g. ``graph_chat``) so callers can see non-domain buckets too.
+
     Only available when LOG_LEVEL is set to DEBUG.
     """
-    return Domain(get_domain(session_mgr)).get_session_debug_response()
+    payload = Domain(get_domain(session_mgr)).get_session_debug_response()
+    extras = {
+        k: v
+        for k, v in (session_mgr.data or {}).items()
+        if k not in ("domain_data", "project_data")
+    }
+    if extras:
+        payload["extras"] = extras
+    return payload
 
 
 @router.get("/app-debug")
