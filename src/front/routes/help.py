@@ -91,7 +91,8 @@ _DOC_INDEX: Dict[str, Dict] = {
 }
 
 # Strict filename pattern for images (no path separators, no traversal).
-_IMAGE_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+\.(svg|png|jpg|jpeg|gif|webp)$")
+# Allows spaces since some screenshots use them in their filenames.
+_IMAGE_NAME_RE = re.compile(r"^[A-Za-z0-9_ .-]+\.(svg|png|jpg|jpeg|gif|webp)$")
 
 
 def _docs_dir() -> str:
@@ -129,22 +130,37 @@ async def list_docs():
     }
 
 
+_ASSET_SUBDIRS = {"images", "screenshots"}
+
+
+def _serve_doc_asset(subdir: str, name: str) -> FileResponse:
+    """Serve a whitelisted asset file from ``docs/<subdir>/``."""
+    if subdir not in _ASSET_SUBDIRS:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if not _IMAGE_NAME_RE.match(name):
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    assets_root = os.path.realpath(os.path.join(_docs_dir(), subdir))
+    path = os.path.join(_docs_dir(), subdir, name)
+    real_path = os.path.realpath(path)
+    if not real_path.startswith(assets_root + os.sep) and real_path != assets_root:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if not os.path.isfile(real_path):
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    return FileResponse(real_path)
+
+
 @router.get("/docs/images/{name}")
 async def get_doc_image(name: str):
     """Serve a whitelisted image file from ``docs/images/``."""
-    if not _IMAGE_NAME_RE.match(name):
-        raise HTTPException(status_code=404, detail="Image not found")
+    return _serve_doc_asset("images", name)
 
-    path = os.path.join(_docs_dir(), "images", name)
-    # Extra safety: ensure resolved path stays within docs/images
-    images_root = os.path.realpath(os.path.join(_docs_dir(), "images"))
-    real_path = os.path.realpath(path)
-    if not real_path.startswith(images_root + os.sep) and real_path != images_root:
-        raise HTTPException(status_code=404, detail="Image not found")
-    if not os.path.isfile(real_path):
-        raise HTTPException(status_code=404, detail="Image not found")
 
-    return FileResponse(real_path)
+@router.get("/docs/screenshots/{name}")
+async def get_doc_screenshot(name: str):
+    """Serve a whitelisted screenshot file from ``docs/screenshots/``."""
+    return _serve_doc_asset("screenshots", name)
 
 
 @router.get("/docs/{slug}")

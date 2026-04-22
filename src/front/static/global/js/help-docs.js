@@ -14,6 +14,8 @@
     var API_LIST = '/api/help/docs';
     var API_DOC = '/api/help/docs/';
     var IMG_PREFIX = '/api/help/docs/images/';
+    var SCREENSHOT_PREFIX = '/api/help/docs/screenshots/';
+    var STATIC_PREFIX = '/static/';
     var GITHUB_BASE =
         'https://github.com/databrickslabs/ontobricks/blob/main/docs/';
 
@@ -250,13 +252,25 @@
         var imgs = root.querySelectorAll('img');
         imgs.forEach(function (img) {
             var src = img.getAttribute('src') || '';
-            if (/^https?:\/\//i.test(src) || src.startsWith('data:')) return;
-            // Strip a leading "./" or "docs/"
-            src = src.replace(/^\.\//, '').replace(/^docs\//, '');
-            if (src.startsWith('images/')) {
+            if (/^https?:\/\//i.test(src) || src.startsWith('data:') || src.startsWith('/')) {
+                img.setAttribute('loading', 'lazy');
+                return;
+            }
+            // Normalise: strip a leading "./" or "docs/" when present
+            var rel = src.replace(/^\.\//, '').replace(/^docs\//, '');
+
+            if (rel.startsWith('images/')) {
+                img.setAttribute('src', IMG_PREFIX + rel.slice('images/'.length));
+            } else if (rel.startsWith('screenshots/')) {
                 img.setAttribute(
                     'src',
-                    IMG_PREFIX + src.slice('images/'.length)
+                    SCREENSHOT_PREFIX + rel.slice('screenshots/'.length)
+                );
+            } else if (rel.startsWith('src/front/static/')) {
+                // App static asset referenced from a README-style doc
+                img.setAttribute(
+                    'src',
+                    STATIC_PREFIX + rel.slice('src/front/static/'.length)
                 );
             }
             img.setAttribute('loading', 'lazy');
