@@ -7,18 +7,19 @@ app, mirroring the tools exposed by the MCP server (see
 the active user session and injected as a query parameter, so the LLM
 never has to call ``list_domains`` / ``select_domain``.
 
+All tools call *internal*, session-aware routes under ``/dtwin/...``
+so they keep working against domains that exist only in the active
+session and have never been published to the registry (the public
+``/api/v1/digitaltwin/*`` routes require a published version and would
+404 with ``not_found: No versions found for domain "<name>"``).
+
 Tools:
-    * ``list_entity_types``   -- GET  /api/v1/digitaltwin/stats
-    * ``describe_entity``     -- GET  /api/v1/digitaltwin/triples/find
-    * ``get_status``          -- GET  /api/v1/digitaltwin/status
-    * ``get_graphql_schema``  -- GET  /dtwin/graphql/schema   (internal,
-                                   session-aware: works even when the
-                                   domain has not been published yet)
-    * ``query_graphql``       -- POST /dtwin/graphql/execute  (internal,
-                                   session-aware counterpart to the
-                                   public ``/graphql/{domain}`` route)
-    * ``run_sparql``          -- POST /dtwin/execute   (internal route;
-                                   same session cookies are forwarded)
+    * ``list_entity_types``   -- GET  /dtwin/sync/stats
+    * ``describe_entity``     -- GET  /dtwin/triples/find
+    * ``get_status``          -- GET  /dtwin/sync/status
+    * ``get_graphql_schema``  -- GET  /dtwin/graphql/schema
+    * ``query_graphql``       -- POST /dtwin/graphql/execute
+    * ``run_sparql``          -- POST /dtwin/execute
 """
 
 from __future__ import annotations
@@ -57,14 +58,18 @@ _SPARQL_DANGEROUS = re.compile(
 def _client(ctx: ToolContext) -> httpx.Client:
     """Build a sync HTTP client bound to the loopback OntoBricks URL.
 
-    Session cookies captured from the user's request are forwarded so
-    the internal ``/dtwin/execute`` route resolves the same active
-    domain.
+    Session cookies AND the user's Databricks-Apps ``X-Forwarded-*``
+    identity headers are forwarded so the loopback route resolves the
+    same active session *and* passes the ``PermissionMiddleware`` on
+    the deployed app (which would otherwise 302-redirect the anonymous
+    internal call to ``/access-denied``).
     """
     return httpx.Client(
         base_url=ctx.dtwin_base_url or "http://localhost:8000",
         cookies=ctx.dtwin_session_cookies or {},
+        headers=ctx.dtwin_session_headers or {},
         timeout=_HTTP_TIMEOUT,
+        follow_redirects=False,
     )
 
 
@@ -99,9 +104,7 @@ def tool_list_entity_types(ctx: ToolContext, **_kwargs) -> str:
     """List entity types + counts + aggregate statistics."""
     try:
         with _client(ctx) as c:
-            resp = c.get(
-                "/api/v1/digitaltwin/stats", params=_domain_params(ctx)
-            )
+            resp = c.get("/dtwin/sync/stats")
             resp.raise_for_status()
             data = resp.json()
     except httpx.HTTPStatusError as exc:
@@ -161,14 +164,11 @@ def tool_describe_entity(
     if not search and not entity_type:
         return _error("Please provide at least a search term or an entity type.")
 
-    params = _domain_params(
-        ctx,
-        {
-            "depth": min(max(int(depth or _MAX_DEPTH), 1), 10),
-            "limit": 500,
-            "offset": 0,
-        },
-    )
+    params: dict = {
+        "depth": min(max(int(depth or _MAX_DEPTH), 1), 10),
+        "limit": 500,
+        "offset": 0,
+    }
     if search:
         params["search"] = search
     if entity_type:
@@ -176,7 +176,7 @@ def tool_describe_entity(
 
     try:
         with _client(ctx) as c:
-            resp = c.get("/api/v1/digitaltwin/triples/find", params=params)
+            resp = c.get("/dtwin/triples/find", params=params)
             resp.raise_for_status()
             data = resp.json()
     except httpx.HTTPStatusError as exc:
@@ -194,9 +194,7 @@ def tool_get_status(ctx: ToolContext, **_kwargs) -> str:
     """Return the selected domain's triple-store status + row count."""
     try:
         with _client(ctx) as c:
-            resp = c.get(
-                "/api/v1/digitaltwin/status", params=_domain_params(ctx)
-            )
+            resp = c.get("/dtwin/sync/status")
             resp.raise_for_status()
             data = resp.json()
     except httpx.HTTPStatusError as exc:

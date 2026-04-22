@@ -45,5 +45,6 @@ class ToolContext:
     # Graph Chat agent fields (``agent_dtwin_chat``) – loopback REST caller
     dtwin_base_url: str = ""
     dtwin_session_cookies: dict = field(default_factory=dict)
+    dtwin_session_headers: dict = field(default_factory=dict)
     dtwin_registry_params: dict = field(default_factory=dict)
     dtwin_domain_name: str = ""

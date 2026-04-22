@@ -134,6 +134,7 @@ def run_agent(
     session_cookies: dict,
     user_message: str,
     conversation_history: Optional[List[dict]] = None,
+    session_headers: Optional[dict] = None,
     on_step: Optional[Callable[[str], None]] = None,
 ) -> AgentResult:
     """Run one turn of the Graph Chat agent.
@@ -146,8 +147,14 @@ def run_agent(
         registry_params: Registry query params injected into every call
             (``registry_catalog``, ``registry_schema``, ``registry_volume``).
         session_cookies: Cookies from the user's request; forwarded to
-            ``/dtwin/execute`` so that the internal route resolves the
-            same session.
+            the internal ``/dtwin/...`` routes so they resolve the same
+            session.
+        session_headers: Databricks-Apps identity / CSRF headers
+            (``X-Forwarded-Email``, ``X-Forwarded-Access-Token``, …)
+            forwarded to the internal routes so
+            :class:`PermissionMiddleware` authenticates the loopback
+            call as the same user instead of 302-redirecting it to
+            ``/access-denied``.
         user_message: The user's new natural-language message.
         conversation_history: Prior ``{role, content}`` messages.
         on_step: Optional progress callback (unused but kept for parity).
@@ -164,6 +171,7 @@ def run_agent(
         token=token or "",
         dtwin_base_url=base_url,
         dtwin_session_cookies=session_cookies or {},
+        dtwin_session_headers=session_headers or {},
         dtwin_registry_params=registry_params or {},
         dtwin_domain_name=domain_name or "",
     )

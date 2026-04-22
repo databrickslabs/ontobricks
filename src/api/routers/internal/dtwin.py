@@ -1612,6 +1612,18 @@ async def dtwin_assistant_chat(
     # resolve the same user session and active domain.
     session_cookies = dict(request.cookies or {})
 
+    # Forward the Databricks-Apps identity + CSRF headers so the loopback
+    # call passes PermissionMiddleware (which otherwise 302-redirects the
+    # anonymous internal request to ``/access-denied``).
+    _FORWARDED_HEADER_PREFIXES = ("x-forwarded-", "x-real-")
+    _FORWARDED_EXTRA_HEADERS = {"x-csrf-token", "referer"}
+    session_headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower().startswith(_FORWARDED_HEADER_PREFIXES)
+        or k.lower() in _FORWARDED_EXTRA_HEADERS
+    }
+
     domain_name = _chat_resolve_domain_name(domain)
 
     logger.info(
@@ -1631,6 +1643,7 @@ async def dtwin_assistant_chat(
             domain_name=domain_name,
             registry_params=registry_params,
             session_cookies=session_cookies,
+            session_headers=session_headers,
             user_message=user_message,
             conversation_history=history,
         )
@@ -1841,6 +1854,130 @@ async def dtwin_graphql_execute(
             for e in exec_result.errors
         ]
     return response
+
+
+@router.get("/triples/find")
+async def dtwin_triples_find(
+    entity_type: str | None = None,
+    search: str | None = None,
+    depth: int = 1,
+    limit: int = 1000,
+    offset: int = 0,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Session-aware search + BFS traversal over the in-session domain.
+
+    Mirrors ``GET /api/v1/digitaltwin/triples/find`` but resolves the
+    domain from the user's session instead of the registry, so the
+    Graph Chat agent can introspect domains that have never been
+    published as a version.
+    """
+    from back.core.helpers import sql_escape
+
+    if not entity_type and not search:
+        raise ValidationError("Provide at least entity_type or search")
+
+    depth = max(1, min(int(depth or 1), 10))
+    limit = max(1, min(int(limit or 1000), 10000))
+    offset = max(0, int(offset or 0))
+
+    domain = get_domain(session_mgr)
+    table = effective_graph_name(domain)
+    if not table:
+        raise ValidationError("Graph name not configured")
+
+    store = get_triplestore(domain, settings, backend="graph")
+    if not store:
+        raise ValidationError("Graph backend not configured")
+
+    rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+    rdfs_label = "http://www.w3.org/2000/01/rdf-schema#label"
+
+    try:
+        seed_conditions: list[str] = []
+        if entity_type:
+            esc = sql_escape(entity_type).lower()
+            seed_conditions.append(
+                f"subject IN (SELECT subject FROM {table} "
+                f"WHERE predicate = '{rdf_type}' AND "
+                f"(LOWER(object) LIKE '%#{esc}' OR LOWER(object) LIKE '%/{esc}'))"
+            )
+        if search:
+            esc = sql_escape(search).lower()
+            seed_conditions.append(
+                f"(subject IN (SELECT subject FROM {table} "
+                f"WHERE (predicate = '{rdfs_label}' "
+                f"OR predicate LIKE '%#label' OR predicate LIKE '%/label' "
+                f"OR predicate LIKE '%#name' OR predicate LIKE '%/name') "
+                f"AND LOWER(object) LIKE '%{esc}%') "
+                f"OR LOWER(subject) LIKE '%/{esc}%' "
+                f"OR LOWER(subject) LIKE '%#{esc}%')"
+            )
+
+        seed_where = " WHERE " + " AND ".join(seed_conditions)
+
+        bfs_rows = store.bfs_traversal(
+            table,
+            seed_where,
+            depth,
+            search=search or "",
+            entity_type=entity_type or "",
+        )
+
+        if not bfs_rows:
+            return {
+                "success": True,
+                "seed_count": 0,
+                "depth": depth,
+                "message": "No matching entities found",
+                "triples": [],
+                "count": 0,
+                "total": 0,
+                "limit": limit,
+                "offset": offset,
+                "entity_count": 0,
+            }
+
+        all_entities = {r["entity"] for r in bfs_rows}
+        seed_count = sum(1 for r in bfs_rows if int(r.get("min_lvl", 0)) == 0)
+        all_entities = DigitalTwin.expand_uri_aliases(store, table, all_entities)
+
+        all_rows = store.get_triples_for_subjects(table, list(all_entities))
+        seen: set = set()
+        all_triples: list = []
+        for r in all_rows:
+            key = (r["subject"], r["predicate"], r["object"])
+            if key not in seen:
+                seen.add(key)
+                all_triples.append(r)
+
+        total = len(all_triples)
+        page = all_triples[offset : offset + limit]
+
+        return {
+            "success": True,
+            "seed_count": seed_count,
+            "depth": depth,
+            "triples": [
+                {
+                    "subject": r.get("subject", ""),
+                    "predicate": r.get("predicate", ""),
+                    "object": r.get("object", ""),
+                }
+                for r in page
+            ],
+            "count": len(page),
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "entity_count": len(all_entities),
+        }
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
+    except Exception as e:
+        logger.exception("dtwin_triples_find failed: %s", e)
+        raise InfrastructureError("Triple search failed", detail=str(e)) from e
 
 
 @router.post("/assistant/history/limit")
