@@ -13,7 +13,7 @@ OntoBricks is a **Knowledge Graph Builder** for the Databricks platform. It lets
 | **Get Started** | [get-started.md](get-started.md) | Install, first run, Databricks setup, environment variables |
 | **User Guide** | [user-guide.md](user-guide.md) | Day-to-day usage — ontology design, data mapping, triple-store pipeline, quality checks, reasoning, import (OWL, FIBO, CDISC, IOF) |
 | **Examples** | [examples.md](examples.md) | Family-tree and customer-journey walkthroughs you can follow along |
-| **Deployment** | [deployment.md](deployment.md) | Local dev, Databricks Apps, `app.yaml` resources, permissions, MCP deploy |
+| **Deployment** | [deployment.md](deployment.md) | Local dev, Databricks Apps, `app.yaml` resources, Unity Catalog grants for the app SP, in-app permissions, MCP deploy |
 | **Architecture** | [architecture.md](architecture.md) | System design, semantic web standards, agents, OntoViz, triple-store backends, reasoning engine |
 | **API** | [api.md](api.md) | External (stateless) REST & GraphQL, plus internal REST reference |
 | **MCP** | [mcp.md](mcp.md) | MCP server, Databricks Playground integration, client configuration |

@@ -126,6 +126,7 @@ Deployment uses **Databricks Asset Bundles** to deploy both the main app and the
 | SQL Warehouse | A running SQL Warehouse in the workspace |
 | Apps feature | Databricks Apps must be enabled on the workspace |
 | Unity Catalog | A catalog, schema, and volume for the project registry |
+| UC grants for the app SP | The app runs as a service principal. See [§3 Unity Catalog Permissions for the Service Principal](#3-unity-catalog-permissions-for-the-service-principal) for the exact grants required on the registry catalog/schema, the registry volume, and your source tables. |
 
 ### Step 1 — Authenticate
 
@@ -355,7 +356,137 @@ In **local development mode** (no Databricks App resources), all Settings contro
 
 ---
 
-## 3. Permission Management
+## 3. Unity Catalog Permissions for the Service Principal
+
+Databricks Apps run as a **service principal** (SP) created automatically when the app is deployed. The app's workspace bindings (`sql-warehouse`, `volume`) only cover the compute and the registry volume — they do **not** grant Unity Catalog privileges on the catalogs, schemas, or tables OntoBricks reads from and writes to. These grants are your responsibility and must be done once per workspace.
+
+You can look up the app's SP ID with:
+
+```bash
+databricks apps get ontobricks -o json \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('service_principal_client_id'))"
+```
+
+Throughout this section that identifier is written as `<app-sp>` (it is a UUID / client-id, not an email).
+
+> **Privilege mental model.** In Unity Catalog, to reference any object you need `USE CATALOG` on its catalog and `USE SCHEMA` on its schema. To read table/view data you need `SELECT`. To create new tables or views in a schema you need schema-level `CREATE TABLE` / `CREATE VIEW`. To modify or replace an object that **already exists** (including `CREATE OR REPLACE` over an existing object) you must own it or hold `MANAGE` on it. Volumes are separate: files under `/Volumes/...` need `READ VOLUME` and `WRITE VOLUME`. `ALL PRIVILEGES` is a convenient shorthand during onboarding but you should narrow it down before production.
+
+### 3.1 — What OntoBricks actually does in UC
+
+The main app's service principal performs the following operations at runtime. Every one of them needs a UC grant.
+
+| # | Operation | Target | UC privilege required |
+|---|-----------|--------|-----------------------|
+| 1 | `SHOW CATALOGS`, `SHOW SCHEMAS`, `SHOW TABLES`, `DESCRIBE`, `SHOW VOLUMES`, `information_schema.tables` lookups (Data Source picker) | Source catalogs + registry catalog | `USE CATALOG` + `USE SCHEMA` + `SELECT` on browsed tables |
+| 2 | `SELECT` on source tables referenced by R2RML `sql_query` entries (VIEW creation + build) | Each source table/view | `SELECT` |
+| 3 | `CREATE OR REPLACE VIEW <registry_catalog>.<registry_schema>.triplestore_<domain>_V<n>` (Digital Twin Sync) | Registry schema | Schema `CREATE VIEW`. If an object with the same name already exists from a previous build, additionally `MANAGE` on it or SP ownership. |
+| 4 | `SELECT subject, predicate, object FROM <triplestore VIEW>` (SPARQL + Ladybug population) | The triplestore VIEW | `SELECT` (inherited by the SP as owner once it created the VIEW in step 3). |
+| 5 | `CREATE OR REPLACE TABLE <registry_catalog>.<registry_schema>._ob_snapshot_<domain>_v<n> AS SELECT ...` (incremental mode) | Registry schema | Schema `CREATE TABLE` (+ `MANAGE` / ownership if the snapshot already exists from a prior run). |
+| 6 | `SELECT` / `DROP TABLE IF EXISTS` on the snapshot table (incremental diff and cleanup) | Snapshot table | Inherited via ownership once the SP created it. |
+| 7 | `CREATE TABLE IF NOT EXISTS <table>(subject STRING, predicate STRING, object STRING) USING DELTA`, `DELETE FROM`, `INSERT INTO` on the optional `DATABRICKS_TRIPLESTORE_TABLE` fallback (reasoning materialisation, MCP session-less calls) | Fallback triple-store table | Schema `CREATE TABLE`. If the table pre-exists, `MODIFY` to `DELETE`/`INSERT` + `SELECT`. |
+| 8 | File I/O under `/Volumes/<registry_catalog>/<registry_schema>/<registry_volume>/` (projects, domains, history log, LadybugDB archives) | Registry volume | `READ VOLUME` + `WRITE VOLUME`. |
+| 9 | `POST /api/2.1/unity-catalog/volumes` — only triggered from **Settings → Registry → Initialize** when the volume does not yet exist | Registry schema | Schema `CREATE VOLUME` (skip if you create the volume manually up front). |
+
+All the above run through the **SQL Warehouse** bound to the app (`sql-warehouse` resource) on behalf of the app SP. The `CAN_USE` grant on the warehouse covers compute access; data access is controlled by UC.
+
+### 3.2 — Registry catalog/schema grants (minimum viable set)
+
+Run these SQL statements **once** as a workspace admin (or anyone with `MANAGE` on the catalog/schema), substituting your bundle values from `databricks.yml`:
+
+```sql
+-- The catalog the registry lives in
+GRANT USE CATALOG   ON CATALOG `<registry_catalog>`               TO `<app-sp>`;
+
+-- The schema that holds the triplestore VIEW, snapshot tables, and the registry Volume
+GRANT USE SCHEMA    ON SCHEMA  `<registry_catalog>`.`<registry_schema>` TO `<app-sp>`;
+GRANT CREATE TABLE  ON SCHEMA  `<registry_catalog>`.`<registry_schema>` TO `<app-sp>`;
+GRANT CREATE VIEW   ON SCHEMA  `<registry_catalog>`.`<registry_schema>` TO `<app-sp>`;
+
+-- Registry Volume (files: projects, domains, history, Ladybug archives).
+-- The `volume` resource binding only grants compute reach-through; UC ACLs still apply.
+GRANT READ VOLUME   ON VOLUME  `<registry_catalog>`.`<registry_schema>`.`<registry_volume>` TO `<app-sp>`;
+GRANT WRITE VOLUME  ON VOLUME  `<registry_catalog>`.`<registry_schema>`.`<registry_volume>` TO `<app-sp>`;
+
+-- Optional — only if you want the Settings UI to be able to create the
+-- registry volume itself on first run (otherwise create it once as admin).
+GRANT CREATE VOLUME ON SCHEMA  `<registry_catalog>`.`<registry_schema>` TO `<app-sp>`;
+```
+
+Alternatively — shorter, broader, and fine for a dev workspace:
+
+```sql
+GRANT USE CATALOG    ON CATALOG `<registry_catalog>`                   TO `<app-sp>`;
+GRANT ALL PRIVILEGES ON SCHEMA  `<registry_catalog>`.`<registry_schema>` TO `<app-sp>`;
+```
+
+Prefer the explicit list above for a production workspace because `ALL PRIVILEGES` also implies `MANAGE`, which is broader than what the app needs day to day.
+
+### 3.3 — Source data grants (customer tables/views)
+
+For every table or view referenced in an R2RML mapping (i.e. anything that appears in the **Data Sources** tab of a domain), the app SP needs to read the data:
+
+```sql
+GRANT USE CATALOG ON CATALOG `<source_catalog>`                               TO `<app-sp>`;
+GRANT USE SCHEMA  ON SCHEMA  `<source_catalog>`.`<source_schema>`             TO `<app-sp>`;
+
+-- Per-object is tightest:
+GRANT SELECT      ON TABLE   `<source_catalog>`.`<source_schema>`.`<table>`   TO `<app-sp>`;
+
+-- Or grant schema-wide if you trust the SP with the whole schema:
+-- GRANT SELECT   ON SCHEMA  `<source_catalog>`.`<source_schema>`             TO `<app-sp>`;
+```
+
+If any mapping `sql_query` joins tables from multiple schemas or catalogs, repeat the `USE CATALOG` / `USE SCHEMA` / `SELECT` chain for each. The VIEW creation in step 3 will fail with `TABLE_OR_VIEW_NOT_FOUND` or `PERMISSION_DENIED` if one is missing.
+
+### 3.4 — What you do **not** need to grant
+
+- `MODIFY` on source tables — the app only reads them.
+- `MANAGE` on the registry schema — `CREATE TABLE` + `CREATE VIEW` are sufficient because the SP automatically owns the objects it creates.
+- `MANAGE` on the registry catalog — not required unless you want the SP to `DROP CATALOG` / `ALTER CATALOG`, which OntoBricks never does.
+
+### 3.5 — Known pitfall: stale object blocking `CREATE OR REPLACE VIEW`
+
+If a build previously materialised the triplestore as a **TABLE** (legacy code path or a manual CTAS in SQL Editor), the next Sync will try to run `CREATE OR REPLACE VIEW` over the same name. Databricks refuses this because:
+
+1. `CREATE OR REPLACE VIEW` cannot convert an existing TABLE to a VIEW, even for the owner.
+2. Even if it could, the SP would need `MANAGE` on that pre-existing object.
+
+The user-facing error surfaces as:
+
+```
+Sync failed: Failed to create VIEW: PERMISSION_DENIED: User does not have MANAGE on Table '<cat>.<schema>.triplestore_<domain>_v<n>'.
+```
+
+**Fix (once):** drop the stale object yourself, then re-run Sync:
+
+```sql
+DROP TABLE IF EXISTS `<registry_catalog>`.`<registry_schema>`.`triplestore_<domain>_v<n>`;
+```
+
+Once dropped, the app SP recreates the object as a VIEW and owns it from then on.
+
+### 3.6 — Granting when the SP ID is unknown yet
+
+If `databricks apps get` reports the SP client-id as `None` (app not fully provisioned), bind it by email-alias instead. Apps expose a dedicated SP user with the form `<app-name>@<account-id>.iam.databricks.com`, visible under **Admin → Service principals** after the first deploy. You can grant against that principal with the same SQL, substituting its identifier in the `TO` clause.
+
+### 3.7 — Quick verification
+
+Once grants are in place, you can verify from any SQL editor or notebook authenticated as the app SP (or by running a build in the app and watching the logs):
+
+```sql
+-- Should succeed (list registry schema objects)
+SHOW TABLES  IN `<registry_catalog>`.`<registry_schema>`;
+SHOW VOLUMES IN `<registry_catalog>`.`<registry_schema>`;
+
+-- Should return the current SP's privileges on the schema
+SHOW GRANTS `<app-sp>` ON SCHEMA `<registry_catalog>`.`<registry_schema>`;
+```
+
+If a user reports a sync failure, the app now surfaces the underlying Databricks error in the task status (`PERMISSION_DENIED`, `TABLE_OR_VIEW_NOT_FOUND`, unresolved column, etc.). The full traceback is always in the app logs.
+
+---
+
+## 4. Permission Management
 
 OntoBricks includes a built-in permission system that controls who can access the app and what they can do. Permissions are managed in **Settings > Permissions** and are only active when running as a Databricks App (local development has no restrictions).
 
@@ -416,11 +547,11 @@ This returns:
 
 ---
 
-## 4. Deploying to a New Workspace
+## 5. Deploying to a New Workspace
 
 When moving OntoBricks to a different Databricks workspace, follow these steps.
 
-### 4.1 — Authenticate to the new workspace
+### 5.1 — Authenticate to the new workspace
 
 ```bash
 # Option A: Set as default
@@ -437,7 +568,7 @@ databricks current-user me
 # Or with a profile: databricks current-user me --profile new-ws
 ```
 
-### 4.2 — Prepare Unity Catalog resources
+### 5.2 — Prepare Unity Catalog resources
 
 The new workspace needs a catalog/schema where OntoBricks can store projects and triple stores:
 
@@ -449,7 +580,7 @@ databricks sql query "CREATE SCHEMA IF NOT EXISTS main.ontobricks"
 databricks sql query "CREATE VOLUME IF NOT EXISTS main.ontobricks.OntoBricksRegistry"
 ```
 
-### 4.3 — Update configuration files
+### 5.3 — Update configuration files
 
 **`databricks.yml`** — update the variable defaults:
 
@@ -481,7 +612,7 @@ Update the `permissions` section with the deploying user's email.
   value: "https://<new-ontobricks-app-url>"
 ```
 
-### 4.4 — Deploy
+### 5.4 — Deploy
 
 ```bash
 # Validate first
@@ -491,20 +622,20 @@ databricks bundle validate
 scripts/deploy.sh --all
 ```
 
-### 4.5 — Bind resources
+### 5.5 — Bind resources
 
 1. Go to **Compute > Apps > ontobricks > Resources**
 2. Bind `sql-warehouse` to a running SQL Warehouse
 3. Bind `volume` to the registry UC Volume
 4. Repeat for `mcp-ontobricks`
 
-### 4.6 — Initialize and verify
+### 5.6 — Initialize and verify
 
 1. Open the app URL
 2. Go to **Settings > Registry > Initialize** (if the volume is empty)
 3. Verify both apps are **Running**: `databricks apps get ontobricks`
 
-### 4.7 — Update MCP server URL
+### 5.7 — Update MCP server URL
 
 After the main app is deployed and running:
 
@@ -531,16 +662,19 @@ scripts/deploy.sh --mcp-only
 [ ] 7.  databricks bundle validate
 [ ] 8.  scripts/deploy.sh --all
 [ ] 9.  Bind sql-warehouse and volume resources in the Apps UI (both apps)
-[ ] 10. Initialize registry (Settings > Registry > Initialize)
-[ ] 11. Verify both apps are RUNNING
-[ ] 12. Update ONTOBRICKS_URL in src/mcp-server/app.yaml with the main app URL
-[ ] 13. scripts/deploy.sh --mcp-only (redeploy MCP with correct URL)
-[ ] 14. Verify MCP appears in Databricks Playground
+[ ] 10. Grant UC privileges to each app's service principal (see §3):
+        registry USE CATALOG/USE SCHEMA/CREATE TABLE/CREATE VIEW +
+        volume READ/WRITE + source-table SELECT
+[ ] 11. Initialize registry (Settings > Registry > Initialize)
+[ ] 12. Verify both apps are RUNNING
+[ ] 13. Update ONTOBRICKS_URL in src/mcp-server/app.yaml with the main app URL
+[ ] 14. scripts/deploy.sh --mcp-only (redeploy MCP with correct URL)
+[ ] 15. Verify MCP appears in Databricks Playground
 ```
 
 ---
 
-## 5. Triple Store Backend Configuration
+## 6. Triple Store Backend Configuration
 
 OntoBricks supports two triple store backends. Choose one in your project settings.
 
@@ -554,7 +688,7 @@ LadybugDB is an embedded graph database that stores data locally at `/tmp`. When
 
 ---
 
-## 6. MCP Server Deployment (Databricks Playground)
+## 7. MCP Server Deployment (Databricks Playground)
 
 The MCP server (`mcp-ontobricks`) is a **separate** Databricks App that exposes OntoBricks knowledge-graph tools to the Databricks Playground. It must have a name starting with `mcp-` to be discoverable.
 
@@ -707,7 +841,7 @@ ONTOBRICKS_URL=http://your-host:8000 python src/mcp-server/mcp_server.py
 
 ---
 
-## 7. MLflow Agent Observability
+## 8. MLflow Agent Observability
 
 OntoBricks agents are instrumented with MLflow tracing. When deployed to Databricks, traces are persisted to the workspace tracking server.
 
@@ -743,7 +877,7 @@ Tracing degrades gracefully: if MLflow is not configured, agents run normally wi
 
 ---
 
-## 8. DAB Reference
+## 9. DAB Reference
 
 ### Bundle Structure
 
@@ -815,7 +949,7 @@ databricks bundle deploy
 
 ---
 
-## 9. Full Deployment Checklist
+## 10. Full Deployment Checklist
 
 Use this checklist when deploying OntoBricks from scratch on any workspace:
 
@@ -840,21 +974,27 @@ Use this checklist when deploying OntoBricks from scratch on any workspace:
           scripts/deploy.sh
 [ ] 8.  Bind sql-warehouse resource in the Apps UI
 [ ] 9.  Bind volume resource to the registry UC Volume
-[ ] 10. Verify main app is RUNNING:
+[ ] 10. Grant Unity Catalog privileges to the app service principal (see §3):
+        [ ] Registry catalog: USE CATALOG
+        [ ] Registry schema : USE SCHEMA + CREATE TABLE + CREATE VIEW
+        [ ] Registry volume : READ VOLUME + WRITE VOLUME
+        [ ] Each source catalog/schema referenced in R2RML mappings:
+            USE CATALOG + USE SCHEMA + SELECT (per table or schema-wide)
+[ ] 11. Verify main app is RUNNING:
           databricks apps get ontobricks
-[ ] 11. Initialize registry if the volume is empty:
+[ ] 12. Initialize registry if the volume is empty:
           Open app → Settings → Registry → Initialize
-[ ] 12. (If using MCP) Update ONTOBRICKS_URL in src/mcp-server/app.yaml:
+[ ] 13. (If using MCP) Update ONTOBRICKS_URL in src/mcp-server/app.yaml:
           databricks apps get ontobricks -o json | python3 -c "import sys,json; print(json.load(sys.stdin)['url'])"
-[ ] 13. (If using MCP) Deploy MCP server:
+[ ] 14. (If using MCP) Deploy MCP server:
           scripts/deploy.sh --mcp-only
-[ ] 14. (If using MCP) Bind MCP resources (same warehouse + volume)
-[ ] 15. (If using MCP) Verify in Databricks Playground
+[ ] 15. (If using MCP) Bind MCP resources (same warehouse + volume)
+[ ] 16. (If using MCP) Verify in Databricks Playground
 ```
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 ### App Won't Start
 
@@ -885,8 +1025,29 @@ The agents need OAuth credentials to call the Foundation Model API. In a Databri
 ### Connection Errors
 
 - Verify the SQL Warehouse is running and the resource binding is correct
-- Check the SP has correct permissions on catalogs/schemas
+- Check the SP has correct permissions on catalogs/schemas — see [§3 Unity Catalog Permissions for the Service Principal](#3-unity-catalog-permissions-for-the-service-principal)
 - Review app logs in the Databricks Apps UI
+
+### Digital Twin Sync: `PERMISSION_DENIED` / `Failed to create VIEW`
+
+If **Sync** fails with a message like
+
+```
+Sync failed: Failed to create VIEW: PERMISSION_DENIED:
+User does not have MANAGE on Table '<cat>.<schema>.triplestore_<domain>_v<n>'.
+```
+
+then an object with the same name already exists in UC as a **TABLE** — typically left behind by a legacy materialised build — and `CREATE OR REPLACE VIEW` cannot overwrite it. Drop the stale object once as an admin and retry:
+
+```sql
+DROP TABLE IF EXISTS `<cat>`.`<schema>`.`triplestore_<domain>_v<n>`;
+```
+
+If the failure is a plain `PERMISSION_DENIED` without a pre-existing object, the app SP is missing a UC grant — see [§3.2](#32--registry-catalogschema-grants-minimum-viable-set) for the registry schema and [§3.3](#33--source-data-grants-customer-tablesviews) for source tables.
+
+### Digital Twin Sync: `TABLE_OR_VIEW_NOT_FOUND`
+
+The app SP lacks `USE CATALOG` / `USE SCHEMA` / `SELECT` on one of the source tables referenced in an R2RML mapping. Identify which source from the error message and grant per [§3.3](#33--source-data-grants-customer-tablesviews).
 
 ### `localhost` Redirects When Deployed
 
@@ -914,7 +1075,7 @@ The MCP app's SP needs `CAN_USE` permission on the main app. The `users` group s
 
 ---
 
-## 11. Production Considerations
+## 12. Production Considerations
 
 ### Security
 
