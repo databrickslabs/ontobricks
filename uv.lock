@@ -2478,7 +2478,7 @@ requires-dist = [
     { name = "real-ladybug", specifier = ">=0.1.0" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "starlette", specifier = ">=0.35.0" },
-    { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.220.0" },
+    { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.312.3" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
 ]
 
@@ -4083,7 +4083,7 @@ wheels = [
 
 [[package]]
 name = "strawberry-graphql"
-version = "0.308.2"
+version = "0.314.3"
 source = { registry = "https://pypi-proxy.dev.databricks.com/simple" }
 dependencies = [
     { name = "cross-web" },
@@ -4092,9 +4092,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cd/7a/9a3689ff070c459f25f446264bb2ba08335e3ed3020e733d9dfcc592c941/strawberry_graphql-0.308.2.tar.gz", hash = "sha256:cba77ba4151d8f6663339e6c7eeb3c40db8ed6fd4fc52e3d6ed3d15ecad3f91b", size = 211603, upload-time = "2026-03-03T17:29:37.77Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/00/4d/df1240ee4d8fe925d0b6f0eff15cf9947f0345ab44c39eb58355b6026425/strawberry_graphql-0.314.3.tar.gz", hash = "sha256:2a841c35af61e9d5df1e215ca991cfac364c00a05fc192d9f38d0733da163097", size = 222131, upload-time = "2026-04-08T18:04:42.727Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b7/cd/f7b1d3e298ca022556495d85f13efde0b603707c34d6c6090bdab328050a/strawberry_graphql-0.308.2-py3-none-any.whl", hash = "sha256:14166a53d192809c6c299b484e39b4e6622a0ace56e3c313406f879588f0c819", size = 308930, upload-time = "2026-03-03T17:29:39.225Z" },
+    { url = "https://files.pythonhosted.org/packages/be/25/13773a2944cc5975d44db58233b3610ddc88d4be49e6576adf7ed4b62250/strawberry_graphql-0.314.3-py3-none-any.whl", hash = "sha256:4ef4442cea79014487acd7a0d1a2ce55c9d2a42dcd34a307d4c01f2ab477ecfa", size = 324471, upload-time = "2026-04-08T18:04:44.088Z" },
 ]
 
 [package.optional-dependencies]
