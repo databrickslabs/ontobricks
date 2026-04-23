@@ -21,9 +21,11 @@ save is cheap and avoids recomputing hashes on every read.
 """
 
 import copy
+import hashlib
+import json
 import re
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 
 from back.core.logging import get_logger
 from shared.config.constants import (
@@ -493,30 +495,38 @@ class DomainSession:
 
         return data
 
-    def _config_snapshot(self) -> str:
-        """Return a quick hash of ontology + mapping for change detection.
+    def _sanitized_ontology_for_hash(self) -> Dict[str, Any]:
+        """Return a deep-copied ontology with volatile runtime flags stripped.
 
-        Strips volatile runtime flags (``excluded``, ``r2rml_output``) so
-        the hash only reflects real user-controlled content.
+        The ``excluded`` flag on classes and properties is a UI-level
+        marker that lives in the mapping (single source of truth); it
+        must never participate in change-detection hashing.
         """
-        import copy, hashlib, json
-
         ont = copy.deepcopy(self._data.get("ontology", {}))
         for cls in ont.get("classes", []):
             cls.pop("excluded", None)
         for prop in ont.get("properties", []):
             prop.pop("excluded", None)
+        return ont
+
+    @staticmethod
+    def _sha256_json(payload: Any) -> str:
+        """SHA-256 of a JSON-serialized payload with stable ordering."""
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, default=str).encode()
+        ).hexdigest()
+
+    def _config_snapshot(self) -> str:
+        """Return a quick hash of ontology + mapping for change detection."""
+        ont = self._sanitized_ontology_for_hash()
         asgn = self._data.get("assignment", {})
-        payload = json.dumps(
+        return self._sha256_json(
             {
                 "ontology": ont,
                 "entities": asgn.get("entities", []),
                 "relationships": asgn.get("relationships", []),
-            },
-            sort_keys=True,
-            default=str,
+            }
         )
-        return hashlib.sha256(payload.encode()).hexdigest()
 
     def _rebake_snapshots(self):
         """Re-capture initial snapshots from current data so save() sees no diff."""
@@ -525,29 +535,18 @@ class DomainSession:
         self._initial_ontology_snapshot = ont_snap
         self._initial_assignment_snapshot = asgn_snap
 
-    def _split_snapshots(self):
+    def _split_snapshots(self) -> Tuple[str, str]:
         """Return separate (ontology_hash, assignment_hash) for granular change detection."""
-        import copy, hashlib, json
-
-        ont = copy.deepcopy(self._data.get("ontology", {}))
-        for cls in ont.get("classes", []):
-            cls.pop("excluded", None)
-        for prop in ont.get("properties", []):
-            prop.pop("excluded", None)
+        ont = self._sanitized_ontology_for_hash()
         asgn = self._data.get("assignment", {})
-
-        ont_payload = json.dumps(ont, sort_keys=True, default=str)
-        asgn_payload = json.dumps(
-            {
-                "entities": asgn.get("entities", []),
-                "relationships": asgn.get("relationships", []),
-            },
-            sort_keys=True,
-            default=str,
-        )
         return (
-            hashlib.sha256(ont_payload.encode()).hexdigest(),
-            hashlib.sha256(asgn_payload.encode()).hexdigest(),
+            self._sha256_json(ont),
+            self._sha256_json(
+                {
+                    "entities": asgn.get("entities", []),
+                    "relationships": asgn.get("relationships", []),
+                }
+            ),
         )
 
     def save(self):
@@ -797,7 +796,7 @@ class DomainSession:
         resolution happens inside :class:`RegistryService` at I/O time.
         """
         from shared.config.settings import get_settings
-        from back.objects.registry.service import RegistryCfg, _DOMAINS_FOLDER
+        from back.objects.registry.RegistryService import RegistryCfg, _DOMAINS_FOLDER
 
         cfg = RegistryCfg.from_domain(self, get_settings())
         if not cfg.is_configured:

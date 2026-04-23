@@ -1,10 +1,10 @@
 """Registry — domain registry, permissions, and scheduled builds."""
 
-from back.objects.registry.service import (
+from back.objects.registry.RegistryService import (
     RegistryCfg,
     RegistryService,
 )
-from back.objects.registry.permissions import (
+from back.objects.registry.PermissionService import (
     PermissionService,
     permission_service,
     ROLE_ADMIN,

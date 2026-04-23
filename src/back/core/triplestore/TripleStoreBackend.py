@@ -441,7 +441,12 @@ class TripleStoreBackend(ABC):
         try:
             return self.execute_query(sql) or []
         except Exception as e:
-            logger.debug("transitive_closure SQL failed: %s", e)
+            logger.warning(
+                "transitive_closure SQL failed on %s, returning empty result: %s",
+                table_name,
+                e,
+                exc_info=True,
+            )
             return []
 
     def symmetric_expand(
@@ -469,7 +474,12 @@ class TripleStoreBackend(ABC):
         try:
             return self.execute_query(sql) or []
         except Exception as e:
-            logger.debug("symmetric_expand SQL failed: %s", e)
+            logger.warning(
+                "symmetric_expand SQL failed on %s, returning empty result: %s",
+                table_name,
+                e,
+                exc_info=True,
+            )
             return []
 
     def shortest_path(

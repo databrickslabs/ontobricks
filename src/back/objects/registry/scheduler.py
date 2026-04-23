@@ -319,7 +319,7 @@ class BuildScheduler:
 
     @staticmethod
     def _history_path(registry_cfg: Dict[str, str], domain_name: str) -> str:
-        from back.objects.registry.service import RegistryCfg, _DOMAINS_FOLDER
+        from back.objects.registry.RegistryService import RegistryCfg, _DOMAINS_FOLDER
 
         c = RegistryCfg.from_dict(registry_cfg)
         return f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/{_DOMAINS_FOLDER}/{domain_name}/{_HISTORY_FILENAME}"
@@ -370,7 +370,7 @@ class BuildScheduler:
     def _resolve_creds(settings):
         """Resolve host/token/registry from env-level settings (for startup)."""
         from back.core.databricks import is_databricks_app
-        from back.objects.registry.service import RegistryCfg
+        from back.objects.registry.RegistryService import RegistryCfg
 
         host = settings.databricks_host
         token = settings.databricks_token
@@ -715,7 +715,7 @@ def _run_scheduled_build(
         if not host or not token:
             raise InfrastructureError("Databricks host/token not available")
 
-        from back.objects.registry.service import RegistryCfg, RegistryService
+        from back.objects.registry.RegistryService import RegistryCfg, RegistryService
 
         cfg = RegistryCfg.from_dict(reg)
         if not cfg.catalog or not cfg.schema:

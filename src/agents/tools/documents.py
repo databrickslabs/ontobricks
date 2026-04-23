@@ -36,7 +36,7 @@ def _volume_docs_path(ctx: ToolContext) -> Optional[str]:
 
         folder = sanitize_domain_folder(ctx.domain_name or "untitled_domain")
     version = ctx.domain_version or "1"
-    from back.objects.registry.service import _DOMAINS_FOLDER
+    from back.objects.registry.RegistryService import _DOMAINS_FOLDER
 
     path = f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/{_DOMAINS_FOLDER}/{folder}/V{version}/documents"
     logger.debug("_volume_docs_path: resolved to %s", path)

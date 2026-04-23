@@ -1,10 +1,10 @@
-"""Tests for back.objects.registry.service — RegistryCfg and RegistryService."""
+"""Tests for back.objects.registry.RegistryService — RegistryCfg and RegistryService."""
 
 import json
 import pytest
 from unittest.mock import MagicMock, patch, call
 
-from back.objects.registry.service import (
+from back.objects.registry.RegistryService import (
     RegistryCfg,
     RegistryService,
     _DEFAULT_VOLUME,

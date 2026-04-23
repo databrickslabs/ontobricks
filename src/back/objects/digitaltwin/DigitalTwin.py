@@ -136,6 +136,38 @@ class DigitalTwin:
 
         Returns an enriched error string suitable for user-facing task messages.
         """
+        # --- Permission errors (UC MANAGE / SELECT / USAGE missing) -----------
+        perm_match = re.search(
+            r"PERMISSION_DENIED:\s*([^\n]+)", error_msg, re.IGNORECASE
+        )
+        if perm_match:
+            perm_detail = perm_match.group(1).strip().rstrip(".")
+            return (
+                f"Permission denied while creating the VIEW.\n"
+                f"  Detail: {perm_detail}\n"
+                f"  Fix: Grant the required privilege to the Databricks App service "
+                f"principal (typically MANAGE on the target object or its parent "
+                f"schema, and SELECT on all source tables). "
+                f"If an object with the target name already exists as a TABLE, drop "
+                f"it first — CREATE OR REPLACE VIEW cannot overwrite a TABLE."
+            )
+
+        # --- Missing source table / view -------------------------------------
+        tbl_match = re.search(
+            r"TABLE_OR_VIEW_NOT_FOUND[^`']*"
+            r"((?:`[^`]+`|'[^']+')"
+            r"(?:\.(?:`[^`]+`|'[^']+')){0,2})",
+            error_msg,
+        )
+        if tbl_match:
+            missing = tbl_match.group(1)
+            return (
+                f"Source table or view not found: {missing}.\n"
+                f"  Fix: Verify the catalog/schema/table exists and the app service "
+                f"principal has SELECT on it."
+            )
+
+        # --- Column-resolution errors ----------------------------------------
         col_match = re.search(r"name `([^`]+)` cannot be resolved", error_msg)
         if not col_match:
             col_match = re.search(
@@ -146,9 +178,14 @@ class DigitalTwin:
                 "diagnose_view_error: unrecognized database error format: %s",
                 error_msg,
             )
+            truncated = error_msg.strip()
+            if len(truncated) > 500:
+                truncated = truncated[:500] + " …"
             return (
-                "The database reported an error that does not match a known column-resolution pattern. "
-                "Verify your source tables and column mappings."
+                "VIEW creation failed with an unrecognized database error.\n"
+                f"  Detail: {truncated}\n"
+                "  Fix: Check source tables, column mappings and warehouse "
+                "permissions. Full traceback is available in the server logs."
             )
 
         bad_column = col_match.group(1)

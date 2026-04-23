@@ -74,6 +74,12 @@ def live_server(_set_env):
     src_dir = os.path.join(repo_root, "src")
     env = {**os.environ}
     env["PYTHONPATH"] = src_dir + os.pathsep + env.get("PYTHONPATH", "")
+    # The unit-test harness (tests/conftest.py) forces CSRF_DISABLED=1 so
+    # TestClient assertions don't need tokens; the E2E subprocess, however,
+    # is meant to mirror real deployment where CSRF is live.  Strip the
+    # override so tests/e2e/test_permissions_flows.py can actually exercise
+    # the rejection branch.
+    env.pop("CSRF_DISABLED", None)
 
     _server_proc = subprocess.Popen(
         [

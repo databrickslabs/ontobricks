@@ -1,4 +1,4 @@
-"""Tests for back.objects.registry.permissions — permission service."""
+"""Tests for back.objects.registry.PermissionService — permission service."""
 
 import json
 import time
@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from back.objects.registry.permissions import (
+from back.objects.registry.PermissionService import (
     PermissionService,
     ROLE_ADMIN,
     ROLE_APP_USER,
@@ -557,7 +557,7 @@ class TestAppPrincipalsBootstrap:
     def test_success_clears_bootstrap_flag(self, svc):
         fake = self._FakeClient([{"email": "a@b.com"}], [], 200)
         with patch(
-            "back.objects.registry.permissions.DatabricksClient",
+            "back.objects.registry.PermissionService.DatabricksClient",
             return_value=fake,
         ):
             svc.list_app_principals("h", "t", "ontobricks")
@@ -566,7 +566,7 @@ class TestAppPrincipalsBootstrap:
     def test_403_sets_bootstrap_flag(self, svc):
         fake = self._FakeClient([], [], 403)
         with patch(
-            "back.objects.registry.permissions.DatabricksClient",
+            "back.objects.registry.PermissionService.DatabricksClient",
             return_value=fake,
         ):
             svc.list_app_principals("h", "t", "ontobricks")
@@ -575,7 +575,7 @@ class TestAppPrincipalsBootstrap:
     def test_non_403_errors_do_not_set_flag(self, svc):
         fake = self._FakeClient([], [], 500)
         with patch(
-            "back.objects.registry.permissions.DatabricksClient",
+            "back.objects.registry.PermissionService.DatabricksClient",
             return_value=fake,
         ):
             svc.list_app_principals("h", "t", "ontobricks")
@@ -584,7 +584,7 @@ class TestAppPrincipalsBootstrap:
     def test_clear_cache_resets_flag(self, svc):
         fake = self._FakeClient([], [], 403)
         with patch(
-            "back.objects.registry.permissions.DatabricksClient",
+            "back.objects.registry.PermissionService.DatabricksClient",
             return_value=fake,
         ):
             svc.list_app_principals("h", "t", "ontobricks")

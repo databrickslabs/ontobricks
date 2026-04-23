@@ -109,5 +109,5 @@ scope:
   # Good
   from back.objects.registry import RegistryService, BuildScheduler
   # Bad
-  from back.objects.registry.service import RegistryService
+  from back.objects.registry import RegistryService
   ```

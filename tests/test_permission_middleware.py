@@ -10,7 +10,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from starlette.datastructures import State
 
-from back.objects.registry.permissions import (
+from back.objects.registry.PermissionService import (
     ROLE_ADMIN,
     ROLE_APP_USER,
     ROLE_BUILDER,

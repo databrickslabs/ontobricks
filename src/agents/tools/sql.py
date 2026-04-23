@@ -64,7 +64,7 @@ def tool_execute_sql(ctx: ToolContext, *, sql: str = "", **_kwargs) -> str:
             }
         )
     except Exception as exc:
-        logger.error("tool_execute_sql: query failed: %s", exc)
+        logger.error("tool_execute_sql: query failed: %s", exc, exc_info=True)
         return json.dumps({"success": False, "error": str(exc)})
 
 

@@ -330,7 +330,7 @@ class PermissionService:
         domain_folder: str,
     ) -> str:
         """Path to .domain_permissions.json inside a domain folder."""
-        from back.objects.registry.service import RegistryCfg
+        from back.objects.registry.RegistryService import RegistryCfg
 
         c = RegistryCfg.from_dict(registry_cfg)
         return (

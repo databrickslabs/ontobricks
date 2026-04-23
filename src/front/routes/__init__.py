@@ -11,7 +11,6 @@ from front.routes.dtwin import router as dtwin_router
 from front.routes.domain import router as domain_router
 from front.routes.registry import router as registry_router
 from front.routes.resolve import router as resolve_router
-from front.routes.help import router as help_router
 
 all_frontend_routers = [
     home_router,
@@ -21,7 +20,6 @@ all_frontend_routers = [
     domain_router,
     registry_router,
     resolve_router,
-    help_router,
 ]
 
 __all__ = ["all_frontend_routers"]

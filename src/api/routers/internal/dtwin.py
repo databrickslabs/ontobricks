@@ -1760,11 +1760,9 @@ async def dtwin_graphql_schema(
     base_uri = ontology.get("base_uri", DEFAULT_BASE_URI)
 
     if not classes:
-        return {
-            "success": False,
-            "domain": display_name,
-            "message": "Ontology is empty — add at least one class to generate a GraphQL schema.",
-        }
+        raise ValidationError(
+            "Ontology is empty — add at least one class to generate a GraphQL schema."
+        )
 
     result = build_schema_for_domain(classes, properties_list, base_uri, display_name)
     if not result:

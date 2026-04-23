@@ -1,8 +1,11 @@
-"""In-app Help Center documentation endpoints.
+"""In-app Help Center documentation endpoints (internal JSON API).
 
 Serves the Markdown files from the repository's ``docs/`` folder and their
 referenced images so the Help Center modal can render them client-side with
 marked.js. Markdown remains the single source of truth.
+
+Lives under :mod:`api.routers.internal` because every endpoint returns
+JSON or binary — no HTML pages are rendered here.
 
 Endpoints (all read-only, JSON/binary):
 
@@ -98,13 +101,15 @@ _IMAGE_NAME_RE = re.compile(r"^[A-Za-z0-9_ .-]+\.(svg|png|jpg|jpeg|gif|webp)$")
 def _docs_dir() -> str:
     """Resolve the repository's ``docs/`` directory.
 
-    Uses the same relative-to-package trick as ``static_dir`` in
-    ``src/shared/fastapi/main.py`` (3 levels up from ``src/front/routes/``
-    lands on the repo root).
+    The Help Center is served from Markdown files bundled at the repo root.
+    This file lives at ``src/api/routers/internal/help.py`` so we climb
+    four ``dirname`` levels to reach ``<repo>/`` and then append ``docs/``.
     """
-    routes_dir = os.path.dirname(os.path.abspath(__file__))
-    # routes_dir = <repo>/src/front/routes
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(routes_dir)))
+    here = os.path.dirname(os.path.abspath(__file__))
+    # here = <repo>/src/api/routers/internal
+    repo_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(here)))
+    )
     return os.path.join(repo_root, "docs")
 
 

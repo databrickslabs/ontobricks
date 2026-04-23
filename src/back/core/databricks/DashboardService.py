@@ -192,10 +192,16 @@ class DashboardService:
             }
         except requests.exceptions.HTTPError as exc:
             logger.exception("HTTP error getting dashboard details: %s", exc)
-            return {"parameters": [], "error": str(exc)}
+            status = (
+                exc.response.status_code if exc.response is not None else "unknown"
+            )
+            return {
+                "parameters": [],
+                "error": f"Databricks API returned HTTP {status}",
+            }
         except Exception as exc:
             logger.exception("Error getting dashboard details: %s", exc)
-            return {"parameters": [], "error": str(exc)}
+            return {"parameters": [], "error": "Could not retrieve dashboard details"}
 
     @staticmethod
     def _extract_parameters(dash_def: dict) -> list:

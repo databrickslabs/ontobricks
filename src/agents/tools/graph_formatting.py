@@ -13,6 +13,8 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
+from back.core.w3c.rdf_utils import uri_local_name
+
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
 
@@ -23,14 +25,16 @@ RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
 def local_name(uri: str) -> str:
     """Extract the human-readable local name from a URI.
 
+    Thin wrapper around :func:`back.core.w3c.rdf_utils.uri_local_name`
+    that preserves the original URI for pathological trailing-separator
+    inputs (``"http://foo/"`` → ``"http://foo/"``) so that the
+    LLM-facing formatter never renders an empty entity label.
+
     ``https://ontobricks.com/ontology/Customer/CUST00094``  →  ``CUST00094``
     ``http://www.w3.org/1999/02/22-rdf-syntax-ns#type``     →  ``type``
     """
-    for sep in ("#", "/"):
-        idx = uri.rfind(sep)
-        if idx >= 0 and idx < len(uri) - 1:
-            return uri[idx + 1:]
-    return uri
+    name = uri_local_name(uri)
+    return name if name else uri
 
 
 def pretty_predicate(uri: str) -> str:

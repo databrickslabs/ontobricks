@@ -191,8 +191,14 @@ class SHACLService:
         try:
             data_graph.parse(data=data_turtle, format="turtle")
         except Exception as e:
-            logger.error("Failed to parse data graph for SHACL rules: %s", e)
-            return {"inferred_triples": [], "count": 0, "error": str(e)}
+            logger.error(
+                "Failed to parse data graph for SHACL rules: %s", e, exc_info=True
+            )
+            return {
+                "inferred_triples": [],
+                "count": 0,
+                "error": "Invalid data graph: could not parse Turtle input",
+            }
 
         original_count = len(data_graph)
 
@@ -207,8 +213,12 @@ class SHACLService:
                 inference="none",
             )
         except Exception as e:
-            logger.error("SHACL-AF rule execution failed: %s", e)
-            return {"inferred_triples": [], "count": 0, "error": str(e)}
+            logger.error("SHACL-AF rule execution failed: %s", e, exc_info=True)
+            return {
+                "inferred_triples": [],
+                "count": 0,
+                "error": "SHACL rule execution failed",
+            }
 
         new_count = len(data_graph)
         inferred = new_count - original_count
@@ -338,12 +348,12 @@ class SHACLService:
                 serialize_report_graph="turtle",
             )
         except Exception as exc:
-            logger.error("PySHACL validation failed: %s", exc)
+            logger.error("PySHACL validation failed: %s", exc, exc_info=True)
             return {
                 "conforms": False,
                 "violations": [],
-                "report_text": str(exc),
-                "error": str(exc),
+                "report_text": "PySHACL validation failed — see server logs",
+                "error": "PySHACL validation failed",
             }
 
         violations = self._extract_violations(results_graph)
