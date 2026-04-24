@@ -121,7 +121,9 @@
                             {% set vis.any = true %}
                             <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> {{ group.title }}</h6></li>
                             {% for item in group['items'] %}
-                            <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}" href="{{ item.route if item.route else menu.route ~ '?section=' ~ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
+                            {% set admin_only_cls = ' admin-only-nav' if item.admin_only|default(false) else '' %}
+                            {% set admin_only_style = 'display:none' if item.admin_only|default(false) else '' %}
+                            <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}{{ admin_only_cls }}" href="{{ item.route if item.route else menu.route ~ '?section=' ~ item.id }}"{% if admin_only_style %} style="{{ admin_only_style }}"{% endif %}><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
                             {% endfor %}
                             {% endif %}
                             {% endfor %}
@@ -193,7 +195,7 @@
                     </li>
                     {% for link in menu_config.utility_links %}
                     {% if link.id == 'settings' %}
-                    <li class="nav-item">
+                    <li class="nav-item admin-only-nav" style="display:none">
                         <a class="nav-link" href="{{ link.route }}" title="{{ link.label }}">
                             <i class="bi {{ link.icon }}"></i>
                         </a>

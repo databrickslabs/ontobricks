@@ -142,10 +142,23 @@ _PERM_BYPASS_PREFIXES = (
 _VIEWER_BLOCKED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 _PERM_ADMIN_ONLY_PREFIXES = (
-    "/settings/permissions",
-    "/settings/domain-permissions",
-    "/settings/teams",
+    "/settings",
 )
+
+# Endpoints under an admin-only prefix that non-admins must still be
+# able to reach (read-only status endpoints consumed by the regular
+# app flow, e.g. checking warehouse / registry configuration before
+# opening the Load Domain dialog, or listing domains for the
+# Registry Browse page). Map is exact-path → allowed HTTP methods,
+# so write variants at the same path (e.g. ``POST /settings/registry``
+# to change the registry location) remain admin-only, and so do
+# deletes on sub-paths like ``/settings/registry/domains/<name>``.
+_PERM_ADMIN_ONLY_EXCEPTIONS = {
+    "/settings/current": {"GET"},
+    "/settings/registry": {"GET"},
+    "/settings/registry/domains": {"GET"},
+    "/settings/registry/bridges": {"GET"},
+}
 
 # Routes that operate on a specific domain (the session's current domain).
 # Non-admin users need a team entry on that domain (user_domain_role != NONE)
@@ -155,6 +168,17 @@ _DOMAIN_SCOPED_PREFIXES = (
     "/ontology/",
     "/mapping/",
     "/dtwin/",
+)
+
+# Routes that live under a domain-scoped prefix but enumerate
+# registry-level data (all domains / all versions). They must not be
+# gated by the *current* session domain's role, otherwise a user who
+# happens to land on a domain they are not a member of cannot even
+# reach the "Load Domain from Registry" picker.
+_DOMAIN_SCOPED_EXCEPTIONS = (
+    "/domain/list-projects",
+    "/domain/list-versions",
+    "/domain/load-from-uc",
 )
 
 
@@ -172,9 +196,11 @@ class PermissionMiddleware(BaseHTTPMiddleware):
       in the domain's ``.domain_permissions.json``.  Admins bypass this.
     - **Viewer write-block**: a viewer team entry allows GETs on domain
       routes but not writes.
-    - **Admin-only prefixes** (`/settings/permissions`,
-      `/settings/domain-permissions`, `/settings/teams`) are gated to
-      admins even for app users.
+    - **Admin-only prefix** (`/settings`) is gated to admins even for
+      app users. A small allow-list (see
+      :data:`_PERM_ADMIN_ONLY_EXCEPTIONS`) keeps the read-only status
+      endpoints that the regular app flow needs (warehouse/registry
+      config) open to non-admins.
 
     Only active when running as a Databricks App (``DATABRICKS_APP_PORT``
     is set).  In local-dev mode every request passes through as admin.
@@ -253,7 +279,7 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         if role != ROLE_ADMIN:
             is_domain_scoped = any(
                 path.startswith(p) for p in _DOMAIN_SCOPED_PREFIXES
-            )
+            ) and path not in _DOMAIN_SCOPED_EXCEPTIONS
             if is_domain_scoped and domain_role == ROLE_NONE:
                 if self._wants_json(request):
                     return self._forbidden_json(
@@ -273,13 +299,18 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                     request, "Viewer role does not allow write operations"
                 )
 
-            for prefix in _PERM_ADMIN_ONLY_PREFIXES:
-                if path.startswith(prefix):
-                    if self._wants_json(request):
-                        return self._forbidden_json(
-                            request, "Only administrators can access settings"
-                        )
-                    return RedirectResponse("/", status_code=302)
+            allowed_methods = _PERM_ADMIN_ONLY_EXCEPTIONS.get(path)
+            is_admin_only = any(
+                path.startswith(p) for p in _PERM_ADMIN_ONLY_PREFIXES
+            ) and not (
+                allowed_methods is not None and request.method in allowed_methods
+            )
+            if is_admin_only:
+                if self._wants_json(request):
+                    return self._forbidden_json(
+                        request, "Only administrators can access settings"
+                    )
+                return RedirectResponse("/", status_code=302)
 
         return await call_next(request)
 
