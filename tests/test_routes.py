@@ -186,6 +186,108 @@ class TestOntologyRoutes:
         assert response.status_code == 200
 
 
+class TestAutoAssignIconsAsync:
+    """The icon-assignment endpoint must be non-blocking and task-tracked.
+
+    Regression suite for the async refactor: the endpoint returns a
+    ``task_id`` immediately and the agent work runs on a background
+    thread, so it shows up under ``/tasks`` like the wizard generator.
+    """
+
+    @staticmethod
+    def _wait_for_task(client, task_id, *, timeout=3.0, interval=0.05):
+        import time
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            resp = client.get(f"/tasks/{task_id}")
+            if resp.status_code == 200:
+                data = resp.json()
+                task = data.get("task") or {}
+                if task.get("status") in ("completed", "failed", "cancelled"):
+                    return task
+            time.sleep(interval)
+        raise AssertionError(f"Task {task_id} did not terminate within {timeout}s")
+
+    def test_empty_entity_names_rejected(self, client):
+        response = client.post("/ontology/auto-assign-icons", json={"entity_names": []})
+        assert response.status_code == 400
+
+    def test_returns_task_id_and_completes_on_success(self, client):
+        from types import SimpleNamespace
+
+        fake_result = SimpleNamespace(
+            success=True,
+            icons={"Customer": "🧑", "Order": "📋"},
+            steps=[],
+            iterations=1,
+            usage={"prompt_tokens": 10, "completion_tokens": 5},
+            error="",
+        )
+
+        with patch(
+            "api.routers.internal.ontology.require_serving_llm",
+            return_value=("https://h", "t", "ep"),
+        ), patch.object(
+            __import__(
+                "api.routers.internal.ontology", fromlist=["Ontology"]
+            ).Ontology,
+            "assign_icons_with_agent",
+            return_value=fake_result,
+        ):
+            response = client.post(
+                "/ontology/auto-assign-icons",
+                json={"entity_names": ["Customer", "Order"]},
+            )
+
+            assert response.status_code == 200
+            body = response.json()
+            assert body["success"] is True
+            assert isinstance(body.get("task_id"), str) and body["task_id"]
+            assert "icons" not in body, (
+                "Icons must be returned via /tasks/{id}, not inline"
+            )
+
+            task = self._wait_for_task(client, body["task_id"])
+            assert task["status"] == "completed"
+            result = task.get("result") or {}
+            assert result.get("icons") == {"Customer": "🧑", "Order": "📋"}
+            assert result.get("missing") == []
+            assert result.get("agent_iterations") == 1
+
+    def test_agent_failure_marks_task_failed(self, client):
+        from types import SimpleNamespace
+
+        fake_result = SimpleNamespace(
+            success=False,
+            icons={},
+            steps=[],
+            iterations=0,
+            usage={},
+            error="LLM endpoint unreachable",
+        )
+
+        with patch(
+            "api.routers.internal.ontology.require_serving_llm",
+            return_value=("https://h", "t", "ep"),
+        ), patch.object(
+            __import__(
+                "api.routers.internal.ontology", fromlist=["Ontology"]
+            ).Ontology,
+            "assign_icons_with_agent",
+            return_value=fake_result,
+        ):
+            response = client.post(
+                "/ontology/auto-assign-icons",
+                json={"entity_names": ["Customer"]},
+            )
+            assert response.status_code == 200
+            task_id = response.json()["task_id"]
+
+            task = self._wait_for_task(client, task_id)
+            assert task["status"] == "failed"
+
+
 class TestMappingRoutes:
     def test_mapping_page(self, client):
         response = client.get("/mapping/")

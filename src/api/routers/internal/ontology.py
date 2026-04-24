@@ -1221,50 +1221,108 @@ async def auto_assign_icons(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Use the auto-icon-assign agent to suggest emoji icons for entity names."""
-    with map_route_errors("Auto-assign icons failed", logger):
-        data = await request.json()
-        entity_names = data.get("entity_names", [])
+    """Start the auto-icon-assign agent as a background task.
 
-        if not entity_names:
-            raise ValidationError("No entity names provided")
+    Returns a ``task_id`` immediately; poll ``GET /tasks/{task_id}`` for
+    ``result.icons`` once ``status == "completed"``. Mirrors the wizard
+    ontology generator pattern (``/wizard/generate-async``) so the icon
+    agent is visible in the global task tracker and survives page
+    navigation.
+    """
+    import threading
 
-        domain = get_domain(session_mgr)
-        host, token, llm_endpoint = require_serving_llm(domain, settings)
+    data = await request.json()
+    entity_names = data.get("entity_names", [])
+    if not entity_names:
+        raise ValidationError("No entity names provided")
 
-        logger.info("AutoIcons: launching agent for %d entities", len(entity_names))
+    domain = get_domain(session_mgr)
+    host, token, llm_endpoint = require_serving_llm(domain, settings)
 
-        agent_result = Ontology(domain).assign_icons_with_agent(
-            host=host,
-            token=token,
-            endpoint_name=llm_endpoint,
-            entity_names=entity_names,
-        )
+    tm = get_task_manager()
+    task = tm.create_task(
+        name=f"Assign Icons ({len(entity_names)} entities)",
+        task_type="auto_assign_icons",
+        steps=[
+            {"name": "init", "description": "Preparing agent"},
+            {"name": "agent", "description": "Asking the LLM"},
+            {"name": "apply", "description": "Merging icons"},
+        ],
+    )
+    logger.info(
+        "AutoIcons: task %s created for %d entities",
+        task.id,
+        len(entity_names),
+    )
 
-        if not agent_result.success:
-            logger.warning("AutoIcons: agent failed — %s", agent_result.error)
-            raise InfrastructureError(
-                "Agent failed to assign icons",
-                detail=agent_result.error or None,
+    def run_icons():
+        try:
+            tm.start_task(task.id, "Starting icon agent…")
+
+            def on_step(msg: str):
+                tm.update_progress(task.id, task.progress, msg)
+
+            tm.advance_step(task.id, "Asking the LLM…")
+            agent_result = Ontology(domain).assign_icons_with_agent(
+                host=host,
+                token=token,
+                endpoint_name=llm_endpoint,
+                entity_names=entity_names,
+                on_step=on_step,
             )
 
-        final_map = Ontology.merge_icon_suggestions(entity_names, agent_result.icons)
-        missing = [n for n in entity_names if n not in final_map]
-        if missing:
-            logger.warning("AutoIcons: No icon for: %s", missing)
+            if not agent_result.success:
+                logger.warning(
+                    "AutoIcons[%s]: agent failed — %s",
+                    task.id,
+                    agent_result.error,
+                )
+                tm.fail_task(
+                    task.id,
+                    agent_result.error or "Agent did not produce icons",
+                )
+                return
 
-        logger.info(
-            "AutoIcons: agent completed — %d/%d icons assigned in %d iterations",
-            len(final_map),
-            len(entity_names),
-            agent_result.iterations,
-        )
+            tm.advance_step(task.id, "Merging icons…")
+            final_map = Ontology.merge_icon_suggestions(
+                entity_names, agent_result.icons
+            )
+            missing = [n for n in entity_names if n not in final_map]
+            if missing:
+                logger.warning(
+                    "AutoIcons[%s]: no icon for %d entity(ies): %s",
+                    task.id,
+                    len(missing),
+                    missing,
+                )
 
-        return {
-            "success": True,
-            "icons": final_map,
-            "agent_iterations": agent_result.iterations,
-        }
+            logger.info(
+                "AutoIcons[%s]: completed — %d/%d icons in %d iterations",
+                task.id,
+                len(final_map),
+                len(entity_names),
+                agent_result.iterations,
+            )
+            tm.complete_task(
+                task.id,
+                result={
+                    "icons": final_map,
+                    "missing": missing,
+                    "agent_iterations": agent_result.iterations,
+                    "agent_usage": agent_result.usage,
+                    "agent_steps": serialize_agent_steps(agent_result.steps),
+                },
+                message=(
+                    f"{len(final_map)}/{len(entity_names)} icons assigned "
+                    f"({agent_result.iterations} agent iterations)"
+                ),
+            )
+        except Exception as exc:
+            logger.exception("AutoIcons[%s]: unexpected failure: %s", task.id, exc)
+            tm.fail_task(task.id, "Icon assignment failed unexpectedly")
+
+    threading.Thread(target=run_icons, daemon=True).start()
+    return {"success": True, "task_id": task.id, "message": "Agent task started"}
 
 
 # ===========================================

@@ -13,10 +13,30 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
+import requests
+
 from back.core.logging import get_logger
 from agents.llm_utils import call_llm_with_retry
 
 logger = get_logger(__name__)
+
+# Endpoints (e.g. databricks-claude-opus-4-7) sometimes reject optional
+# OpenAI-style parameters with a 400 message like:
+#   "Model ... does not support the temperature parameter."
+# We cache such bans per (endpoint, param) pair so subsequent calls skip the
+# offending field proactively instead of re-discovering the 400 every time.
+_UNSUPPORTED_PARAMS: Dict[str, set] = {}
+
+
+def _unsupported_params(endpoint_name: str) -> set:
+    return _UNSUPPORTED_PARAMS.setdefault(endpoint_name, set())
+
+
+def _looks_unsupported(body_text: str, param: str) -> bool:
+    low = (body_text or "").lower()
+    return f"does not support the {param} parameter" in low or (
+        "unsupported" in low and param in low
+    )
 
 
 # =====================================================
@@ -64,25 +84,52 @@ def call_serving_endpoint(
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
+
+    banned = _unsupported_params(endpoint_name)
     payload: Dict[str, Any] = {
         "messages": messages,
         "max_tokens": max_tokens,
-        "temperature": temperature,
     }
+    if "temperature" not in banned and temperature is not None:
+        payload["temperature"] = temperature
     if tools:
         payload["tools"] = tools
 
     logger.info(
-        "%s: POST %s — %d messages, %d tool defs, max_tokens=%d",
+        "%s: POST %s — %d messages, %d tool defs, max_tokens=%d, temperature=%s",
         trace_name,
         endpoint_name,
         len(messages),
         len(tools) if tools else 0,
         max_tokens,
+        payload.get("temperature", "<skipped>"),
     )
 
-    resp = call_llm_with_retry(url, headers, payload, timeout=timeout)
-    return resp.json()
+    try:
+        resp = call_llm_with_retry(url, headers, payload, timeout=timeout)
+        return resp.json()
+    except requests.exceptions.HTTPError as exc:
+        response = exc.response
+        status = response.status_code if response is not None else None
+        if status != 400:
+            raise
+        body_text = response.text if response is not None else ""
+        # Detect and strip parameters the model rejects, then retry once.
+        dropped: List[str] = []
+        for param in ("temperature",):
+            if param in payload and _looks_unsupported(body_text, param):
+                banned.add(param)
+                payload.pop(param, None)
+                dropped.append(param)
+        if not dropped:
+            raise
+        logger.warning(
+            "%s: endpoint rejected unsupported param(s) %s — retrying without them",
+            trace_name,
+            dropped,
+        )
+        resp = call_llm_with_retry(url, headers, payload, timeout=timeout)
+        return resp.json()
 
 
 # =====================================================

@@ -62,3 +62,6 @@ src/.coding_rules.md
 
 # Internal notes (not pushed)
 /internal/
+
+# Release requirements / design drafts (not pushed)
+/releasereq/

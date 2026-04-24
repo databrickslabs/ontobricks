@@ -39,6 +39,32 @@ LLM_TIMEOUT = 120
 
 _TRACE_NAME = "auto_icon_assign"
 
+_BASE_MAX_TOKENS = 1024
+_PER_ENTITY_MAX_TOKENS = 80
+# Databricks-hosted Claude endpoints (e.g. databricks-claude-opus-4-7) reject
+# requests whose ``max_tokens`` exceeds the model's output cap (~8192). Going
+# higher returns an opaque 400 Bad Request. When the ontology is too large to
+# fit in one round, the agent naturally batches via the "retry with smaller
+# subset" tool-error feedback loop.
+_ABSOLUTE_MAX_TOKENS = 8192
+
+
+def _compute_max_tokens(n_entities: int) -> int:
+    """Budget enough tokens to emit the full tool-call JSON for N entities.
+
+    The ``assign_icons`` tool-call argument is a JSON object whose size grows
+    roughly linearly with the number of entities (name length + emoji + JSON
+    punctuation). At the default 2048-token budget, ontologies with ~40+
+    entities get the tool-call JSON truncated, which propagates as a
+    ``JSONDecodeError`` → empty ``arguments`` → ``tool_assign_icons()``
+    raising ``TypeError``. We scale with entity count but never exceed the
+    endpoint's documented output cap.
+    """
+    return min(
+        _ABSOLUTE_MAX_TOKENS,
+        _BASE_MAX_TOKENS + _PER_ENTITY_MAX_TOKENS * max(n_entities, 1),
+    )
+
 
 # =====================================================
 # Data classes
@@ -164,6 +190,10 @@ def run_agent(
 
     total_usage: Dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0}
     tools_supported = True
+    max_tokens = _compute_max_tokens(len(entity_names))
+    logger.info(
+        "Icon Agent: max_tokens=%d for %d entities", max_tokens, len(entity_names)
+    )
 
     def notify(msg: str):
         if on_step:
@@ -191,6 +221,7 @@ def run_agent(
                 messages,
                 tools=send_tools,
                 temperature=0.3,
+                max_tokens=max_tokens,
                 timeout=LLM_TIMEOUT,
                 trace_name=_TRACE_NAME,
             )
@@ -210,6 +241,7 @@ def run_agent(
                         messages,
                         tools=None,
                         temperature=0.3,
+                        max_tokens=max_tokens,
                         timeout=LLM_TIMEOUT,
                         trace_name=_TRACE_NAME,
                     )
@@ -255,10 +287,65 @@ def run_agent(
                 raw_args = func.get("arguments", "{}")
                 tool_id = tc.get("id", "")
 
+                finish_reason = choice.get("finish_reason")
+                truncated = finish_reason == "length"
+
                 try:
                     arguments = json.loads(raw_args)
-                except json.JSONDecodeError:
-                    arguments = {}
+                except json.JSONDecodeError as json_exc:
+                    logger.warning(
+                        "Icon Agent: tool_call '%s' arguments are not valid JSON "
+                        "(%d chars, finish_reason=%s) — almost certainly truncated. "
+                        "Error: %s. First 200: %r  Last 200: %r",
+                        tool_name,
+                        len(raw_args),
+                        finish_reason,
+                        json_exc,
+                        raw_args[:200],
+                        raw_args[-200:],
+                    )
+                    notify("Tool arguments were truncated — asking agent to retry…")
+                    tool_result = json.dumps(
+                        {
+                            "error": (
+                                "Your tool-call arguments were truncated by the "
+                                "token budget and could not be parsed as JSON. "
+                                "Retry assign_icons with a smaller payload: "
+                                "return icons for only a subset of entities, then "
+                                "call assign_icons again for the rest. Prefer "
+                                "short keys (exact entity names) and single "
+                                "emoji values."
+                            )
+                        }
+                    )
+                    result.steps.append(
+                        AgentStep(
+                            step_type="tool_call",
+                            content=f"<truncated, {len(raw_args)} chars>",
+                            tool_name=tool_name,
+                        )
+                    )
+                    result.steps.append(
+                        AgentStep(
+                            step_type="tool_result",
+                            content=tool_result[:300],
+                            tool_name=tool_name,
+                        )
+                    )
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_id,
+                            "content": tool_result,
+                        }
+                    )
+                    continue
+
+                if truncated:
+                    logger.warning(
+                        "Icon Agent: LLM stopped on 'length' but tool args "
+                        "parsed — output may still be incomplete"
+                    )
 
                 notify(f"Calling {tool_name}…")
                 result.steps.append(
