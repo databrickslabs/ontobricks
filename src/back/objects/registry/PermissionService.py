@@ -17,7 +17,7 @@ mode every user has unrestricted access.
 
 import json
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.databricks.DatabricksClient import DatabricksClient
@@ -600,6 +600,67 @@ class PermissionService:
             self._domain_perm_cache.pop(domain_folder, None)
         else:
             self._domain_perm_cache.clear()
+
+    # ------------------------------------------------------------------
+    # Visibility filter for domain lists
+    # ------------------------------------------------------------------
+
+    def filter_accessible_domains(
+        self,
+        email: str,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        app_name: str,
+        entries: List[Any],
+        *,
+        user_token: str = "",
+        app_role: str = "",
+        key: Optional[Callable[[Any], str]] = None,
+    ) -> List[Any]:
+        """Return only the entries the user has a role != ``ROLE_NONE`` on.
+
+        Admins (either by passed-in *app_role* or via live lookup) get the
+        full list back unchanged.  When *key* is ``None`` each entry is
+        treated as a folder name string, or ``entry["name"]`` for dicts.
+        """
+        if not entries:
+            return []
+
+        if app_role == ROLE_ADMIN or self.is_admin(
+            email, host, token, app_name, user_token=user_token
+        ):
+            return list(entries)
+
+        def _folder(e: Any) -> str:
+            if key is not None:
+                return key(e)
+            if isinstance(e, str):
+                return e
+            return e.get("name", "") if isinstance(e, dict) else ""
+
+        # Use the already-resolved app role to skip a redundant admin
+        # lookup inside get_domain_role. Fall back to ROLE_APP_USER so
+        # admin-level resolution is not triggered.
+        effective_app_role = app_role or ROLE_APP_USER
+        out: List[Any] = []
+        for entry in entries:
+            folder = _folder(entry)
+            if not folder:
+                continue
+            role = self.get_domain_role(
+                email,
+                host,
+                token,
+                registry_cfg,
+                app_name,
+                folder,
+                user_token=user_token,
+                app_role=effective_app_role,
+            )
+            if role != ROLE_NONE:
+                out.append(entry)
+        return out
 
     # ------------------------------------------------------------------
     # Batch domain-permission save (matrix UI)

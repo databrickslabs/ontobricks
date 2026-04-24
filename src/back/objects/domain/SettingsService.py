@@ -723,10 +723,13 @@ class SettingsService:
 
         role = "none"
         is_app_admin = False
+        domain_role = user_domain_role or ""
+        domain_folder = ""
         try:
-            _, host, token, registry_cfg = SettingsService._resolve_context(
+            domain, host, token, registry_cfg = SettingsService._resolve_context(
                 session_mgr, settings
             )
+            domain_folder = getattr(domain, "domain_folder", "") or ""
 
             permission_service.clear_admin_cache(email)
             is_app_admin = permission_service.is_admin(
@@ -744,6 +747,19 @@ class SettingsService:
                 settings.ontobricks_app_name,
                 user_token=user_token,
             )
+            # Re-resolve domain role fresh so it matches what the
+            # middleware sees on the next request (useful for debugging
+            # why a viewer can/can't write).
+            domain_role = permission_service.get_domain_role(
+                email,
+                host,
+                token,
+                registry_cfg,
+                settings.ontobricks_app_name,
+                domain_folder,
+                user_token=user_token,
+                app_role=role,
+            )
         except Exception as e:
             logger.error(
                 "permissions/me: error resolving role for %s (middleware app/domain role=%r/%r): %s",
@@ -760,6 +776,8 @@ class SettingsService:
             "role": role,
             "is_app_admin": is_app_admin,
             "is_app_mode": True,
+            "domain_folder": domain_folder,
+            "domain_role": domain_role,
         }
 
     @staticmethod

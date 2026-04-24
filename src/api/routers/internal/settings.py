@@ -4,6 +4,8 @@ Internal API -- Settings / configuration JSON endpoints.
 Moved from app/frontend/settings/routes.py during the front/back split.
 """
 
+from typing import Any, List
+
 from fastapi import APIRouter, Request, Depends
 
 from shared.config.settings import get_settings, Settings
@@ -12,6 +14,11 @@ from back.core.errors import ValidationError
 from back.objects.session import SessionManager, get_session_manager
 from back.core.helpers import resolve_default_base_uri, resolve_default_emoji
 from back.objects.session import get_domain
+from back.objects.registry import (
+    RegistryCfg,
+    ROLE_ADMIN,
+    permission_service,
+)
 
 from back.objects.domain.SettingsService import SettingsService as config_service
 
@@ -28,6 +35,47 @@ def _settings_request_identity(request: Request) -> tuple[str, str, str, str, st
     user_role = getattr(request.state, "user_role", "") or ""
     user_domain_role = getattr(request.state, "user_domain_role", "") or ""
     return email, display_name, user_token, user_role, user_domain_role
+
+
+def _filter_registry_domains_by_user_access(
+    request: Request,
+    session_mgr: SessionManager,
+    settings: Settings,
+    entries: List[Any],
+) -> List[Any]:
+    """Restrict *entries* (dicts with ``name``) to those the user has a role
+    != NONE on. Admins keep the full list. No-ops outside App mode."""
+    if not entries:
+        return list(entries)
+
+    user_role = getattr(request.state, "user_role", "") or ""
+    if not user_role or user_role == ROLE_ADMIN:
+        return list(entries)
+
+    email = (
+        getattr(request.state, "user_email", "")
+        or request.headers.get("x-forwarded-email", "")
+    )
+    if not email:
+        return list(entries)
+
+    from back.core.helpers import get_databricks_host_and_token
+
+    domain = get_domain(session_mgr)
+    host, token = get_databricks_host_and_token(domain, settings)
+    user_token = request.headers.get("x-forwarded-access-token", "") or ""
+    registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
+
+    return permission_service.filter_accessible_domains(
+        email,
+        host,
+        token,
+        registry_cfg,
+        settings.ontobricks_app_name,
+        entries,
+        user_token=user_token,
+        app_role=user_role,
+    )
 
 
 # ===========================================
@@ -221,11 +269,19 @@ async def initialize_registry(
 
 @router.get("/registry/domains")
 async def list_registry_domains(
+    request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """List domains in the registry with name and description."""
-    return config_service.list_registry_domains_result(session_mgr, settings)
+    """List domains in the registry with name and description.
+
+    Non-admin users only see domains they have a role on; admins see all.
+    """
+    result = config_service.list_registry_domains_result(session_mgr, settings)
+    result["domains"] = _filter_registry_domains_by_user_access(
+        request, session_mgr, settings, result.get("domains", [])
+    )
+    return result
 
 
 @router.get("/registry/bridges")

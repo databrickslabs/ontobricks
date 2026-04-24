@@ -51,7 +51,8 @@
                             "label": "Teams",
                             "icon": "bi-people",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "admin_only": true
                         }
                     ]
                 },
