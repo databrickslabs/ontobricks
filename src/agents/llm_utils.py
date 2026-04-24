@@ -73,7 +73,19 @@ def call_llm_with_retry(
                     time.sleep(delay)
                     continue
                 resp.raise_for_status()
-            resp.raise_for_status()
+            if not resp.ok:
+                body_preview = (resp.text or "")[:800]
+                logger.error(
+                    "LLM: HTTP %d from %s — body: %s",
+                    resp.status_code,
+                    url,
+                    body_preview,
+                )
+                raise requests.exceptions.HTTPError(
+                    f"{resp.status_code} Client Error: {resp.reason} for url: {url} "
+                    f"— body: {body_preview}",
+                    response=resp,
+                )
             return resp
         except requests.exceptions.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else None

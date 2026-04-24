@@ -136,6 +136,12 @@ async function initOntologyMap() {
         return;
     }
 
+    // If a previous icon-assignment task is still running, resume monitoring
+    // so the user sees the result land without clicking the button again.
+    if (typeof checkAndResumeIconsTask === 'function') {
+        checkAndResumeIconsTask();
+    }
+
     // Load saved layout
     const savedLayout = await loadMapLayout();
 
@@ -1485,13 +1491,190 @@ async function createInheritanceFromMap(childEntity, parentEntity) {
 }
 
 // =====================================================
-// AUTO-MAP ICONS (via LLM)
+// AUTO-MAP ICONS (via LLM, async background task)
 // =====================================================
+
+// Session-storage key for persisting a running icon task across navigation.
+const ICONS_TASK_KEY = 'ontobricks_icons_task';
+
+// Module-level guard so the monitor loop is started at most once per task.
+let _iconsCurrentTaskId = null;
+
+/**
+ * Restore button state (used after completion, failure, or resume).
+ */
+function _restoreAutoAssignIconsButton() {
+    const btn = document.getElementById('mapAutoAssignIcons');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-emoji-smile"></i>';
+    }
+}
+
+/**
+ * Apply an {entityName: emoji} map to OntologyState.config.classes, then
+ * save and refresh the map. Returns the number of icons actually applied.
+ */
+async function _applyIconsToOntologyState(iconMap) {
+    const classes = OntologyState?.config?.classes || [];
+    let assignedCount = 0;
+    for (const cls of classes) {
+        const emoji = iconMap ? iconMap[cls.name] : undefined;
+        if (emoji) {
+            cls.emoji = emoji;
+            assignedCount++;
+        }
+    }
+    if (assignedCount > 0) {
+        if (typeof saveConfigToSession === 'function') {
+            await saveConfigToSession();
+        }
+        initOntologyMap();
+        if (typeof updateClassesList === 'function') {
+            updateClassesList();
+        }
+    }
+    return assignedCount;
+}
+
+/**
+ * Poll /tasks/{taskId} until the icon task terminates, then apply the
+ * result or surface an error. Safe to call after a page reload because
+ * it reads the latest task state on the first poll.
+ */
+async function _monitorIconsTask(taskId) {
+    if (_iconsCurrentTaskId === taskId) {
+        // Already monitoring — avoid stacking loops after a resume.
+        return;
+    }
+    _iconsCurrentTaskId = taskId;
+
+    const pollInterval = 1500;
+    try {
+        while (true) {
+            await new Promise(r => setTimeout(r, pollInterval));
+
+            let task;
+            try {
+                const resp = await fetch(`/tasks/${taskId}`, { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (!data.success || !data.task) {
+                    throw new Error('Task not found');
+                }
+                task = data.task;
+            } catch (err) {
+                console.error('[Map] Icons task polling error:', err);
+                if (typeof showNotification === 'function') {
+                    showNotification('Error monitoring icon task: ' + err.message, 'error', 5000);
+                }
+                sessionStorage.removeItem(ICONS_TASK_KEY);
+                _restoreAutoAssignIconsButton();
+                return;
+            }
+
+            if (task.status === 'running' || task.status === 'pending') {
+                continue;
+            }
+
+            sessionStorage.removeItem(ICONS_TASK_KEY);
+
+            if (task.status === 'completed') {
+                const iconMap = (task.result && task.result.icons) || {};
+                const missing = (task.result && task.result.missing) || [];
+                const applied = await _applyIconsToOntologyState(iconMap);
+
+                if (typeof showNotification === 'function') {
+                    if (applied === 0) {
+                        showNotification('LLM did not return any icons', 'warning', 3000);
+                    } else {
+                        showNotification(
+                            `Mapped icons to ${applied} ${applied === 1 ? 'entity' : 'entities'}`,
+                            'success',
+                            3000,
+                        );
+                    }
+                    if (missing.length > 0) {
+                        showNotification(
+                            `No icon for ${missing.length} ${missing.length === 1 ? 'entity' : 'entities'}`,
+                            'warning',
+                            4000,
+                        );
+                    }
+                }
+                if (typeof refreshTasks === 'function') refreshTasks();
+                return;
+            }
+
+            if (task.status === 'failed') {
+                if (typeof showNotification === 'function') {
+                    showNotification(
+                        'Icon assignment failed: ' + (task.error || task.message || 'Unknown error'),
+                        'error',
+                        5000,
+                    );
+                }
+                if (typeof refreshTasks === 'function') refreshTasks();
+                return;
+            }
+
+            if (task.status === 'cancelled') {
+                if (typeof showNotification === 'function') {
+                    showNotification('Icon assignment was cancelled', 'warning', 3000);
+                }
+                if (typeof refreshTasks === 'function') refreshTasks();
+                return;
+            }
+
+            // Unknown terminal status — bail out.
+            console.warn('[Map] Icons task unexpected status:', task.status);
+            return;
+        }
+    } finally {
+        _iconsCurrentTaskId = null;
+        _restoreAutoAssignIconsButton();
+    }
+}
+
+/**
+ * Resume monitoring a previously-started icon task after a page reload or
+ * view switch. Called from initOntologyMap().
+ */
+async function checkAndResumeIconsTask() {
+    const savedTaskId = sessionStorage.getItem(ICONS_TASK_KEY);
+    if (!savedTaskId) return;
+    try {
+        const resp = await fetch(`/tasks/${savedTaskId}`, { credentials: 'same-origin' });
+        const data = await resp.json();
+        if (!data.success || !data.task) {
+            sessionStorage.removeItem(ICONS_TASK_KEY);
+            return;
+        }
+        const task = data.task;
+        if (task.status === 'running' || task.status === 'pending') {
+            console.log('[Map] Resuming icons task monitoring:', savedTaskId);
+            const btn = document.getElementById('mapAutoAssignIcons');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+            }
+            _monitorIconsTask(savedTaskId);
+        } else if (task.status === 'completed') {
+            const iconMap = (task.result && task.result.icons) || {};
+            sessionStorage.removeItem(ICONS_TASK_KEY);
+            await _applyIconsToOntologyState(iconMap);
+        } else {
+            sessionStorage.removeItem(ICONS_TASK_KEY);
+        }
+    } catch (err) {
+        console.error('[Map] Resume icons task error:', err);
+        sessionStorage.removeItem(ICONS_TASK_KEY);
+    }
+}
 
 /**
  * Auto-map icons to all entities that still have the default icon.
- * Calls the backend LLM endpoint to pick the best emoji for each name,
- * then updates OntologyState, saves to session, and refreshes the map.
+ * Starts the icon agent as a background task, persists task_id to
+ * sessionStorage, and polls /tasks/{id} for the result.
  */
 async function autoAssignEntityIcons() {
     if (window.isActiveVersion === false) return;
@@ -1504,13 +1687,7 @@ async function autoAssignEntityIcons() {
     }
 
     const defaultEmoji = OntologyState.defaultClassEmoji || '📦';
-
-    // Collect entity names that still have the default icon
-    const candidates = classes.filter(cls => {
-        const currentEmoji = cls.emoji || defaultEmoji;
-        return currentEmoji === defaultEmoji;
-    });
-
+    const candidates = classes.filter(cls => (cls.emoji || defaultEmoji) === defaultEmoji);
     if (candidates.length === 0) {
         if (typeof showNotification === 'function') {
             showNotification('All entities already have custom icons', 'info', 2000);
@@ -1518,14 +1695,16 @@ async function autoAssignEntityIcons() {
         return;
     }
 
-    const entityNames = candidates.map(cls => cls.name);
-
-    // Show progress
-    if (typeof showNotification === 'function') {
-        showNotification(`Asking LLM to assign icons for ${entityNames.length} ${entityNames.length === 1 ? 'entity' : 'entities'}...`, 'info', 5000);
+    // A task is already running — don't launch another.
+    if (sessionStorage.getItem(ICONS_TASK_KEY)) {
+        if (typeof showNotification === 'function') {
+            showNotification('Icon assignment already in progress…', 'info', 2500);
+        }
+        return;
     }
 
-    // Disable the button while loading
+    const entityNames = candidates.map(cls => cls.name);
+
     const btn = document.getElementById('mapAutoAssignIcons');
     if (btn) {
         btn.disabled = true;
@@ -1537,62 +1716,36 @@ async function autoAssignEntityIcons() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ entity_names: entityNames }),
-            credentials: 'same-origin'
+            credentials: 'same-origin',
         });
-
         const result = await response.json();
 
-        if (!result.success) {
+        if (!result.success || !result.task_id) {
             if (typeof showNotification === 'function') {
-                showNotification(result.message || 'Failed to assign icons', 'error', 5000);
+                showNotification(result.message || 'Failed to start icon task', 'error', 5000);
             }
+            _restoreAutoAssignIconsButton();
             return;
         }
 
-        const iconMap = result.icons || {};
-        let assignedCount = 0;
-
-        for (const cls of candidates) {
-            const emoji = iconMap[cls.name];
-            if (emoji) {
-                cls.emoji = emoji;
-                assignedCount++;
-            }
-        }
-
-        if (assignedCount === 0) {
-            if (typeof showNotification === 'function') {
-                showNotification('LLM did not return any icons', 'warning', 3000);
-            }
-            return;
-        }
-
-        // Save and refresh
-        if (typeof saveConfigToSession === 'function') {
-            await saveConfigToSession();
-        }
-
-        initOntologyMap();
-
-        if (typeof updateClassesList === 'function') {
-            updateClassesList();
-        }
-
+        sessionStorage.setItem(ICONS_TASK_KEY, result.task_id);
         if (typeof showNotification === 'function') {
-            showNotification(`Mapped icons to ${assignedCount} ${assignedCount === 1 ? 'entity' : 'entities'}`, 'success', 3000);
+            showNotification(
+                `Assigning icons for ${entityNames.length} ${entityNames.length === 1 ? 'entity' : 'entities'} in the background…`,
+                'info',
+                4000,
+            );
         }
+        if (typeof refreshTasks === 'function') refreshTasks();
+
+        _monitorIconsTask(result.task_id);
 
     } catch (error) {
-        console.error('[Map] Auto-map icons error:', error);
+        console.error('[Map] Auto-map icons start error:', error);
         if (typeof showNotification === 'function') {
-            showNotification('Error calling LLM: ' + error.message, 'error', 5000);
+            showNotification('Error starting icon task: ' + error.message, 'error', 5000);
         }
-    } finally {
-        // Restore button
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-emoji-smile"></i>';
-        }
+        _restoreAutoAssignIconsButton();
     }
 }
 
