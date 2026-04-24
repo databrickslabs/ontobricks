@@ -300,9 +300,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 const nameLabel = escapeHtml(d.name) +
                     (isCurrent ? ' <span class="badge bg-primary-subtle text-primary border ms-1" style="font-size:0.65rem;">current</span>' : '');
                 const deleteBtn = isCurrent
-                    ? '<button type="button" class="btn btn-sm border-0 text-muted" disabled title="Cannot delete the currently loaded domain">' +
+                    ? '<button type="button" class="btn btn-sm border-0 text-muted admin-only-nav" style="display:none" disabled title="Cannot delete the currently loaded domain">' +
                           '<i class="bi bi-trash"></i></button>'
-                    : '<button type="button" class="btn btn-sm btn-outline-danger border-0 registry-delete-btn" ' +
+                    : '<button type="button" class="btn btn-sm btn-outline-danger border-0 registry-delete-btn admin-only-nav" style="display:none" ' +
                           'data-domain="' + escapeHtml(d.name) + '" title="Delete domain and all versions">' +
                           '<i class="bi bi-trash"></i></button>';
                 const versionsBadge = activeVer
@@ -352,7 +352,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                   '<i class="bi bi-box-arrow-in-down me-1"></i>Load</button>';
                         const deleteBtn = isLoaded
                             ? ''
-                            : '<button type="button" class="btn btn-sm btn-outline-danger border-0 registry-delete-version-btn" ' +
+                            : '<button type="button" class="btn btn-sm btn-outline-danger border-0 registry-delete-version-btn admin-only-nav" style="display:none" ' +
                                   'data-domain="' + escapeHtml(d.name) + '" data-version="' + escapeHtml(ver) + '" ' +
                                   'title="Delete version v' + escapeHtml(ver) + '">' +
                                   '<i class="bi bi-trash"></i></button>';
@@ -396,6 +396,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     deleteRegistryVersion(btn.dataset.domain, btn.dataset.version);
                 });
             });
+
+            // Reveal the .admin-only-nav delete controls only for admins
+            // (no-op for non-admins; buttons stay hidden via inline style).
+            if (typeof showAdminNavItems === 'function') {
+                showAdminNavItems();
+            }
 
             listDiv.querySelectorAll('.registry-load-version-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {

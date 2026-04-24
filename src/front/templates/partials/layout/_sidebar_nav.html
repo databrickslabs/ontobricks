@@ -14,12 +14,14 @@
 <div class="sidebar-title{% if not loop.first %} mt-4{% endif %}">{{ group.title }}</div>
 <nav class="nav flex-column">
     {% for item in group['items'] %}
+    {% set admin_only_cls = ' admin-only-nav' if item.admin_only|default(false) else '' %}
+    {% set admin_only_style = 'display:none' if item.admin_only|default(false) else '' %}
     {% if item.route %}
-    <a class="nav-link{% if item.requires|default('') == 'domain_saved' %} sidebar-requires-domain{% endif %}" href="{{ item.route }}?section=information">
+    <a class="nav-link{% if item.requires|default('') == 'domain_saved' %} sidebar-requires-domain{% endif %}{{ admin_only_cls }}" href="{{ item.route }}?section=information"{% if admin_only_style %} style="{{ admin_only_style }}"{% endif %}>
         <i class="bi {{ item.icon }}"></i> {{ item.label }}
     </a>
     {% else %}
-    <a class="nav-link{% if item.default %} active{% endif %}{% if item.requires|default('') == 'domain_saved' %} sidebar-requires-domain{% endif %}{% if item.requires|default('') == 'sync_ready' %} sync-requires-ready disabled{% endif %}{% if item.disabled_during|default('') == 'autoassign' %} autoassign-disables{% endif %}{% if item.hidden_in_view_mode|default(false) %} view-mode-hidden{% endif %}" href="#" data-section="{{ item.id }}"{% if item.requires|default('') == 'sync_ready' %} title="Triple store is empty — run Sync first" style="pointer-events:none;opacity:0.45"{% endif %}>
+    <a class="nav-link{% if item.default %} active{% endif %}{% if item.requires|default('') == 'domain_saved' %} sidebar-requires-domain{% endif %}{% if item.requires|default('') == 'sync_ready' %} sync-requires-ready disabled{% endif %}{% if item.disabled_during|default('') == 'autoassign' %} autoassign-disables{% endif %}{% if item.hidden_in_view_mode|default(false) %} view-mode-hidden{% endif %}{{ admin_only_cls }}" href="#" data-section="{{ item.id }}"{% if item.requires|default('') == 'sync_ready' %} title="Triple store is empty — run Sync first" style="pointer-events:none;opacity:0.45{% if admin_only_style %};{{ admin_only_style }}{% endif %}"{% elif admin_only_style %} style="{{ admin_only_style }}"{% endif %}>
         <i class="bi {{ item.icon }}"></i> {{ item.label }}
     </a>
     {% endif %}
