@@ -66,11 +66,20 @@ class PermissionService:
     def __init__(self):
         self._admin_cache: Dict[str, Tuple[bool, float]] = {}
 
-        self._users_cache: Optional[List[Dict[str, Any]]] = None
-        self._users_cache_ts: float = 0.0
+        # App-scoped principals (users + groups *with permission on the
+        # Databricks App*). Populated by list_app_principals.
+        self._app_users_cache: Optional[List[Dict[str, Any]]] = None
+        self._app_groups_cache: Optional[List[Dict[str, Any]]] = None
+        self._app_principals_ts: float = 0.0
 
-        self._groups_cache: Optional[List[Dict[str, Any]]] = None
-        self._groups_cache_ts: float = 0.0
+        # Workspace-scoped principals (full SCIM listing). Populated by
+        # list_users / list_groups. Kept separate from the app-scoped
+        # caches because the two endpoints return different sets and
+        # mixing them silently corrupted lookups.
+        self._workspace_users_cache: Optional[List[Dict[str, Any]]] = None
+        self._workspace_users_ts: float = 0.0
+        self._workspace_groups_cache: Optional[List[Dict[str, Any]]] = None
+        self._workspace_groups_ts: float = 0.0
 
         # Per-domain permission cache: keyed by domain folder name
         self._domain_perm_cache: Dict[str, Tuple[Dict[str, Any], float]] = {}
@@ -785,9 +794,23 @@ class PermissionService:
             self._admin_cache.clear()
 
     def clear_principals_cache(self):  # noqa: D401
-        """Invalidate the cached users/groups so the next call fetches fresh data."""
-        self._users_cache = None
-        self._groups_cache = None
+        """Invalidate every principal-related cache.
+
+        Drops the app-scoped principals (``list_app_principals``), the
+        workspace-scoped users/groups (``list_users`` / ``list_groups``),
+        the per-user admin cache and the SCIM group-membership cache, and
+        resets the bootstrap-403 flag. Used by the Settings UI when the
+        user explicitly asks for a fresh fetch.
+        """
+        self._app_users_cache = None
+        self._app_groups_cache = None
+        self._app_principals_ts = 0.0
+        self._workspace_users_cache = None
+        self._workspace_users_ts = 0.0
+        self._workspace_groups_cache = None
+        self._workspace_groups_ts = 0.0
+        self._admin_cache.clear()
+        self._user_groups_cache.clear()
         self._app_principals_forbidden = False
 
     def list_app_principals(
@@ -803,20 +826,22 @@ class PermissionService:
         """
         now = time.time()
         if (
-            self._users_cache is not None
-            and self._groups_cache is not None
-            and (now - self._users_cache_ts) < _CACHE_TTL_PRINCIPALS
+            self._app_users_cache is not None
+            and self._app_groups_cache is not None
+            and (now - self._app_principals_ts) < _CACHE_TTL_PRINCIPALS
         ):
-            return {"users": self._users_cache, "groups": self._groups_cache}
+            return {
+                "users": self._app_users_cache,
+                "groups": self._app_groups_cache,
+            }
 
         client = DatabricksClient(host=host, token=token)
         result = client.list_app_principals(app_name)
         status = getattr(client, "last_app_permissions_status", 0)
         self._app_principals_forbidden = status == 403
-        self._users_cache = result.get("users", [])
-        self._groups_cache = result.get("groups", [])
-        self._users_cache_ts = now
-        self._groups_cache_ts = now
+        self._app_users_cache = result.get("users", [])
+        self._app_groups_cache = result.get("groups", [])
+        self._app_principals_ts = now
         return result
 
     def is_app_principals_forbidden(self) -> bool:
@@ -829,31 +854,33 @@ class PermissionService:
         return self._app_principals_forbidden
 
     def list_users(self, host: str, token: str) -> List[Dict[str, Any]]:
+        """Return every workspace user via SCIM (full directory)."""
         now = time.time()
         if (
-            self._users_cache is not None
-            and (now - self._users_cache_ts) < _CACHE_TTL_PRINCIPALS
+            self._workspace_users_cache is not None
+            and (now - self._workspace_users_ts) < _CACHE_TTL_PRINCIPALS
         ):
-            return self._users_cache
+            return self._workspace_users_cache
 
         client = DatabricksClient(host=host, token=token)
         users = client.list_workspace_users()
-        self._users_cache = users
-        self._users_cache_ts = now
+        self._workspace_users_cache = users
+        self._workspace_users_ts = now
         return users
 
     def list_groups(self, host: str, token: str) -> List[Dict[str, Any]]:
+        """Return every workspace group via SCIM (full directory)."""
         now = time.time()
         if (
-            self._groups_cache is not None
-            and (now - self._groups_cache_ts) < _CACHE_TTL_PRINCIPALS
+            self._workspace_groups_cache is not None
+            and (now - self._workspace_groups_ts) < _CACHE_TTL_PRINCIPALS
         ):
-            return self._groups_cache
+            return self._workspace_groups_cache
 
         client = DatabricksClient(host=host, token=token)
         groups = client.list_workspace_groups()
-        self._groups_cache = groups
-        self._groups_cache_ts = now
+        self._workspace_groups_cache = groups
+        self._workspace_groups_ts = now
         return groups
 
 

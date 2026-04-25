@@ -163,12 +163,86 @@ class TestAdminCache:
 
 
 class TestPrincipalsCache:
-    def test_clear(self, svc):
-        svc._users_cache = [{"email": "a"}]
-        svc._groups_cache = [{"name": "g"}]
+    def test_clear_drops_app_and_workspace_caches(self, svc):
+        svc._app_users_cache = [{"email": "a"}]
+        svc._app_groups_cache = [{"name": "g"}]
+        svc._workspace_users_cache = [{"email": "ws"}]
+        svc._workspace_groups_cache = [{"name": "wsg"}]
+        svc._admin_cache["a@b.com"] = (True, time.time())
+        svc._user_groups_cache["a@b.com"] = (["g1"], time.time())
+        svc._app_principals_forbidden = True
+
         svc.clear_principals_cache()
-        assert svc._users_cache is None
-        assert svc._groups_cache is None
+
+        assert svc._app_users_cache is None
+        assert svc._app_groups_cache is None
+        assert svc._workspace_users_cache is None
+        assert svc._workspace_groups_cache is None
+        assert svc._admin_cache == {}
+        assert svc._user_groups_cache == {}
+        assert svc.is_app_principals_forbidden() is False
+
+    def test_app_and_workspace_caches_are_isolated(self, svc):
+        """``list_app_principals`` (app-scoped ACL) and ``list_users`` /
+        ``list_groups`` (full SCIM directory) must not share storage —
+        otherwise one call poisons the other and admin/user lookups
+        return the wrong set.
+        """
+
+        class _AppFakeClient:
+            def list_app_principals(self, _app_name):
+                return {
+                    "users": [{"email": "alice@app"}],
+                    "groups": [{"display_name": "app-admins"}],
+                }
+
+            @property
+            def last_app_permissions_status(self):
+                return 200
+
+        class _DirFakeClient:
+            def list_workspace_users(self):
+                return [
+                    {"email": "alice@app"},
+                    {"email": "bob@workspace"},
+                ]
+
+            def list_workspace_groups(self):
+                return [
+                    {"display_name": "app-admins"},
+                    {"display_name": "everyone"},
+                ]
+
+        with patch(
+            "back.objects.registry.PermissionService.DatabricksClient",
+            return_value=_AppFakeClient(),
+        ):
+            app = svc.list_app_principals("h", "t", "ontobricks")
+
+        with patch(
+            "back.objects.registry.PermissionService.DatabricksClient",
+            return_value=_DirFakeClient(),
+        ):
+            ws_users = svc.list_users("h", "t")
+            ws_groups = svc.list_groups("h", "t")
+
+        # App-scoped result is unchanged (would be 2 users / 2 groups
+        # if the workspace fetch had overwritten the same cache).
+        assert len(app["users"]) == 1
+        assert len(app["groups"]) == 1
+        # Workspace fetch returns the larger directory.
+        assert len(ws_users) == 2
+        assert len(ws_groups) == 2
+
+        # A second call to list_app_principals must come from the
+        # app-scoped cache and still report the small set.
+        with patch(
+            "back.objects.registry.PermissionService.DatabricksClient",
+            side_effect=AssertionError("should hit cache, not the API"),
+        ):
+            app_again = svc.list_app_principals("h", "t", "ontobricks")
+        assert len(app_again["users"]) == 1
+        assert len(app_again["groups"]) == 1
 
 
 # ===================================================================
