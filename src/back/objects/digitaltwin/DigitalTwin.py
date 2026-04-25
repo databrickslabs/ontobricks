@@ -882,7 +882,7 @@ class DigitalTwin:
 
         result: Dict[str, Any] = {
             "view_exists": None,
-            "local_lbug_exists": os.path.exists(local_path),
+            "local_lbug_exists": bool(last_built) and os.path.exists(local_path),
             "registry_lbug_exists": None,
             "view_table": view_table,
             "graph_name": graph_name,
