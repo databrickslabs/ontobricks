@@ -53,6 +53,26 @@ body[data-app-role="admin"] [data-requires-app="admin"] {
     display: revert !important;
 }
 
+/*
+ * ``display: revert`` above falls back to the user-agent default (e.g.
+ * ``inline`` for ``<a>``), bypassing every author rule — including
+ * Bootstrap's ``.dropdown-item { display: block }`` and our own
+ * ``.sidebar-nav .nav-link { display: flex }``. Restore the right display
+ * for admin-gated entries on the surfaces where the natural ``<a>`` /
+ * ``<button>`` ``inline`` would break the layout. Fixes "Teams icon not
+ * aligned with the others" in the retractable sidebar (the Teams entry
+ * is the only ``data-requires-app="admin"`` nav-link, so it loses
+ * ``display: flex`` for admins and the icon falls back to inline
+ * positioning, ignoring ``gap`` and ``align-items``).
+ */
+body[data-app-role="admin"] .sidebar-nav .nav-link[data-requires-app="admin"] {
+    display: flex !important;
+}
+
+body[data-app-role="admin"] .dropdown-item[data-requires-app="admin"] {
+    display: block !important;
+}
+
 /* ==========================================================================
    Domain-role gates (builder / editor)
    ========================================================================== */
