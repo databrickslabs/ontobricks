@@ -412,29 +412,28 @@ const _VIEWER_WRITE_EXCEPTIONS = new Set([
     '/domain/load-from-uc',
 ]);
 
-async function checkDomainRole() {
-    try {
-        const me = await fetch('/settings/permissions/me', { credentials: 'same-origin' })
-            .then(r => r.ok ? r.json() : null);
-        if (!me || !me.is_app_mode) return;
-        if (me.is_app_admin || me.role === 'admin') return;
-        if ((me.domain_role || '').toLowerCase() === 'viewer') {
-            window.isDomainViewer = true;
-            // Cascade to the version-based read-only flag. Every ontology/
-            // mapping widget (shared side-panel, OntoViz canvas, map context
-            // menus, mapping-designer, mapping-manual, ...) already gates
-            // editing on ``window.isActiveVersion === false``. Flipping it
-            // here reuses that plumbing so viewers get the same treatment as
-            // someone viewing an older version — no right-click actions, no
-            // save button, no add/remove attribute, no dashboard/bridge
-            // assignment, etc.
-            window.isActiveVersion = false;
-            showViewerReadOnlyBanner();
-            disableEditingForInactiveVersion();
-            installViewerFetchGuard();
-        }
-    } catch (e) {
-        console.log('Could not fetch domain role');
+function checkDomainRole() {
+    // Roles are now stamped on <body> by base.html (data-app-role /
+    // data-domain-role / data-app-mode) and surfaced via
+    // window.OB.permissions, so this function no longer needs to
+    // fetch /settings/permissions/me on every page load.
+    const perms = (window.OB && window.OB.permissions) || null;
+    if (!perms || !perms.isAppMode) return;
+    if (perms.isAdmin) return;
+    if (perms.domainRole === 'viewer') {
+        window.isDomainViewer = true;
+        // Cascade to the version-based read-only flag. Every ontology/
+        // mapping widget (shared side-panel, OntoViz canvas, map context
+        // menus, mapping-designer, mapping-manual, ...) already gates
+        // editing on ``window.isActiveVersion === false``. Flipping it
+        // here reuses that plumbing so viewers get the same treatment as
+        // someone viewing an older version — no right-click actions, no
+        // save button, no add/remove attribute, no dashboard/bridge
+        // assignment, etc.
+        window.isActiveVersion = false;
+        showViewerReadOnlyBanner();
+        disableEditingForInactiveVersion();
+        installViewerFetchGuard();
     }
 }
 
@@ -518,8 +517,10 @@ function showViewerReadOnlyBanner() {
 }
 
 // Run on page load (version check first, then role-based gate).
+// checkDomainRole is now synchronous (reads window.OB.permissions),
+// no await needed.
 document.addEventListener('DOMContentLoaded', async () => {
     await checkVersionStatus();
     if (!window.isActiveVersion) return;
-    await checkDomainRole();
+    checkDomainRole();
 });

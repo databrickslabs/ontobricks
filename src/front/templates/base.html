@@ -23,6 +23,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/help-modal.css') }}?v={{ asset_version }}">
     
     <!-- OntoBricks JS Utilities (defer: non-blocking, executed after HTML parse) -->
+    <!-- permissions.js MUST stay first so window.OB.permissions exists before
+         every other script (navbar, version-check, ...) reads it. -->
+    <script defer src="{{ url_for('static', filename='global/js/permissions.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/utils.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/uc_file_dialog.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/uc-location-widget.js') }}?v={{ asset_version }}"></script>
@@ -40,7 +43,9 @@
     
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body data-app-role="{{ get_user_role() or 'admin' }}"
+      data-domain-role="{{ get_user_domain_role() or 'admin' }}"
+      data-app-mode="{{ 'true' if is_app_mode() else 'false' }}">
     
     <!-- Navigation (driven by menu_config.json) -->
     <nav class="navbar navbar-expand-lg navbar-dark">

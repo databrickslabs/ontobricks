@@ -109,12 +109,26 @@ def get_user_domain_role(context: dict) -> str:
     return ""
 
 
+def is_app_mode() -> bool:
+    """Return True when the server runs as a Databricks App.
+
+    Mirrors :func:`back.core.databricks.is_databricks_app` so templates
+    can decide whether to render permission-aware UI gates without a
+    second API round-trip.  In local-dev mode every caller is treated
+    as admin, so the gates can simply turn into no-ops.
+    """
+    from back.core.databricks import is_databricks_app as _is_app
+
+    return _is_app()
+
+
 # Add custom globals to Jinja2 environment
 templates.env.globals["url_for"] = url_for
 templates.env.globals["range"] = range_filter
 templates.env.globals["get_user_email"] = get_user_email
 templates.env.globals["get_user_role"] = get_user_role
 templates.env.globals["get_user_domain_role"] = get_user_domain_role
+templates.env.globals["is_app_mode"] = is_app_mode
 
 # Menu configuration available in all templates as {{ menu_config }}
 from front.config import get_menu_config, get_menu_by_id
