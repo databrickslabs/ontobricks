@@ -1,0 +1,179 @@
+/*
+ * permissions.css — declarative role / version gates
+ *
+ * This stylesheet replaces dozens of imperative ``element.style.display = …``
+ * and ``element.disabled = true`` snippets that used to live in
+ * ``navbar.js`` / ``version-check.js``. Permissions and read-only state are
+ * now expressed *declaratively* on the DOM and the rules below do the
+ * gating in the cascade, which means:
+ *
+ *   - markup stays self-documenting (a "needs admin" button literally
+ *     carries ``data-requires-app="admin"`` instead of being toggled by
+ *     someone else's JS),
+ *   - there is no flicker between page paint and JS deciding to hide a
+ *     control (no extra round-trip, no race against
+ *     ``DOMContentLoaded``),
+ *   - role-aware UI is reachable for any markup we add later — no need
+ *     to remember to call ``showAdminNavItems()`` again.
+ *
+ * Inputs (all set by the backend / server-rendered ``base.html``):
+ *
+ *   ``<body data-app-role="…" data-domain-role="…" data-app-mode="…">``
+ *     written from the Jinja globals ``get_user_role``,
+ *     ``get_user_domain_role``, ``is_app_mode``. Mirrors the backend
+ *     authorisation hierarchy (admin > builder > editor > viewer >
+ *     none) and matches ``window.OB.permissions``.
+ *
+ *   ``body.read-only-version``
+ *     added by ``version-check.js`` when the loaded domain version is
+ *     not the active one. This is the only inline class-flip we keep,
+ *     because the read-only state is determined asynchronously after
+ *     the version-status round-trip.
+ *
+ * Conventions for new gates:
+ *
+ *   ``[data-requires-app="admin"]``   visible only for app-role admin
+ *   ``[data-requires="builder"]``     interactive only for domain-role >= builder
+ *   ``[data-requires="editor"]``      interactive only for domain-role >= editor
+ *
+ * Admins always satisfy the domain-role gates so the cascade matches
+ * the backend ``require(scope='domain')`` dependency, which falls back
+ * to the app role when no per-domain entry is set.
+ */
+
+/* ==========================================================================
+   App-role gates
+   ========================================================================== */
+
+[data-requires-app="admin"] {
+    display: none !important;
+}
+
+body[data-app-role="admin"] [data-requires-app="admin"] {
+    display: revert !important;
+}
+
+/* ==========================================================================
+   Domain-role gates (builder / editor)
+   ========================================================================== */
+
+[data-requires="builder"],
+[data-requires="editor"] {
+    pointer-events: none !important;
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+body[data-app-role="admin"] [data-requires="builder"],
+body[data-app-role="admin"] [data-requires="editor"],
+body[data-domain-role="builder"] [data-requires="builder"],
+body[data-domain-role="builder"] [data-requires="editor"],
+body[data-domain-role="editor"] [data-requires="editor"] {
+    pointer-events: auto !important;
+    opacity: 1 !important;
+    cursor: auto !important;
+}
+
+/* ==========================================================================
+   Older-version (inactive version) read-only mode
+
+   When ``checkVersionStatus`` finds the loaded version is no longer
+   active, it adds ``read-only-version`` to <body>. The rules below
+   collectively replace ``disableEditingForInactiveVersion`` and its
+   13 helpers. New write surfaces should be added to one of the lists
+   below rather than to a JS query-selector sweep.
+   ========================================================================== */
+
+/* --- Domain > Metadata: every write button + ``data-meta-action`` write. */
+body.read-only-version #loadMetadataBtn,
+body.read-only-version #removeTablesBtn,
+body.read-only-version #updateMetadataBtn,
+body.read-only-version #importSelectedBtn,
+body.read-only-version #loadMetadataConfirmBtn,
+body.read-only-version #updateMappingsBtn,
+body.read-only-version [data-meta-action="clear-metadata"],
+body.read-only-version [data-meta-action="open-ds-modal"],
+body.read-only-version [data-meta-action="edit-comment"],
+body.read-only-version [data-meta-action="table-details"],
+body.read-only-version [data-meta-action="update-from-uc"],
+body.read-only-version [data-meta-action="remove-selected-tables"],
+body.read-only-version [data-meta-action="update-mappings"],
+body.read-only-version [data-meta-action="show-load-modal"],
+body.read-only-version button[onclick*="saveTableDetails"],
+body.read-only-version button[onclick*="saveTableComment"],
+body.read-only-version button[onclick*="clearMetadata"],
+/* --- Domain > Documents: dropzone + delete-file in dynamically rendered list. */
+body.read-only-version #docDropZone,
+body.read-only-version #docUploadBtn,
+body.read-only-version #docClearQueueBtn,
+body.read-only-version #docFileInput,
+body.read-only-version #docFileList button[onclick*="deleteFile"],
+/* --- Ontology > Import: every "import from …" trigger + module checkboxes. */
+body.read-only-version #importOwlLocalBtn,
+body.read-only-version #importOwlUCBtn,
+body.read-only-version #importRdfsLocalBtn,
+body.read-only-version #importRdfsUCBtn,
+body.read-only-version #importFiboBtn,
+body.read-only-version #importCdiscBtn,
+body.read-only-version #importIofBtn,
+body.read-only-version #importOwlFileInput,
+body.read-only-version #importRdfsFileInput,
+body.read-only-version .fibo-domain-cb,
+body.read-only-version .cdisc-domain-cb,
+body.read-only-version .iof-domain-cb,
+/* --- Mapping > Import: R2RML imports. */
+body.read-only-version #importR2rmlLocalBtn,
+body.read-only-version #importR2rmlUCBtn,
+body.read-only-version #importR2rmlFileInput,
+/* --- Mapping > Designer / Manual: reset, auto-map, save. */
+body.read-only-version #resetPanelBtn,
+body.read-only-version #autoMapPanelBtn,
+body.read-only-version #savePanelBtn,
+body.read-only-version #manualResetBtn,
+body.read-only-version #manualAutoMapBtn,
+body.read-only-version #manualSavePanelBtn,
+/* --- Ontology > Business Views: CRUD buttons. */
+body.read-only-version #createViewBtn,
+body.read-only-version #renameViewBtn,
+body.read-only-version #deleteViewBtn,
+body.read-only-version #createGroupFromViewBtn,
+/* --- Ontology > Data Quality: every per-rule action button. */
+body.read-only-version .dq-shape-card .btn-group button,
+/* --- Save Domain navbar item: still rendered, but neutralised. */
+body.read-only-version #menuSaveDomain {
+    pointer-events: none !important;
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+/* --- Cosmetic toggles: hide rather than just neutralise. */
+body.read-only-version .ontology-edit-btn,
+body.read-only-version #mapToggleAssistant,
+body.read-only-version #mapAutoAssignIcons,
+body.read-only-version #designModeToggle,
+body.read-only-version .view-mode-hidden {
+    display: none !important;
+}
+
+/* --- Generic form-field disabling on ontology/mapping pages.
+   Search/filter/query inputs and the version selector explicitly stay
+   interactive so the user can switch back to the latest version. */
+body.read-only-version input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect),
+body.read-only-version textarea,
+body.read-only-version select:not(#domainVersionSelect) {
+    pointer-events: none !important;
+    background-color: #e9ecef !important;
+    opacity: 0.7 !important;
+    cursor: not-allowed !important;
+}
+
+/* --- Banner-driven layout adjustment (shared by every page). */
+body.read-only-version .content-wrapper {
+    margin-top: 40px;
+}
+
+body.read-only-version .btn:disabled,
+body.read-only-version .btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

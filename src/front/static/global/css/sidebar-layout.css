@@ -327,22 +327,22 @@ body.full-width-layout {
    Read-Only Mode Adjustments
    When the read-only banner is displayed, reduce available height
    ========================================================================== */
-body.read-only-mode .sidebar-layout {
+body.read-only-version .sidebar-layout {
     height: calc(100vh - var(--ob-chrome-height-ro, 100px));
     max-height: calc(100vh - var(--ob-chrome-height-ro, 100px));
 }
 
-body.read-only-mode .sidebar-content {
+body.read-only-version .sidebar-content {
     max-height: calc(100vh - var(--ob-chrome-height-ro, 100px));
 }
 
-body.read-only-mode #sigmagraph-section.active,
-body.read-only-mode #graphql-section.active {
+body.read-only-version #sigmagraph-section.active,
+body.read-only-version #graphql-section.active {
     height: calc(100vh - 120px);
     max-height: calc(100vh - 120px);
 }
 
-body.read-only-mode #design-section #ontology-designer-canvas-wrapper {
+body.read-only-version #design-section #ontology-designer-canvas-wrapper {
     height: calc(100vh - 200px);
 }
 

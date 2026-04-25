@@ -81,7 +81,7 @@ const Breadcrumb = {
         const nav = document.getElementById('obBreadcrumb');
         if (!nav || nav.classList.contains('d-none')) return;
         const bcHeight = nav.offsetHeight;
-        const base = document.body.classList.contains('read-only-mode') ? 100 : 60;
+        const base = document.body.classList.contains('read-only-version') ? 100 : 60;
         document.documentElement.style.setProperty('--ob-chrome-height', (base + bcHeight) + 'px');
         document.documentElement.style.setProperty('--ob-chrome-height-ro', (100 + bcHeight) + 'px');
     },

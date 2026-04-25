@@ -21,6 +21,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/sidebar-layout.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/emoji-picker.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/help-modal.css') }}?v={{ asset_version }}">
+    <!-- permissions.css must load LAST so its !important gates win over
+         any per-component rule that might set display/pointer-events on
+         the same selectors. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='global/css/permissions.css') }}?v={{ asset_version }}">
     
     <!-- OntoBricks JS Utilities (defer: non-blocking, executed after HTML parse) -->
     <!-- permissions.js MUST stay first so window.OB.permissions exists before
@@ -126,9 +130,7 @@
                             {% set vis.any = true %}
                             <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> {{ group.title }}</h6></li>
                             {% for item in group['items'] %}
-                            {% set admin_only_cls = ' admin-only-nav' if item.admin_only|default(false) else '' %}
-                            {% set admin_only_style = 'display:none' if item.admin_only|default(false) else '' %}
-                            <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}{{ admin_only_cls }}" href="{{ item.route if item.route else menu.route ~ '?section=' ~ item.id }}"{% if admin_only_style %} style="{{ admin_only_style }}"{% endif %}><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
+                            <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}" href="{{ item.route if item.route else menu.route ~ '?section=' ~ item.id }}"{% if item.admin_only|default(false) %} data-requires-app="admin"{% endif %}><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
                             {% endfor %}
                             {% endif %}
                             {% endfor %}
@@ -141,7 +143,7 @@
                 
                 <ul class="navbar-nav ms-auto">
                     <!-- SQL Warehouse status indicator (admin-only) -->
-                    <li class="nav-item admin-only-nav" style="display:none">
+                    <li class="nav-item" data-requires-app="admin">
                         <a class="nav-link" href="/settings" id="warehouseStatusLink" title="SQL Warehouse – click to configure">
                             <i class="bi bi-server" id="warehouseStatusIcon" style="color: var(--bs-secondary);"></i>
                         </a>
@@ -200,7 +202,7 @@
                     </li>
                     {% for link in menu_config.utility_links %}
                     {% if link.id == 'settings' %}
-                    <li class="nav-item admin-only-nav" style="display:none">
+                    <li class="nav-item" data-requires-app="admin">
                         <a class="nav-link" href="{{ link.route }}" title="{{ link.label }}">
                             <i class="bi {{ link.icon }}"></i>
                         </a>

@@ -489,40 +489,40 @@ code {
 }
 
 /* Adjust content-wrapper when banner is present */
-body.read-only-mode .content-wrapper {
+body.read-only-version .content-wrapper {
     min-height: calc(100vh - 100px);  /* 60px navbar + 40px banner */
 }
 
 /* ==========================================================================
    OntoViz Read-Only Mode - Hide edit controls
    ========================================================================== */
-body.read-only-mode .ovz-toolbar {
+body.read-only-version .ovz-toolbar {
     display: none !important;
 }
 
-body.read-only-mode .ovz-entity-actions {
+body.read-only-version .ovz-entity-actions {
     display: none !important;
 }
 
-body.read-only-mode .ovz-property-actions {
+body.read-only-version .ovz-property-actions {
     display: none !important;
 }
 
-body.read-only-mode .ovz-rel-delete,
-body.read-only-mode .ovz-rel-add-prop,
-body.read-only-mode .ovz-rel-direction {
+body.read-only-version .ovz-rel-delete,
+body.read-only-version .ovz-rel-add-prop,
+body.read-only-version .ovz-rel-direction {
     display: none !important;
 }
 
-body.read-only-mode .ovz-rel-prop-delete {
+body.read-only-version .ovz-rel-prop-delete {
     display: none !important;
 }
 
-body.read-only-mode .ovz-entity-name input,
-body.read-only-mode .ovz-entity-title input,
-body.read-only-mode .ovz-property-name input,
-body.read-only-mode .ovz-rel-name-input,
-body.read-only-mode .ovz-rel-prop-name {
+body.read-only-version .ovz-entity-name input,
+body.read-only-version .ovz-entity-title input,
+body.read-only-version .ovz-property-name input,
+body.read-only-version .ovz-rel-name-input,
+body.read-only-version .ovz-rel-prop-name {
     pointer-events: none !important;
     background: transparent !important;
     border-color: transparent !important;
@@ -531,8 +531,8 @@ body.read-only-mode .ovz-rel-prop-name {
 }
 
 /* Also disable all inputs in OntoViz entities */
-body.read-only-mode .ovz-entity input,
-body.read-only-mode .ovz-relationship-label input {
+body.read-only-version .ovz-entity input,
+body.read-only-version .ovz-relationship-label input {
     pointer-events: none !important;
     background: transparent !important;
     border-color: transparent !important;
@@ -540,46 +540,46 @@ body.read-only-mode .ovz-relationship-label input {
     user-select: none !important;
 }
 
-body.read-only-mode .ovz-context-menu {
+body.read-only-version .ovz-context-menu {
     display: none !important;
 }
 
-body.read-only-mode .ovz-entity {
+body.read-only-version .ovz-entity {
     cursor: default !important;
 }
 
-body.read-only-mode .ovz-connector {
+body.read-only-version .ovz-connector {
     display: none !important;
 }
 
-body.read-only-mode .ovz-rel-direction-label {
+body.read-only-version .ovz-rel-direction-label {
     pointer-events: none !important;
     cursor: default !important;
 }
 
 /* Hide entity buttons container */
-body.read-only-mode .ovz-entity-btn {
+body.read-only-version .ovz-entity-btn {
     display: none !important;
 }
 
 /* Hide property buttons */
-body.read-only-mode .ovz-property-btn {
+body.read-only-version .ovz-property-btn {
     display: none !important;
 }
 
 /* Hide Add Property button at bottom of entity boxes */
-body.read-only-mode .ovz-add-property {
+body.read-only-version .ovz-add-property {
     display: none !important;
 }
 
 /* ==========================================================================
    Read-Only Mode - Disable form inputs on ontology/mapping pages
    ========================================================================== */
-body.read-only-mode #ontologyName,
-body.read-only-mode #baseUri,
-body.read-only-mode #information-section input,
-body.read-only-mode #information-section textarea,
-body.read-only-mode #information-section select:not(#domainVersionSelect) {
+body.read-only-version #ontologyName,
+body.read-only-version #baseUri,
+body.read-only-version #information-section input,
+body.read-only-version #information-section textarea,
+body.read-only-version #information-section select:not(#domainVersionSelect) {
     pointer-events: none !important;
     background-color: #e9ecef !important;
     opacity: 0.7 !important;
@@ -587,7 +587,7 @@ body.read-only-mode #information-section select:not(#domainVersionSelect) {
 }
 
 /* Version selector should always be enabled to allow switching versions */
-body.read-only-mode #domainVersionSelect {
+body.read-only-version #domainVersionSelect {
     pointer-events: auto !important;
     background-color: #fff !important;
     opacity: 1 !important;

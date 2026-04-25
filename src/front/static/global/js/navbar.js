@@ -26,13 +26,12 @@ document.addEventListener('DOMContentLoaded', function() {
  *
  * Uses the consolidated /navbar/state endpoint so a single HTTP
  * round-trip (with a 15 s sessionStorage TTL cache) replaces four
- * separate requests. The admin-only nav items are now toggled
- * synchronously from window.OB.permissions (server-injected on
- * <body> by base.html), so no extra fetch is needed.
+ * separate requests. Admin-only nav items are now gated declaratively
+ * via ``[data-requires-app="admin"]`` in ``permissions.css`` so no
+ * extra fetch or JS pass is needed.
  */
 function initNavbar() {
     loadNavbarState();
-    showAdminNavItems();
 }
 
 /**
@@ -52,25 +51,6 @@ async function loadNavbarState() {
     }
 }
 
-
-/**
- * Reveal nav items marked with the ``.admin-only-nav`` class for
- * admin callers. The class is rendered with an inline
- * ``style="display:none"`` in base.html (defensive default), and we
- * un-hide it here based on the synchronously-injected role from
- * ``window.OB.permissions``.
- *
- * Step 4 of the permissions cleanup will replace both the class and
- * this helper with a CSS-only ``[data-requires-app]`` gate, at which
- * point this function (and the inline style) will be removed.
- */
-function showAdminNavItems() {
-    const perms = (window.OB && window.OB.permissions) || null;
-    if (!perms || !perms.isAdmin) return;
-    document.querySelectorAll('.admin-only-nav').forEach(el => {
-        el.style.display = '';
-    });
-}
 
 /**
  * Refresh all three workflow indicators (Ontology, Mapping, Digital Twin)

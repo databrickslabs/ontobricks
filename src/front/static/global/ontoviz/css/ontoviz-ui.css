@@ -438,37 +438,37 @@
    Read-Only Mode
    Hide all edit/delete/add buttons and disable text editing
    ========================================================================== */
-body.read-only-mode .ovz-toolbar {
+body.read-only-version .ovz-toolbar {
     display: none !important;
 }
 
 /* Hide entity action buttons (edit, delete, add property) */
-body.read-only-mode .ovz-entity-actions {
+body.read-only-version .ovz-entity-actions {
     display: none !important;
 }
 
 /* Hide property delete buttons */
-body.read-only-mode .ovz-property-actions {
+body.read-only-version .ovz-property-actions {
     display: none !important;
 }
 
 /* Hide relationship edit controls (delete, add prop, direction toggle) */
-body.read-only-mode .ovz-rel-delete,
-body.read-only-mode .ovz-rel-add-prop,
-body.read-only-mode .ovz-rel-direction {
+body.read-only-version .ovz-rel-delete,
+body.read-only-version .ovz-rel-add-prop,
+body.read-only-version .ovz-rel-direction {
     display: none !important;
 }
 
 /* Hide relationship property delete buttons */
-body.read-only-mode .ovz-rel-prop-delete {
+body.read-only-version .ovz-rel-prop-delete {
     display: none !important;
 }
 
 /* Make all inputs and text fields read-only */
-body.read-only-mode .ovz-entity-name,
-body.read-only-mode .ovz-property-name,
-body.read-only-mode .ovz-rel-name-input,
-body.read-only-mode .ovz-rel-prop-name {
+body.read-only-version .ovz-entity-name,
+body.read-only-version .ovz-property-name,
+body.read-only-version .ovz-rel-name-input,
+body.read-only-version .ovz-rel-prop-name {
     pointer-events: none !important;
     background: transparent !important;
     border-color: transparent !important;
@@ -476,22 +476,22 @@ body.read-only-mode .ovz-rel-prop-name {
 }
 
 /* Hide context menu edit options */
-body.read-only-mode .ovz-context-menu {
+body.read-only-version .ovz-context-menu {
     display: none !important;
 }
 
 /* Disable entity dragging */
-body.read-only-mode .ovz-entity {
+body.read-only-version .ovz-entity {
     cursor: default !important;
 }
 
 /* Hide connector points (used to create relationships) */
-body.read-only-mode .ovz-connector {
+body.read-only-version .ovz-connector {
     display: none !important;
 }
 
 /* Hide direction label click action */
-body.read-only-mode .ovz-rel-direction-label {
+body.read-only-version .ovz-rel-direction-label {
     pointer-events: none !important;
     cursor: default !important;
 }

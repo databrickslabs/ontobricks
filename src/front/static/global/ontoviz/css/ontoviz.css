@@ -15,51 +15,51 @@
    Read-Only Mode (inlined here to avoid caching issues with @import)
    Hide all edit/delete/add buttons and disable text editing
    ========================================================================== */
-body.read-only-mode .ovz-toolbar {
+body.read-only-version .ovz-toolbar {
     display: none !important;
 }
 
-body.read-only-mode .ovz-entity-actions {
+body.read-only-version .ovz-entity-actions {
     display: none !important;
 }
 
-body.read-only-mode .ovz-property-actions {
+body.read-only-version .ovz-property-actions {
     display: none !important;
 }
 
-body.read-only-mode .ovz-rel-delete,
-body.read-only-mode .ovz-rel-add-prop,
-body.read-only-mode .ovz-rel-direction {
+body.read-only-version .ovz-rel-delete,
+body.read-only-version .ovz-rel-add-prop,
+body.read-only-version .ovz-rel-direction {
     display: none !important;
 }
 
-body.read-only-mode .ovz-rel-prop-delete {
+body.read-only-version .ovz-rel-prop-delete {
     display: none !important;
 }
 
-body.read-only-mode .ovz-entity-name,
-body.read-only-mode .ovz-property-name,
-body.read-only-mode .ovz-rel-name-input,
-body.read-only-mode .ovz-rel-prop-name {
+body.read-only-version .ovz-entity-name,
+body.read-only-version .ovz-property-name,
+body.read-only-version .ovz-rel-name-input,
+body.read-only-version .ovz-rel-prop-name {
     pointer-events: none !important;
     background: transparent !important;
     border-color: transparent !important;
     cursor: default !important;
 }
 
-body.read-only-mode .ovz-context-menu {
+body.read-only-version .ovz-context-menu {
     display: none !important;
 }
 
-body.read-only-mode .ovz-entity {
+body.read-only-version .ovz-entity {
     cursor: default !important;
 }
 
-body.read-only-mode .ovz-connector {
+body.read-only-version .ovz-connector {
     display: none !important;
 }
 
-body.read-only-mode .ovz-rel-direction-label {
+body.read-only-version .ovz-rel-direction-label {
     pointer-events: none !important;
     cursor: default !important;
 }
