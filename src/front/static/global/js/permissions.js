@@ -200,7 +200,7 @@
         if (!item || !label || !badge) return;
 
         label.textContent = role.toUpperCase();
-        item.style.setProperty('display', 'flex', 'important');
+        item.classList.add('is-visible');
 
         const tooltip = ROLE_TOOLTIPS[role] || role.toUpperCase();
         setBadgeTooltip(badge, tooltip);

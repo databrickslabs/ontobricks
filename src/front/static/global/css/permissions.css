@@ -219,3 +219,27 @@ body:is(.read-only-version, .role-viewer) .btn.disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* ==========================================================================
+   Navbar role badge
+
+   The badge ships hidden and ``permissions.js`` flips ``.is-visible`` on
+   ``#roleNavBadgeItem`` once it has resolved an effective role. The
+   colour / sizing live here (rule §4: no inline CSS in templates).
+   ========================================================================== */
+
+#roleNavBadgeItem {
+    display: none;
+}
+
+#roleNavBadgeItem.is-visible {
+    display: flex !important;
+}
+
+#roleNavBadge {
+    background-color: #dc3545;
+    color: #fff;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+}
