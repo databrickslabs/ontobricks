@@ -395,7 +395,22 @@ function getSharedInheritedProperties(parentName, visited = new Set()) {
 // ENTITY PANEL FUNCTIONS
 // =====================================================
 
+// True when the caller may mutate the loaded ontology — falls through
+// to ``window.OB.canEditOntology`` so the rule (active version + domain
+// role >= editor) lives in one place. Older bundles without
+// ``window.OB`` keep the legacy "active version" behaviour.
+function _canEditOntologyPanel() {
+    if (window.OB && typeof window.OB.canEditOntology === 'function') {
+        return window.OB.canEditOntology();
+    }
+    return window.isActiveVersion !== false;
+}
+
 async function openEntityPanel(options = {}) {
+    if (!_canEditOntologyPanel()) {
+        console.log('[SharedPanel] openEntityPanel suppressed (read-only / viewer)');
+        return;
+    }
     await checkDirtyBeforeSwitch();
     console.log('[SharedPanel] openEntityPanel called');
     sharedPanelEditType = 'entity';
@@ -425,6 +440,15 @@ async function openEntityPanel(options = {}) {
 }
 
 async function openEntityPanelForEdit(idx, options = {}) {
+    // Viewers / older-version readers fall through to the view-only
+    // panel so the icon button, attribute add/remove, dashboard assign
+    // and bridge add controls (rendered behind the ``!viewOnly`` guard
+    // in renderEntityForm / renderSharedEntityAttributes / …) are not
+    // even emitted into the DOM. Saves us a per-button CSS sweep and
+    // keeps a single source of truth.
+    if (!_canEditOntologyPanel()) {
+        return openEntityPanelForView(idx, options);
+    }
     await checkDirtyBeforeSwitch();
     console.log('[SharedPanel] openEntityPanelForEdit called, idx:', idx);
     const cls = OntologyState.config.classes[idx];
@@ -1674,6 +1698,10 @@ async function saveEntityConstraintsToServer(className, disjointWith, equivalent
 // =====================================================
 
 async function openRelationshipPanel(options = {}) {
+    if (!_canEditOntologyPanel()) {
+        console.log('[SharedPanel] openRelationshipPanel suppressed (read-only / viewer)');
+        return;
+    }
     await checkDirtyBeforeSwitch();
     console.log('[SharedPanel] openRelationshipPanel called');
     sharedPanelEditType = 'relationship';
@@ -1698,6 +1726,12 @@ async function openRelationshipPanel(options = {}) {
 }
 
 async function openRelationshipPanelForEdit(idx, options = {}) {
+    // Mirror ``openEntityPanelForEdit`` — viewers/inactive-version
+    // readers fall through to the read-only panel so add/remove
+    // controls are never rendered.
+    if (!_canEditOntologyPanel()) {
+        return openRelationshipPanelForView(idx, options);
+    }
     await checkDirtyBeforeSwitch();
     console.log('[SharedPanel] openRelationshipPanelForEdit called, idx:', idx);
     const prop = OntologyState.config.properties[idx];
@@ -2095,8 +2129,7 @@ async function saveSharedPanelItem() {
 function editClassByName(className) {
     const idx = OntologyState.config.classes.findIndex(cls => cls.name === className);
     if (idx >= 0) {
-        const canEdit = window.isActiveVersion !== false;
-        if (canEdit) openEntityPanelForEdit(idx, { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } });
+        if (_canEditOntologyPanel()) openEntityPanelForEdit(idx, { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } });
         else openEntityPanelForView(idx);
     }
 }
@@ -2107,8 +2140,7 @@ function viewClass(idx) { openEntityPanelForView(idx); }
 function editPropertyByName(propertyName) {
     const idx = OntologyState.config.properties.findIndex(prop => prop.name === propertyName);
     if (idx >= 0) {
-        const canEdit = window.isActiveVersion !== false;
-        if (canEdit) openRelationshipPanelForEdit(idx, { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } });
+        if (_canEditOntologyPanel()) openRelationshipPanelForEdit(idx, { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } });
         else openRelationshipPanelForView(idx);
     }
 }

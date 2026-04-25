@@ -101,7 +101,9 @@ window.SwrlModule = {
             return;
         }
         noMsg.classList.add('d-none');
-        const canEdit = window.isActiveVersion !== false;
+        const canEdit = (window.OB && typeof window.OB.canEditOntology === 'function')
+            ? window.OB.canEditOntology()
+            : window.isActiveVersion !== false;
 
         let html = '';
         this.rules.forEach((rule, i) => {

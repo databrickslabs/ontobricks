@@ -483,28 +483,14 @@
 }
 
 
-/* ==========================================================================
-   Read-Only Mode Banner (for older versions)
-   ========================================================================== */
-
-#readOnlyBanner {
-    position: fixed;
-    top: 56px;  /* Below the navbar */
-    left: 0;
-    right: 0;
-    z-index: 1040;
-    border-radius: 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-#readOnlyBannerSpacer {
-    height: 40px;  /* Same height as the banner */
-}
-
-/* Read-only banner / inactive-version body rules now live in
+/* Read-only / inactive-version body rules now live in
    ``permissions.css`` (the dedicated stylesheet that owns every
    role/version gate). They were moved out of components.css so the
-   gating concerns stay in one file. */
+   gating concerns stay in one file.
+
+   The READ-ONLY badge itself is rendered as a navbar pill (see
+   ``base.html`` → ``#readOnlyNavBadge``) and styled inline; it no
+   longer needs a sticky banner under the navbar. */
 
 
 /* ==========================================================================

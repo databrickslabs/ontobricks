@@ -16,6 +16,7 @@ OntoBricks is a **Knowledge Graph Builder** for the Databricks platform. It lets
 | **Deployment** | [deployment.md](deployment.md) | Local dev, Databricks Apps, `app.yaml` resources, Unity Catalog grants for the app SP, in-app permissions, MCP deploy |
 | **Architecture** | [architecture.md](architecture.md) | System design, semantic web standards, agents, OntoViz, triple-store backends, reasoning engine |
 | **API** | [api.md](api.md) | External (stateless) REST & GraphQL, plus internal REST reference |
+| **Data Access** | [data-access.md](data-access.md) | Engine map — which wrapper (REST / GraphQL / SPARQL / Spark SQL / Cypher) every UI / MCP / Chat feature actually uses |
 | **MCP** | [mcp.md](mcp.md) | MCP server, Databricks Playground integration, client configuration |
 | **Development** | [development.md](development.md) | Dependencies, test suite, permission / SDK notes |
 | **Code Map** | [code_organization.md](code_organization.md) | UI routes & templates, API surfaces, agents, MCP wiring |

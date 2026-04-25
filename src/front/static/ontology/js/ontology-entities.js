@@ -82,7 +82,12 @@ function buildClassHierarchy(classes) {
 function renderHierarchyTree(nodes, level) {
     if (!nodes || nodes.length === 0) return '';
     
-    const canEdit = window.isActiveVersion !== false;
+    // Single source of truth for "can the caller mutate the ontology?"
+    // — combines inactive-version + viewer-role gating. Falls back to
+    // the legacy active-version check if ``permissions.js`` failed to load.
+    const canEdit = (window.OB && typeof window.OB.canEditOntology === 'function')
+        ? window.OB.canEditOntology()
+        : window.isActiveVersion !== false;
     
     let html = '<ul class="class-hierarchy-list' + (level === 0 ? ' root-level' : '') + '">';
     
@@ -145,8 +150,17 @@ function findClassIndexByName(className) {
 
 /**
  * Remove class by name
+ *
+ * Defense-in-depth: bail out if the caller isn't allowed to mutate the
+ * ontology (viewer role or inactive version). The trash buttons that
+ * normally call this are already hidden in those cases, but the function
+ * is reachable from other modules / dev console, so we re-check here.
  */
 async function removeClassByName(className) {
+    if (window.OB && typeof window.OB.canEditOntology === 'function'
+        && !window.OB.canEditOntology()) {
+        return;
+    }
     const idx = findClassIndexByName(className);
     if (idx >= 0) {
         await removeClass(idx);

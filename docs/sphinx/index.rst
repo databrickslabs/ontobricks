@@ -24,6 +24,7 @@ RST summaries; see the architecture guide for the full design document.
    guides/user-guide
    guides/import-export
    guides/api
+   guides/data-access
    guides/mcp
    guides/development
    guides/product

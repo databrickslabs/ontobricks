@@ -209,7 +209,9 @@ window.AxiomsModule = {
         }
 
         if (noMsg) noMsg.style.display = 'none';
-        const canEdit = window.isActiveVersion !== false;
+        const canEdit = (window.OB && typeof window.OB.canEditOntology === 'function')
+            ? window.OB.canEditOntology()
+            : window.isActiveVersion !== false;
 
         let html = '';
         for (const item of items) {

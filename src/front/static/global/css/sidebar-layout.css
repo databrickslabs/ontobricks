@@ -323,26 +323,13 @@ body.full-width-layout {
     overflow: hidden !important;
 }
 
-/* ==========================================================================
-   Read-Only Mode Adjustments
-   When the read-only banner is displayed, reduce available height
-   ========================================================================== */
-body.read-only-version .sidebar-layout {
-    height: calc(100vh - var(--ob-chrome-height-ro, 100px));
-    max-height: calc(100vh - var(--ob-chrome-height-ro, 100px));
-}
+/* Read-only mode no longer steals vertical space — the indicator is
+   now a navbar pill (see ``#readOnlyNavBadge``) instead of a sticky
+   banner under the navbar. The sidebar therefore shares the same
+   ``--ob-chrome-height`` as edit mode, so no read-only overrides are
+   needed here. */
 
-body.read-only-version .sidebar-content {
-    max-height: calc(100vh - var(--ob-chrome-height-ro, 100px));
-}
-
-body.read-only-version #sigmagraph-section.active,
-body.read-only-version #graphql-section.active {
-    height: calc(100vh - 120px);
-    max-height: calc(100vh - 120px);
-}
-
-body.read-only-version #design-section #ontology-designer-canvas-wrapper {
+body:is(.read-only-version, .role-viewer) #design-section #ontology-designer-canvas-wrapper {
     height: calc(100vh - 200px);
 }
 

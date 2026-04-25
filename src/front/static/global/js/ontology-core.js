@@ -327,12 +327,21 @@ async function autoGenerateOwl() {
     // /ontology/export-owl, which renders the same OWL content
     // server-side without persisting anything.
     //
-    // Viewers no longer need a JS guard here: their write surfaces are
-    // hidden / disabled declaratively by ``permissions.css`` so the POST
-    // path is unreachable for them. We still keep the read-only
-    // endpoint for the inactive-version flow, where admins/builders can
-    // legitimately preview the OWL without persisting changes.
-    const isReadOnly = () => window.isActiveVersion === false;
+    // Two read-only paths converge here: an older inactive version
+    // (any role, set asynchronously by ``version-check.js``) and a
+    // viewer on the current domain (no edit role, stamped on <body>
+    // synchronously by ``permissions.js``). Both must use GET
+    // ``/ontology/export-owl`` instead of POST ``/ontology/generate-owl``
+    // — the POST path persists the domain and is 403'd by the backend
+    // ``PermissionMiddleware`` in either case. ``window.OB.canEditOntology``
+    // collapses both signals into a single check; the legacy fallback
+    // keeps older bundles compiling if ``permissions.js`` failed to load.
+    const isReadOnly = () => {
+        if (window.OB && typeof window.OB.canEditOntology === 'function') {
+            return !window.OB.canEditOntology();
+        }
+        return window.isActiveVersion === false;
+    };
 
     const readOnlyFetch = () => fetch('/ontology/export-owl', {
         method: 'GET',

@@ -80,10 +80,11 @@ const Breadcrumb = {
     _updateChromeHeight() {
         const nav = document.getElementById('obBreadcrumb');
         if (!nav || nav.classList.contains('d-none')) return;
+        // Chrome = navbar (60px) + breadcrumb. Read-only no longer adds
+        // a banner — the indicator is now a navbar pill — so the same
+        // height applies whether or not the user is in read-only mode.
         const bcHeight = nav.offsetHeight;
-        const base = document.body.classList.contains('read-only-version') ? 100 : 60;
-        document.documentElement.style.setProperty('--ob-chrome-height', (base + bcHeight) + 'px');
-        document.documentElement.style.setProperty('--ob-chrome-height-ro', (100 + bcHeight) + 'px');
+        document.documentElement.style.setProperty('--ob-chrome-height', (60 + bcHeight) + 'px');
     },
 
     _updateSection(sectionName) {

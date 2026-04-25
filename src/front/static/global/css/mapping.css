@@ -389,7 +389,7 @@
 }
 
 /* Read-only mode adjustments for design section */
-body.read-only-version #design-section.active {
+body:is(.read-only-version, .role-viewer) #design-section.active {
     height: calc(100% - 40px) !important;
 }
 
