@@ -12,6 +12,7 @@ from back.core.errors import ValidationError
 from back.objects.session import SessionManager, get_session_manager
 from back.core.helpers import resolve_default_base_uri, resolve_default_emoji
 from back.objects.session import get_domain
+from back.objects.registry import ROLE_ADMIN, require
 
 from api.routers.internal._permissions import filter_visible_domains
 
@@ -426,7 +427,10 @@ async def permissions_diag(
     )
 
 
-@router.get("/permissions")
+@router.get(
+    "/permissions",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def list_app_permissions(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
@@ -439,7 +443,10 @@ async def list_app_permissions(
     return config_service.list_app_principals_result(session_mgr, settings)
 
 
-@router.get("/permissions/principals")
+@router.get(
+    "/permissions/principals",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def list_principals(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
@@ -452,7 +459,10 @@ async def list_principals(
     return config_service.list_principals_result(session_mgr, settings)
 
 
-@router.get("/permissions/search")
+@router.get(
+    "/permissions/search",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def search_principals(
     q: str = "",
     type: str = "user",
@@ -476,7 +486,10 @@ async def search_principals(
 # ===========================================
 
 
-@router.get("/domain-permissions/{domain_name}")
+@router.get(
+    "/domain-permissions/{domain_name}",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def list_domain_permissions(
     domain_name: str,
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -488,7 +501,10 @@ async def list_domain_permissions(
     )
 
 
-@router.post("/domain-permissions/{domain_name}")
+@router.post(
+    "/domain-permissions/{domain_name}",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def add_domain_permission(
     domain_name: str,
     request: Request,
@@ -502,7 +518,10 @@ async def add_domain_permission(
     )
 
 
-@router.delete("/domain-permissions/{domain_name}/{principal:path}")
+@router.delete(
+    "/domain-permissions/{domain_name}/{principal:path}",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def delete_domain_permission(
     domain_name: str,
     principal: str,
@@ -520,7 +539,10 @@ async def delete_domain_permission(
 # ===========================================
 
 
-@router.get("/teams")
+@router.get(
+    "/teams",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def teams_matrix(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
@@ -529,7 +551,10 @@ async def teams_matrix(
     return config_service.build_teams_matrix_result(session_mgr, settings)
 
 
-@router.post("/teams")
+@router.post(
+    "/teams",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def teams_save_batch(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
