@@ -222,6 +222,40 @@ async def initialize_registry(
     return config_service.initialize_registry_result(session_mgr, settings)
 
 
+@router.post(
+    "/registry/migrate-to-lakebase",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def migrate_registry_to_lakebase(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Copy Volume registry data into Lakebase tables (admin only).
+
+    Binaries (``documents/``, ``*.lbug.tar.gz``) stay on the Unity
+    Catalog Volume. Idempotent at the Lakebase side.
+    """
+    return config_service.migrate_to_lakebase_result(session_mgr, settings)
+
+
+@router.get(
+    "/registry/lakebase-stats",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def get_lakebase_stats(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return per-table row counts for the Lakebase registry schema.
+
+    Powers the read-only inventory grid in the Registry Location
+    panel. Returns ``success=False`` with a human-readable
+    ``message`` when the Lakebase resource is not bound or the
+    backend is not installed.
+    """
+    return config_service.lakebase_stats_result(session_mgr, settings)
+
+
 @router.get("/registry/domains")
 async def list_registry_domains(
     request: Request,

@@ -38,6 +38,12 @@
             <i class="bi bi-shield-lock me-1"></i> Permissions
         </button>
     </li>
+    <li class="nav-item" role="presentation" id="tab-registry-wrapper">
+        <button class="nav-link" id="tab-registry" data-bs-toggle="tab" data-bs-target="#pane-registry"
+                type="button" role="tab" aria-controls="pane-registry" aria-selected="false">
+            <i class="bi bi-archive me-1"></i> Registry
+        </button>
+    </li>
     {% endif %}
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-ladybugdb" data-bs-toggle="tab" data-bs-target="#pane-ladybugdb"
@@ -136,6 +142,11 @@
                         <span class="spinner-border spinner-border-sm me-1"></span> Loading app principals...
                     </div>
                 </div>
+            </div>
+
+            <!-- ==================== REGISTRY TAB ==================== -->
+            <div class="tab-pane fade" id="pane-registry" role="tabpanel" aria-labelledby="tab-registry">
+                {% include "partials/registry/_registry_configuration.html" %}
             </div>
             {% endif %}
 
@@ -283,5 +294,6 @@
 <script src="{{ url_for('static', filename='config/js/settings.js') }}?v={{ asset_version }}"></script>
 {% if user_role == 'admin' %}
 <script src="{{ url_for('static', filename='config/js/permissions.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='registry/js/registry.js') }}?v={{ asset_version }}"></script>
 {% endif %}
 {% endblock %}

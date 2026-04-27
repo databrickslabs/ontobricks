@@ -41,13 +41,11 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError, NotFoundError, InfrastructureError
-from back.objects.session.global_config import global_config_service
 from shared.config.constants import DEFAULT_GRAPH_NAME
 
 logger = get_logger(__name__)
 
 _SCHEDULES_KEY = "schedules"
-_HISTORY_FILENAME = ".schedule_history.json"
 _MAX_HISTORY = 50
 _JOB_PREFIX = "scheduled_build_"
 
@@ -300,29 +298,48 @@ class BuildScheduler:
     # Persistence helpers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _store_for(host: str, token: str, registry_cfg: Dict[str, str]):
+        from back.objects.registry import RegistryCfg
+        from back.objects.registry.store import RegistryFactory
+
+        cfg = RegistryCfg.from_dict(registry_cfg)
+        return RegistryFactory.from_cfg(cfg, host=host, token=token)
+
     def _load_schedules(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> Dict[str, Any]:
         if not host or not registry_cfg.get("catalog"):
             return {}
-        cfg = global_config_service.load(host, token, registry_cfg, force=True)
-        return dict(cfg.get(_SCHEDULES_KEY) or {})
+        try:
+            store = self._store_for(host, token, registry_cfg)
+            return dict(store.load_schedules() or {})
+        except Exception as e:
+            logger.debug("Could not load schedules: %s", e)
+            return {}
 
     def _persist_schedules(
         self, host: str, token: str, registry_cfg: Dict[str, str], schedules: Dict
     ) -> Tuple[bool, str]:
         if not host or not registry_cfg.get("catalog"):
             return False, "Databricks credentials or registry not configured"
-        return global_config_service._save(
-            host, token, registry_cfg, {_SCHEDULES_KEY: schedules}
-        )
+        try:
+            store = self._store_for(host, token, registry_cfg)
+            ok, msg = store.save_schedules(schedules)
+            if ok:
+                # Invalidate the in-process global-config cache so other
+                # readers (e.g. settings UI, GlobalConfigService.load) see
+                # the schedule changes on next load.
+                from back.objects.session.global_config import (
+                    global_config_service,
+                )
 
-    @staticmethod
-    def _history_path(registry_cfg: Dict[str, str], domain_name: str) -> str:
-        from back.objects.registry.RegistryService import RegistryCfg, _DOMAINS_FOLDER
-
-        c = RegistryCfg.from_dict(registry_cfg)
-        return f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/{_DOMAINS_FOLDER}/{domain_name}/{_HISTORY_FILENAME}"
+                global_config_service._cache = None
+                global_config_service._cache_ts = 0.0
+            return ok, msg
+        except Exception as e:
+            logger.exception("Could not persist schedules: %s", e)
+            return False, str(e)
 
     def _load_domain_history(
         self,
@@ -333,17 +350,12 @@ class BuildScheduler:
     ) -> List[Dict[str, Any]]:
         if not host or not registry_cfg.get("catalog"):
             return []
-        from back.core.databricks.VolumeFileService import VolumeFileService
-
-        path = self._history_path(registry_cfg, domain_name)
         try:
-            uc = VolumeFileService(host=host, token=token)
-            ok, content, _ = uc.read_file(path)
-            if ok and content:
-                return json.loads(content)
+            store = self._store_for(host, token, registry_cfg)
+            return list(store.load_schedule_history(domain_name))
         except Exception as e:
             logger.debug("Could not load history for '%s': %s", domain_name, e)
-        return []
+            return []
 
     def _append_history(
         self,
@@ -353,16 +365,11 @@ class BuildScheduler:
         domain_name: str,
         entry: Dict[str, Any],
     ) -> None:
-        entries = self._load_domain_history(host, token, registry_cfg, domain_name)
-        entries.append(entry)
-        if len(entries) > _MAX_HISTORY:
-            entries = entries[-_MAX_HISTORY:]
-        from back.core.databricks.VolumeFileService import VolumeFileService
-
-        path = self._history_path(registry_cfg, domain_name)
         try:
-            uc = VolumeFileService(host=host, token=token)
-            uc.write_file(path, json.dumps(entries, indent=2), overwrite=True)
+            store = self._store_for(host, token, registry_cfg)
+            store.append_schedule_history(
+                domain_name, entry, max_entries=_MAX_HISTORY
+            )
         except Exception as e:
             logger.warning("Could not save history for '%s': %s", domain_name, e)
 
@@ -616,17 +623,18 @@ def _write_graph_triples(
 
 
 def _persist_domain_metadata(
-    uc, domain, domain_path: str, latest: str, build_ts: str, domain_name: str
+    svc, domain, version: str, build_ts: str, domain_name: str
 ):
-    """Stamp last_build and write domain JSON back to the registry."""
+    """Stamp last_build and write the domain doc via the active store.
+
+    ``svc`` is the :class:`RegistryService` that owns the right
+    :class:`RegistryStore` for the current backend (Volume or Lakebase).
+    ``version`` is the numeric version string (e.g. ``"1"``).
+    """
     domain.last_build = build_ts
     try:
         domain_data = domain.export_for_save()
-        w_ok, w_msg = uc.write_file(
-            f"{domain_path}/{latest}",
-            json.dumps(domain_data, indent=2),
-            overwrite=True,
-        )
+        w_ok, w_msg = svc._store.write_version(domain_name, version, domain_data)
         if w_ok:
             logger.info(
                 "Scheduled build [%s]: stamped last_build=%s in registry",
@@ -635,7 +643,7 @@ def _persist_domain_metadata(
             )
         else:
             logger.error(
-                "Scheduled build [%s]: write_file returned failure: %s",
+                "Scheduled build [%s]: write_version returned failure: %s",
                 domain_name,
                 w_msg,
             )
@@ -811,7 +819,7 @@ def _run_scheduled_build(
                     status = "success"
                     message = f"No changes — {triple_count} triples unchanged"
                     _persist_domain_metadata(
-                        uc, domain, domain_path, latest, build_ts, domain_name
+                        svc, domain, version, build_ts, domain_name
                     )
                     return
             except Exception as e:
@@ -856,7 +864,7 @@ def _run_scheduled_build(
             )
 
         tm.update_progress(task.id, 95, "Saving domain metadata...")
-        _persist_domain_metadata(uc, domain, domain_path, latest, build_ts, domain_name)
+        _persist_domain_metadata(svc, domain, version, build_ts, domain_name)
 
         status = "success"
         message = f"Built {triple_count} triples in {time.time() - start:.1f}s"

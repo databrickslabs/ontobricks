@@ -15,13 +15,11 @@ Active only in Databricks App mode (DATABRICKS_APP_PORT is set).  In local
 mode every user has unrestricted access.
 """
 
-import json
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.databricks.DatabricksClient import DatabricksClient
-from back.core.databricks import VolumeFileService
 
 logger = get_logger(__name__)
 
@@ -53,7 +51,6 @@ def min_role(a: str, b: str) -> str:
     return a if role_level(a) <= role_level(b) else b
 
 
-_DOMAIN_PERMISSIONS_FILENAME = ".domain_permissions.json"
 _CACHE_TTL_DOMAIN_PERMS = 120  # 2 min – per-domain permission cache
 _CACHE_TTL_ADMIN = 60  # 1 min – keep short to pick up permission changes quickly
 _CACHE_TTL_PRINCIPALS = 600  # 10 min
@@ -330,22 +327,14 @@ class PermissionService:
     # Domain-level permission file I/O
     # ------------------------------------------------------------------
 
-    def _new_uc(self, host: str, token: str) -> VolumeFileService:
-        return VolumeFileService(host=host, token=token)
+    @staticmethod
+    def _store_for(host: str, token: str, registry_cfg: Dict[str, str]):
+        """Build the right :class:`RegistryStore` for *registry_cfg*."""
+        from back.objects.registry import RegistryCfg
+        from back.objects.registry.store import RegistryFactory
 
-    def _domain_permissions_path(
-        self,
-        registry_cfg: Dict[str, str],
-        domain_folder: str,
-    ) -> str:
-        """Path to .domain_permissions.json inside a domain folder."""
-        from back.objects.registry.RegistryService import RegistryCfg
-
-        c = RegistryCfg.from_dict(registry_cfg)
-        return (
-            f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/domains/"
-            f"{domain_folder}/{_DOMAIN_PERMISSIONS_FILENAME}"
-        )
+        cfg = RegistryCfg.from_dict(registry_cfg)
+        return RegistryFactory.from_cfg(cfg, host=host, token=token)
 
     def load_domain_permissions(
         self,
@@ -356,29 +345,24 @@ class PermissionService:
         *,
         force: bool = False,
     ) -> Dict[str, Any]:
-        """Load and cache per-domain permission file."""
+        """Load and cache per-domain permissions from the active store."""
         now = time.time()
         if not force:
             cached = self._domain_perm_cache.get(domain_folder)
             if cached and (now - cached[1]) < _CACHE_TTL_DOMAIN_PERMS:
                 return cached[0]
 
-        path = self._domain_permissions_path(registry_cfg, domain_folder)
         try:
-            uc = self._new_uc(host, token)
-            ok, content, msg = uc.read_file(path)
-            if ok and content:
-                data = json.loads(content)
-                self._domain_perm_cache[domain_folder] = (data, now)
-                logger.info(
-                    "Loaded %d domain permission entries for %s",
-                    len(data.get("permissions", [])),
-                    domain_folder,
-                )
-                return data
-            logger.debug(
-                "Domain permission file not found for %s: %s", domain_folder, msg
+            store = self._store_for(host, token, registry_cfg)
+            data = store.load_domain_permissions(domain_folder)
+            self._domain_perm_cache[domain_folder] = (data, now)
+            logger.info(
+                "Loaded %d domain permission entries for %s (backend=%s)",
+                len(data.get("permissions", [])),
+                domain_folder,
+                store.backend,
             )
+            return data
         except Exception as e:
             logger.warning(
                 "Error loading domain permissions for %s: %s", domain_folder, e
@@ -396,23 +380,25 @@ class PermissionService:
         domain_folder: str,
         data: Dict[str, Any],
     ) -> Tuple[bool, str]:
-        """Write the per-domain permission file."""
+        """Persist per-domain permissions via the active store."""
         if not registry_cfg.get("catalog") or not registry_cfg.get("schema"):
             return False, "Registry not configured"
-        path = self._domain_permissions_path(registry_cfg, domain_folder)
         try:
-            uc = self._new_uc(host, token)
-            ok, msg = uc.write_file(path, json.dumps(data, indent=2), overwrite=True)
+            store = self._store_for(host, token, registry_cfg)
+            ok, msg = store.save_domain_permissions(domain_folder, data)
             if not ok:
                 logger.error(
-                    "Failed to write domain permissions for %s: %s", domain_folder, msg
+                    "Failed to write domain permissions for %s: %s",
+                    domain_folder,
+                    msg,
                 )
                 return False, f"Failed to save domain permissions: {msg}"
             self._domain_perm_cache[domain_folder] = (data, time.time())
             logger.info(
-                "Saved %d domain permission entries for %s",
+                "Saved %d domain permission entries for %s (backend=%s)",
                 len(data.get("permissions", [])),
                 domain_folder,
+                store.backend,
             )
             return True, "Domain permissions saved"
         except Exception as e:

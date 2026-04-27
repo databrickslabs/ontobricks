@@ -39,6 +39,26 @@ logger = get_logger(__name__)
 LADYBUG_BASE_DIR = "/tmp/ontobricks"
 
 
+def _enum_short(value: Any) -> str:
+    """Return the short name of an SDK enum (or pass strings through).
+
+    The Databricks SDK serialises ``DatabaseInstanceState`` and friends
+    as ``ClassName.MEMBER``. The admin UI only needs ``MEMBER``.
+    """
+    if value is None or value == "":
+        return ""
+    s = str(value)
+    return s.split(".", 1)[1] if "." in s else s
+
+
+def _pg_version_short(value: Any) -> str:
+    """Reduce ``PG_VERSION_16`` (SDK enum string) to ``"16"``."""
+    s = _enum_short(value)
+    if s.upper().startswith("PG_VERSION_"):
+        return s[len("PG_VERSION_"):]
+    return s
+
+
 class SettingsService:
     """Configuration, registry, permissions, local LadybugDB files, and build schedules."""
 
@@ -333,7 +353,15 @@ class SettingsService:
     def build_registry_get_payload(
         session_mgr: SessionManager, settings: Settings
     ) -> Dict[str, Any]:
-        """Payload for GET /settings/registry."""
+        """Payload for GET /settings/registry.
+
+        Includes the registry triplet (catalog/schema/volume), the
+        active ``backend`` (``volume`` or ``lakebase``), the configured
+        ``lakebase_schema``, and a read-only ``lakebase`` block that
+        surfaces the runtime-injected Postgres connection parameters
+        (``PGHOST``/``PGPORT``/``PGDATABASE``/``PGUSER``) plus
+        availability/health for the admin UI.
+        """
         rcfg = RegistryCfg.from_session(session_mgr, settings)
         initialized = False
 
@@ -349,13 +377,235 @@ class SettingsService:
             **rcfg.as_dict(),
             "configured": initialized,
             "registry_locked": SettingsService.is_registry_locked(settings),
+            "available_backends": SettingsService._available_backends(),
+            "lakebase": SettingsService._lakebase_runtime_info(rcfg),
+        }
+
+    @staticmethod
+    def _available_backends() -> Dict[str, Any]:
+        """Return which backends are usable in the current process.
+
+        ``volume`` is always available. ``lakebase`` requires the
+        optional :mod:`psycopg` extra and the four ``PG*`` environment
+        variables that the Databricks App resource binding injects at
+        runtime.
+        """
+        import os
+
+        try:
+            import psycopg  # noqa: F401  -- detect optional dep
+
+            has_psycopg = True
+        except ImportError:
+            has_psycopg = False
+
+        env_ready = all(
+            os.environ.get(k)
+            for k in ("PGHOST", "PGDATABASE", "PGUSER")
+        )
+        return {
+            "volume": {"available": True, "reason": ""},
+            "lakebase": {
+                "available": has_psycopg and env_ready,
+                "reason": (
+                    ""
+                    if has_psycopg and env_ready
+                    else (
+                        "psycopg extra not installed"
+                        if not has_psycopg
+                        else "Lakebase resource not bound (PGHOST/PGDATABASE/PGUSER missing)"
+                    )
+                ),
+                "psycopg_installed": has_psycopg,
+                "env_ready": env_ready,
+            },
+        }
+
+    @staticmethod
+    def _lakebase_runtime_info(rcfg: RegistryCfg) -> Dict[str, Any]:
+        """Surface the read-only PG* connection params for the UI.
+
+        Returns an empty block when the Lakebase resource is not bound.
+        Never raises and never includes the OAuth token.
+
+        When PG* env vars are present, also tries to enrich the payload
+        with Databricks metadata about the bound instance (name, tier,
+        state, pg_version, node_count). The lookup is best-effort and
+        degrades silently on failure.
+        """
+        import os
+
+        host = os.environ.get("PGHOST", "")
+        if not host:
+            return {
+                "host": "",
+                "port": "",
+                "database": "",
+                "user": "",
+                "schema": rcfg.lakebase_schema,
+                "bound": False,
+                "instance": None,
+            }
+        return {
+            "host": host,
+            "port": os.environ.get("PGPORT", "5432"),
+            "database": os.environ.get("PGDATABASE", ""),
+            "user": os.environ.get("PGUSER", ""),
+            "schema": rcfg.lakebase_schema,
+            "bound": True,
+            "instance": SettingsService._lakebase_instance_metadata(host),
+        }
+
+    @staticmethod
+    def _lakebase_instance_metadata(host: str) -> Optional[Dict[str, Any]]:
+        """Look up Databricks metadata for the Lakebase instance at ``host``.
+
+        Matches by ``read_write_dns`` (and falls back to ``read_only_dns``)
+        and returns a small JSON-friendly dict suitable for the admin UI.
+        Returns ``None`` on any failure — the caller will still show the
+        raw connection params (PGHOST/PGPORT/PGDATABASE/PGUSER), so this
+        is purely additive.
+        """
+        if not host:
+            return None
+        try:
+            from databricks.sdk import WorkspaceClient
+
+            w = WorkspaceClient()
+            target = host.strip().lower()
+            for inst in w.database.list_database_instances():
+                rw = (getattr(inst, "read_write_dns", "") or "").strip().lower()
+                ro = (getattr(inst, "read_only_dns", "") or "").strip().lower()
+                if target in (rw, ro):
+                    capacity = getattr(inst, "effective_capacity", "") or getattr(
+                        inst, "capacity", ""
+                    ) or ""
+                    state = getattr(inst, "state", "")
+                    pg_version = getattr(inst, "pg_version", "") or ""
+                    return {
+                        "name": getattr(inst, "name", "") or "",
+                        "uid": getattr(inst, "uid", "") or "",
+                        # SDK enums stringify as e.g. ``DatabaseInstanceState.AVAILABLE``;
+                        # strip the prefix so the UI shows just ``AVAILABLE``.
+                        "state": _enum_short(state),
+                        "stopped": bool(
+                            getattr(inst, "effective_stopped", False)
+                            or getattr(inst, "stopped", False)
+                        ),
+                        "capacity": _enum_short(capacity),
+                        "pg_version": _pg_version_short(pg_version),
+                        "node_count": getattr(inst, "effective_node_count", None)
+                        or getattr(inst, "node_count", None),
+                        "creator": getattr(inst, "creator", "") or "",
+                        "creation_time": getattr(inst, "creation_time", "") or "",
+                        "endpoint": rw or ro,
+                        "read_only_endpoint": ro,
+                    }
+            logger.debug(
+                "No Databricks database instance matched PGHOST=%s "
+                "(searched read_write_dns / read_only_dns)",
+                host,
+            )
+            return None
+        except Exception as exc:  # noqa: BLE001 -- best-effort enrichment
+            logger.debug("Lakebase instance lookup failed: %s", exc)
+            return None
+
+    @staticmethod
+    def lakebase_stats_result(
+        session_mgr: SessionManager, settings: Settings
+    ) -> Dict[str, Any]:
+        """Return per-table row counts for the Lakebase registry schema.
+
+        Used by the admin Registry Location panel to give a quick at-a-
+        glance inventory of what currently lives in Lakebase. Never
+        raises — surfaces failures via ``success=False`` + ``message``.
+        """
+        from back.core.databricks import get_lakebase_auth
+
+        auth = get_lakebase_auth()
+        if not auth.is_available:
+            return {
+                "success": False,
+                "message": "Lakebase resource not bound (PGHOST/PGUSER missing)",
+                "tables": [],
+            }
+
+        try:
+            domain = get_domain(session_mgr)
+            cfg = RegistryCfg.from_domain(domain, settings)
+            host, token = get_databricks_host_and_token(domain, settings)
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "success": False,
+                "message": f"Could not resolve registry context: {exc}",
+                "tables": [],
+            }
+
+        try:
+            from back.objects.registry.store import RegistryFactory
+
+            lakebase_cfg = RegistryCfg(
+                catalog=cfg.catalog,
+                schema=cfg.schema,
+                volume=cfg.volume,
+                backend="lakebase",
+                lakebase_schema=cfg.lakebase_schema,
+            )
+            store = RegistryFactory.lakebase(
+                registry_cfg=lakebase_cfg,
+                schema=cfg.lakebase_schema,
+            )
+        except ImportError:
+            return {
+                "success": False,
+                "message": "Lakebase backend not installed (missing psycopg)",
+                "tables": [],
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "success": False,
+                "message": f"Could not build Lakebase store: {exc}",
+                "tables": [],
+            }
+
+        tables = (
+            "registries",
+            "global_config",
+            "domains",
+            "domain_versions",
+            "domain_permissions",
+            "schedules",
+            "schedule_runs",
+        )
+        try:
+            counts = store.table_row_counts(tables)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Lakebase table_row_counts failed")
+            return {
+                "success": False,
+                "message": f"Could not query Lakebase: {exc}",
+                "tables": [],
+            }
+        return {
+            "success": True,
+            "schema": cfg.lakebase_schema,
+            "initialized": store.is_initialized(),
+            "tables": [{"name": t, "rows": counts.get(t, 0)} for t in tables],
         }
 
     @staticmethod
     def apply_registry_save(
         data: Dict[str, Any], session_mgr: SessionManager
     ) -> Dict[str, Any]:
-        """Persist registry catalog/schema/volume from request body."""
+        """Persist registry triplet, backend choice, and lakebase schema.
+
+        Expected payload (all optional, partial updates allowed):
+
+        - ``catalog`` / ``schema`` / ``volume``: Unity Catalog triplet.
+        - ``backend``: ``"volume"`` or ``"lakebase"``.
+        - ``lakebase_schema``: Postgres schema for registry tables.
+        """
         domain = get_domain(session_mgr)
         reg = domain.settings.setdefault("registry", {})
         if data.get("catalog"):
@@ -364,8 +614,91 @@ class SettingsService:
             reg["schema"] = data["schema"]
         if data.get("volume"):
             reg["volume"] = data["volume"]
+        if "backend" in data:
+            backend = (data.get("backend") or "volume").lower()
+            if backend not in ("volume", "lakebase"):
+                raise ValidationError(
+                    f"Unknown registry backend '{backend}' — expected volume or lakebase"
+                )
+            reg["backend"] = backend
+        if data.get("lakebase_schema"):
+            reg["lakebase_schema"] = data["lakebase_schema"]
         domain.save()
         return {"success": True, "message": "Registry configuration saved"}
+
+    @staticmethod
+    def migrate_to_lakebase_result(
+        session_mgr: SessionManager, settings: Settings
+    ) -> Dict[str, Any]:
+        """Copy Volume registry data into Lakebase tables.
+
+        Builds a :class:`VolumeRegistryStore` from the active session
+        configuration and a :class:`LakebaseRegistryStore` using the
+        injected ``PG*`` env vars and the configured Lakebase schema.
+        Binary artefacts (``documents/``, ``*.lbug.tar.gz``) are not
+        moved — they always live on the Volume.
+        """
+        try:
+            domain = get_domain(session_mgr)
+            host, token = get_databricks_host_and_token(domain, settings)
+            cfg = RegistryCfg.from_domain(domain, settings)
+            if not cfg.catalog or not cfg.schema:
+                raise ValidationError(
+                    "Registry catalog and schema must be configured first"
+                )
+
+            from back.objects.registry.store import (
+                RegistryFactory,
+                migrate_volume_to_lakebase,
+                summarize_migration,
+            )
+
+            volume_cfg = RegistryCfg(
+                catalog=cfg.catalog,
+                schema=cfg.schema,
+                volume=cfg.volume,
+                backend="volume",
+                lakebase_schema=cfg.lakebase_schema,
+            )
+            lakebase_cfg = RegistryCfg(
+                catalog=cfg.catalog,
+                schema=cfg.schema,
+                volume=cfg.volume,
+                backend="lakebase",
+                lakebase_schema=cfg.lakebase_schema,
+            )
+
+            src_store = RegistryFactory.volume(
+                registry_cfg=volume_cfg, host=host, token=token
+            )
+            try:
+                dst_store = RegistryFactory.lakebase(
+                    registry_cfg=lakebase_cfg,
+                    schema=cfg.lakebase_schema,
+                )
+            except ImportError as exc:
+                raise InfrastructureError(
+                    "Lakebase backend not installed",
+                    detail=str(exc),
+                ) from exc
+
+            report = migrate_volume_to_lakebase(src_store, dst_store)
+            ok, summary = summarize_migration(report)
+            return {
+                "success": ok,
+                "message": (
+                    "Migration complete — " if ok else "Migration completed with errors — "
+                )
+                + summary,
+                "report": report.as_dict(),
+            }
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("Migrate to Lakebase failed: %s", e)
+            raise InfrastructureError(
+                "Migrate to Lakebase failed", detail=str(e)
+            ) from e
 
     @staticmethod
     def initialize_registry_result(

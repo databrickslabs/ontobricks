@@ -43,6 +43,18 @@ env:
   # App name for permission management (must match the deployed app name)
   - name: ONTOBRICKS_APP_NAME
     value: "ontobricks"
+  # ── Lakebase (optional) ───────────────────────────────────────
+  # When the bundle is deployed to a *-lakebase target the DAB binds
+  # a ``database`` resource to this app. Databricks Apps then
+  # auto-injects PGHOST/PGPORT/PGDATABASE/PGUSER/PGAPPNAME/PGSSLMODE
+  # into the runtime — no explicit ``valueFrom`` mapping needed.
+  # The OAuth token used as the Postgres password is minted on the fly
+  # by ``LakebaseAuth`` (see src/back/core/databricks/LakebaseAuth.py).
+  # Without that resource binding the env vars stay unset and the
+  # admin UI keeps the Lakebase backend disabled — the app continues
+  # to run normally on the Unity Catalog Volume backend.
+  - name: LAKEBASE_SCHEMA
+    value: "ontobricks_registry"
   # MLflow — ensure traces are persisted to the workspace tracking server
   - name: MLFLOW_TRACKING_URI
     value: "databricks"

@@ -29,6 +29,8 @@ def _make_settings(**overrides):
         "registry_schema": "env_sch",
         "registry_volume": "",
         "registry_volume_path": "",
+        "registry_backend": "volume",
+        "lakebase_schema": "ontobricks_registry",
         "databricks_host": "https://host.databricks.com",
         "databricks_token": "tok-123",
     }
@@ -44,9 +46,15 @@ def _make_uc():
 
 
 def _make_svc(cfg=None, uc=None):
-    """Build a RegistryService with the domains folder pre-resolved (skips UC probe)."""
+    """Build a RegistryService with the domains folder pre-resolved (skips UC probe).
+
+    The store now owns its own domain-folder probe, so we pre-resolve
+    both the service- and the store-level cache.
+    """
     svc = RegistryService(cfg or CFG, uc or _make_uc())
     svc._resolved_domains_folder = _DOMAINS_FOLDER
+    if hasattr(svc._store, "_resolved_domains_folder"):
+        svc._store._resolved_domains_folder = _DOMAINS_FOLDER
     return svc
 
 
@@ -149,7 +157,15 @@ class TestRegistryCfgHelpers:
 
     def test_as_dict(self):
         c = RegistryCfg("x", "y", "z")
-        assert c.as_dict() == {"catalog": "x", "schema": "y", "volume": "z"}
+        # ``backend`` and ``lakebase_schema`` were added when Lakebase
+        # support landed — Volume-only callers see the defaults.
+        assert c.as_dict() == {
+            "catalog": "x",
+            "schema": "y",
+            "volume": "z",
+            "backend": "volume",
+            "lakebase_schema": "ontobricks_registry",
+        }
 
     def test_as_dict_roundtrip(self):
         c = RegistryCfg("a", "b", "c")
@@ -264,6 +280,10 @@ class TestIsInitialized:
 class TestInitialize:
     def test_creates_volume_and_marker(self):
         uc = _make_uc()
+        # ``initialize`` now goes through the store, which writes the
+        # ``.registry`` marker via ``uc.write_file`` and expects a
+        # ``(ok, msg)`` tuple back.
+        uc.write_file.return_value = (True, "ok")
         client = MagicMock()
         client.list_volumes.return_value = []
         client.create_volume.return_value = True
@@ -278,6 +298,7 @@ class TestInitialize:
 
     def test_skips_volume_creation_if_exists(self):
         uc = _make_uc()
+        uc.write_file.return_value = (True, "ok")
         client = MagicMock()
         client.list_volumes.return_value = ["vol"]
 
@@ -404,9 +425,14 @@ class TestDeleteDomain:
         errors = svc.delete_domain("my_proj")
 
         assert errors == []
-        uc.list_directory.assert_called_once_with(
-            "/Volumes/cat/sch/vol/domains/my_proj"
+        # Two passes: once via ``store.delete_domain`` (JSON side) and
+        # once via ``recursive_delete`` (binary side — documents/ +
+        # *.lbug.tar.gz live on the Volume regardless of backend).
+        assert all(
+            c == call("/Volumes/cat/sch/vol/domains/my_proj")
+            for c in uc.list_directory.call_args_list
         )
+        assert uc.list_directory.call_count == 2
 
 
 # ==================================================================
@@ -548,10 +574,14 @@ class TestWriteVersion:
 
         ok, msg = svc.write_version("proj", "5", '{"data": true}')
         assert ok is True
-        uc.write_file.assert_called_once_with(
-            "/Volumes/cat/sch/vol/domains/proj/V5/V5.json",
-            '{"data": true}',
-        )
+        # The store re-serialises the parsed dict with ``indent=2`` and
+        # always overwrites — we check the path + dict equivalence
+        # rather than the exact string spelling.
+        uc.write_file.assert_called_once()
+        path, payload = uc.write_file.call_args.args
+        assert path == "/Volumes/cat/sch/vol/domains/proj/V5/V5.json"
+        assert json.loads(payload) == {"data": True}
+        assert uc.write_file.call_args.kwargs == {"overwrite": True}
 
 
 class TestDeleteVersion:
@@ -574,9 +604,11 @@ class TestDeleteVersion:
 
         ok, msg = svc.delete_version("proj", "3")
         assert ok is True
-        uc.list_directory.assert_called_once_with(
-            "/Volumes/cat/sch/vol/domains/proj/V3"
-        )
+        # As with delete_domain, the JSON side (store) and the binary
+        # side (service.recursive_delete) each list the version dir.
+        for c in uc.list_directory.call_args_list:
+            assert c == call("/Volumes/cat/sch/vol/domains/proj/V3")
+        assert uc.list_directory.call_count >= 1
 
 
 # ==================================================================

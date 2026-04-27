@@ -83,20 +83,6 @@
                             "requires": null
                         }
                     ]
-                },
-                {
-                    "id": "registry-config",
-                    "title": "Configuration",
-                    "icon": "bi-gear",
-                    "items": [
-                        {
-                            "id": "configuration",
-                            "label": "Registry Location",
-                            "icon": "bi-archive",
-                            "default": false,
-                            "requires": null
-                        }
-                    ]
                 }
             ]
         },

@@ -250,19 +250,19 @@ class TestPrincipalsCache:
 # ===================================================================
 
 
-class TestDomainPermissionsPath:
-    def test_path(self, svc):
-        path = svc._domain_permissions_path(REGISTRY_CFG, DOMAIN)
-        assert (
-            path
-            == f"/Volumes/cat/sch/OntoBricksRegistry/domains/{DOMAIN}/.domain_permissions.json"
-        )
-
-
 class TestLoadDomainPermissions:
+    """Per-domain permissions are now read/written through the active
+    :class:`RegistryStore`. The tests mock ``_store_for`` to keep the
+    coverage independent from the storage backend.
+    """
+
     def test_load_empty_when_missing(self, svc):
-        with patch.object(svc, "_new_uc") as mock_uc:
-            mock_uc.return_value.read_file.return_value = (False, "", "Not found")
+        store = type("S", (), {})()
+        store.load_domain_permissions = lambda folder: {
+            "version": 1,
+            "permissions": [],
+        }
+        with patch.object(PermissionService, "_store_for", return_value=store):
             data = svc.load_domain_permissions("h", "t", REGISTRY_CFG, DOMAIN)
             assert data == {"version": 1, "permissions": []}
 
@@ -271,24 +271,35 @@ class TestLoadDomainPermissions:
             "version": 1,
             "permissions": [{"principal": "a@b.com", "role": "viewer"}],
         }
-        with patch.object(svc, "_new_uc") as mock_uc:
-            mock_uc.return_value.read_file.return_value = (True, json.dumps(dp), "ok")
+        store = type("S", (), {})()
+        store.backend = "memory"
+        store.load_domain_permissions = lambda folder: dp
+        with patch.object(PermissionService, "_store_for", return_value=store):
             data = svc.load_domain_permissions("h", "t", REGISTRY_CFG, DOMAIN)
             assert len(data["permissions"]) == 1
 
     def test_caching(self, svc):
-        with patch.object(svc, "_new_uc") as mock_uc:
-            mock_uc.return_value.read_file.return_value = (False, "", "")
+        store = type("S", (), {})()
+        calls = {"n": 0}
+
+        def _load(_folder):
+            calls["n"] += 1
+            return {"version": 1, "permissions": []}
+
+        store.load_domain_permissions = _load
+        with patch.object(PermissionService, "_store_for", return_value=store):
             svc.load_domain_permissions("h", "t", REGISTRY_CFG, DOMAIN)
             svc.load_domain_permissions("h", "t", REGISTRY_CFG, DOMAIN)
-            assert mock_uc.call_count == 1
+        assert calls["n"] == 1
 
 
 class TestSaveDomainPermissions:
     def test_save_success(self, svc):
         data = {"version": 1, "permissions": []}
-        with patch.object(svc, "_new_uc") as mock_uc:
-            mock_uc.return_value.write_file.return_value = (True, "ok")
+        store = type("S", (), {})()
+        store.backend = "memory"
+        store.save_domain_permissions = lambda folder, payload: (True, "ok")
+        with patch.object(PermissionService, "_store_for", return_value=store):
             ok, _msg = svc.save_domain_permissions(
                 "h", "t", REGISTRY_CFG, DOMAIN, data
             )

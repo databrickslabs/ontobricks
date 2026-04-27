@@ -662,32 +662,74 @@ The `DomainSession` class (`src/back/objects/session/DomainSession.py`) provides
 
 ---
 
-## Unity Catalog Versioning
+## Registry Storage Backends
 
-OntoBricks uses Unity Catalog Volumes for domain storage with built-in version control.
+OntoBricks supports two backends for the domain registry, selected
+instance-wide by an admin in **Settings → Registry / Registry
+Location**. Both backends co-exist behind a single
+:class:`RegistryStore` abstraction so route handlers and services are
+agnostic to which one is active.
 
-### Storage Structure
+### Backend matrix
+
+| Backend | Identifier | What lives in it | Binaries (`documents/`, `*.lbug.tar.gz`) |
+|---|---|---|---|
+| Unity Catalog Volume *(default)* | `volume` | Domain JSON, permissions, schedules, history, global config — all serialised as JSON files on the Volume | Same Volume |
+| Databricks Lakebase (Postgres) | `lakebase` | Same data, normalised into Postgres tables (with JSONB columns for the larger blobs) | **Still on the Volume** — Lakebase is registry-data only |
+
+Switching backend is a runtime setting; it does not migrate data on
+its own. A one-shot **Migrate to Lakebase** button in the admin UI
+copies every JSON-shaped artefact from the Volume into Lakebase
+(`POST /settings/registry/migrate-to-lakebase` →
+`back/objects/registry/store/migration.py`). Binary artefacts stay on
+the Volume in both modes.
+
+### Volume layout (default)
 
 ```
 Unity Catalog
 └── catalog (e.g., main)
     └── schema (e.g., ontobricks)
         └── volume (e.g., OntoBricksRegistry)
+            ├── .registry                      # marker
+            ├── .global_config.json            # warehouse, schedules, emoji, …
             └── domains/
                 └── {domain_name}/
+                    ├── .domain_permissions.json
+                    ├── .schedule_history.json
                     ├── V1/
-                    │   ├── V1.json                                # Version 1 payload
-                    │   ├── documents/                             # Version-scoped documents
-                    │   └── ontobricks_{name}_V1.lbug.tar.gz       # LadybugDB archive
-                    ├── V2/
-                    │   ├── V2.json                                # Version 2 payload
+                    │   ├── V1.json
                     │   ├── documents/
-                    │   └── ontobricks_{name}_V2.lbug.tar.gz
-                    └── V3/
-                        ├── V3.json                                # Version 3 payload
-                        ├── documents/
-                        └── ontobricks_{name}_V3.lbug.tar.gz
+                    │   └── ontobricks_{name}_V1.lbug.tar.gz
+                    ├── V2/…
+                    └── V3/…
 ```
+
+### Lakebase layout (opt-in)
+
+The Postgres schema (default `ontobricks_registry`) holds seven
+relational tables:
+
+| Table | Purpose |
+|---|---|
+| `registries` | One row per `(catalog, schema, volume)` triplet — scopes everything else |
+| `global_config` | Instance-wide settings (warehouse, emoji, base URI, …) as JSONB |
+| `domains` | Stable per-domain identity (UUID, name, base URI, description) |
+| `domain_versions` | Per-version JSONB document; mirrors what `V{N}.json` used to hold |
+| `domain_permissions` | Per-domain ACL (replaces `.domain_permissions.json`) |
+| `schedules` | Active scheduled-build configuration |
+| `schedule_runs` | Ring-buffered run history per domain |
+
+Authentication is fully app-managed: the Databricks Apps runtime
+injects `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER` and OntoBricks mints a
+short-lived OAuth token via `WorkspaceClient().config.authenticate()`
+(`back/core/databricks/LakebaseAuth.py`). No user secrets are stored.
+The connection layer is tier-agnostic — both **Provisioned** and
+**Autoscaling** Lakebase instances are supported, with retry on
+`SQLSTATE 57P03` to absorb autoscaling cold-starts.
+
+Binary artefacts (`documents/`, `*.lbug.tar.gz`) keep the Volume
+layout above regardless of which backend is selected.
 
 ### Export Format (Versioned)
 

@@ -28,6 +28,15 @@ dependencies = [
     "networkx>=3.0",
 ]
 
+[project.optional-dependencies]
+# Install with: ``uv sync --extra lakebase`` or ``pip install .[lakebase]``.
+# Only required when ``REGISTRY_BACKEND=lakebase``. Volume-only deployments
+# work without these.
+lakebase = [
+    "psycopg[binary]>=3.2.0",
+    "psycopg-pool>=3.2.0",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",

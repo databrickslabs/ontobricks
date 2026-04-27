@@ -6,7 +6,16 @@
 document.addEventListener('DOMContentLoaded', function () {
 
     let registryConfigured = false;
-    let registryCfg = { catalog: '', schema: '', volume: 'OntoBricksRegistry', configured: false };
+    let registryCfg = {
+        catalog: '',
+        schema: '',
+        volume: 'OntoBricksRegistry',
+        backend: 'volume',
+        lakebase_schema: 'ontobricks_registry',
+        configured: false,
+        available_backends: { volume: { available: true }, lakebase: { available: false } },
+        lakebase: { bound: false, host: '', port: '', database: '', user: '', schema: 'ontobricks_registry' }
+    };
     let registryLocked = false;
 
     loadRegistryConfig();
@@ -23,6 +32,8 @@ document.addEventListener('DOMContentLoaded', function () {
             registryCfg = await resp.json();
             registryLocked = !!registryCfg.registry_locked;
 
+            updateBackendChooser();
+            updateLakebasePanel();
             updateRegistryLabel();
             updateRegistryStatus(registryCfg);
 
@@ -50,13 +61,242 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function updateBackendChooser() {
+        const radioVol = document.getElementById('registryBackendVolume');
+        const radioLb = document.getElementById('registryBackendLakebase');
+        if (!radioVol || !radioLb) return;
+
+        const backend = (registryCfg.backend || 'volume').toLowerCase();
+        radioVol.checked = backend === 'volume';
+        radioLb.checked = backend === 'lakebase';
+
+        const avail = registryCfg.available_backends || { lakebase: { available: false } };
+        const lbAvail = !!(avail.lakebase && avail.lakebase.available);
+        radioLb.disabled = !lbAvail || registryLocked;
+        radioVol.disabled = registryLocked;
+
+        const help = document.getElementById('registryBackendHelp');
+        if (help) {
+            if (!lbAvail && avail.lakebase && avail.lakebase.reason) {
+                help.innerHTML = '<i class="bi bi-exclamation-triangle text-warning me-1"></i> Lakebase unavailable: ' + escapeHtml(avail.lakebase.reason);
+            } else {
+                help.textContent = 'Volume keeps the JSON-on-Volume layout. Lakebase splits registry data into Postgres tables. Switching does not move existing data automatically.';
+            }
+        }
+
+        const migrateBtn = document.getElementById('btnMigrateToLakebase');
+        if (migrateBtn) {
+            migrateBtn.style.display = (lbAvail && backend === 'volume' && registryCfg.configured) ? '' : 'none';
+        }
+    }
+
+    function updateLakebasePanel() {
+        const panel = document.getElementById('lakebasePanel');
+        if (!panel) return;
+        const backend = (registryCfg.backend || 'volume').toLowerCase();
+        if (backend !== 'lakebase') {
+            panel.style.display = 'none';
+            return;
+        }
+        panel.style.display = '';
+
+        const lb = registryCfg.lakebase || {};
+        const set = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val || '—';
+        };
+        set('lakebaseHost', lb.host);
+        set('lakebasePort', lb.port);
+        set('lakebaseDatabase', lb.database);
+        set('lakebaseUser', lb.user);
+        set('lakebaseSchema', lb.schema || registryCfg.lakebase_schema);
+
+        const badge = document.getElementById('lakebaseStatusBadge');
+        if (badge) {
+            if (lb.bound) {
+                badge.textContent = 'bound';
+                badge.className = 'badge bg-success';
+            } else {
+                badge.textContent = 'not bound';
+                badge.className = 'badge bg-warning text-dark';
+            }
+        }
+
+        updateLakebaseInstanceBlock(lb.instance);
+        // Auto-load row counts the first time the panel is displayed,
+        // then keep them around — admins can re-fetch via the Refresh
+        // button. Skipped when not bound (no point hammering the API).
+        if (lb.bound && !panel.dataset.statsLoaded) {
+            panel.dataset.statsLoaded = '1';
+            loadLakebaseStats();
+        }
+    }
+
+    function updateLakebaseInstanceBlock(instance) {
+        const block = document.getElementById('lakebaseInstanceBlock');
+        if (!block) return;
+        if (!instance) {
+            block.style.display = 'none';
+            return;
+        }
+        block.style.display = '';
+
+        const set = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val || '—';
+        };
+        set('lakebaseInstanceName', instance.name);
+        set('lakebaseInstanceCapacity', instance.capacity);
+        set('lakebaseInstancePgVersion', instance.pg_version);
+        const nodes = instance.node_count;
+        set('lakebaseInstanceNodes', (nodes !== null && nodes !== undefined) ? String(nodes) : '');
+        const uidEl = document.getElementById('lakebaseInstanceUid');
+        if (uidEl) {
+            uidEl.textContent = instance.uid || '—';
+            if (instance.uid) uidEl.title = instance.uid;
+        }
+        const stateEl = document.getElementById('lakebaseInstanceState');
+        if (stateEl) {
+            const state = (instance.state || '').toUpperCase();
+            const stopped = !!instance.stopped;
+            let cls = 'badge bg-secondary';
+            let label = state || (stopped ? 'STOPPED' : 'unknown');
+            if (stopped) {
+                cls = 'badge bg-warning text-dark';
+                label = 'STOPPED';
+            } else if (state === 'AVAILABLE' || state === 'RUNNING' || state === 'READY') {
+                cls = 'badge bg-success';
+            } else if (state === 'STARTING' || state === 'PROVISIONING' || state === 'UPDATING') {
+                cls = 'badge bg-info text-dark';
+            } else if (state === 'FAILED' || state === 'ERROR') {
+                cls = 'badge bg-danger';
+            }
+            stateEl.innerHTML = '<span class="' + cls + '">' + escapeHtml(label) + '</span>';
+        }
+    }
+
+    async function loadLakebaseStats() {
+        const tbody = document.getElementById('lakebaseStatsBody');
+        const msg = document.getElementById('lakebaseStatsMessage');
+        const btn = document.getElementById('btnRefreshLakebaseStats');
+        if (!tbody) return;
+
+        if (btn) btn.disabled = true;
+        tbody.innerHTML = '<tr><td class="ps-0 text-muted" colspan="2"><span class="spinner-border spinner-border-sm me-1"></span> Loading row counts…</td></tr>';
+        if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
+
+        try {
+            const resp = await fetch('/settings/registry/lakebase-stats', { credentials: 'same-origin' });
+            const data = await resp.json();
+            if (!data.success) {
+                tbody.innerHTML = '<tr><td class="ps-0 text-muted" colspan="2">'
+                    + '<i class="bi bi-exclamation-triangle text-warning me-1"></i> '
+                    + escapeHtml(data.message || 'Could not load Lakebase stats')
+                    + '</td></tr>';
+                return;
+            }
+            const rows = Array.isArray(data.tables) ? data.tables : [];
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td class="ps-0 text-muted" colspan="2">No tables to report.</td></tr>';
+                return;
+            }
+            const total = rows.reduce((s, r) => s + (Number(r.rows) || 0), 0);
+            tbody.innerHTML = rows.map(r => (
+                '<tr>'
+                + '<td class="ps-0 font-monospace">' + escapeHtml(r.name) + '</td>'
+                + '<td class="text-end pe-0 font-monospace">' + (Number(r.rows) || 0).toLocaleString() + '</td>'
+                + '</tr>'
+            )).join('') + (
+                '<tr class="border-top">'
+                + '<td class="ps-0 fw-semibold">Total</td>'
+                + '<td class="text-end pe-0 fw-semibold font-monospace">' + total.toLocaleString() + '</td>'
+                + '</tr>'
+            );
+            if (msg) {
+                if (data.initialized) {
+                    msg.style.display = '';
+                    msg.innerHTML = '<i class="bi bi-check-circle text-success me-1"></i> Schema <code>'
+                        + escapeHtml(data.schema || '') + '</code> initialized.';
+                } else {
+                    msg.style.display = '';
+                    msg.innerHTML = '<i class="bi bi-exclamation-triangle text-warning me-1"></i> Schema <code>'
+                        + escapeHtml(data.schema || '') + '</code> not initialized — run <em>Migrate to Lakebase</em> or initialize the registry.';
+                }
+            }
+        } catch (e) {
+            tbody.innerHTML = '<tr><td class="ps-0 text-muted" colspan="2">'
+                + '<i class="bi bi-x-circle text-danger me-1"></i> '
+                + escapeHtml(e.message || 'Network error')
+                + '</td></tr>';
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    document.getElementById('btnRefreshLakebaseStats')?.addEventListener('click', () => {
+        loadLakebaseStats();
+    });
+
+    document.querySelectorAll('input[name="registryBackend"]').forEach(radio => {
+        radio.addEventListener('change', async () => {
+            if (radio.disabled || !radio.checked) return;
+            const newBackend = radio.value;
+            if (newBackend === (registryCfg.backend || 'volume')) return;
+
+            const confirmed = await showConfirmDialog({
+                title: 'Switch Registry Backend',
+                message: 'Switch the registry backend to <strong>' + escapeHtml(newBackend) + '</strong>? '
+                    + 'Existing registry data is not moved automatically. '
+                    + (newBackend === 'lakebase'
+                        ? 'Use <strong>Migrate to Lakebase</strong> after switching to copy data.'
+                        : 'You can switch back to Volume at any time.'),
+                confirmText: 'Switch',
+                confirmClass: 'btn-primary',
+                icon: 'arrow-left-right'
+            });
+            if (!confirmed) {
+                radio.checked = false;
+                document.getElementById(newBackend === 'lakebase' ? 'registryBackendVolume' : 'registryBackendLakebase').checked = true;
+                return;
+            }
+
+            try {
+                const resp = await fetch('/settings/registry', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ backend: newBackend })
+                });
+                const r = await resp.json();
+                if (!r.success) {
+                    showNotification('Error: ' + (r.message || 'Could not switch backend'), 'error');
+                    return;
+                }
+                showNotification('Backend switched to ' + newBackend, 'success', 2000);
+                await loadRegistryConfig();
+            } catch (e) {
+                showNotification('Error switching backend: ' + e.message, 'error');
+            }
+        });
+    });
+
     function updateRegistryLabel() {
         const label = document.getElementById('registryLocationLabel');
         const initBtn = document.getElementById('btnInitRegistry');
+        const backend = (registryCfg.backend || 'volume').toLowerCase();
 
         if (registryCfg.catalog && registryCfg.schema) {
-            const path = registryCfg.catalog + '.' + registryCfg.schema + '.' + (registryCfg.volume || 'OntoBricksRegistry');
-            label.innerHTML = '<i class="bi bi-archive text-success me-1"></i> <strong>' + escapeHtml(path) + '</strong>';
+            const volPath = registryCfg.catalog + '.' + registryCfg.schema + '.' + (registryCfg.volume || 'OntoBricksRegistry');
+            if (backend === 'lakebase') {
+                const lb = registryCfg.lakebase || {};
+                const dbLabel = lb.bound
+                    ? (lb.database || 'lakebase') + '.' + (registryCfg.lakebase_schema || lb.schema || 'ontobricks_registry')
+                    : (registryCfg.lakebase_schema || 'ontobricks_registry') + ' (Lakebase resource not bound)';
+                label.innerHTML = '<i class="bi bi-database text-primary me-1"></i> <strong>' + escapeHtml(dbLabel) + '</strong>'
+                    + ' <span class="text-muted small ms-2">binaries: ' + escapeHtml(volPath) + '</span>';
+            } else {
+                label.innerHTML = '<i class="bi bi-archive text-success me-1"></i> <strong>' + escapeHtml(volPath) + '</strong>';
+            }
             if (initBtn) initBtn.style.display = registryCfg.configured ? 'none' : '';
         } else {
             label.innerHTML = '<i class="bi bi-exclamation-triangle text-warning me-1"></i> <span class="text-muted">Not configured</span>';
@@ -84,10 +324,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const section = document.getElementById('registryDomainsSection');
             if (section) section.style.display = 'none';
         } else {
-            const alertHtml = '<div class="alert alert-warning small mb-0">' +
-                '<i class="bi bi-exclamation-triangle me-1"></i> Registry not configured. Go to <strong>Configuration</strong> to select a catalog, schema and volume.</div>';
-            if (div) { div.style.display = 'block'; div.innerHTML = alertHtml; }
-            if (configDiv) { configDiv.style.display = 'block'; configDiv.innerHTML = alertHtml; }
+            const browseAlert = '<div class="alert alert-warning small mb-0">' +
+                '<i class="bi bi-exclamation-triangle me-1"></i> Registry not configured. ' +
+                'Go to <strong>Settings &rarr; Registry</strong> (admin) to select a catalog, schema and volume.</div>';
+            const configAlert = '<div class="alert alert-warning small mb-0">' +
+                '<i class="bi bi-exclamation-triangle me-1"></i> Registry not configured. ' +
+                'Pick a backend above and click <strong>Change</strong> to select a catalog, schema and volume.</div>';
+            if (div) { div.style.display = 'block'; div.innerHTML = browseAlert; }
+            if (configDiv) { configDiv.style.display = 'block'; configDiv.innerHTML = configAlert; }
             const section = document.getElementById('registryDomainsSection');
             if (section) section.style.display = 'none';
         }
@@ -98,6 +342,11 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('btnChangeRegistry')?.addEventListener('click', () => {
         const modal = new bootstrap.Modal(document.getElementById('registryChangeModal'));
         modal.show();
+        const backend = (registryCfg.backend || 'volume').toLowerCase();
+        const lbWrap = document.getElementById('registryLakebaseSchemaWrapper');
+        if (lbWrap) lbWrap.style.display = backend === 'lakebase' ? '' : 'none';
+        const lbInput = document.getElementById('registryLakebaseSchema');
+        if (lbInput) lbInput.value = registryCfg.lakebase_schema || 'ontobricks_registry';
         loadModalCatalogs();
     });
 
@@ -169,6 +418,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const catalog = document.getElementById('registryCatalog').value;
         const schema = document.getElementById('registrySchema').value;
         const volume = document.getElementById('registryVolume').value.trim() || 'OntoBricksRegistry';
+        const lakebaseSchemaInput = document.getElementById('registryLakebaseSchema');
+        const lakebaseSchema = lakebaseSchemaInput
+            ? (lakebaseSchemaInput.value.trim() || 'ontobricks_registry')
+            : (registryCfg.lakebase_schema || 'ontobricks_registry');
 
         if (!catalog || !schema) {
             showNotification('Please select both a catalog and a schema', 'warning');
@@ -180,20 +433,26 @@ document.addEventListener('DOMContentLoaded', function () {
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
 
         try {
+            const payload = {
+                catalog,
+                schema,
+                volume,
+                lakebase_schema: lakebaseSchema,
+            };
             const resp = await fetch('/settings/registry', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ catalog, schema, volume })
+                body: JSON.stringify(payload)
             });
             const r = await resp.json();
 
             if (r.success) {
-                registryCfg = { catalog, schema, volume, configured: r.configured !== undefined ? r.configured : registryCfg.configured };
-
                 const cfgResp = await fetch('/settings/registry', { credentials: 'same-origin' });
                 registryCfg = await cfgResp.json();
 
+                updateBackendChooser();
+                updateLakebasePanel();
                 updateRegistryLabel();
                 updateRegistryStatus(registryCfg);
                 bootstrap.Modal.getInstance(document.getElementById('registryChangeModal'))?.hide();
@@ -206,6 +465,56 @@ document.addEventListener('DOMContentLoaded', function () {
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Apply';
+        }
+    });
+
+    document.getElementById('btnMigrateToLakebase')?.addEventListener('click', async () => {
+        const confirmed = await showConfirmDialog({
+            title: 'Migrate to Lakebase',
+            message: 'Copy registry JSON data (domains, versions, permissions, schedules, history, global config) from the Unity Catalog Volume into the Lakebase tables? '
+                + 'Binary artefacts (documents, .lbug archives) stay on the Volume. The Volume JSON is not deleted automatically.',
+            confirmText: 'Migrate',
+            confirmClass: 'btn-primary',
+            icon: 'arrow-right-circle'
+        });
+        if (!confirmed) return;
+
+        const btn = document.getElementById('btnMigrateToLakebase');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Migrating...';
+        try {
+            const resp = await fetch('/settings/registry/migrate-to-lakebase', {
+                method: 'POST',
+                credentials: 'same-origin'
+            });
+            const data = await resp.json();
+            // Always dump the full structured report to the console so
+            // admins can inspect every error, not just the first one
+            // surfaced in the toast.
+            if (data.report) {
+                console.groupCollapsed('Lakebase migration report');
+                console.log(data.report);
+                if (Array.isArray(data.report.errors) && data.report.errors.length) {
+                    console.warn('Migration errors:');
+                    data.report.errors.forEach((e, i) => console.warn(`  [${i + 1}] ${e}`));
+                }
+                console.groupEnd();
+            }
+            if (data.success) {
+                showNotification(data.message || 'Migration complete', 'success');
+                // Force a fresh stats fetch on the next panel render so
+                // the admin sees the new row counts immediately.
+                const lbPanel = document.getElementById('lakebasePanel');
+                if (lbPanel) delete lbPanel.dataset.statsLoaded;
+                await loadRegistryConfig();
+            } else {
+                showNotification('Error: ' + (data.message || 'Migration failed'), 'error');
+            }
+        } catch (e) {
+            showNotification('Error during migration: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-right-circle me-1"></i> Migrate to Lakebase';
         }
     });
 
