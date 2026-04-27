@@ -788,7 +788,14 @@ class Domain:
             self._s.save()
             clear_version_status_cache()
             invalidate_registry_cache()
-            graph_warning = self.sync_ladybug_from_volume(svc.uc)
+            # Lazy graph load: skip the eager sync_ladybug_from_volume
+            # download here. The .lbug archive can be tens of MB and the
+            # SQL Warehouse Files API is the slow part of "Load Domain".
+            # LadybugBase._get_connection auto-restores from the registry
+            # on first DT/Build access via the auto_restore callback wired
+            # up by GraphDBFactory, and the explicit "Reload from registry"
+            # admin button (POST /sync/reload-from-registry) remains
+            # available for forced refreshes.
             ts_stats = self._s.triplestore.setdefault("stats", {})
             ts_stats.pop("status", None)
             ts_stats.pop("dt_existence", None)
@@ -796,8 +803,6 @@ class Domain:
             self._s.save()
             status = "Latest" if is_latest else "Read-only"
             msg = f"Domain loaded: {domain_name} v{version} ({status})"
-            if graph_warning:
-                msg += f" (graph sync warning: {graph_warning})"
             return {
                 "success": True,
                 "message": msg,

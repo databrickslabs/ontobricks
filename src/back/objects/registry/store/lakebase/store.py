@@ -18,14 +18,23 @@ Authentication:
   :class:`back.core.databricks.LakebaseAuth`.
 
 Cold start (Autoscaling tier):
-- We never hold idle connections (``min_size=0``-equivalent: we open a
-  fresh connection per operation). Initial calls retry with
-  exponential backoff on SQLSTATE ``57P03`` ("cannot_connect_now") and
-  on ``connection refused``.
+- Initial calls retry with exponential backoff on SQLSTATE ``57P03``
+  ("cannot_connect_now") and on ``connection refused``.
+
+Connection pooling:
+- A process-wide LIFO pool (``_LakebasePool``) keeps a small handful
+  of warm psycopg connections, keyed by host/db/user/schema. This
+  avoids the 200-500 ms TCP+TLS+JWT handshake per call and turns
+  hot-path operations like *Load Domain from Registry* into a single
+  network round-trip per query. Connections are recycled before the
+  1 h JWT expiry (``_POOL_MAX_LIFETIME_S``), so token rotation stays
+  invisible to callers.
 
 Token expiry:
 - Authentication failures (SQLSTATE ``28P01``) trigger a single
-  invalidate-and-retry cycle.
+  invalidate-and-retry cycle when *opening* a fresh connection. Pooled
+  connections that hit auth failure mid-flight are discarded by the
+  ``_connect`` context manager.
 
 The whole module is import-safe even without ``psycopg`` installed —
 it raises a clear error only when the class is instantiated.
@@ -36,7 +45,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple
 
 from back.core.databricks import get_lakebase_auth
@@ -58,6 +69,15 @@ _AUTH_FAILURE_SQLSTATES = {"28P01"}  # invalid_password / token expired
 _MAX_COLD_START_ATTEMPTS = 6
 _INITIAL_BACKOFF_S = 1.0
 _MAX_BACKOFF_S = 16.0
+
+# Connection pool tuning. ``_POOL_MAX_LIFETIME_S`` is comfortably below
+# the Lakebase JWT TTL (~1 h) so a connection is always retired before
+# its credentials would expire mid-query. ``_POOL_MAX_SIZE`` is small on
+# purpose: the registry is admin-traffic only, and Postgres connections
+# are not cheap on the Lakebase side either.
+_POOL_MAX_SIZE = 4
+_POOL_MAX_LIFETIME_S = 45 * 60.0  # 45 min
+_POOL_ACQUIRE_TIMEOUT_S = 30.0
 
 # Whitelist used by ``table_row_counts``; keeps the dynamic SQL safe
 # even though identifiers are also quoted via ``_q``.
@@ -86,6 +106,234 @@ def _require_psycopg():
             "set REGISTRY_BACKEND=volume."
         ) from exc
     return psycopg, dict_row
+
+
+class _LakebasePool:
+    """Tiny thread-safe LIFO connection pool for Lakebase.
+
+    The pool is intentionally minimal — just enough plumbing to
+    avoid the per-call TCP+TLS+JWT handshake while keeping all the
+    bespoke behaviour (cold-start retries, OAuth token rotation,
+    ``search_path`` setup) that we already had on the unpooled path.
+
+    A single instance is shared by every :class:`LakebaseRegistryStore`
+    pointing at the same host/db/user/schema (see :func:`_get_pool`).
+    """
+
+    def __init__(
+        self,
+        *,
+        auth: Any,
+        schema: str,
+        max_size: int = _POOL_MAX_SIZE,
+        max_lifetime: float = _POOL_MAX_LIFETIME_S,
+    ) -> None:
+        self._auth = auth
+        self._schema = schema
+        self._max_size = max_size
+        self._max_lifetime = max_lifetime
+        self._cv = threading.Condition()
+        self._idle: List[Tuple[Any, float]] = []  # (conn, opened_at)
+        self._size = 0  # checked-out + idle
+        self._closed = False
+
+    # -- public API --------------------------------------------------
+
+    @contextmanager
+    def connection(self):
+        """Yield a healthy Lakebase connection from the pool."""
+        conn, opened_at = self._acquire()
+        try:
+            yield conn
+        except Exception:
+            self._discard(conn)
+            raise
+        else:
+            self._release(conn, opened_at)
+
+    def close(self) -> None:
+        """Drain the pool, closing every idle connection."""
+        with self._cv:
+            self._closed = True
+            idle = list(self._idle)
+            self._idle.clear()
+            self._size = 0
+            self._cv.notify_all()
+        for conn, _ in idle:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def stats(self) -> Dict[str, int]:
+        with self._cv:
+            return {
+                "size": self._size,
+                "idle": len(self._idle),
+                "max_size": self._max_size,
+            }
+
+    # -- internals ---------------------------------------------------
+
+    def _is_alive(self, conn: Any, opened_at: float) -> bool:
+        if (time.monotonic() - opened_at) >= self._max_lifetime:
+            return False
+        try:
+            return not conn.closed
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _acquire(self, timeout: float = _POOL_ACQUIRE_TIMEOUT_S) -> Tuple[Any, float]:
+        deadline = time.monotonic() + timeout
+        with self._cv:
+            while True:
+                if self._closed:
+                    raise StoreError("Lakebase pool is closed")
+                # Re-use an idle connection (LIFO keeps the hottest
+                # connection on top — friendliest to TCP keep-alive).
+                while self._idle:
+                    conn, opened_at = self._idle.pop()
+                    if self._is_alive(conn, opened_at):
+                        return conn, opened_at
+                    # Stale or closed: drop and keep looking.
+                    self._size -= 1
+                    try:
+                        conn.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+                # No idle: open a fresh one if we are under cap. We
+                # reserve the slot here, then release the lock to do
+                # the (potentially slow) open.
+                if self._size < self._max_size:
+                    self._size += 1
+                    break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise StoreError(
+                        f"Lakebase pool exhausted after waiting "
+                        f"{timeout:.1f}s for a connection"
+                    )
+                self._cv.wait(remaining)
+        # Open outside the lock. On failure, give the slot back so
+        # other waiters are not starved by a transient outage.
+        try:
+            conn = self._open_one()
+        except Exception:
+            with self._cv:
+                self._size -= 1
+                self._cv.notify()
+            raise
+        return conn, time.monotonic()
+
+    def _release(self, conn: Any, opened_at: float) -> None:
+        with self._cv:
+            if self._closed or not self._is_alive(conn, opened_at):
+                self._size -= 1
+                self._cv.notify()
+                try:
+                    conn.close()
+                except Exception:  # noqa: BLE001
+                    pass
+                return
+            self._idle.append((conn, opened_at))
+            self._cv.notify()
+
+    def _discard(self, conn: Any) -> None:
+        with self._cv:
+            self._size -= 1
+            self._cv.notify()
+        try:
+            conn.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _open_one(self) -> Any:
+        """Open one new psycopg connection, with cold-start + auth retry."""
+        psycopg, _ = _require_psycopg()
+        attempts = 0
+        backoff = _INITIAL_BACKOFF_S
+        retried_auth = False
+        while True:
+            try:
+                conn = psycopg.connect(
+                    autocommit=True,
+                    **self._auth.kwargs(application_name="ontobricks-registry"),
+                )
+                with conn.cursor() as cur:
+                    cur.execute(f'SET search_path TO "{self._schema}", public')
+                return conn
+            except Exception as exc:  # noqa: BLE001
+                sqlstate = getattr(exc, "sqlstate", "") or ""
+                msg = str(exc).lower()
+                cold = (
+                    sqlstate in _COLD_START_SQLSTATES
+                    or "starting up" in msg
+                    or "connection refused" in msg
+                )
+                auth_failed = (
+                    sqlstate in _AUTH_FAILURE_SQLSTATES
+                    or "authentication failed" in msg
+                )
+                if auth_failed and not retried_auth:
+                    self._auth.invalidate()
+                    retried_auth = True
+                    logger.info("Lakebase auth failed; rotating token and retrying")
+                    continue
+                if cold and attempts < _MAX_COLD_START_ATTEMPTS:
+                    attempts += 1
+                    sleep_for = min(backoff, _MAX_BACKOFF_S)
+                    logger.info(
+                        "Lakebase cold start (sqlstate=%s, attempt=%d/%d); "
+                        "sleeping %.1fs",
+                        sqlstate or "?",
+                        attempts,
+                        _MAX_COLD_START_ATTEMPTS,
+                        sleep_for,
+                    )
+                    time.sleep(sleep_for)
+                    backoff *= 2
+                    continue
+                raise StoreError(f"Lakebase connection failed: {exc}") from exc
+
+
+# Process-wide pool registry. ``LakebaseRegistryStore`` is rebuilt on
+# every request through :class:`RegistryFactory`, so the pool itself
+# must outlive any single store instance.
+_pools_lock = threading.Lock()
+_pools: Dict[Tuple[str, str, str, str, str, str], _LakebasePool] = {}
+
+
+def _safe_attr(obj: Any, name: str) -> str:
+    """Read an attribute that may raise ``ValidationError`` lazily."""
+    try:
+        return str(getattr(obj, name, "") or "")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _get_pool(auth: Any, schema: str) -> _LakebasePool:
+    """Return (and lazily create) the shared pool for *auth* + *schema*."""
+    key = (
+        _safe_attr(auth, "host"),
+        _safe_attr(auth, "port"),
+        _safe_attr(auth, "database"),
+        _safe_attr(auth, "user"),
+        _safe_attr(auth, "instance_name"),
+        schema,
+    )
+    with _pools_lock:
+        pool = _pools.get(key)
+        if pool is None:
+            pool = _LakebasePool(auth=auth, schema=schema)
+            _pools[key] = pool
+            logger.info(
+                "Created Lakebase connection pool for %s/%s (schema=%s, max_size=%d)",
+                key[0],
+                key[2],
+                schema,
+                _POOL_MAX_SIZE,
+            )
+        return pool
 
 
 class LakebaseRegistryStore(RegistryStore):
@@ -756,60 +1004,17 @@ class LakebaseRegistryStore(RegistryStore):
     # ------------------------------------------------------------------
 
     def _connect(self):
-        """Open a fresh psycopg connection with retry on cold start.
+        """Acquire a Lakebase connection from the shared process-wide pool.
 
-        We do NOT pool connections so that:
+        Returns a context manager: callers keep the existing
+        ``with self._connect() as conn`` idiom unchanged. On clean
+        exit the connection goes back to the pool; on exception it
+        is discarded so that broken sessions are never reused.
 
-        - The autoscaling Lakebase tier can scale to zero between
-          requests (no idle connections holding it warm).
-        - OAuth tokens never outlive a single operation, sidestepping
-          the 1-hour expiry concern.
+        The pool itself owns cold-start retry and OAuth token
+        rotation — see :class:`_LakebasePool._open_one`.
         """
-        psycopg, _ = _require_psycopg()
-        attempts = 0
-        backoff = _INITIAL_BACKOFF_S
-        retried_auth = False
-        while True:
-            try:
-                conn = psycopg.connect(
-                    autocommit=True,
-                    **self._auth.kwargs(application_name="ontobricks-registry"),
-                )
-                with conn.cursor() as cur:
-                    cur.execute(f"SET search_path TO {self._q(self._schema)}, public")
-                return conn
-            except Exception as exc:  # noqa: BLE001
-                sqlstate = getattr(exc, "sqlstate", "") or ""
-                msg = str(exc).lower()
-                cold = (
-                    sqlstate in _COLD_START_SQLSTATES
-                    or "starting up" in msg
-                    or "connection refused" in msg
-                )
-                auth_failed = (
-                    sqlstate in _AUTH_FAILURE_SQLSTATES
-                    or "authentication failed" in msg
-                )
-                if auth_failed and not retried_auth:
-                    self._auth.invalidate()
-                    retried_auth = True
-                    logger.info("Lakebase auth failed; rotating token and retrying")
-                    continue
-                if cold and attempts < _MAX_COLD_START_ATTEMPTS:
-                    attempts += 1
-                    sleep_for = min(backoff, _MAX_BACKOFF_S)
-                    logger.info(
-                        "Lakebase cold start (sqlstate=%s, attempt=%d/%d); "
-                        "sleeping %.1fs",
-                        sqlstate or "?",
-                        attempts,
-                        _MAX_COLD_START_ATTEMPTS,
-                        sleep_for,
-                    )
-                    time.sleep(sleep_for)
-                    backoff *= 2
-                    continue
-                raise StoreError(f"Lakebase connection failed: {exc}") from exc
+        return _get_pool(self._auth, self._schema).connection()
 
     def _registry(self) -> str:
         if self._registry_id is None:
