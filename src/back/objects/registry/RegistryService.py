@@ -62,6 +62,15 @@ class RegistryCfg:
 
     ``lakebase_schema`` is the Postgres schema for registry tables. It
     is ignored when ``backend == "volume"``.
+
+    ``lakebase_database`` (optional) overrides the bound Postgres
+    database name. When empty (the default), the Lakebase backend uses
+    the ``PGDATABASE`` env var auto-injected by the Databricks Apps
+    runtime from the ``database`` resource binding. Setting this lets
+    an admin point the registry at any other database that lives on
+    the same Lakebase instance — provided the app's service principal
+    has ``CONNECT`` on it. The Lakebase JWT scope is per-instance, so
+    no token re-mint is required.
     """
 
     catalog: str
@@ -69,6 +78,7 @@ class RegistryCfg:
     volume: str
     backend: str = "volume"
     lakebase_schema: str = "ontobricks_registry"
+    lakebase_database: str = ""
 
     # -- constructors ------------------------------------------------
 
@@ -79,6 +89,7 @@ class RegistryCfg:
         *,
         backend: str = "volume",
         lakebase_schema: str = "ontobricks_registry",
+        lakebase_database: str = "",
     ) -> RegistryCfg:
         """Parse ``/Volumes/<catalog>/<schema>/<volume>`` into a RegistryCfg."""
         parts = path.strip("/").split("/")
@@ -89,6 +100,7 @@ class RegistryCfg:
                 volume=parts[3],
                 backend=backend,
                 lakebase_schema=lakebase_schema,
+                lakebase_database=lakebase_database,
             )
         logger.warning(
             "Cannot parse volume path '%s'; expected /Volumes/<c>/<s>/<v>", path
@@ -99,39 +111,62 @@ class RegistryCfg:
             volume="",
             backend=backend,
             lakebase_schema=lakebase_schema,
+            lakebase_database=lakebase_database,
         )
 
     @classmethod
     def from_domain(cls, domain, settings) -> RegistryCfg:
         """Build from a *DomainSession* and *Settings* with env-var fallbacks.
 
-        When the app is deployed with a Volume resource the injected path
-        (``settings.registry_volume_path``) takes highest priority so that
-        admin-level Databricks App resource configuration always wins.
+        Resolution order (highest priority first):
 
-        ``backend`` and ``lakebase_schema`` come from the *Settings*
-        (env-level) and are then overridden by the global config when
-        the registry is reachable — see :class:`RegistryService`.
+        1. ``domain.settings["registry"]`` — admin choices made from the
+           Settings UI. These ALWAYS win for the *backend chooser* and
+           the Lakebase-side knobs (``lakebase_schema`` /
+           ``lakebase_database``), even on a Databricks Apps deployment
+           where the Volume is bound by the platform. Without this
+           precedence, flipping the backend radio in Settings would be
+           silently discarded on every request, because the Volume path
+           branch below would re-read ``backend`` from the env and
+           overwrite the freshly-saved value.
+        2. ``settings.registry_volume_path`` — when present (Databricks
+           Apps with a bound Volume resource), the catalog/schema/volume
+           triplet is sourced from the injected path so the in-app
+           registry is always pinned to the resource binding.
+        3. ``settings.*`` env vars — last-resort fallback for catalog,
+           schema, volume, backend, ``lakebase_schema`` and
+           ``lakebase_database``.
         """
-        backend = (getattr(settings, "registry_backend", "volume") or "volume").lower()
-        lb_schema = (
+        env_backend = (
+            getattr(settings, "registry_backend", "volume") or "volume"
+        ).lower()
+        env_lb_schema = (
             getattr(settings, "lakebase_schema", "ontobricks_registry")
             or "ontobricks_registry"
         )
+        env_lb_database = getattr(settings, "lakebase_database", "") or ""
+
+        reg = domain.settings.get("registry", {}) if domain is not None else {}
+        backend = (reg.get("backend") or env_backend).lower()
+        lb_schema = reg.get("lakebase_schema") or env_lb_schema
+        lb_database = reg.get("lakebase_database") or env_lb_database
 
         vol_path = getattr(settings, "registry_volume_path", "")
         if vol_path:
             return cls.from_volume_path(
-                vol_path, backend=backend, lakebase_schema=lb_schema
+                vol_path,
+                backend=backend,
+                lakebase_schema=lb_schema,
+                lakebase_database=lb_database,
             )
 
-        reg = domain.settings.get("registry", {})
         return cls(
             catalog=reg.get("catalog") or settings.registry_catalog,
             schema=reg.get("schema") or settings.registry_schema,
             volume=reg.get("volume") or settings.registry_volume or _DEFAULT_VOLUME,
-            backend=(reg.get("backend") or backend).lower(),
-            lakebase_schema=reg.get("lakebase_schema") or lb_schema,
+            backend=backend,
+            lakebase_schema=lb_schema,
+            lakebase_database=lb_database,
         )
 
     @classmethod
@@ -150,6 +185,7 @@ class RegistryCfg:
             volume=d.get("volume", "") or _DEFAULT_VOLUME,
             backend=(d.get("backend") or "volume").lower(),
             lakebase_schema=d.get("lakebase_schema") or "ontobricks_registry",
+            lakebase_database=d.get("lakebase_database") or "",
         )
 
     # -- helpers -----------------------------------------------------
@@ -168,6 +204,7 @@ class RegistryCfg:
             "volume": self.volume,
             "backend": self.backend,
             "lakebase_schema": self.lakebase_schema,
+            "lakebase_database": self.lakebase_database,
         }
 
 
@@ -217,6 +254,13 @@ class RegistryService:
         :class:`VolumeRegistryStore` manually so we can reuse the
         already-built :class:`VolumeFileService` without duplicating
         host/token credentials.
+
+        For the Lakebase backend we route through
+        :class:`RegistryFactory` and forward both the schema *and the
+        database override* (``cfg.lakebase_database``). Forgetting the
+        latter would silently fall back to the bound ``PGDATABASE``
+        even when the admin picked a different database in Settings,
+        making the Browse list read from the wrong Postgres database.
         """
         from back.objects.registry.store import (
             RegistryFactory,
@@ -227,6 +271,7 @@ class RegistryService:
             return RegistryFactory.lakebase(
                 registry_cfg=cfg,
                 schema=cfg.lakebase_schema,
+                database=cfg.lakebase_database,
             )
         store = VolumeRegistryStore.__new__(VolumeRegistryStore)
         store._cfg = cfg
@@ -255,7 +300,16 @@ class RegistryService:
         """Cache key bound to the *store identity* (backend-aware)."""
         return self._store.cache_key
 
-    # -- path builders -----------------------------------------------
+    # -- path builders (Volume-side, used by both backends) ----------
+    #
+    # Binary artifacts (``documents/`` and ``*.lbug.tar.gz``) always
+    # live on the Unity Catalog Volume regardless of which
+    # :class:`RegistryStore` backs the registry. The path builders
+    # below produce those Volume paths and are therefore safe to call
+    # under both the Volume and Lakebase backends. The same goes for
+    # :meth:`recursive_delete`, :meth:`copy_version_documents` and
+    # :meth:`migrate_domain_layout` further down — they manipulate the
+    # binary tree only and intentionally bypass the store.
 
     def volume_root(self) -> str:
         c = self._cfg
@@ -327,7 +381,8 @@ class RegistryService:
 
         *client* is a ``DatabricksClient`` used by the Volume backend
         to create the UC Volume on first use; it is ignored by the
-        Lakebase backend (where the database is provisioned separately).
+        Lakebase backend (where the Autoscaling Postgres database is
+        created out-of-band by the platform).
         """
         c = self._cfg
         if (c.backend or "volume").lower() == "volume":
@@ -699,7 +754,10 @@ class RegistryService:
     def list_all_bridges(self) -> Tuple[bool, List[Dict[str, Any]], str]:
         """Collect all bridges across every domain in the registry.
 
-        Iterates over each domain, loads its latest version, and extracts
+        Iterates over each domain (via the active backend's
+        :meth:`RegistryStore.list_domain_folders` so Lakebase
+        registries that have no on-Volume ``domains/`` directory still
+        return their content), loads its latest version, and extracts
         bridges from ``ontology.classes[].bridges``.
 
         Returns ``(ok, domains_with_bridges, error_msg)`` where each entry
@@ -708,13 +766,12 @@ class RegistryService:
         ``target_domain``, ``target_class_name``, ``target_class_uri``,
         ``label``).
         """
-        ok, items, msg = self._uc.list_directory(self.domains_path(), dirs_only=True)
+        ok, names, msg = self._store.list_domain_folders()
         if not ok:
             return False, [], msg
 
         result: List[Dict[str, Any]] = []
-        for item in sorted(items, key=lambda i: i["name"]):
-            name = item["name"]
+        for name in sorted(names):
             if name.startswith("."):
                 continue
 

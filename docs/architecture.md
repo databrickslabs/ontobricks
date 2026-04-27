@@ -724,9 +724,10 @@ Authentication is fully app-managed: the Databricks Apps runtime
 injects `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER` and OntoBricks mints a
 short-lived OAuth token via `WorkspaceClient().config.authenticate()`
 (`back/core/databricks/LakebaseAuth.py`). No user secrets are stored.
-The connection layer is tier-agnostic — both **Provisioned** and
-**Autoscaling** Lakebase instances are supported, with retry on
-`SQLSTATE 57P03` to absorb autoscaling cold-starts.
+OntoBricks targets **Lakebase Autoscaling** exclusively (the default
+tier since 2026-03-12); Provisioned instances are not supported. The
+connection layer retries on `SQLSTATE 57P03` to absorb scale-from-zero
+cold-starts.
 
 Binary artefacts (`documents/`, `*.lbug.tar.gz`) keep the Volume
 layout above regardless of which backend is selected.

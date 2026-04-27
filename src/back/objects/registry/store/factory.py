@@ -62,6 +62,7 @@ class RegistryFactory:
         host: str = "",
         token: str = "",
         lakebase_schema: str = _DEFAULT_LAKEBASE_SCHEMA,
+        lakebase_database: str = "",
     ) -> RegistryStore:
         """Return the right concrete store for *backend*.
 
@@ -82,12 +83,18 @@ class RegistryFactory:
         lakebase_schema:
             Postgres schema where the registry tables live. Defaults
             to ``"ontobricks_registry"``.
+        lakebase_database:
+            Optional override of the Postgres database name. Empty
+            (the default) means "use the bound ``PGDATABASE``". A
+            non-empty value picks a different database on the same
+            Lakebase instance — see :class:`LakebaseRegistryStore`.
         """
         backend_l = (backend or "volume").strip().lower()
         if backend_l == "lakebase":
             return RegistryFactory.lakebase(
                 registry_cfg=registry_cfg,
                 schema=lakebase_schema or _DEFAULT_LAKEBASE_SCHEMA,
+                database=lakebase_database,
             )
         return RegistryFactory.volume(
             registry_cfg=registry_cfg, host=host, token=token
@@ -123,6 +130,7 @@ class RegistryFactory:
         *,
         registry_cfg: "RegistryCfg",
         schema: str = _DEFAULT_LAKEBASE_SCHEMA,
+        database: str = "",
     ) -> RegistryStore:
         """Build a Lakebase (Postgres) store.
 
@@ -130,12 +138,16 @@ class RegistryFactory:
         not need the ``lakebase`` extra installed. Raises
         :class:`back.core.errors.InfrastructureError` at instantiation
         time if the extra is missing.
+
+        ``database`` (optional) overrides the bound ``PGDATABASE``;
+        empty falls back to the runtime-injected database.
         """
         from .lakebase import LakebaseRegistryStore
 
         return LakebaseRegistryStore(
             registry_cfg=registry_cfg,
             schema=schema or _DEFAULT_LAKEBASE_SCHEMA,
+            database=database,
         )
 
     # ------------------------------------------------------------------
@@ -161,6 +173,7 @@ class RegistryFactory:
             host=host,
             token=token,
             lakebase_schema=registry_cfg.lakebase_schema,
+            lakebase_database=getattr(registry_cfg, "lakebase_database", ""),
         )
 
 
@@ -171,6 +184,7 @@ def build_store(
     host: str = "",
     token: str = "",
     lakebase_schema: str = _DEFAULT_LAKEBASE_SCHEMA,
+    lakebase_database: str = "",
 ) -> RegistryStore:
     """Backwards-compatible alias for :meth:`RegistryFactory.for_backend`.
 
@@ -187,4 +201,5 @@ def build_store(
         host=host,
         token=token,
         lakebase_schema=lakebase_schema,
+        lakebase_database=lakebase_database,
     )

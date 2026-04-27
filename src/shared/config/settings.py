@@ -4,7 +4,7 @@ Used across the codebase (HTML routes, objects, external ``api`` package, FastAP
 """
 
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from pydantic import AliasChoices, ConfigDict, Field
 from functools import lru_cache
 import os
 
@@ -57,8 +57,30 @@ class Settings(BaseSettings):
     # workspace SDK.
     lakebase_schema: str = "ontobricks_registry"
 
-    # Databricks App name (for permission management)
-    ontobricks_app_name: str = ""
+    # Lakebase: optional override of the Postgres database name. When
+    # empty (the default), the Lakebase backend uses ``PGDATABASE`` as
+    # auto-injected by the Apps runtime. Setting this picks a different
+    # database on the *same* bound Lakebase instance — useful when the
+    # admin wants to change the registry database without redeploying
+    # the bundle. The service principal must have ``CONNECT`` on the
+    # target database. The JWT scope is per-instance so no token
+    # re-mint is needed.
+    lakebase_database: str = ""
+
+    # Databricks App name (for permission management).
+    # Reads ``ONTOBRICKS_APP_NAME`` first (explicit override, e.g. via .env
+    # for local dev), then falls back to ``DATABRICKS_APP_NAME`` which the
+    # Databricks Apps runtime auto-injects as the deployed app's name
+    # (e.g. ``ontobricks`` for prod, ``ontobricks-dev`` for the sandbox).
+    # This lets the same ``app.yaml`` and source tree power multiple
+    # Databricks App deployments without requiring a per-app override.
+    ontobricks_app_name: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_APP_NAME",
+            "DATABRICKS_APP_NAME",
+        ),
+    )
 
     # Session settings - use /tmp in Databricks Apps
     session_dir: str = _get_default_session_dir()

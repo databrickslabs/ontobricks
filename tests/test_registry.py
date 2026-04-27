@@ -31,6 +31,7 @@ def _make_settings(**overrides):
         "registry_volume_path": "",
         "registry_backend": "volume",
         "lakebase_schema": "ontobricks_registry",
+        "lakebase_database": "",
         "databricks_host": "https://host.databricks.com",
         "databricks_token": "tok-123",
     }
@@ -141,6 +142,57 @@ class TestRegistryCfgConstruction:
         assert c.schema == "ontobricks_deployed"
         assert c.volume == "registry"
 
+    def test_from_domain_volume_path_keeps_session_backend(self):
+        """The Volume-resource path must NOT clobber the admin-saved
+        backend choice. Otherwise flipping the radio in Settings →
+        Registry Location is silently discarded on every request."""
+        domain = _make_domain(
+            registry={"backend": "lakebase"},
+        )
+        settings = _make_settings(
+            registry_volume_path="/Volumes/benoit_cayla/ontobricks_deployed/registry",
+            registry_backend="volume",
+        )
+        c = RegistryCfg.from_domain(domain, settings)
+        assert c.backend == "lakebase"
+        assert c.catalog == "benoit_cayla"
+        assert c.schema == "ontobricks_deployed"
+        assert c.volume == "registry"
+
+    def test_from_domain_volume_path_keeps_session_lakebase_overrides(self):
+        """Lakebase schema/database overrides saved in the Settings UI
+        must survive on a Databricks Apps deployment."""
+        domain = _make_domain(
+            registry={
+                "backend": "lakebase",
+                "lakebase_schema": "custom_schema",
+                "lakebase_database": "custom_db",
+            },
+        )
+        settings = _make_settings(
+            registry_volume_path="/Volumes/benoit_cayla/ontobricks_deployed/registry",
+            lakebase_schema="env_schema",
+            lakebase_database="env_db",
+        )
+        c = RegistryCfg.from_domain(domain, settings)
+        assert c.backend == "lakebase"
+        assert c.lakebase_schema == "custom_schema"
+        assert c.lakebase_database == "custom_db"
+
+    def test_from_domain_no_volume_path_session_backend_wins(self):
+        """Same precedence on the non-bound (local-dev) path."""
+        domain = _make_domain(
+            registry={
+                "catalog": "c",
+                "schema": "s",
+                "volume": "v",
+                "backend": "lakebase",
+            },
+        )
+        settings = _make_settings(registry_backend="volume")
+        c = RegistryCfg.from_domain(domain, settings)
+        assert c.backend == "lakebase"
+
 
 class TestRegistryCfgHelpers:
     def test_is_configured_true(self):
@@ -157,7 +209,7 @@ class TestRegistryCfgHelpers:
 
     def test_as_dict(self):
         c = RegistryCfg("x", "y", "z")
-        # ``backend`` and ``lakebase_schema`` were added when Lakebase
+        # ``backend`` and ``lakebase_*`` were added when Lakebase
         # support landed — Volume-only callers see the defaults.
         assert c.as_dict() == {
             "catalog": "x",
@@ -165,6 +217,7 @@ class TestRegistryCfgHelpers:
             "volume": "z",
             "backend": "volume",
             "lakebase_schema": "ontobricks_registry",
+            "lakebase_database": "",
         }
 
     def test_as_dict_roundtrip(self):
@@ -413,6 +466,89 @@ class TestListDomainDetails:
             },
             {"version": "1", "active": False, "last_update": "", "last_build": ""},
         ]
+
+
+class TestListAllBridges:
+    """``list_all_bridges`` must enumerate domains via the active
+    backend's :class:`RegistryStore` (so Lakebase registries work)
+    and only fall back to the Volume for the ontology read path
+    (which itself goes through ``read_version`` on the store too).
+    """
+
+    def test_uses_store_list_domain_folders_not_volume(self):
+        """Regression: previously enumerated via
+        ``_uc.list_directory(self.domains_path(), dirs_only=True)``
+        which returns nothing on a Lakebase-only registry.
+        """
+        uc = _make_uc()
+        # Make sure we'd FAIL noisily if the implementation regressed
+        # back to listing through ``_uc`` against the domains folder.
+        uc.list_directory.side_effect = AssertionError(
+            "list_all_bridges must not enumerate domains via _uc"
+        )
+        svc = _make_svc(uc=uc)
+
+        # Force the store to return two domains; load_latest_domain_data
+        # is patched to short-circuit (no I/O).
+        svc._store.list_domain_folders = lambda: (
+            True,
+            ["proj_a", "proj_b"],
+            "",
+        )
+        svc.load_latest_domain_data = lambda name: (
+            True,
+            {
+                "info": {"description": ""},
+                "versions": {
+                    "1": {
+                        "ontology": {
+                            "base_uri": f"http://x/{name}",
+                            "classes": [
+                                {
+                                    "name": "C",
+                                    "uri": f"http://x/{name}#C",
+                                    "emoji": "📦",
+                                    "bridges": [
+                                        {
+                                            "target_domain": "other",
+                                            "target_class_name": "T",
+                                            "target_class_uri": "http://x/other#T",
+                                            "label": "rel",
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    }
+                },
+            },
+            "1",
+            "",
+        )
+
+        ok, result, _ = svc.list_all_bridges()
+        assert ok is True
+        assert [d["name"] for d in result] == ["proj_a", "proj_b"]
+        assert all(d["bridges"] for d in result)
+
+    def test_skips_hidden_folder_names(self):
+        """``.hidden`` entries from the store must be filtered out."""
+        uc = _make_uc()
+        svc = _make_svc(uc=uc)
+        svc._store.list_domain_folders = lambda: (
+            True,
+            [".system", "real"],
+            "",
+        )
+        svc.load_latest_domain_data = lambda name: (
+            True,
+            {"versions": {"1": {"ontology": {"base_uri": "u", "classes": []}}}},
+            "1",
+            "",
+        )
+        ok, result, _ = svc.list_all_bridges()
+        assert ok is True
+        assert [d["name"] for d in result] == ["real"]
 
 
 class TestDeleteDomain:
@@ -739,3 +875,233 @@ class TestFromContext:
 
         assert svc.cfg == RegistryCfg("c", "s", "v")
         assert svc.uc is not None
+
+
+# ==================================================================
+# BuildScheduler._resolve_creds — backend fields plumbed at startup
+# ==================================================================
+
+
+class TestSchedulerResolveCredsBackend:
+    """At startup the scheduler restores jobs *before* the global
+    config has been read, so the ``RegistryCfg`` it builds from
+    *Settings* must already carry ``backend`` / ``lakebase_schema``
+    / ``lakebase_database``. Otherwise schedule reads/writes would
+    silently default to Volume even on a Lakebase deployment.
+    """
+
+    def test_volume_defaults(self):
+        from back.objects.registry.scheduler import BuildScheduler
+
+        settings = _make_settings()
+        host, token, cfg = BuildScheduler._resolve_creds(settings)
+        assert host == "https://host.databricks.com"
+        assert token == "tok-123"
+        assert cfg["backend"] == "volume"
+        assert cfg["lakebase_schema"] == "ontobricks_registry"
+        assert cfg["lakebase_database"] == ""
+
+    def test_lakebase_with_database_override(self):
+        from back.objects.registry.scheduler import BuildScheduler
+
+        settings = _make_settings(
+            registry_backend="lakebase",
+            lakebase_schema="ontobricks_registry",
+            lakebase_database="ontobricks_other",
+        )
+        _h, _t, cfg = BuildScheduler._resolve_creds(settings)
+        assert cfg["backend"] == "lakebase"
+        assert cfg["lakebase_schema"] == "ontobricks_registry"
+        assert cfg["lakebase_database"] == "ontobricks_other"
+
+
+# ==================================================================
+# POST /settings/registry — locked-resource semantics
+# ==================================================================
+
+
+class TestSaveRegistryRouteLockedSemantics:
+    """The registry is "locked" when the Volume is supplied by a
+    Databricks App resource binding (``settings.registry_volume_path``
+    is set inside ``is_databricks_app()``). Locking must protect the
+    bound triplet ``catalog/schema/volume`` only — the **backend
+    chooser** (Volume ↔ Lakebase) and the Lakebase-side knobs
+    (``lakebase_schema`` / ``lakebase_database``) must remain editable
+    so admins can flip backends from the UI without redeploying.
+    """
+
+    # NOTE: these tests run the ``save_registry`` coroutine via a fresh
+    # private event loop instead of relying on pytest-asyncio. With
+    # ``asyncio_mode = auto`` and the ``anyio`` plugin both loaded, the
+    # session-wide pytest-asyncio runner can leak state across tests
+    # (``Runner.run() cannot be called from a running event loop``).
+    # Using ``asyncio.new_event_loop().run_until_complete`` keeps these
+    # cases hermetic.
+
+    def test_locked_blocks_catalog_schema_volume_changes(self):
+        from api.routers.internal import settings as settings_router
+
+        req = MagicMock()
+        req.json = MagicMock(return_value=_AwaitableValue({"catalog": "evil"}))
+        sm = MagicMock()
+        s = _make_settings()
+
+        with patch.object(
+            settings_router.config_service, "is_registry_locked", return_value=True
+        ), patch.object(
+            settings_router.config_service, "apply_registry_save"
+        ) as apply_mock:
+            with pytest.raises(Exception) as excinfo:
+                _run(settings_router.save_registry(req, sm, s))
+            assert "cannot be changed here" in str(excinfo.value)
+            apply_mock.assert_not_called()
+
+    def test_locked_allows_backend_switch(self):
+        """Locked registry must still accept ``backend`` updates."""
+        from api.routers.internal import settings as settings_router
+
+        req = MagicMock()
+        req.json = MagicMock(
+            return_value=_AwaitableValue({"backend": "lakebase"})
+        )
+        sm = MagicMock()
+        s = _make_settings()
+
+        with patch.object(
+            settings_router.config_service, "is_registry_locked", return_value=True
+        ), patch.object(
+            settings_router.config_service,
+            "apply_registry_save",
+            return_value={"success": True, "message": "ok"},
+        ) as apply_mock:
+            result = _run(settings_router.save_registry(req, sm, s))
+
+        assert result["success"] is True
+        apply_mock.assert_called_once()
+        forwarded = apply_mock.call_args[0][0]
+        assert forwarded == {"backend": "lakebase"}
+
+    def test_locked_allows_lakebase_database_override(self):
+        from api.routers.internal import settings as settings_router
+
+        req = MagicMock()
+        req.json = MagicMock(
+            return_value=_AwaitableValue(
+                {"lakebase_database": "ontobricks_other", "lakebase_schema": "reg"}
+            )
+        )
+        sm = MagicMock()
+        s = _make_settings()
+
+        with patch.object(
+            settings_router.config_service, "is_registry_locked", return_value=True
+        ), patch.object(
+            settings_router.config_service,
+            "apply_registry_save",
+            return_value={"success": True, "message": "ok"},
+        ) as apply_mock:
+            result = _run(settings_router.save_registry(req, sm, s))
+
+        assert result["success"] is True
+        forwarded = apply_mock.call_args[0][0]
+        assert forwarded["lakebase_database"] == "ontobricks_other"
+        assert forwarded["lakebase_schema"] == "reg"
+
+    def test_locked_strips_locked_keys_silently_when_empty(self):
+        """Empty locked-keys (e.g. ``catalog: ""``) are stripped, not rejected.
+
+        Some clients echo the full registry config back; an empty / falsy
+        value is a no-op and should not raise — only *non-empty* writes
+        to the bound triplet are blocked.
+        """
+        from api.routers.internal import settings as settings_router
+
+        req = MagicMock()
+        req.json = MagicMock(
+            return_value=_AwaitableValue(
+                {"catalog": "", "schema": "", "backend": "lakebase"}
+            )
+        )
+        sm = MagicMock()
+        s = _make_settings()
+
+        with patch.object(
+            settings_router.config_service, "is_registry_locked", return_value=True
+        ), patch.object(
+            settings_router.config_service,
+            "apply_registry_save",
+            return_value={"success": True, "message": "ok"},
+        ) as apply_mock:
+            _run(settings_router.save_registry(req, sm, s))
+
+        forwarded = apply_mock.call_args[0][0]
+        assert "catalog" not in forwarded
+        assert "schema" not in forwarded
+        assert forwarded["backend"] == "lakebase"
+
+    def test_unlocked_passes_payload_through(self):
+        from api.routers.internal import settings as settings_router
+
+        req = MagicMock()
+        payload = {"catalog": "c", "schema": "s", "volume": "v", "backend": "volume"}
+        req.json = MagicMock(return_value=_AwaitableValue(payload))
+        sm = MagicMock()
+        s = _make_settings()
+
+        with patch.object(
+            settings_router.config_service, "is_registry_locked", return_value=False
+        ), patch.object(
+            settings_router.config_service,
+            "apply_registry_save",
+            return_value={"success": True, "message": "ok"},
+        ) as apply_mock:
+            _run(settings_router.save_registry(req, sm, s))
+
+        apply_mock.assert_called_once()
+        forwarded = apply_mock.call_args[0][0]
+        assert forwarded == payload
+
+
+class _AwaitableValue:
+    """Minimal awaitable wrapper so ``await req.json()`` works in tests."""
+
+    def __init__(self, value):
+        self._value = value
+
+    def __await__(self):
+        async def _coro():
+            return self._value
+
+        return _coro().__await__()
+
+
+def _run(coro):
+    """Run *coro* on a fresh event loop in a worker thread and return its result.
+
+    Some earlier tests in the suite leave an event loop running on
+    the main thread (a known pytest-asyncio + anyio interaction).
+    Spawning a thread with its own loop sidesteps that pollution and
+    keeps each ``save_registry`` invocation hermetic.
+    """
+    import asyncio
+    import threading
+
+    result = [None]
+    error: list = []
+
+    def _runner():
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            result[0] = loop.run_until_complete(coro)
+        except BaseException as exc:  # noqa: BLE001
+            error.append(exc)
+        finally:
+            loop.close()
+
+    t = threading.Thread(target=_runner, daemon=True)
+    t.start()
+    t.join()
+    if error:
+        raise error[0]
+    return result[0]

@@ -19,17 +19,23 @@ workspace bearer token returned by ``config.authenticate()`` is
 The Lakebase instance name is sourced from (in order):
 
 1. ``DATABASE_INSTANCE_NAME`` env var (if you set it explicitly).
-2. ``PGAPPNAME`` env var (some Apps deployments inject it).
-3. A one-time SDK lookup that matches ``PGHOST`` against
+2. A one-time SDK lookup that matches ``PGHOST`` against
    ``read_write_dns`` / ``read_only_dns`` of the workspace's
    database instances. Result is cached for the process lifetime.
+
+``PGAPPNAME`` is **not** consulted — it's libpq's
+``application_name`` (a free-form connection tracing label) and
+the Databricks Apps runtime populates it with the *app's* name
+(e.g. ``ontobricks-dev``), which has nothing to do with the
+Lakebase instance.
 
 Tokens are valid for ~1 hour, so :class:`LakebaseAuth` refreshes
 them ~5 minutes before expiry.
 
-The same code path serves both the **Provisioned** and **Autoscaling**
-Lakebase tiers — they expose the same Postgres surface; tier
-information is purely informational.
+OntoBricks targets **Lakebase Autoscaling** exclusively (the default
+tier for every instance created after 2026-03-12). Provisioned
+instances are not supported — the deployment YAML and the runtime
+auth code both assume an Autoscaling project resource.
 """
 
 from __future__ import annotations
@@ -112,18 +118,21 @@ class LakebaseAuth:
         """Resolve the Lakebase instance name (cached).
 
         Order:
-        1. ``DATABASE_INSTANCE_NAME`` env var.
-        2. ``PGAPPNAME`` env var.
-        3. SDK lookup: match ``PGHOST`` against
+        1. ``DATABASE_INSTANCE_NAME`` env var (explicit override).
+        2. SDK lookup: match ``PGHOST`` against
            ``read_write_dns`` / ``read_only_dns`` of the workspace's
            Lakebase instances.
+
+        ``PGAPPNAME`` is intentionally **not** consulted — Databricks
+        Apps sets it to the app name (e.g. ``ontobricks-dev``) which
+        is unrelated to the Lakebase instance and would cause
+        ``generate_database_credential`` to fail with
+        ``Database instance '<app-name>' not found``.
         """
         if self._instance_name:
             return self._instance_name
 
-        explicit = os.environ.get("DATABASE_INSTANCE_NAME") or os.environ.get(
-            "PGAPPNAME"
-        )
+        explicit = os.environ.get("DATABASE_INSTANCE_NAME")
         if explicit:
             self._instance_name = explicit
             return self._instance_name

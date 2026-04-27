@@ -87,10 +87,19 @@ def migrate_volume_to_lakebase(
             report.errors.append(f"initialize destination: {msg}")
             return report
 
-    # Global config first — schedules embedded in it are handled below
-    # via the dedicated schedules path.
+    # Global config first. The Volume backend stores schedules + history
+    # *inside* the JSON blob — those belong to dedicated Lakebase tables
+    # (``schedules`` / ``schedule_runs``) and are copied through their
+    # own paths below. Strip them here so the destination ``global_config``
+    # row stays the single source of truth for instance-wide settings only.
     try:
         cfg = src.load_global_config()
+        if cfg:
+            cfg = {
+                k: v
+                for k, v in cfg.items()
+                if k not in ("schedules", "schedule_history")
+            }
         if cfg:
             ok, msg = dst.save_global_config(cfg)
             if ok:

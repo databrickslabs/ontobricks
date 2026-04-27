@@ -48,9 +48,10 @@ scripts/setup.sh
 - A Unity Catalog Volume for the domain registry
 - *(Optional)* A Databricks Lakebase Postgres database — required only
   when the admin switches the registry storage backend from
-  **Volume** (default) to **Lakebase** in Settings → Registry. Both
-  Provisioned and Autoscaling tiers are supported. Install the
-  optional driver with `uv sync --extra lakebase`.
+  **Volume** (default) to **Lakebase** in Settings → Registry.
+  OntoBricks targets **Lakebase Autoscaling** exclusively (Provisioned
+  instances are not supported). Install the optional driver with
+  `uv sync --extra lakebase`.
 
 ## Deploying / Installing the Project
 

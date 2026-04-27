@@ -72,8 +72,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const avail = registryCfg.available_backends || { lakebase: { available: false } };
         const lbAvail = !!(avail.lakebase && avail.lakebase.available);
-        radioLb.disabled = !lbAvail || registryLocked;
-        radioVol.disabled = registryLocked;
+        // ``registryLocked`` only locks the *catalog/schema/volume* identifiers
+        // (they come from the bound Volume resource), NOT the backend choice.
+        // Switching Volume <-> Lakebase only changes where JSON registry data
+        // lives, not the bound resource — admins must always be able to flip
+        // it from the UI on a Databricks Apps deployment.
+        radioLb.disabled = !lbAvail;
+        radioVol.disabled = false;
 
         const help = document.getElementById('registryBackendHelp');
         if (help) {
@@ -84,9 +89,41 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
+        // *Migrate to Lakebase* visibility / styling. Three regimes:
+        //  1. Lakebase is the active backend AND tables already hold data
+        //     → hide the button outright. Re-running the migration
+        //     would silently overwrite live rows; offering it without
+        //     a story is a footgun.
+        //  2. Volume is active AND Lakebase tables already hold data
+        //     → show the button but downgrade it to *Re-sync from
+        //     Volume*: warning style, plus a hard confirmation popup
+        //     in the click handler. This is the legitimate "reset"
+        //     path — admin knows they're overwriting.
+        //  3. Otherwise (Volume + empty Lakebase, or Lakebase but
+        //     uninitialised) → standard "Migrate to Lakebase" CTA.
         const migrateBtn = document.getElementById('btnMigrateToLakebase');
         if (migrateBtn) {
-            migrateBtn.style.display = (lbAvail && backend === 'volume' && registryCfg.configured) ? '' : 'none';
+            const lb = registryCfg.lakebase || {};
+            const lbInit = !!lb.initialized;
+            const lbPopulated = !!lb.populated;
+            let showMigrate = lbAvail && registryCfg.configured;
+            if (showMigrate && backend === 'lakebase') {
+                // Active Lakebase backend: only useful before data arrives.
+                showMigrate = !lbInit || !lbPopulated;
+            }
+            migrateBtn.style.display = showMigrate ? '' : 'none';
+            if (showMigrate) {
+                const isResync = lbPopulated;
+                migrateBtn.dataset.mode = isResync ? 'resync' : 'migrate';
+                migrateBtn.classList.toggle('btn-outline-primary', !isResync);
+                migrateBtn.classList.toggle('btn-outline-danger', isResync);
+                migrateBtn.innerHTML = isResync
+                    ? '<i class="bi bi-arrow-counterclockwise me-1"></i> Re-sync from Volume'
+                    : '<i class="bi bi-arrow-right-circle me-1"></i> Migrate to Lakebase';
+                migrateBtn.title = isResync
+                    ? 'Lakebase already holds data — running this will overwrite the existing tables with the Volume contents. Use only as a reset.'
+                    : 'Copy Volume registry data into Lakebase tables (binaries stay on the Volume)';
+            }
         }
     }
 
@@ -107,7 +144,22 @@ document.addEventListener('DOMContentLoaded', function () {
         };
         set('lakebaseHost', lb.host);
         set('lakebasePort', lb.port);
-        set('lakebaseDatabase', lb.database);
+        const effectiveDb = lb.effective_database || lb.database;
+        set('lakebaseDatabase', effectiveDb);
+        const dbHint = document.getElementById('lakebaseDatabaseHint');
+        if (dbHint) {
+            if (lb.database_override && lb.database_override !== lb.database) {
+                dbHint.style.display = '';
+                dbHint.innerHTML = '<i class="bi bi-pencil-square me-1"></i>'
+                    + 'override (bound: <code>' + escapeHtml(lb.database || '—') + '</code>)';
+            } else if (lb.database) {
+                dbHint.style.display = '';
+                dbHint.innerHTML = '<i class="bi bi-link-45deg me-1"></i>from app resource binding';
+            } else {
+                dbHint.style.display = 'none';
+                dbHint.textContent = '';
+            }
+        }
         set('lakebaseUser', lb.user);
         set('lakebaseSchema', lb.schema || registryCfg.lakebase_schema);
 
@@ -173,6 +225,34 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             stateEl.innerHTML = '<span class="' + cls + '">' + escapeHtml(label) + '</span>';
         }
+
+        // Lakebase Autoscaling-only: surface the active branch
+        // (the one hosting the bound PGDATABASE) plus the project's
+        // autoscaling CU min/max. Hide each block when the field
+        // is missing — the runtime payload omits them whenever the
+        // /api/2.0/postgres/projects/<name> lookup is unavailable.
+        const branchCol = document.getElementById('lakebaseInstanceBranchCol');
+        const branchEl = document.getElementById('lakebaseInstanceBranch');
+        const autoCol = document.getElementById('lakebaseInstanceAutoscaleCol');
+        const autoEl = document.getElementById('lakebaseInstanceAutoscale');
+        const branch = instance.branch || '';
+        const resource = instance.branch_resource || '';
+        if (branchCol) branchCol.style.display = branch ? '' : 'none';
+        if (branchEl && branch) {
+            branchEl.textContent = branch;
+            branchEl.title = resource || branch;
+        }
+        const min = instance.autoscaling_min_cu;
+        const max = instance.autoscaling_max_cu;
+        const hasRange = (min !== null && min !== undefined) || (max !== null && max !== undefined);
+        if (autoCol) autoCol.style.display = hasRange ? '' : 'none';
+        if (autoEl && hasRange) {
+            if (min !== null && min !== undefined && max !== null && max !== undefined && min !== max) {
+                autoEl.textContent = min + ' – ' + max;
+            } else {
+                autoEl.textContent = String(max ?? min);
+            }
+        }
     }
 
     async function loadLakebaseStats() {
@@ -219,8 +299,31 @@ document.addEventListener('DOMContentLoaded', function () {
                         + escapeHtml(data.schema || '') + '</code> initialized.';
                 } else {
                     msg.style.display = '';
-                    msg.innerHTML = '<i class="bi bi-exclamation-triangle text-warning me-1"></i> Schema <code>'
-                        + escapeHtml(data.schema || '') + '</code> not initialized — run <em>Migrate to Lakebase</em> or initialize the registry.';
+                    // Reason-aware copy: ``no_usage`` is a permission
+                    // problem (admin must run bootstrap-lakebase-perms),
+                    // not a bare "not initialised" — surfacing it
+                    // explicitly avoids the misleading "0 rows /
+                    // not initialised" trap when data is actually
+                    // present but the SP can't see it.
+                    const reason = data.reason || '';
+                    const detail = data.message || '';
+                    let inner;
+                    if (reason === 'no_usage') {
+                        inner = '<i class="bi bi-shield-exclamation text-danger me-1"></i> Schema <code>'
+                            + escapeHtml(data.schema || '') + '</code> visible but the app service principal '
+                            + 'lacks <code>USAGE</code>. Run <code>scripts/bootstrap-lakebase-perms.sh</code> '
+                            + '(or grant manually) and refresh.';
+                    } else if (reason === 'connect_failed' || reason === 'table_count_failed') {
+                        inner = '<i class="bi bi-x-circle text-danger me-1"></i> '
+                            + escapeHtml(detail || 'Could not reach Lakebase.');
+                    } else if (reason === 'no_registry_row') {
+                        inner = '<i class="bi bi-exclamation-triangle text-warning me-1"></i> Schema <code>'
+                            + escapeHtml(data.schema || '') + '</code> exists but has no registry row — click <em>Initialize</em>.';
+                    } else {
+                        inner = '<i class="bi bi-exclamation-triangle text-warning me-1"></i> Schema <code>'
+                            + escapeHtml(data.schema || '') + '</code> not initialized — run <em>Migrate to Lakebase</em> or initialize the registry.';
+                    }
+                    msg.innerHTML = inner;
                 }
             }
         } catch (e) {
@@ -289,10 +392,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const volPath = registryCfg.catalog + '.' + registryCfg.schema + '.' + (registryCfg.volume || 'OntoBricksRegistry');
             if (backend === 'lakebase') {
                 const lb = registryCfg.lakebase || {};
+                const effectiveDb = lb.effective_database || lb.database || 'lakebase';
                 const dbLabel = lb.bound
-                    ? (lb.database || 'lakebase') + '.' + (registryCfg.lakebase_schema || lb.schema || 'ontobricks_registry')
+                    ? effectiveDb + '.' + (registryCfg.lakebase_schema || lb.schema || 'ontobricks_registry')
                     : (registryCfg.lakebase_schema || 'ontobricks_registry') + ' (Lakebase resource not bound)';
-                label.innerHTML = '<i class="bi bi-database text-primary me-1"></i> <strong>' + escapeHtml(dbLabel) + '</strong>'
+                const overrideTag = (lb.database_override && lb.database_override !== lb.database)
+                    ? ' <span class="badge bg-info-subtle text-info-emphasis ms-1" title="Database override active">override</span>'
+                    : '';
+                label.innerHTML = '<i class="bi bi-database text-primary me-1"></i> <strong>' + escapeHtml(dbLabel) + '</strong>' + overrideTag
                     + ' <span class="text-muted small ms-2">binaries: ' + escapeHtml(volPath) + '</span>';
             } else {
                 label.innerHTML = '<i class="bi bi-archive text-success me-1"></i> <strong>' + escapeHtml(volPath) + '</strong>';
@@ -347,8 +454,84 @@ document.addEventListener('DOMContentLoaded', function () {
         if (lbWrap) lbWrap.style.display = backend === 'lakebase' ? '' : 'none';
         const lbInput = document.getElementById('registryLakebaseSchema');
         if (lbInput) lbInput.value = registryCfg.lakebase_schema || 'ontobricks_registry';
+
+        const dbWrap = document.getElementById('registryLakebaseDatabaseWrapper');
+        if (dbWrap) dbWrap.style.display = backend === 'lakebase' ? '' : 'none';
+        if (backend === 'lakebase') {
+            loadModalLakebaseDatabases();
+        }
+
         loadModalCatalogs();
     });
+
+    async function loadModalLakebaseDatabases() {
+        const sel = document.getElementById('registryLakebaseDatabase');
+        const help = document.getElementById('registryLakebaseDatabaseHelp');
+        if (!sel) return;
+
+        const currentOverride = (registryCfg.lakebase || {}).database_override
+            || registryCfg.lakebase_database
+            || '';
+        sel.disabled = true;
+        sel.innerHTML = '<option value="">Loading databases…</option>';
+
+        try {
+            const resp = await fetch('/settings/registry/lakebase-databases', { credentials: 'same-origin' });
+            const data = await resp.json();
+
+            if (!data.success) {
+                sel.innerHTML = '<option value="">(default — use bound database)</option>';
+                sel.disabled = false;
+                if (help) help.innerHTML = '<i class="bi bi-exclamation-triangle text-warning me-1"></i>'
+                    + escapeHtml(data.message || 'Could not list databases — falling back to bound database.');
+                if (currentOverride) {
+                    const opt = document.createElement('option');
+                    opt.value = currentOverride;
+                    opt.textContent = currentOverride + ' (configured override, unverified)';
+                    opt.selected = true;
+                    sel.appendChild(opt);
+                }
+                return;
+            }
+
+            const bound = data.bound_database || '';
+            const dbs = Array.isArray(data.databases) ? data.databases : [];
+
+            sel.innerHTML = '';
+            const defOpt = document.createElement('option');
+            defOpt.value = '';
+            defOpt.textContent = '(default — use bound database'
+                + (bound ? ': ' + bound : '')
+                + ')';
+            sel.appendChild(defOpt);
+
+            for (const db of dbs) {
+                const opt = document.createElement('option');
+                opt.value = db.name;
+                let label = db.name;
+                if (db.is_bound) label += ' (bound)';
+                if (!db.connectable) label += ' — no CONNECT';
+                opt.textContent = label;
+                if (!db.connectable) opt.disabled = true;
+                if (db.name === currentOverride) opt.selected = true;
+                sel.appendChild(opt);
+            }
+            if (!currentOverride) defOpt.selected = true;
+            sel.disabled = false;
+
+            if (help) {
+                help.innerHTML = 'Postgres database the registry talks to. Defaults to the database bound by the Apps resource'
+                    + (bound ? ' (<code>' + escapeHtml(bound) + '</code>)' : '')
+                    + '. Pick another database on the same Lakebase instance to migrate the registry without redeploying — the service principal must already have CONNECT on it.';
+            }
+        } catch (e) {
+            console.error('Error loading Lakebase databases:', e);
+            sel.innerHTML = '<option value="">(default — use bound database)</option>';
+            sel.disabled = false;
+            if (help) help.innerHTML = '<i class="bi bi-x-circle text-danger me-1"></i>'
+                + escapeHtml(e.message || 'Network error loading databases');
+        }
+    }
 
     async function loadModalCatalogs() {
         const catSelect = document.getElementById('registryCatalog');
@@ -422,6 +605,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const lakebaseSchema = lakebaseSchemaInput
             ? (lakebaseSchemaInput.value.trim() || 'ontobricks_registry')
             : (registryCfg.lakebase_schema || 'ontobricks_registry');
+        const lakebaseDbSelect = document.getElementById('registryLakebaseDatabase');
+        const lakebaseDatabase = lakebaseDbSelect
+            ? (lakebaseDbSelect.value || '')
+            : ((registryCfg.lakebase || {}).database_override || '');
 
         if (!catalog || !schema) {
             showNotification('Please select both a catalog and a schema', 'warning');
@@ -438,6 +625,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 schema,
                 volume,
                 lakebase_schema: lakebaseSchema,
+                lakebase_database: lakebaseDatabase,
             };
             const resp = await fetch('/settings/registry', {
                 method: 'POST',
@@ -469,19 +657,41 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     document.getElementById('btnMigrateToLakebase')?.addEventListener('click', async () => {
-        const confirmed = await showConfirmDialog({
-            title: 'Migrate to Lakebase',
-            message: 'Copy registry JSON data (domains, versions, permissions, schedules, history, global config) from the Unity Catalog Volume into the Lakebase tables? '
-                + 'Binary artefacts (documents, .lbug archives) stay on the Volume. The Volume JSON is not deleted automatically.',
-            confirmText: 'Migrate',
-            confirmClass: 'btn-primary',
-            icon: 'arrow-right-circle'
-        });
+        const btn = document.getElementById('btnMigrateToLakebase');
+        const isResync = btn?.dataset.mode === 'resync';
+        // Two-tier confirmation: re-sync (Lakebase already populated)
+        // gets a red, explicit warning calling out the overwrite. The
+        // first-migration flow keeps the friendlier informational dialog.
+        const confirmed = await showConfirmDialog(
+            isResync
+                ? {
+                      title: 'Re-sync from Volume — overwrite Lakebase?',
+                      message: '<strong>Lakebase already holds registry data.</strong><br>'
+                          + 'Re-running the migration will <strong>overwrite</strong> the existing rows '
+                          + '(domains, versions, permissions, schedules, history, global config) with whatever is '
+                          + 'currently on the Unity Catalog Volume. Any change made directly in Lakebase since the '
+                          + 'last migration will be lost.<br><br>'
+                          + 'Binary artefacts (<code>documents/</code>, <code>.lbug</code> archives) stay on the '
+                          + 'Volume. The Volume JSON is not deleted.<br><br>'
+                          + 'Continue only if you intend to <em>reset</em> Lakebase from the Volume snapshot.',
+                      confirmText: 'Overwrite Lakebase',
+                      confirmClass: 'btn-danger',
+                      icon: 'exclamation-triangle'
+                  }
+                : {
+                      title: 'Migrate to Lakebase',
+                      message: 'Copy registry JSON data (domains, versions, permissions, schedules, history, global config) from the Unity Catalog Volume into the Lakebase tables? '
+                          + 'Binary artefacts (documents, .lbug archives) stay on the Volume. The Volume JSON is not deleted automatically.',
+                      confirmText: 'Migrate',
+                      confirmClass: 'btn-primary',
+                      icon: 'arrow-right-circle'
+                  }
+        );
         if (!confirmed) return;
 
-        const btn = document.getElementById('btnMigrateToLakebase');
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Migrating...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> '
+            + (isResync ? 'Re-syncing...' : 'Migrating...');
         try {
             const resp = await fetch('/settings/registry/migrate-to-lakebase', {
                 method: 'POST',
@@ -514,7 +724,18 @@ document.addEventListener('DOMContentLoaded', function () {
             showNotification('Error during migration: ' + e.message, 'error');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-arrow-right-circle me-1"></i> Migrate to Lakebase';
+            // Restore the label from the mode we entered with — on the
+            // success path ``loadRegistryConfig()`` has already
+            // re-rendered the button via ``updateBackendChooser``,
+            // so this only matters when migration failed before the
+            // refresh. We avoid hard-coding "Migrate to Lakebase"
+            // because that would clobber the *Re-sync* label after a
+            // failed re-sync attempt.
+            if (isResync) {
+                btn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i> Re-sync from Volume';
+            } else {
+                btn.innerHTML = '<i class="bi bi-arrow-right-circle me-1"></i> Migrate to Lakebase';
+            }
         }
     });
 
@@ -914,7 +1135,20 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Bridges load triggers ---
 
     document.addEventListener('sidebarSectionChanged', (e) => {
-        if (e.detail?.section === 'bridges' && !bridgesLoaded) {
+        const section = e.detail?.section;
+        // Re-fetch the domain list every time the user navigates back
+        // to the Domains (Browse) section. The list can go stale when
+        // versions are loaded / activated / deleted from another tab,
+        // when an admin switches backend or Lakebase database in
+        // Settings, or simply because new versions appeared after
+        // a build. Skip the refresh while the registry is still being
+        // configured (no point hammering the API on a non-configured
+        // registry) — the initial ``loadRegistryConfig`` already
+        // primes the list once the config is ready.
+        if (section === 'domains' && registryConfigured) {
+            loadRegistryDomains();
+        }
+        if (section === 'bridges' && !bridgesLoaded) {
             loadRegistryBridges();
         }
     });

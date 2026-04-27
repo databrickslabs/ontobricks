@@ -20,6 +20,7 @@ in the gated ``tests/integration/`` suite.
 from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -203,6 +204,66 @@ class TestRegistryFactory:
         assert store.backend == "lakebase"
         assert store.cache_key.startswith("lakebase:")
 
+    def test_lakebase_database_override_propagates_to_store(self, monkeypatch):
+        """``RegistryFactory.lakebase(database=...)`` must store the
+        override on the resulting store and surface it both via
+        ``describe()`` and the (effective) ``cache_key`` so callers
+        like ``RegistryService._build_store`` can route Browse traffic
+        to the database the admin actually picked in Settings.
+        """
+        monkeypatch.setenv("PGHOST", "test-host")
+        monkeypatch.setenv("PGPORT", "5432")
+        monkeypatch.setenv("PGDATABASE", "ontobricks_registry")
+        monkeypatch.setenv("PGUSER", "sp-test")
+
+        store = RegistryFactory.lakebase(
+            registry_cfg=CFG,
+            schema="ontobricks_registry",
+            database="ontobricks_other",
+        )
+        info = store.describe()
+        assert info["database"] == "ontobricks_registry"
+        assert info["database_override"] == "ontobricks_other"
+        assert info["effective_database"] == "ontobricks_other"
+        # The pool key bakes the effective database in, so a cache
+        # entry built for the bound DB cannot leak across to a store
+        # that points at a different database.
+        assert "ontobricks_other" in store.cache_key
+
+    def test_lakebase_factory_for_backend_plumbs_database(self, monkeypatch):
+        """End-to-end check that ``for_backend`` and ``from_cfg`` both
+        forward the override to the store — these are the entry points
+        ``RegistryService._build_store`` uses.
+        """
+        monkeypatch.setenv("PGHOST", "test-host")
+        monkeypatch.setenv("PGPORT", "5432")
+        monkeypatch.setenv("PGDATABASE", "ontobricks_registry")
+        monkeypatch.setenv("PGUSER", "sp-test")
+
+        cfg = RegistryCfg(
+            catalog="c",
+            schema="s",
+            volume="v",
+            backend="lakebase",
+            lakebase_schema="ontobricks_registry",
+            lakebase_database="ontobricks_other",
+        )
+
+        from back.objects.registry.store.lakebase import LakebaseRegistryStore
+
+        s1 = RegistryFactory.for_backend(
+            "lakebase",
+            registry_cfg=cfg,
+            lakebase_schema=cfg.lakebase_schema,
+            lakebase_database=cfg.lakebase_database,
+        )
+        assert isinstance(s1, LakebaseRegistryStore)
+        assert s1.describe()["effective_database"] == "ontobricks_other"
+
+        s2 = RegistryFactory.from_cfg(cfg)
+        assert isinstance(s2, LakebaseRegistryStore)
+        assert s2.describe()["effective_database"] == "ontobricks_other"
+
 
 class TestBuildStoreShim:
     """The deprecated ``build_store`` function must still work as a
@@ -294,6 +355,396 @@ class TestStoreContract:
 
     def test_table_row_counts_handles_empty_input(self, store):
         assert store.table_row_counts(()) == {}
+
+
+# ---------------------------------------------------------------------
+# Lakebase identity model: 1 schema = 1 registry, with legacy adoption
+# ---------------------------------------------------------------------
+
+
+class _ScriptedCursor:
+    """Tiny psycopg-cursor stand-in driven by a queue of scripted
+    ``(predicate, fetchone, fetchall)`` triples. Each call to
+    :meth:`execute` consumes the first matching script entry and pins
+    its return values for the next ``fetchone`` / ``fetchall``.
+    """
+
+    def __init__(self, script):
+        # script: list of dicts with keys: contains, fetchone, fetchall
+        self._script = list(script)
+        self.executed = []  # captured (sql, params) tuples
+        self._next_one = None
+        self._next_all = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def execute(self, sql, params=None):
+        self.executed.append((sql, params))
+        for entry in self._script:
+            if entry["contains"] in sql and not entry.get("_used"):
+                entry["_used"] = True
+                self._next_one = entry.get("fetchone")
+                self._next_all = entry.get("fetchall", [])
+                return
+        # Default to "no row" so unscripted queries don't accidentally
+        # return stale data from the previous script entry.
+        self._next_one = None
+        self._next_all = []
+
+    def fetchone(self):
+        return self._next_one
+
+    def fetchall(self):
+        return self._next_all
+
+
+class _ScriptedConn:
+    def __init__(self, cursor):
+        self._cursor = cursor
+        self.closed = False
+
+    def cursor(self):
+        return self._cursor
+
+    def close(self):
+        self.closed = True
+
+
+def _make_lakebase_store(monkeypatch, schema="ontobricks_registry"):
+    """Build a real :class:`LakebaseRegistryStore` whose ``_connect``
+    is patched to yield a scripted cursor — so the registry-name and
+    legacy-adoption logic can be tested without a real Postgres.
+    """
+    monkeypatch.setenv("PGHOST", "test-host")
+    monkeypatch.setenv("PGPORT", "5432")
+    monkeypatch.setenv("PGDATABASE", "ontobricks_registry")
+    monkeypatch.setenv("PGUSER", "sp-test")
+
+    from back.objects.registry.store.lakebase import LakebaseRegistryStore
+
+    return LakebaseRegistryStore(registry_cfg=CFG, schema=schema)
+
+
+class TestLakebaseRegistryIdentity:
+    """The Lakebase registry name is keyed on the *schema*, not the
+    Volume triplet. This decouples dev/prod apps that share a Lakebase
+    binding from their (unrelated) Volume bindings, and lets a single
+    legacy row migrated under the old ``catalog.schema.volume`` naming
+    be transparently adopted on first access.
+    """
+
+    def test_registry_name_is_the_schema(self, monkeypatch):
+        store = _make_lakebase_store(monkeypatch, schema="my_lb_schema")
+        # _registry_name is the new identity. Critically, it does NOT
+        # depend on the cfg's catalog/schema/volume — two apps with
+        # different Volume bindings but the same Lakebase schema must
+        # see the same registry.
+        assert store._registry_name() == "my_lb_schema"
+        cfg2 = RegistryCfg(catalog="other", schema="other", volume="other")
+        store2 = _make_lakebase_store(monkeypatch, schema="my_lb_schema")
+        store2._cfg = cfg2
+        assert store2._registry_name() == "my_lb_schema"
+
+    def test_fetch_returns_id_when_named_row_exists(self, monkeypatch):
+        store = _make_lakebase_store(monkeypatch)
+        cur = _ScriptedCursor(
+            [{"contains": "WHERE name = %s", "fetchone": ("rid-123",)}]
+        )
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_connect():
+            yield _ScriptedConn(cur)
+
+        monkeypatch.setattr(store, "_connect", fake_connect)
+
+        assert store._fetch_registry_id() == "rid-123"
+        # Single SELECT, no UPDATE — the row is already in the new shape.
+        kinds = [s for s, _ in cur.executed]
+        assert any("WHERE name = %s" in s for s in kinds)
+        assert not any("UPDATE" in s for s in kinds)
+
+    def test_fetch_adopts_lone_legacy_row(self, monkeypatch):
+        """Pre-existing schemas keyed by ``catalog.schema.volume`` must
+        be silently renamed to the new schema-based identity on first
+        access — that's what makes the dev app start seeing the data
+        the production app migrated, without any manual SQL.
+        """
+        store = _make_lakebase_store(monkeypatch)
+        cur = _ScriptedCursor(
+            [
+                {"contains": "WHERE name = %s", "fetchone": None},
+                {
+                    "contains": "ORDER BY created_at",
+                    "fetchone": ("legacy-id", "cat.sch.vol", 1),
+                },
+                {"contains": "UPDATE", "fetchone": None},
+            ]
+        )
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_connect():
+            yield _ScriptedConn(cur)
+
+        monkeypatch.setattr(store, "_connect", fake_connect)
+
+        assert store._fetch_registry_id() == "legacy-id"
+        # The rename SQL must have been issued with the *new* name.
+        update_sql = [(s, p) for s, p in cur.executed if "UPDATE" in s]
+        assert len(update_sql) == 1
+        _, params = update_sql[0]
+        assert params[0] == store._registry_name()  # new name
+        assert params[1] == "legacy-id"  # row id
+
+    def test_fetch_returns_none_when_schema_is_empty(self, monkeypatch):
+        store = _make_lakebase_store(monkeypatch)
+        cur = _ScriptedCursor(
+            [
+                {"contains": "WHERE name = %s", "fetchone": None},
+                {"contains": "ORDER BY created_at", "fetchone": None},
+            ]
+        )
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_connect():
+            yield _ScriptedConn(cur)
+
+        monkeypatch.setattr(store, "_connect", fake_connect)
+
+        assert store._fetch_registry_id() is None
+        # Must NOT have issued an UPDATE if there was nothing to adopt.
+        assert not any("UPDATE" in s for s, _ in cur.executed)
+
+    def test_fetch_adopts_oldest_when_multiple_legacy_rows(self, monkeypatch):
+        """When several legacy registry rows are present (old multi-
+        tenant data), pick the oldest deterministically and warn so
+        the admin can clean up the rest. We rely on Postgres's
+        ``ORDER BY created_at ASC LIMIT 1`` for the determinism — the
+        unit test verifies the warning is emitted by patching the
+        store's logger directly (caplog occasionally misses records
+        when other tests alter root-logger configuration).
+        """
+        from back.objects.registry.store.lakebase import store as lb_store
+
+        store = _make_lakebase_store(monkeypatch)
+        cur = _ScriptedCursor(
+            [
+                {"contains": "WHERE name = %s", "fetchone": None},
+                {
+                    "contains": "ORDER BY created_at",
+                    "fetchone": ("oldest-id", "cat1.sch1.vol1", 3),
+                },
+                {"contains": "UPDATE", "fetchone": None},
+            ]
+        )
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_connect():
+            yield _ScriptedConn(cur)
+
+        monkeypatch.setattr(store, "_connect", fake_connect)
+        warn_mock = MagicMock()
+        monkeypatch.setattr(lb_store.logger, "warning", warn_mock)
+
+        assert store._fetch_registry_id() == "oldest-id"
+
+        warn_mock.assert_called_once()
+        rendered = warn_mock.call_args[0][0] % warn_mock.call_args[0][1:]
+        assert "3 registry rows" in rendered
+
+
+class TestLakebaseInitStatus:
+    """``init_status`` is the detailed companion to ``is_initialized``.
+
+    The bare bool used to swallow the most common silent failure
+    mode — *the app's service principal lacks ``USAGE`` on the
+    registry schema* — and report it as a generic "not
+    initialized", which sent operators chasing phantom data loss
+    instead of running the bootstrap-perms script. The new method
+    returns a stable ``reason`` token so the admin UI can render
+    the actual cause.
+    """
+
+    def _patch_connect(self, monkeypatch, store, cur):
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_connect():
+            yield _ScriptedConn(cur)
+
+        monkeypatch.setattr(store, "_connect", fake_connect)
+
+    def test_no_usage_is_surfaced_explicitly(self, monkeypatch):
+        """Schema USAGE missing — must NOT report "not initialised"."""
+        store = _make_lakebase_store(monkeypatch)
+        cur = _ScriptedCursor(
+            [{"contains": "has_schema_privilege", "fetchone": (False,)}]
+        )
+        self._patch_connect(monkeypatch, store, cur)
+
+        status = store.init_status()
+        assert status["initialized"] is False
+        assert status["reason"] == "no_usage"
+        assert "USAGE" in status["error"]
+        # Must short-circuit — no ``to_regclass`` query when the
+        # SP can't even see the schema.
+        assert not any("to_regclass" in s for s, _ in cur.executed)
+
+    def test_no_registries_table_when_schema_is_fresh(self, monkeypatch):
+        store = _make_lakebase_store(monkeypatch)
+        cur = _ScriptedCursor(
+            [
+                {"contains": "has_schema_privilege", "fetchone": (True,)},
+                {"contains": "to_regclass", "fetchone": (False,)},
+            ]
+        )
+        self._patch_connect(monkeypatch, store, cur)
+
+        status = store.init_status()
+        assert status["initialized"] is False
+        assert status["reason"] == "no_registries_table"
+
+    def test_no_registry_row_when_table_exists_but_empty(self, monkeypatch):
+        store = _make_lakebase_store(monkeypatch)
+        cur = _ScriptedCursor(
+            [
+                {"contains": "has_schema_privilege", "fetchone": (True,)},
+                {"contains": "to_regclass", "fetchone": (True,)},
+                # ``_fetch_registry_id`` runs after — both queries return
+                # nothing, so the schema is initialised but unseeded.
+                {"contains": "WHERE name = %s", "fetchone": None},
+                {"contains": "ORDER BY created_at", "fetchone": None},
+            ]
+        )
+        self._patch_connect(monkeypatch, store, cur)
+
+        status = store.init_status()
+        assert status["initialized"] is False
+        assert status["reason"] == "no_registry_row"
+
+    def test_ok_when_everything_is_in_place(self, monkeypatch):
+        store = _make_lakebase_store(monkeypatch)
+        cur = _ScriptedCursor(
+            [
+                {"contains": "has_schema_privilege", "fetchone": (True,)},
+                {"contains": "to_regclass", "fetchone": (True,)},
+                {"contains": "WHERE name = %s", "fetchone": ("rid-42",)},
+            ]
+        )
+        self._patch_connect(monkeypatch, store, cur)
+
+        status = store.init_status()
+        assert status == {"initialized": True, "reason": "ok", "error": None}
+        # ``is_initialized`` is the bool wrapper — must agree.
+        # Reset cached id so the second probe re-runs the script
+        # against a new cursor instance.
+        store._registry_id = None
+        cur2 = _ScriptedCursor(
+            [
+                {"contains": "has_schema_privilege", "fetchone": (True,)},
+                {"contains": "to_regclass", "fetchone": (True,)},
+                {"contains": "WHERE name = %s", "fetchone": ("rid-42",)},
+            ]
+        )
+        self._patch_connect(monkeypatch, store, cur2)
+        assert store.is_initialized() is True
+
+    def test_connect_failure_is_reported_not_swallowed_silently(self, monkeypatch):
+        """A pool/auth blow-up must surface as ``connect_failed`` —
+        not the legacy "all good, just empty" false negative.
+        """
+        store = _make_lakebase_store(monkeypatch)
+        from contextlib import contextmanager
+
+        @contextmanager
+        def boom():
+            raise RuntimeError("Lakebase pool exhausted")
+
+        monkeypatch.setattr(store, "_connect", boom)
+
+        status = store.init_status()
+        assert status["initialized"] is False
+        assert status["reason"] == "connect_failed"
+        assert "pool exhausted" in status["error"]
+
+
+class TestLakebaseTableRowCountsErrors:
+    """``table_row_counts`` used to swallow every exception and return
+    all-zeros, which masked real deployment problems (service principal
+    missing USAGE on the schema, instance unreachable, …). It now
+    propagates so the admin UI can surface a clear error instead of a
+    misleading "0 rows everywhere" inventory.
+    """
+
+    def test_propagates_connection_error(self, monkeypatch):
+        store = _make_lakebase_store(monkeypatch)
+        from contextlib import contextmanager
+
+        @contextmanager
+        def boom():
+            raise RuntimeError("Lakebase pool exhausted")
+
+        monkeypatch.setattr(store, "_connect", boom)
+
+        with pytest.raises(RuntimeError, match="Lakebase pool exhausted"):
+            store.table_row_counts(("registries", "domains"))
+
+    def test_returns_zero_for_known_tables_when_schema_is_empty(self, monkeypatch):
+        # Schema exists but is empty: information_schema.tables returns
+        # no rows for our requested whitelist; we still get a clean
+        # ``{table: 0}`` mapping without raising. This is the
+        # legitimate "schema not initialised" signal — distinct from
+        # "could not connect" which now raises.
+        store = _make_lakebase_store(monkeypatch)
+        cur = _ScriptedCursor(
+            [{"contains": "information_schema.tables", "fetchall": []}]
+        )
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_connect():
+            yield _ScriptedConn(cur)
+
+        monkeypatch.setattr(store, "_connect", fake_connect)
+
+        counts = store.table_row_counts(("registries", "domains"))
+        assert counts == {"registries": 0, "domains": 0}
+
+    def test_counts_only_present_tables(self, monkeypatch):
+        store = _make_lakebase_store(monkeypatch)
+        cur = _ScriptedCursor(
+            [
+                # Only "domains" is returned by information_schema, so
+                # we must NOT issue a count query for "registries".
+                {
+                    "contains": "information_schema.tables",
+                    "fetchall": [("domains",)],
+                },
+                {"contains": "SELECT count(*)", "fetchone": (42,)},
+            ]
+        )
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_connect():
+            yield _ScriptedConn(cur)
+
+        monkeypatch.setattr(store, "_connect", fake_connect)
+
+        counts = store.table_row_counts(("registries", "domains"))
+        assert counts == {"registries": 0, "domains": 42}
+        # Exactly one ``count(*)`` query — guards against accidentally
+        # querying tables the schema doesn't have, which would error
+        # under ``relation does not exist``.
+        count_calls = [s for s, _ in cur.executed if "SELECT count(*)" in s]
+        assert len(count_calls) == 1
 
 
 # ---------------------------------------------------------------------

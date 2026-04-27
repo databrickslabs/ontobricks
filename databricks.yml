@@ -1,19 +1,43 @@
-# OntoBricks — Databricks Asset Bundle
-# Deploys the main OntoBricks app and the MCP companion server.
+# OntoBricks Dev Sandbox — Databricks Asset Bundle
 #
-# The runtime configuration (command, env vars) is defined in each app's
-# own app.yaml file — not duplicated here. The DAB handles resource
-# bindings and deployment targets only.
+# This bundle deploys the OntoBricks **development sandbox app**
+# (``ontobricks-dev``) only. It is intentionally separate from the
+# production ``ontobricks`` and ``mcp-ontobricks`` apps:
+#
+# - Different ``bundle.name`` (``ontobricks_dev_bundle``) so DAB state
+#   does not collide with any prior ``ontobricks_bundle`` deployment.
+# - Different ``workspace.root_path`` so the sync directory and the
+#   ``.bundle/state/`` tracking files live under their own folder
+#   (``/Workspace/Users/<me>/.bundle/ontobricks-dev/<target>``).
+# - Only ``ontobricks_dev_app`` is declared. ``databricks bundle deploy``
+#   here can never touch the production ``ontobricks`` /
+#   ``mcp-ontobricks`` apps because this bundle simply does not know
+#   about them.
+#
+# Source code: shipped straight from the repository root. Because this
+# bundle declares only one app, the "duplicate source_code_path" rule
+# does not apply, so we no longer need a wrapper directory. The
+# sandbox auto-detects its app name (``ontobricks-dev``) from the
+# Databricks-Apps-injected ``DATABRICKS_APP_NAME`` env var — see
+# ``Settings.ontobricks_app_name`` for the alias-chain logic.
 #
 # Usage:
-#   databricks bundle validate
-#   databricks bundle deploy                  # deploy dev (default)
-#   databricks bundle deploy -t prod          # deploy prod
-#   databricks bundle run ontobricks_app      # start the main app
-#   databricks bundle run mcp_ontobricks_app  # start the MCP server
+#   databricks bundle validate                       # validate dev
+#   databricks bundle deploy                         # deploy + register sandbox (Volume backend)
+#   databricks bundle run ontobricks_dev_app         # start the sandbox
+#   databricks bundle deploy -t dev-lakebase         # opt into the Lakebase backend
+#
+# To re-introduce the production apps later, restore the previous
+# ``databricks.yml`` from git history (commit before
+# 2026-04-27 "Carve ontobricks-dev into its own DAB").
 
 bundle:
-  name: ontobricks_bundle
+  name: ontobricks_dev_bundle
+
+workspace:
+  # Sandbox path — distinct from any other ``ontobricks*`` bundle so
+  # we cannot share/clobber sync state with the production apps.
+  root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/ontobricks-dev/${bundle.target}
 
 sync:
   exclude:
@@ -39,9 +63,6 @@ sync:
     # folder itself must stay in the bundle. Only strip the Sphinx
     # build output, which is not needed at runtime.
     - docs/sphinx/
-    # NOTE: do NOT add un-anchored "internal/" here — the pattern
-    # would also match src/api/routers/internal/, which is a required
-    # module and its absence breaks app startup (ModuleNotFoundError).
 
 variables:
   warehouse_id:
@@ -56,46 +77,42 @@ variables:
   registry_volume:
     description: "Volume name for the domain registry"
     default: "registry"
-  admin_user:
-    description: "User with CAN_MANAGE on both apps (used in prod target)"
-    default: "benoit.cayla@databricks.com"
 
-  # ── Registry backend ──────────────────────────────────────────
-  # ``volume`` (default) keeps the original JSON-on-UC-Volume layout.
-  # ``lakebase`` stores registry data in Postgres on Databricks Lakebase;
-  # binaries (documents/, *.lbug.tar.gz) still live on the Volume.
-  registry_backend:
-    description: "Registry storage backend: 'volume' or 'lakebase'"
-    default: "volume"
-
-  # Lakebase Postgres database name. The canonical name for OntoBricks
-  # deployments is ``ontobricks_registry`` — override only if your
-  # workspace uses a different one.
-  lakebase_database:
-    description: "Lakebase Postgres database name"
-    default: "ontobricks_registry"
-
-  # Lakebase instance name. Used for Provisioned tier (database
-  # instance) bindings; for Autoscaling, point this at the matching
-  # ``database_catalogs`` resource. Leave empty in Volume-only
-  # deployments — only the *-lakebase targets read this variable.
-  lakebase_instance:
-    description: "Lakebase database instance / project name"
-    default: "ontobricks-app"
-
-  # Postgres schema where the registry tables (domains, versions,
-  # permissions, schedules, …) are created. Defaults to the same
-  # canonical name as the database.
-  lakebase_schema:
-    description: "Postgres schema for OntoBricks registry tables"
-    default: "ontobricks_registry"
+  # ── Lakebase resource binding (Autoscaling-only) ────────────────
+  # OntoBricks targets **Lakebase Autoscaling** exclusively (the
+  # default tier for every instance created after 2026-03-12). The
+  # legacy Provisioned tier is no longer supported — the runtime
+  # auth code (``LakebaseAuth``) and the admin UI both assume an
+  # Autoscaling project resource.
+  #
+  # Autoscaling uses the Apps ``postgres: { branch, database }``
+  # binding where both fields are *full project-relative resource
+  # paths*. New instances created via ``databricks api create
+  # /database/instances`` show up as Autoscaling projects with a
+  # default branch named ``production`` (NOT ``main``).
+  #
+  # Defaults match the dev sandbox instance ``ontobricks-app``;
+  # override at deploy time with e.g.
+  # ``-t dev-lakebase --var=lakebase_branch=...``.
+  lakebase_branch:
+    description: "Full Lakebase Autoscaling branch resource path (e.g. ``projects/<project>/branches/production``)"
+    default: "projects/ontobricks-app/branches/production"
+  lakebase_database_resource:
+    description: |
+      Full Lakebase Autoscaling database resource path (e.g.
+      ``projects/<project>/branches/production/databases/db-xxx-yyy``).
+      Look it up with ``databricks api get
+      /api/2.0/postgres/projects/<project>/branches/<branch>/databases``
+      and pick the entry whose ``status.postgres_database`` matches
+      the human-readable database name you want bound.
+    default: "projects/ontobricks-app/branches/production/databases/db-8u4l-0na72ub5sp"
 
 resources:
   apps:
-    # ── Main OntoBricks App ─────────────────────────────────────
-    ontobricks_app:
-      name: "ontobricks"
-      description: "OntoBricks — Knowledge Graph Builder for Databricks"
+    # ── Dev sandbox app (the only app this bundle manages) ──────
+    ontobricks_dev_app:
+      name: "ontobricks-dev"
+      description: "OntoBricks (development sandbox app)"
       source_code_path: .
       resources:
         - name: sql-warehouse
@@ -110,161 +127,31 @@ resources:
             securable_full_name: "${var.registry_catalog}.${var.registry_schema}.${var.registry_volume}"
             permission: WRITE_VOLUME
 
-    # ── MCP Companion Server ────────────────────────────────────
-    mcp_ontobricks_app:
-      name: "mcp-ontobricks"
-      description: "OntoBricks MCP Server — Knowledge Graph tools for Databricks Playground"
-      source_code_path: ./src/mcp-server
-      resources:
-        - name: sql-warehouse
-          description: "SQL Warehouse for MCP server operations"
-          sql_warehouse:
-            id: ${var.warehouse_id}
-            permission: CAN_USE
-        - name: volume
-          description: "Unity Catalog Volume for reading the domain registry"
-          uc_securable:
-            securable_type: "VOLUME"
-            securable_full_name: "${var.registry_catalog}.${var.registry_schema}.${var.registry_volume}"
-            permission: WRITE_VOLUME
-
 targets:
+  # Default sandbox: Volume-only registry backend.
   dev:
     mode: development
     default: true
-    # In development mode, DAB auto-grants CAN_MANAGE to the deploying user.
-    # The 'users' group gets CAN_USE so the app is accessible to all workspace users.
-    #
-    # ``ontobricks_dev_app`` is a sandbox sibling of the main ``ontobricks_app``.
-    # It ships from ``./dev-app/`` (a thin directory that symlinks the real
-    # source tree so we don't duplicate code) and is declared inside the
-    # dev overlay only — never reaches prod deployments.
-    resources:
-      apps:
-        ontobricks_dev_app:
-          name: "ontobricks-dev"
-          description: "OntoBricks (development sandbox app)"
-          source_code_path: ./dev-app
-          resources:
-            - name: sql-warehouse
-              description: "SQL Warehouse for executing queries and metadata operations"
-              sql_warehouse:
-                id: ${var.warehouse_id}
-                permission: CAN_USE
-            - name: volume
-              description: "Unity Catalog Volume for the OntoBricks domain registry"
-              uc_securable:
-                securable_type: "VOLUME"
-                securable_full_name: "${var.registry_catalog}.${var.registry_schema}.${var.registry_volume}"
-                permission: WRITE_VOLUME
 
-  prod:
-    mode: production
-    workspace:
-      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
-    resources:
-      apps:
-        ontobricks_app:
-          permissions:
-            - level: CAN_MANAGE
-              user_name: ${var.admin_user}
-            - level: CAN_USE
-              group_name: users
-        mcp_ontobricks_app:
-          permissions:
-            - level: CAN_MANAGE
-              user_name: ${var.admin_user}
-            - level: CAN_USE
-              group_name: users
-
-  # ── Lakebase opt-in overlays ────────────────────────────────
-  # The default ``dev``/``prod`` targets stay Volume-only so existing
-  # deployments keep working. To enable the Lakebase backend, deploy
-  # to one of these overlays:
+  # Sandbox with the Lakebase Postgres registry backend bound
+  # (Autoscaling-only). Uses the Apps ``postgres`` resource type
+  # with ``branch`` + ``database`` resource paths — both must be
+  # full project-relative paths, not bare names. See the
+  # ``lakebase_*`` variables above for the lookup recipe.
   #
-  #   databricks bundle deploy -t dev-lakebase
-  #   databricks bundle deploy -t prod-lakebase
-  #
-  # Both overlays attach a ``database`` resource (Databricks Apps then
-  # auto-injects ``PGHOST``/``PGPORT``/``PGDATABASE``/``PGUSER``/
-  # ``PGAPPNAME``/``PGSSLMODE`` into the app runtime) and only require
-  # an existing Lakebase Postgres database — Provisioned or Autoscaling
-  # are both supported, the runtime never branches on tier.
+  # The Apps runtime injects PGHOST / PGPORT / PGDATABASE /
+  # PGUSER / PGAPPNAME / PGSSLMODE for the bound database, so the
+  # in-app code path (``LakebaseAuth``) keeps working without any
+  # extra config.
   dev-lakebase:
     mode: development
     resources:
       apps:
-        ontobricks_app:
-          resources:
-            - name: database
-              description: "Lakebase Postgres database for the OntoBricks registry"
-              database:
-                database_name: ${var.lakebase_database}
-                instance_name: ${var.lakebase_instance}
-                permission: "CAN_CONNECT_AND_CREATE"
-        mcp_ontobricks_app:
-          resources:
-            - name: database
-              description: "Lakebase Postgres database for the OntoBricks registry (read-only consumer)"
-              database:
-                database_name: ${var.lakebase_database}
-                instance_name: ${var.lakebase_instance}
-                permission: "CAN_CONNECT_AND_CREATE"
-        # Sandbox dev app — same bindings as the dev overlay, plus the
-        # Lakebase database resource so the dev app gets the auto-injected
-        # ``PG*`` env vars at runtime.
         ontobricks_dev_app:
-          name: "ontobricks-dev"
-          description: "OntoBricks (development sandbox app, Lakebase backend)"
-          source_code_path: ./dev-app
           resources:
-            - name: sql-warehouse
-              description: "SQL Warehouse for executing queries and metadata operations"
-              sql_warehouse:
-                id: ${var.warehouse_id}
-                permission: CAN_USE
-            - name: volume
-              description: "Unity Catalog Volume for the OntoBricks domain registry"
-              uc_securable:
-                securable_type: "VOLUME"
-                securable_full_name: "${var.registry_catalog}.${var.registry_schema}.${var.registry_volume}"
-                permission: WRITE_VOLUME
-            - name: database
-              description: "Lakebase Postgres database for the OntoBricks registry"
-              database:
-                database_name: ${var.lakebase_database}
-                instance_name: ${var.lakebase_instance}
-                permission: "CAN_CONNECT_AND_CREATE"
-
-  prod-lakebase:
-    mode: production
-    workspace:
-      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
-    resources:
-      apps:
-        ontobricks_app:
-          permissions:
-            - level: CAN_MANAGE
-              user_name: ${var.admin_user}
-            - level: CAN_USE
-              group_name: users
-          resources:
-            - name: database
-              description: "Lakebase Postgres database for the OntoBricks registry"
-              database:
-                database_name: ${var.lakebase_database}
-                instance_name: ${var.lakebase_instance}
-                permission: "CAN_CONNECT_AND_CREATE"
-        mcp_ontobricks_app:
-          permissions:
-            - level: CAN_MANAGE
-              user_name: ${var.admin_user}
-            - level: CAN_USE
-              group_name: users
-          resources:
-            - name: database
-              description: "Lakebase Postgres database for the OntoBricks registry (read-only consumer)"
-              database:
-                database_name: ${var.lakebase_database}
-                instance_name: ${var.lakebase_instance}
+            - name: postgres
+              description: "Lakebase Autoscaling Postgres database for the OntoBricks registry"
+              postgres:
+                branch: ${var.lakebase_branch}
+                database: ${var.lakebase_database_resource}
                 permission: "CAN_CONNECT_AND_CREATE"

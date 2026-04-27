@@ -416,9 +416,13 @@ function updateDtwinCard(data) {
         }
     }
 
-    // Triple-Store VIEW card
     var viewEl = document.getElementById('psDtExistView');
-    if (viewEl) viewEl.innerHTML = _dtBadge(dt.view_exists, 'Exists', 'Not found', 'Not configured');
+    if (viewEl) {
+        viewEl.innerHTML = _dtBadge(dt.view_exists, 'Exists', 'Not found', 'Not configured');
+        if (dt.view_check_error) viewEl.title = dt.view_check_error;
+        else if (dt.view_table) viewEl.title = 'Queried: ' + dt.view_table;
+        else viewEl.title = '';
+    }
 
     var zcCard = document.getElementById('psDtZeroCopyCard');
     if (zcCard) {
@@ -429,6 +433,17 @@ function updateDtwinCard(data) {
 
     var viewNameEl = document.getElementById('psDtViewName');
     if (viewNameEl) viewNameEl.textContent = dt.view_table || 'Not configured';
+
+    var viewReasonEl = document.getElementById('psDtViewReason');
+    if (viewReasonEl) {
+        if (dt.view_check_error) {
+            viewReasonEl.textContent = dt.view_check_error;
+            viewReasonEl.style.display = '';
+        } else {
+            viewReasonEl.textContent = '';
+            viewReasonEl.style.display = 'none';
+        }
+    }
 
     // Snapshot
     var snapshotArea = document.getElementById('psDtSnapshotArea');
@@ -454,7 +469,28 @@ function updateDtwinCard(data) {
     }
 
     var regEl = document.getElementById('psDtExistRegistry');
-    if (regEl) regEl.innerHTML = _dtBadge(dt.registry_lbug_exists, 'Archived', 'Not archived', 'Not configured');
+    if (regEl) {
+        regEl.innerHTML = _dtBadge(dt.registry_lbug_exists, 'Archived', 'Not archived', 'Not configured');
+        if (dt.registry_check_error) regEl.title = dt.registry_check_error;
+        else if (dt.registry_lbug_path) regEl.title = 'Archive: ' + dt.registry_lbug_path;
+        else regEl.title = '';
+    }
+
+    var regPathEl = document.getElementById('psDtRegistryPath');
+    if (regPathEl) {
+        regPathEl.textContent = dt.registry_lbug_path || '';
+        regPathEl.style.display = dt.registry_lbug_path ? '' : 'none';
+    }
+    var regReasonEl = document.getElementById('psDtRegistryReason');
+    if (regReasonEl) {
+        if (dt.registry_check_error) {
+            regReasonEl.textContent = dt.registry_check_error;
+            regReasonEl.style.display = '';
+        } else {
+            regReasonEl.textContent = '';
+            regReasonEl.style.display = 'none';
+        }
+    }
 
     // Triple count
     var tripleArea = document.getElementById('psDtTripleArea');

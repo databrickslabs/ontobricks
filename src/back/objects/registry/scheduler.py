@@ -375,7 +375,17 @@ class BuildScheduler:
 
     @staticmethod
     def _resolve_creds(settings):
-        """Resolve host/token/registry from env-level settings (for startup)."""
+        """Resolve host/token/registry from env-level settings (for startup).
+
+        The returned ``cfg`` carries ``backend``, ``lakebase_schema`` and
+        ``lakebase_database`` from *Settings* so that schedule-related
+        store calls made *before* the global config has been loaded
+        (e.g. on app boot, when restoring jobs) target the right
+        backend instead of silently defaulting to Volume. This matters
+        for Databricks Apps deployments that bind a Lakebase database
+        and want their schedules persisted there from the very first
+        APScheduler tick.
+        """
         from back.core.databricks import is_databricks_app
         from back.objects.registry.RegistryService import RegistryCfg
 
@@ -389,10 +399,22 @@ class BuildScheduler:
 
             host, token = get_databricks_host_and_token(_Stub(), settings)
 
+        backend = (
+            getattr(settings, "registry_backend", "volume") or "volume"
+        ).lower()
+        lakebase_schema = (
+            getattr(settings, "lakebase_schema", "ontobricks_registry")
+            or "ontobricks_registry"
+        )
+        lakebase_database = getattr(settings, "lakebase_database", "") or ""
+
         cfg = RegistryCfg(
             catalog=settings.registry_catalog,
             schema=settings.registry_schema,
             volume=settings.registry_volume or "OntoBricksRegistry",
+            backend=backend,
+            lakebase_schema=lakebase_schema,
+            lakebase_database=lakebase_database,
         )
         return host, token, cfg.as_dict()
 

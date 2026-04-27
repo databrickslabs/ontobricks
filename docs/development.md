@@ -1082,7 +1082,7 @@ user has no access to any part of the application.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ONTOBRICKS_APP_NAME` | Yes | Must match the deployed Databricks App name (e.g., `"ontobricks"`). Used to query the app's permission ACL. |
+| `ONTOBRICKS_APP_NAME` | No | Optional override of the deployed Databricks App name used to query the app's permission ACL. If unset, the runtime auto-detects it from the Databricks-Apps-injected `DATABRICKS_APP_NAME` (e.g. `ontobricks` for prod, `ontobricks-dev` for the sandbox). Useful in `.env` for local development. |
 | `REGISTRY_CATALOG` | Yes | Unity Catalog catalog for the Registry Volume where `.permissions.json` is stored. |
 | `REGISTRY_SCHEMA` | Yes | Unity Catalog schema for the Registry Volume. |
 | `REGISTRY_VOLUME` | No | Volume name (default: `"OntoBricksRegistry"`). |

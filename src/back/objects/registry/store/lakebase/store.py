@@ -13,12 +13,14 @@ Storage layout (one Postgres schema, default ``ontobricks_registry``):
 
 Authentication:
 - Connection params (host/port/db/user) come from ``PG*`` env vars
-  injected by the Apps ``database`` resource binding.
+  injected by the Apps ``postgres`` resource binding (Lakebase
+  Autoscaling — the only tier supported by OntoBricks).
 - The Postgres password is a short-lived OAuth token minted by
   :class:`back.core.databricks.LakebaseAuth`.
 
-Cold start (Autoscaling tier):
-- Initial calls retry with exponential backoff on SQLSTATE ``57P03``
+Cold start:
+- Lakebase Autoscaling scales-to-zero when idle. Initial calls
+  retry with exponential backoff on SQLSTATE ``57P03``
   ("cannot_connect_now") and on ``connection refused``.
 
 Connection pooling:
@@ -125,11 +127,17 @@ class _LakebasePool:
         *,
         auth: Any,
         schema: str,
+        database: str = "",
         max_size: int = _POOL_MAX_SIZE,
         max_lifetime: float = _POOL_MAX_LIFETIME_S,
     ) -> None:
         self._auth = auth
         self._schema = schema
+        # Empty string means "use whatever PGDATABASE is bound to the
+        # app". A non-empty value points the store at a different
+        # database on the same Lakebase instance (the JWT scope is
+        # per-instance so the cached token still authenticates).
+        self._database = database or ""
         self._max_size = max_size
         self._max_lifetime = max_lifetime
         self._cv = threading.Condition()
@@ -255,10 +263,12 @@ class _LakebasePool:
         retried_auth = False
         while True:
             try:
-                conn = psycopg.connect(
-                    autocommit=True,
-                    **self._auth.kwargs(application_name="ontobricks-registry"),
+                kwargs = self._auth.kwargs(
+                    application_name="ontobricks-registry"
                 )
+                if self._database:
+                    kwargs["dbname"] = self._database
+                conn = psycopg.connect(autocommit=True, **kwargs)
                 with conn.cursor() as cur:
                     cur.execute(f'SET search_path TO "{self._schema}", public')
                 return conn
@@ -300,7 +310,7 @@ class _LakebasePool:
 # every request through :class:`RegistryFactory`, so the pool itself
 # must outlive any single store instance.
 _pools_lock = threading.Lock()
-_pools: Dict[Tuple[str, str, str, str, str, str], _LakebasePool] = {}
+_pools: Dict[Tuple[str, str, str, str, str, str, str], _LakebasePool] = {}
 
 
 def _safe_attr(obj: Any, name: str) -> str:
@@ -311,12 +321,23 @@ def _safe_attr(obj: Any, name: str) -> str:
         return ""
 
 
-def _get_pool(auth: Any, schema: str) -> _LakebasePool:
-    """Return (and lazily create) the shared pool for *auth* + *schema*."""
+def _get_pool(auth: Any, schema: str, database: str = "") -> _LakebasePool:
+    """Return (and lazily create) the shared pool for *auth* + *schema* + *database*.
+
+    The ``database`` arg is the optional override that points the store
+    at a different Postgres database on the same Lakebase instance. The
+    empty string means "use the bound PGDATABASE". Two stores that
+    differ only by ``database`` get distinct pools (and distinct
+    connections), which is what we want — a Postgres connection only
+    ever talks to a single database.
+    """
+    bound_db = _safe_attr(auth, "database")
+    effective_db = database or bound_db
     key = (
         _safe_attr(auth, "host"),
         _safe_attr(auth, "port"),
-        _safe_attr(auth, "database"),
+        bound_db,
+        effective_db,
         _safe_attr(auth, "user"),
         _safe_attr(auth, "instance_name"),
         schema,
@@ -324,12 +345,12 @@ def _get_pool(auth: Any, schema: str) -> _LakebasePool:
     with _pools_lock:
         pool = _pools.get(key)
         if pool is None:
-            pool = _LakebasePool(auth=auth, schema=schema)
+            pool = _LakebasePool(auth=auth, schema=schema, database=database)
             _pools[key] = pool
             logger.info(
                 "Created Lakebase connection pool for %s/%s (schema=%s, max_size=%d)",
                 key[0],
-                key[2],
+                effective_db,
                 schema,
                 _POOL_MAX_SIZE,
             )
@@ -337,9 +358,34 @@ def _get_pool(auth: Any, schema: str) -> _LakebasePool:
 
 
 class LakebaseRegistryStore(RegistryStore):
-    """Postgres-backed registry store. Optional backend."""
+    """Postgres-backed registry store. Optional backend.
 
-    def __init__(self, *, registry_cfg, schema: str = "ontobricks_registry"):
+    Parameters
+    ----------
+    registry_cfg:
+        :class:`back.objects.registry.RegistryService.RegistryCfg` —
+        used as the registry identity (the catalog/schema/volume
+        triplet still matters because binaries live on the Volume).
+    schema:
+        Postgres schema where registry tables live. Defaults to
+        ``"ontobricks_registry"``.
+    database:
+        Optional Postgres database name. Empty (the default) means
+        "use whatever ``PGDATABASE`` is bound to the app". A non-empty
+        value lets the admin point the registry at any other database
+        that lives on the *same* Lakebase instance — provided the
+        service principal has ``CONNECT`` on it. The Lakebase JWT
+        scope is per-instance, so the cached token still authenticates
+        without a re-mint.
+    """
+
+    def __init__(
+        self,
+        *,
+        registry_cfg,
+        schema: str = "ontobricks_registry",
+        database: str = "",
+    ):
         if not _SAFE_SCHEMA_RE.match(schema or ""):
             raise InfrastructureError(
                 f"Invalid Lakebase schema name {schema!r}; must match "
@@ -347,6 +393,7 @@ class LakebaseRegistryStore(RegistryStore):
             )
         self._cfg = registry_cfg
         self._schema = schema
+        self._database = database or ""
         self._auth = get_lakebase_auth()
         self._registry_id: Optional[str] = None  # cached after initialize()
 
@@ -362,33 +409,119 @@ class LakebaseRegistryStore(RegistryStore):
     def cache_key(self) -> str:
         c = self._cfg
         # Include the backend tag so a switch at runtime invalidates the
-        # registry-level TTL cache automatically.
-        return f"lakebase:{self._auth.host}:{self._schema}:{c.catalog}.{c.schema}.{c.volume}"
+        # registry-level TTL cache automatically. The database override
+        # (when set) is part of the key so swapping it busts the cache.
+        db = self._effective_database
+        return (
+            f"lakebase:{self._auth.host}:{db}:{self._schema}:"
+            f"{c.catalog}.{c.schema}.{c.volume}"
+        )
 
     @property
     def schema(self) -> str:
         return self._schema
 
+    @property
+    def _effective_database(self) -> str:
+        """Resolve the Postgres database name actually used by the store.
+
+        Returns the explicit override when set (admin chose a database
+        from the UI), otherwise the auto-injected ``PGDATABASE`` from
+        the Apps runtime via :class:`LakebaseAuth`.
+        """
+        return self._database or self._auth.database
+
     def is_initialized(self) -> bool:
+        """Cheap boolean probe — silent on errors (matches base contract).
+
+        Most callers only need a yes/no answer (e.g. *Initialize*
+        button gating). Use :meth:`init_status` when you also want
+        the *reason* an initialised schema looks empty (missing
+        ``USAGE`` on the schema, no registry row, …) — that's what
+        the admin Registry Location panel surfaces to operators.
+        """
+        return self.init_status()["initialized"]
+
+    def init_status(self) -> Dict[str, Any]:
+        """Detailed initialise-probe with explicit failure reasons.
+
+        Returns ``{initialized: bool, reason: str, error: Optional[str]}``.
+        ``reason`` is a short stable token (``"ok"``, ``"no_usage"``,
+        ``"no_registries_table"``, ``"no_registry_row"``,
+        ``"connect_failed"``) suitable for log filtering; ``error``
+        is a human-readable explanation suitable for the admin UI.
+
+        The reason ``no_usage`` is the most common silent-failure
+        mode: when the app's service principal lacks ``USAGE`` on
+        the registry schema, ``to_regclass`` returns NULL even
+        though the tables exist and hold data — turning the panel
+        into a misleading "not initialised, 0 rows everywhere"
+        screen. Surfacing the explicit reason lets the operator
+        run ``scripts/bootstrap-lakebase-perms.sh`` and move on
+        instead of hunting for a phantom data loss.
+        """
         try:
             with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT has_schema_privilege(current_user, %s, 'USAGE')",
+                    (self._schema,),
+                )
+                row = cur.fetchone()
+                has_usage = bool(row[0]) if row else False
+                if not has_usage:
+                    msg = (
+                        f"Service principal lacks USAGE on schema "
+                        f"'{self._schema}'. Run "
+                        f"scripts/bootstrap-lakebase-perms.sh or "
+                        f"GRANT USAGE ON SCHEMA "
+                        f"\"{self._schema}\" to the app SP."
+                    )
+                    logger.warning("Lakebase init probe: %s", msg)
+                    return {
+                        "initialized": False,
+                        "reason": "no_usage",
+                        "error": msg,
+                    }
                 cur.execute(
                     "SELECT to_regclass(%s) IS NOT NULL",
                     (f"{self._schema}.registries",),
                 )
                 ok = bool(cur.fetchone()[0])
-            if ok and self._registry_id is None:
+            if not ok:
+                return {
+                    "initialized": False,
+                    "reason": "no_registries_table",
+                    "error": (
+                        f"Schema '{self._schema}' has no 'registries' "
+                        f"table — run *Initialize* to create it."
+                    ),
+                }
+            if self._registry_id is None:
                 self._registry_id = self._fetch_registry_id()
-            return ok and self._registry_id is not None
+            if self._registry_id is None:
+                return {
+                    "initialized": False,
+                    "reason": "no_registry_row",
+                    "error": (
+                        f"Schema '{self._schema}' has no registry row "
+                        f"yet — run *Initialize* to seed it."
+                    ),
+                }
+            return {"initialized": True, "reason": "ok", "error": None}
         except Exception as exc:  # noqa: BLE001
-            logger.debug("Lakebase is_initialized probe failed: %s", exc)
-            return False
+            logger.warning("Lakebase init probe failed: %s", exc)
+            return {
+                "initialized": False,
+                "reason": "connect_failed",
+                "error": f"Lakebase probe failed: {exc}",
+            }
 
     def initialize(self, *, client: Any = None) -> Tuple[bool, str]:
         del client  # not used: Lakebase instance is provisioned out of band
         try:
             self._apply_ddl()
             self._registry_id = self._ensure_registry_row()
+            self._scrub_global_config_legacy_keys()
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute("SELECT 1")  # wake probe
             logger.info(
@@ -398,7 +531,8 @@ class LakebaseRegistryStore(RegistryStore):
             )
             return True, (
                 f"Lakebase registry initialized at "
-                f"{self._auth.host}/{self._auth.database} (schema={self._schema})"
+                f"{self._auth.host}/{self._effective_database} "
+                f"(schema={self._schema})"
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Lakebase initialise failed")
@@ -893,6 +1027,10 @@ class LakebaseRegistryStore(RegistryStore):
             if not row:
                 return {}
             data = dict(row["config"] or {})
+            # ``schedules`` lives in its own table on Lakebase; ``schedule_history``
+            # in ``schedule_runs``. Strip both so the JSONB blob is the single
+            # source of truth only for instance-wide settings.
+            data.pop(_SCHEDULES_KEY, None)
             data.pop("schedule_history", None)
             return data
         except Exception as exc:  # noqa: BLE001
@@ -903,8 +1041,14 @@ class LakebaseRegistryStore(RegistryStore):
         try:
             data = self.load_global_config()
             data["version"] = data.get("version", 1)
+            sanitized_updates = {
+                k: v
+                for k, v in (updates or {}).items()
+                if k not in (_SCHEDULES_KEY, "schedule_history")
+            }
+            data.pop(_SCHEDULES_KEY, None)
             data.pop("schedule_history", None)
-            data.update(updates)
+            data.update(sanitized_updates)
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
                     f"""
@@ -944,16 +1088,18 @@ class LakebaseRegistryStore(RegistryStore):
         c = self._cfg
         try:
             host = self._auth.host
-            db = self._auth.database
+            bound_db = self._auth.database
             user = self._auth.user
-        except Exception as exc:  # noqa: BLE001
-            host = db = user = ""
+        except Exception:  # noqa: BLE001
+            host = bound_db = user = ""
         return {
             "backend": self.backend,
             "cache_key": self.cache_key,
             "schema": self._schema,
             "host": host,
-            "database": db,
+            "database": bound_db,
+            "database_override": self._database,
+            "effective_database": self._database or bound_db,
             "user": user,
             "volume_catalog": c.catalog,
             "volume_schema": c.schema,
@@ -964,39 +1110,38 @@ class LakebaseRegistryStore(RegistryStore):
         """Return ``{table_name: row_count}`` for tables in this schema.
 
         Tables that do not exist (schema not yet initialised, or table
-        renamed) are reported as ``0`` rather than raising — this lets
-        the admin UI render a consistent inventory grid even on an
-        empty Lakebase. Whitelist-only: *tables* is matched against
-        :data:`_KNOWN_TABLES` to keep the dynamic SQL safe.
+        renamed) are reported as ``0``. Connection / permission /
+        unknown errors are *raised* — silent zeros mask broken
+        deployments (e.g. service principal missing ``USAGE`` on the
+        schema) and are surfaced by the admin UI. Whitelist-only:
+        *tables* is matched against :data:`_KNOWN_TABLES` to keep the
+        dynamic SQL safe.
         """
         result: Dict[str, int] = {t: 0 for t in tables}
         wanted = [t for t in tables if t in _KNOWN_TABLES]
         if not wanted:
             return result
-        try:
-            with self._connect() as conn, conn.cursor() as cur:
-                # First, find which of the requested tables actually
-                # exist — that way we never blow up on partial schemas
-                # (e.g. mid-migration or before initialise()).
+        with self._connect() as conn, conn.cursor() as cur:
+            # First, find which of the requested tables actually
+            # exist — that way we never blow up on partial schemas
+            # (e.g. mid-migration or before initialise()).
+            cur.execute(
+                """
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = %s AND table_name = ANY(%s)
+                """,
+                (self._schema, wanted),
+            )
+            present = {row[0] for row in cur.fetchall()}
+            for tname in wanted:
+                if tname not in present:
+                    continue
                 cur.execute(
-                    """
-                    SELECT table_name FROM information_schema.tables
-                    WHERE table_schema = %s AND table_name = ANY(%s)
-                    """,
-                    (self._schema, wanted),
+                    f"SELECT count(*) FROM "
+                    f"{self._q(self._schema)}.{self._q(tname)}"
                 )
-                present = {row[0] for row in cur.fetchall()}
-                for tname in wanted:
-                    if tname not in present:
-                        continue
-                    cur.execute(
-                        f"SELECT count(*) FROM "
-                        f"{self._q(self._schema)}.{self._q(tname)}"
-                    )
-                    row = cur.fetchone()
-                    result[tname] = int(row[0]) if row else 0
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("Lakebase table_row_counts failed: %s", exc)
+                row = cur.fetchone()
+                result[tname] = int(row[0]) if row else 0
         return result
 
     # ------------------------------------------------------------------
@@ -1014,7 +1159,9 @@ class LakebaseRegistryStore(RegistryStore):
         The pool itself owns cold-start retry and OAuth token
         rotation — see :class:`_LakebasePool._open_one`.
         """
-        return _get_pool(self._auth, self._schema).connection()
+        return _get_pool(
+            self._auth, self._schema, self._database
+        ).connection()
 
     def _registry(self) -> str:
         if self._registry_id is None:
@@ -1022,6 +1169,24 @@ class LakebaseRegistryStore(RegistryStore):
         return self._registry_id
 
     def _fetch_registry_id(self) -> Optional[str]:
+        """Find the singleton registry row for this Lakebase schema.
+
+        Identity model: **one Postgres schema = one OntoBricks
+        registry**. The ``registries.name`` is the schema name, so two
+        apps that share a Lakebase resource binding (instance +
+        database + schema) naturally see the same registry. The Volume
+        triplet (``catalog/schema/volume``) is no longer part of the
+        identity — it's just where binary artifacts (``.lbug.tar.gz``,
+        ``documents/``) live for whichever app is currently reading.
+
+        Backward-compat: pre-existing schemas migrated under the legacy
+        ``"<catalog>.<schema>.<volume>"`` naming are *adopted* on first
+        access. If no row matches the new schema-based name but exactly
+        one legacy row is present, we transparently rename it so the
+        next lookup is O(1). When more than one legacy row is present,
+        we adopt the oldest by ``created_at`` and log a warning so the
+        admin can clean up duplicates.
+        """
         try:
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
@@ -1030,7 +1195,46 @@ class LakebaseRegistryStore(RegistryStore):
                     (self._registry_name(),),
                 )
                 row = cur.fetchone()
-            return str(row[0]) if row else None
+                if row:
+                    return str(row[0])
+                # No row keyed by the new (schema-based) name. Try to
+                # adopt a legacy row. We pick the oldest row to be
+                # deterministic when more than one is present.
+                cur.execute(
+                    f"""
+                    SELECT id, name, count(*) OVER () AS total
+                    FROM {self._q(self._schema)}.registries
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                    """
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                legacy_id, legacy_name, total = row
+                if total > 1:
+                    logger.warning(
+                        "Lakebase schema %r contains %d registry rows; "
+                        "adopting the oldest (%s) under the new "
+                        "schema-keyed name. Drop the unused rows when "
+                        "you are sure they are no longer needed.",
+                        self._schema,
+                        total,
+                        legacy_name,
+                    )
+                else:
+                    logger.info(
+                        "Adopting legacy Lakebase registry row %r as "
+                        "the singleton for schema %r.",
+                        legacy_name,
+                        self._schema,
+                    )
+                cur.execute(
+                    f"UPDATE {self._q(self._schema)}.registries "
+                    "SET name = %s, updated_at = now() WHERE id = %s",
+                    (self._registry_name(), legacy_id),
+                )
+                return str(legacy_id)
         except Exception:  # noqa: BLE001
             return None
 
@@ -1055,8 +1259,18 @@ class LakebaseRegistryStore(RegistryStore):
         return str(row[0])
 
     def _registry_name(self) -> str:
-        c = self._cfg
-        return f"{c.catalog}.{c.schema}.{c.volume}"
+        """Registry identity for the Lakebase backend.
+
+        The Postgres schema *is* the registry namespace. Pointing two
+        apps at the same Lakebase ``(instance, database, schema)``
+        triple makes them share the registry; pointing them at
+        different schemas isolates them. The Volume triplet from
+        :class:`RegistryCfg` is intentionally *not* part of the
+        identity here — Volume bindings only matter for binary
+        artifacts (``documents/``, ``.lbug.tar.gz``) and can differ
+        per app without forking the metadata.
+        """
+        return self._schema
 
     def _apply_ddl(self) -> None:
         ddl_path = os.path.join(os.path.dirname(__file__), _DDL_FILENAME)
@@ -1065,6 +1279,43 @@ class LakebaseRegistryStore(RegistryStore):
         ddl = ddl.replace(_SCHEMA_TOKEN, self._schema)
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(ddl)
+
+    def _scrub_global_config_legacy_keys(self) -> None:
+        """Remove ``schedules`` / ``schedule_history`` from the JSONB blob.
+
+        Both keys belong to dedicated tables on Lakebase (``schedules`` and
+        ``schedule_runs``). They used to leak into ``global_config.config``
+        through the Volume → Lakebase migration path, which fed the entire
+        Volume ``.global_config.json`` blob — schedules included — into
+        ``save_global_config``. The duplicated state was harmless at read
+        time (callers go through ``load_schedules``) but caused the JSONB
+        blob to grow unbounded and confused operators inspecting the row
+        directly. This one-shot ``UPDATE`` runs at every ``initialize()``
+        so existing deployments self-heal on next app start. The ``WHERE``
+        clause keeps the scrub a no-op once the blob is clean.
+        """
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    UPDATE {self._q(self._schema)}.global_config
+                    SET config = (config - 'schedules') - 'schedule_history',
+                        updated_at = now()
+                    WHERE config ? 'schedules' OR config ? 'schedule_history'
+                    """
+                )
+                scrubbed = cur.rowcount or 0
+            if scrubbed:
+                logger.info(
+                    "Scrubbed legacy schedules/schedule_history keys from "
+                    "global_config (%d row(s)) — Lakebase keeps schedules "
+                    "in the dedicated 'schedules' table.",
+                    scrubbed,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Could not scrub legacy keys from global_config: %s", exc
+            )
 
     @staticmethod
     def _q(name: str) -> str:

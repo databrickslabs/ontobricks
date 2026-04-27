@@ -203,13 +203,31 @@ async def save_registry(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Persist registry catalog / schema / volume in settings.registry."""
-    if config_service.is_registry_locked(settings):
-        raise ValidationError(
-            "Registry is configured via Databricks App resources and cannot be changed here.",
-        )
+    """Persist registry catalog / schema / volume in settings.registry.
 
+    When the registry is "locked" (i.e. the Volume is supplied by a
+    Databricks App resource), the bound triplet
+    ``catalog/schema/volume`` is read-only — those fields come from
+    the platform and editing them in-app would silently desync from
+    the actual binding. The **backend choice** (Volume ↔ Lakebase)
+    and the Lakebase-side knobs (``lakebase_schema``,
+    ``lakebase_database``) remain editable, since toggling the
+    backend only changes which storage layer the registry writes
+    JSON into; it does not move the bound resource around.
+    """
     data = await request.json()
+
+    if config_service.is_registry_locked(settings):
+        locked_keys = {"catalog", "schema", "volume"}
+        attempted = locked_keys.intersection(k for k, v in data.items() if v)
+        if attempted:
+            raise ValidationError(
+                "Registry catalog/schema/volume are configured via Databricks "
+                "App resources and cannot be changed here. You can still switch "
+                "between Volume and Lakebase backends.",
+            )
+        data = {k: v for k, v in data.items() if k not in locked_keys}
+
     return config_service.apply_registry_save(data, session_mgr)
 
 
@@ -220,6 +238,26 @@ async def initialize_registry(
 ):
     """Create the registry Volume (and root marker) if they do not exist."""
     return config_service.initialize_registry_result(session_mgr, settings)
+
+
+@router.get(
+    "/registry/lakebase-databases",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def list_lakebase_databases(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List Postgres databases on the bound Lakebase instance (admin only).
+
+    Lets the Registry Location modal populate a "Lakebase Database"
+    picker so the admin can switch the registry to a different
+    database on the same instance without redeploying. ``connectable``
+    flags databases the service principal does not have ``CONNECT``
+    on, so the UI can disable them. Returns ``success=False`` (with a
+    ``message``) when Lakebase is not bound or psycopg is missing.
+    """
+    return config_service.list_lakebase_databases_result(session_mgr, settings)
 
 
 @router.post(
