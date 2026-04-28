@@ -357,6 +357,97 @@ def _get_pool(auth: Any, schema: str, database: str = "") -> _LakebasePool:
         return pool
 
 
+# ---------------------------------------------------------------------------
+# Public helper: fetch the (catalog, schema, volume) of the Lakebase row
+# without instantiating a full ``LakebaseRegistryStore``. Used by
+# ``RegistryCfg.from_domain`` so the active registry triplet matches what
+# is stored *in Lakebase* (where binary artifacts were originally archived)
+# rather than whatever Volume the Apps runtime happens to bind. Without
+# this, a deployment whose ``volume`` resource points at a different
+# Volume than the one referenced by the Lakebase row resolves
+# ``effective_view_table`` and ``uc_version_path`` to paths where no
+# artefact exists — every existence badge on the Build page goes red even
+# though the underlying data is intact.
+# ---------------------------------------------------------------------------
+
+_TRIPLET_CACHE: Dict[Tuple[str, str], Optional[Tuple[str, str, str]]] = {}
+_TRIPLET_LOCK = threading.Lock()
+_TRIPLET_NEGATIVE_TTL_S = 60.0
+_TRIPLET_NEG_TS: Dict[Tuple[str, str], float] = {}
+
+
+def fetch_lakebase_registry_triplet(
+    schema: str,
+    database: str = "",
+) -> Optional[Tuple[str, str, str]]:
+    """Return the ``(catalog, schema, volume)`` stored in the Lakebase ``registries`` row.
+
+    Returns ``None`` when Lakebase is unavailable, the row doesn't exist
+    yet, or any error occurs — callers must fall back gracefully (e.g.
+    to the bound Volume resource path).
+
+    Positive results are cached for the lifetime of the process keyed by
+    ``(schema, database)``. Negative results are cached for
+    :data:`_TRIPLET_NEGATIVE_TTL_S` so a transient cold-start failure
+    doesn't stick around forever, but we also don't hammer the database
+    on every page render. Restart the app to invalidate after editing
+    the row directly in Postgres.
+    """
+    key = (schema or "", database or "")
+    with _TRIPLET_LOCK:
+        if key in _TRIPLET_CACHE:
+            cached = _TRIPLET_CACHE[key]
+            if cached is not None:
+                return cached
+            ts = _TRIPLET_NEG_TS.get(key, 0.0)
+            if (time.time() - ts) < _TRIPLET_NEGATIVE_TTL_S:
+                return None
+
+    try:
+        auth = get_lakebase_auth()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Lakebase auth unavailable for triplet probe: %s", exc)
+        with _TRIPLET_LOCK:
+            _TRIPLET_CACHE[key] = None
+            _TRIPLET_NEG_TS[key] = time.time()
+        return None
+
+    try:
+        with _get_pool(auth, schema, database).connection() as conn, conn.cursor() as cur:
+            # Identifiers can't be parameterised in psycopg, so we use the
+            # same _quote-via-double-replace trick as the rest of the
+            # store. ``schema`` is operator-controlled config, never user
+            # input, but escape defensively.
+            quoted = '"' + schema.replace('"', '""') + '"'
+            cur.execute(
+                f"SELECT catalog, schema, volume FROM {quoted}.registries "
+                "ORDER BY created_at ASC LIMIT 1"
+            )
+            row = cur.fetchone()
+        if not row:
+            with _TRIPLET_LOCK:
+                _TRIPLET_CACHE[key] = None
+                _TRIPLET_NEG_TS[key] = time.time()
+            return None
+        triplet = (str(row[0]), str(row[1]), str(row[2]))
+        with _TRIPLET_LOCK:
+            _TRIPLET_CACHE[key] = triplet
+        return triplet
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Could not fetch Lakebase registry triplet: %s", exc)
+        with _TRIPLET_LOCK:
+            _TRIPLET_CACHE[key] = None
+            _TRIPLET_NEG_TS[key] = time.time()
+        return None
+
+
+def reset_lakebase_triplet_cache() -> None:
+    """Clear the cached registry triplet — call after admin-side edits in Postgres or in tests."""
+    with _TRIPLET_LOCK:
+        _TRIPLET_CACHE.clear()
+        _TRIPLET_NEG_TS.clear()
+
+
 class LakebaseRegistryStore(RegistryStore):
     """Postgres-backed registry store. Optional backend.
 

@@ -32,9 +32,20 @@ document.addEventListener('DOMContentLoaded', function () {
             registryCfg = await resp.json();
             registryLocked = !!registryCfg.registry_locked;
 
-            updateBackendChooser();
-            updateLakebasePanel();
-            updateRegistryLabel();
+            // The cosmetic helpers below touch DOM elements that only
+            // exist on the Settings → Registry tab. They've been hardened
+            // individually, but defend in depth: if any of them throws,
+            // we still want ``updateRegistryStatus`` to run so the
+            // Registry/Browse page auto-loads the domain list on first
+            // page open instead of waiting for a manual Refresh click.
+            const _safe = (fn, name) => {
+                try { fn(); } catch (err) {
+                    console.warn('registry.js:', name, 'failed:', err);
+                }
+            };
+            _safe(updateBackendChooser, 'updateBackendChooser');
+            _safe(updateLakebasePanel, 'updateLakebasePanel');
+            _safe(updateRegistryLabel, 'updateRegistryLabel');
             updateRegistryStatus(registryCfg);
 
             if (registryLocked) {
@@ -386,6 +397,12 @@ document.addEventListener('DOMContentLoaded', function () {
     function updateRegistryLabel() {
         const label = document.getElementById('registryLocationLabel');
         const initBtn = document.getElementById('btnInitRegistry');
+        // ``registryLocationLabel`` only exists on the Settings → Registry
+        // tab. ``registry.js`` is also loaded on the Registry/Browse page,
+        // where the element is absent. Bail out cleanly so the rest of
+        // ``loadRegistryConfig`` (and the domain list refresh it triggers)
+        // keeps running instead of crashing on ``label.innerHTML = …``.
+        if (!label) return;
         const backend = (registryCfg.backend || 'volume').toLowerCase();
 
         if (registryCfg.catalog && registryCfg.schema) {

@@ -399,9 +399,16 @@ class BuildScheduler:
 
             host, token = get_databricks_host_and_token(_Stub(), settings)
 
-        backend = (
-            getattr(settings, "registry_backend", "volume") or "volume"
-        ).lower()
+        # ``"auto"`` (the new default) → Lakebase when the runtime has
+        # injected PG* env vars and psycopg is importable, otherwise
+        # Volume. Centralised in ``resolve_default_backend`` so the
+        # scheduler subprocess and the FastAPI request path agree on
+        # which backend to use.
+        from back.objects.registry import resolve_default_backend
+
+        backend = resolve_default_backend(
+            getattr(settings, "registry_backend", None)
+        )
         lakebase_schema = (
             getattr(settings, "lakebase_schema", "ontobricks_registry")
             or "ontobricks_registry"

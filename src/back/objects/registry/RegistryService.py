@@ -44,6 +44,68 @@ _REGISTRY_MARKER = ".registry"
 _DOMAINS_FOLDER = "domains"
 _LEGACY_DOMAINS_FOLDER = "projects"
 
+# Sentinel used by :class:`Settings` (and the env var ``REGISTRY_BACKEND``) to
+# mean "let the runtime pick". When the operator does not pin the backend
+# explicitly we prefer Lakebase if the Apps runtime has injected the Postgres
+# resource binding (PG* env vars) AND the optional ``psycopg`` extra is
+# importable; otherwise we fall back to the JSON-on-Volume backend. Historic
+# code sometimes used the literal ``"volume"`` as the default — that branch
+# is still honoured for back-compat, but new resolutions go through this
+# helper so a single place owns the policy.
+_AUTO_BACKEND = "auto"
+_VALID_BACKENDS = ("volume", "lakebase")
+
+
+def _lakebase_runtime_available() -> bool:
+    """Probe whether the Lakebase backend can be used in this process.
+
+    Returns ``True`` only when *both* preconditions hold:
+
+    1. The optional ``psycopg`` extra is importable. Volume-only deployments
+       intentionally don't install it (see ``pyproject.toml [project.optional-dependencies] lakebase``).
+    2. The Apps runtime has injected the database resource binding env
+       vars (``PGHOST`` / ``PGDATABASE`` / ``PGUSER``). Without them the
+       SDK can't mint a Lakebase JWT and the connection would fail at
+       open time anyway.
+
+    Kept here (rather than in :mod:`SettingsService`) so the registry
+    package has no upward dependency on the FastAPI service layer — the
+    same probe powers config resolution for the scheduler subprocess.
+    """
+    import os
+
+    try:
+        import psycopg  # noqa: F401  -- detect optional dep
+    except ImportError:
+        return False
+    return all(os.environ.get(k) for k in ("PGHOST", "PGDATABASE", "PGUSER"))
+
+
+def resolve_default_backend(raw: Optional[str]) -> str:
+    """Resolve ``raw`` into a concrete backend name (``"volume"`` or ``"lakebase"``).
+
+    ``raw`` may be ``None``, ``""``, ``"auto"`` (case-insensitive), or any
+    of the literal backend names. Anything unrecognised falls back to
+    ``"volume"`` — the safe default that works without optional deps.
+
+    The ``"auto"`` rule:
+
+    * Lakebase wins when :func:`_lakebase_runtime_available` returns
+      ``True`` (psycopg installed *and* PG* env bound). This means a
+      fresh Databricks Apps deployment with the ``database`` resource
+      bound and the ``--extra lakebase`` install flag picks Lakebase
+      out of the box, which matches operator expectations after they
+      went to the trouble of binding the resource.
+    * Otherwise (local dev without psycopg, or App without the
+      database binding) we stay on Volume.
+    """
+    name = (raw or "").strip().lower()
+    if name in _VALID_BACKENDS:
+        return name
+    if name in ("", _AUTO_BACKEND):
+        return "lakebase" if _lakebase_runtime_available() else "volume"
+    return "volume"
+
 
 # ------------------------------------------------------------------
 # RegistryCfg — lightweight value object
@@ -115,7 +177,13 @@ class RegistryCfg:
         )
 
     @classmethod
-    def from_domain(cls, domain, settings) -> RegistryCfg:
+    def from_domain(
+        cls,
+        domain,
+        settings,
+        *,
+        prefer_volume_binding: bool = False,
+    ) -> RegistryCfg:
         """Build from a *DomainSession* and *Settings* with env-var fallbacks.
 
         Resolution order (highest priority first):
@@ -129,17 +197,38 @@ class RegistryCfg:
            silently discarded on every request, because the Volume path
            branch below would re-read ``backend`` from the env and
            overwrite the freshly-saved value.
-        2. ``settings.registry_volume_path`` — when present (Databricks
-           Apps with a bound Volume resource), the catalog/schema/volume
-           triplet is sourced from the injected path so the in-app
-           registry is always pinned to the resource binding.
-        3. ``settings.*`` env vars — last-resort fallback for catalog,
+        2. **Lakebase ``registries`` row** — when ``backend`` resolves to
+           ``"lakebase"`` and Lakebase is reachable, the
+           catalog/schema/volume triplet is sourced from the row so
+           ``effective_view_table`` and ``uc_version_path`` point at
+           where artefacts were actually built / archived. Otherwise a
+           dev app whose Volume resource is bound to a *different*
+           Volume than the one referenced by the row would resolve every
+           Build-page existence check against the wrong location and
+           silently report all-red badges.
+        3. ``settings.registry_volume_path`` — when present (Databricks
+           Apps with a bound Volume resource) and step 2 didn't fire,
+           the triplet comes from the injected path so the Volume
+           backend is always pinned to the resource binding.
+        4. ``settings.*`` env vars — last-resort fallback for catalog,
            schema, volume, backend, ``lakebase_schema`` and
            ``lakebase_database``.
+
+        ``prefer_volume_binding`` (Initialize path only): when ``True``
+        the Lakebase row read in step 2 is skipped. Lets the Initialize
+        flow re-pin the registry triplet to the *current* Volume
+        binding so a re-bind + re-init cycle propagates the new
+        catalog/schema/volume into the ``registries`` row. Without this
+        flag, re-initialising on a re-bound app silently re-upserts the
+        stale triplet that was already in the row, leaving downstream
+        artefact paths pointing at the previous Volume.
         """
-        env_backend = (
-            getattr(settings, "registry_backend", "volume") or "volume"
-        ).lower()
+        # ``settings.registry_backend`` may be ``"auto"`` (the new default —
+        # see :data:`_AUTO_BACKEND`), an explicit ``"volume"`` / ``"lakebase"``
+        # pin from the operator, or empty. ``resolve_default_backend`` collapses
+        # all of those to a concrete name with Lakebase preferred when the
+        # Apps runtime has bound it.
+        env_backend = resolve_default_backend(getattr(settings, "registry_backend", None))
         env_lb_schema = (
             getattr(settings, "lakebase_schema", "ontobricks_registry")
             or "ontobricks_registry"
@@ -147,9 +236,39 @@ class RegistryCfg:
         env_lb_database = getattr(settings, "lakebase_database", "") or ""
 
         reg = domain.settings.get("registry", {}) if domain is not None else {}
-        backend = (reg.get("backend") or env_backend).lower()
+        # UI choice still wins (admins must always be able to pin Volume even
+        # on a Lakebase-bound app), but ``"auto"`` saved into the session
+        # goes through the same resolver so a fresh session that never
+        # touched the radio inherits the env-level default rather than
+        # silently sticking to Volume.
+        backend = resolve_default_backend(reg.get("backend") or env_backend)
         lb_schema = reg.get("lakebase_schema") or env_lb_schema
         lb_database = reg.get("lakebase_database") or env_lb_database
+
+        # Lakebase short-circuit: read catalog/schema/volume from the
+        # ``registries`` row so binary-archive paths and Delta view names
+        # point where artefacts actually live, not at whatever Volume the
+        # Apps runtime bound. Fail-soft — if Lakebase is unreachable we
+        # fall through to the regular Volume-binding / env-var chain.
+        # Skipped when ``prefer_volume_binding`` is True (Initialize
+        # path) so re-binding the Volume + re-running Initialize
+        # propagates the new triplet into the row.
+        if backend == "lakebase" and not prefer_volume_binding:
+            from back.objects.registry.store.lakebase.store import (
+                fetch_lakebase_registry_triplet,
+            )
+
+            triplet = fetch_lakebase_registry_triplet(lb_schema, lb_database)
+            if triplet:
+                cat, sch, vol = triplet
+                return cls(
+                    catalog=cat,
+                    schema=sch,
+                    volume=vol or _DEFAULT_VOLUME,
+                    backend=backend,
+                    lakebase_schema=lb_schema,
+                    lakebase_database=lb_database,
+                )
 
         vol_path = getattr(settings, "registry_volume_path", "")
         if vol_path:
@@ -178,12 +297,16 @@ class RegistryCfg:
 
     @classmethod
     def from_dict(cls, d: Dict[str, str]) -> RegistryCfg:
-        """Build from a plain dict (e.g. an existing ``registry_cfg``)."""
+        """Build from a plain dict (e.g. an existing ``registry_cfg``).
+
+        ``backend`` may be ``"auto"``/empty — :func:`resolve_default_backend`
+        picks Lakebase or Volume based on runtime availability.
+        """
         return cls(
             catalog=d.get("catalog", ""),
             schema=d.get("schema", ""),
             volume=d.get("volume", "") or _DEFAULT_VOLUME,
-            backend=(d.get("backend") or "volume").lower(),
+            backend=resolve_default_backend(d.get("backend")),
             lakebase_schema=d.get("lakebase_schema") or "ontobricks_registry",
             lakebase_database=d.get("lakebase_database") or "",
         )
@@ -237,11 +360,24 @@ class RegistryService:
     # -- factory -----------------------------------------------------
 
     @classmethod
-    def from_context(cls, domain, settings) -> RegistryService:
-        """One-call factory: resolve config + build VolumeFileService + store."""
+    def from_context(
+        cls,
+        domain,
+        settings,
+        *,
+        prefer_volume_binding: bool = False,
+    ) -> RegistryService:
+        """One-call factory: resolve config + build VolumeFileService + store.
+
+        ``prefer_volume_binding`` (Initialize path only) is forwarded to
+        :meth:`RegistryCfg.from_domain` — see that docstring for why it
+        matters when re-running Initialize against a re-bound app.
+        """
         from back.core.helpers import get_databricks_host_and_token
 
-        cfg = RegistryCfg.from_domain(domain, settings)
+        cfg = RegistryCfg.from_domain(
+            domain, settings, prefer_volume_binding=prefer_volume_binding
+        )
         host, token = get_databricks_host_and_token(domain, settings)
         uc = VolumeFileService(host=host, token=token)
         return cls(cfg, uc)
@@ -379,25 +515,76 @@ class RegistryService:
     def initialize(self, client) -> Tuple[bool, str]:
         """Bring the registry up to a usable state (idempotent).
 
-        *client* is a ``DatabricksClient`` used by the Volume backend
-        to create the UC Volume on first use; it is ignored by the
-        Lakebase backend (where the Autoscaling Postgres database is
-        created out-of-band by the platform).
+        *client* is a ``DatabricksClient`` used to create the UC Volume
+        on first use. Both backends use it: Volume to host
+        ``.registry`` + ``/domains/``, Lakebase for binary artefacts
+        (``documents/``, ``*.lbug.tar.gz``) that always live on the
+        Volume regardless of where registry rows are stored.
+
+        For the Lakebase backend, callers should construct this service
+        with ``RegistryService.from_context(..., prefer_volume_binding
+        =True)`` so :attr:`cfg` reflects the *current* Volume binding
+        rather than the (potentially stale) Lakebase ``registries``
+        row. Without that flag, re-running Initialize after re-binding
+        the Volume resource silently re-upserts the old triplet.
         """
         c = self._cfg
         if (c.backend or "volume").lower() == "volume":
             return self._store.initialize(client=client)
-        # Lakebase: also ensure the binary volume exists so document
-        # uploads keep working regardless of which backend stores the
-        # registry rows.
+
+        # Lakebase: ensure the binary volume exists. Failures here are
+        # surfaced to the caller (instead of being swallowed as a
+        # warning) so the admin sees exactly what went wrong if the
+        # service principal lacks ``CREATE VOLUME`` on the target
+        # schema. The store's ``initialize`` still runs after a
+        # creation failure so the schema/tables come up regardless —
+        # the Volume can be granted/created out-of-band and a re-run
+        # will be a no-op on the schema side.
+        volume_msg = ""
         if client is not None and c.catalog and c.schema and c.volume:
             try:
                 volumes = client.list_volumes(c.catalog, c.schema)
                 if c.volume not in volumes:
-                    client.create_volume(c.catalog, c.schema, c.volume)
+                    if client.create_volume(c.catalog, c.schema, c.volume):
+                        volume_msg = (
+                            f" Created binary volume "
+                            f"{c.catalog}.{c.schema}.{c.volume}."
+                        )
+                        logger.info(
+                            "Created binary volume %s.%s.%s",
+                            c.catalog,
+                            c.schema,
+                            c.volume,
+                        )
+                    else:
+                        volume_msg = (
+                            f" WARNING: could not create binary volume "
+                            f"{c.catalog}.{c.schema}.{c.volume} — check "
+                            f"the app service principal's CREATE VOLUME "
+                            f"privilege on {c.catalog}.{c.schema}."
+                        )
+                        logger.warning(
+                            "Failed to create binary volume %s.%s.%s",
+                            c.catalog,
+                            c.schema,
+                            c.volume,
+                        )
+                else:
+                    volume_msg = (
+                        f" Binary volume "
+                        f"{c.catalog}.{c.schema}.{c.volume} already exists."
+                    )
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Could not ensure binary volume exists: %s", exc)
-        return self._store.initialize()
+                volume_msg = (
+                    f" WARNING: volume probe failed for "
+                    f"{c.catalog}.{c.schema}.{c.volume}: {exc}"
+                )
+                logger.warning(
+                    "Could not ensure binary volume exists: %s", exc
+                )
+
+        ok, store_msg = self._store.initialize()
+        return ok, (store_msg + volume_msg).strip()
 
     # -- domain CRUD -------------------------------------------------
 

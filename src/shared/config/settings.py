@@ -36,11 +36,17 @@ class Settings(BaseSettings):
         return self.databricks_sql_warehouse_id
 
     # Domain Registry — storage backend
-    # ``volume`` (default) keeps the original JSON-on-UC-Volume layout.
+    # ``auto`` (default) prefers Lakebase when the Apps runtime has bound
+    # the Postgres ``database`` resource (PG* env vars present) AND the
+    # optional ``psycopg`` extra is installed; otherwise falls back to
+    # ``volume``. Operators can pin the choice with
+    # ``REGISTRY_BACKEND=volume`` or ``REGISTRY_BACKEND=lakebase``.
+    # ``volume`` keeps the original JSON-on-UC-Volume layout.
     # ``lakebase`` stores registry-shaped data in a Postgres schema on
     # Databricks Lakebase; binaries (documents/, *.lbug.tar.gz) stay on
-    # the Volume regardless of this choice.
-    registry_backend: str = "volume"
+    # the Volume regardless of this choice. Resolution lives in
+    # :func:`back.objects.registry.resolve_default_backend`.
+    registry_backend: str = "auto"
 
     # Domain Registry (single Volume for all domains) — used by both
     # backends for binary artifacts and by the volume backend for

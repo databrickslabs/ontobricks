@@ -1089,7 +1089,16 @@ class SettingsService:
     ) -> Dict[str, Any]:
         try:
             domain = get_domain(session_mgr)
-            svc = RegistryService.from_context(domain, settings)
+            # ``prefer_volume_binding=True`` so the Initialize flow
+            # pins the registry triplet to the *current* Volume binding
+            # (not the cached Lakebase ``registries`` row). Without
+            # this, re-binding the Volume resource and re-clicking
+            # Initialize would silently no-op the row update — the row
+            # is the source of truth for read paths, so callers would
+            # keep seeing the stale catalog/schema/volume.
+            svc = RegistryService.from_context(
+                domain, settings, prefer_volume_binding=True
+            )
             if not svc.cfg.is_configured:
                 raise ValidationError(
                     "Registry catalog, schema, and volume must be configured first"
@@ -1102,6 +1111,21 @@ class SettingsService:
             ok, msg = svc.initialize(client)
             if not ok:
                 raise InfrastructureError("Registry initialization failed", detail=msg)
+            # Drop the process-local Lakebase triplet cache so the next
+            # ``RegistryCfg.from_domain`` reads the freshly-upserted
+            # ``registries`` row instead of returning the stale triplet
+            # captured before this Initialize.
+            try:
+                from back.objects.registry.store.lakebase.store import (
+                    reset_lakebase_triplet_cache,
+                )
+
+                reset_lakebase_triplet_cache()
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "reset_lakebase_triplet_cache unavailable; skipping",
+                    exc_info=True,
+                )
             return {"success": ok, "message": msg}
         except OntoBricksError:
             raise

@@ -3,6 +3,7 @@
 from back.objects.registry.RegistryService import (
     RegistryCfg,
     RegistryService,
+    resolve_default_backend,
 )
 from back.objects.registry.PermissionService import (
     PermissionService,
@@ -29,6 +30,7 @@ from back.objects.registry.registry_cache import (
 __all__ = [
     "RegistryCfg",
     "RegistryService",
+    "resolve_default_backend",
     "PermissionService",
     "permission_service",
     "ROLE_ADMIN",

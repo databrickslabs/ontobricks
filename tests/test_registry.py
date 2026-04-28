@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch, call
 from back.objects.registry.RegistryService import (
     RegistryCfg,
     RegistryService,
+    resolve_default_backend,
     _DEFAULT_VOLUME,
     _DOMAINS_FOLDER,
     _LEGACY_DOMAINS_FOLDER,
@@ -194,6 +195,150 @@ class TestRegistryCfgConstruction:
         assert c.backend == "lakebase"
 
 
+class TestRegistryCfgFromDomainLakebaseTriplet:
+    """``backend == "lakebase"`` must read catalog/schema/volume from the
+    Lakebase ``registries`` row so artefact paths point at where domains
+    were *actually* archived, not at whatever Volume the Apps runtime
+    happened to bind. Without this the Build page renders all-red badges
+    on a deployment whose ``volume`` resource drifted from the original
+    archive location.
+    """
+
+    def test_lakebase_row_overrides_volume_binding(self, monkeypatch):
+        from back.objects.registry.store.lakebase import store as _lb_store
+
+        # Pretend Lakebase says the registry lives at a *different*
+        # catalog/schema/volume than the one the Apps runtime bound.
+        monkeypatch.setattr(
+            _lb_store,
+            "fetch_lakebase_registry_triplet",
+            lambda schema, database="": ("benoit_cayla", "ontobricks", "OntoBricksRegistry"),
+        )
+        domain = _make_domain(registry={"backend": "lakebase"})
+        settings = _make_settings(
+            registry_volume_path="/Volumes/benoit_cayla/ontobricks_deployed/registry",
+            registry_backend="lakebase",
+        )
+        c = RegistryCfg.from_domain(domain, settings)
+        assert c.backend == "lakebase"
+        assert c.catalog == "benoit_cayla"
+        assert c.schema == "ontobricks"
+        assert c.volume == "OntoBricksRegistry"
+
+    def test_lakebase_unreachable_falls_back_to_volume_binding(self, monkeypatch):
+        # ``fetch_lakebase_registry_triplet`` returns ``None`` when the
+        # row is missing or Lakebase is offline. The cfg must still
+        # resolve cleanly so the app doesn't 500 — fall back to the
+        # bound Volume resource path (the existing behaviour).
+        from back.objects.registry.store.lakebase import store as _lb_store
+
+        monkeypatch.setattr(
+            _lb_store,
+            "fetch_lakebase_registry_triplet",
+            lambda schema, database="": None,
+        )
+        domain = _make_domain(registry={"backend": "lakebase"})
+        settings = _make_settings(
+            registry_volume_path="/Volumes/benoit_cayla/ontobricks_deployed/registry",
+            registry_backend="lakebase",
+        )
+        c = RegistryCfg.from_domain(domain, settings)
+        assert c.backend == "lakebase"
+        assert c.catalog == "benoit_cayla"
+        assert c.schema == "ontobricks_deployed"
+        assert c.volume == "registry"
+
+    def test_volume_backend_ignores_lakebase_row(self, monkeypatch):
+        # Volume backend must not consult Lakebase at all — that would
+        # be wasted I/O, *and* we want Volume-bound deployments to keep
+        # tracking the resource binding even if there's stale data in
+        # the Lakebase row from a prior life.
+        from back.objects.registry.store.lakebase import store as _lb_store
+
+        called = {"yes": False}
+
+        def _spy(schema, database=""):
+            called["yes"] = True
+            return ("x", "y", "z")
+
+        monkeypatch.setattr(_lb_store, "fetch_lakebase_registry_triplet", _spy)
+        domain = _make_domain(registry={"backend": "volume"})
+        settings = _make_settings(
+            registry_volume_path="/Volumes/benoit_cayla/ontobricks_deployed/registry",
+            registry_backend="volume",
+        )
+        c = RegistryCfg.from_domain(domain, settings)
+        assert called["yes"] is False
+        assert c.schema == "ontobricks_deployed"
+
+    def test_prefer_volume_binding_skips_lakebase_row(self, monkeypatch):
+        """Initialize path: ``prefer_volume_binding=True`` must bypass the
+        cached ``registries`` row and pin the cfg to the Volume binding.
+
+        Regression: re-binding the Volume resource and re-clicking
+        Initialize used to silently no-op the row update because the
+        cfg used to upsert the row was itself read from the (stale)
+        row. With this flag the row is skipped, and the upsert
+        propagates the new triplet (e.g. switching the dev sandbox
+        from ``ontobricks_deployed.registry`` to
+        ``ontobricks_deployed_test.registry_test``).
+        """
+        from back.objects.registry.store.lakebase import store as _lb_store
+
+        called = {"yes": False}
+
+        def _spy(schema, database=""):
+            called["yes"] = True
+            return ("benoit_cayla", "ontobricks", "OntoBricksRegistry")
+
+        monkeypatch.setattr(_lb_store, "fetch_lakebase_registry_triplet", _spy)
+        domain = _make_domain(registry={"backend": "lakebase"})
+        settings = _make_settings(
+            registry_volume_path=(
+                "/Volumes/benoit_cayla/ontobricks_deployed_test/registry_test"
+            ),
+            registry_backend="lakebase",
+        )
+        c = RegistryCfg.from_domain(
+            domain, settings, prefer_volume_binding=True
+        )
+        # Row read must NOT have happened.
+        assert called["yes"] is False
+        # Triplet must come from the bound Volume resource.
+        assert c.backend == "lakebase"
+        assert c.catalog == "benoit_cayla"
+        assert c.schema == "ontobricks_deployed_test"
+        assert c.volume == "registry_test"
+
+    def test_lakebase_row_used_with_lb_database_override(self, monkeypatch):
+        # The lakebase_database override (admin-saved) must be passed
+        # to the triplet probe so two databases on the same Lakebase
+        # instance can each have their own registry row.
+        from back.objects.registry.store.lakebase import store as _lb_store
+
+        captured = {}
+
+        def _spy(schema, database=""):
+            captured["schema"] = schema
+            captured["database"] = database
+            return ("c1", "s1", "v1")
+
+        monkeypatch.setattr(_lb_store, "fetch_lakebase_registry_triplet", _spy)
+        domain = _make_domain(
+            registry={
+                "backend": "lakebase",
+                "lakebase_schema": "custom_schema",
+                "lakebase_database": "custom_db",
+            }
+        )
+        settings = _make_settings(
+            registry_volume_path="/Volumes/benoit_cayla/ontobricks_deployed/registry",
+            registry_backend="lakebase",
+        )
+        RegistryCfg.from_domain(domain, settings)
+        assert captured == {"schema": "custom_schema", "database": "custom_db"}
+
+
 class TestRegistryCfgHelpers:
     def test_is_configured_true(self):
         assert RegistryCfg("a", "b", "c").is_configured is True
@@ -223,6 +368,96 @@ class TestRegistryCfgHelpers:
     def test_as_dict_roundtrip(self):
         c = RegistryCfg("a", "b", "c")
         assert RegistryCfg.from_dict(c.as_dict()) == c
+
+
+class TestResolveDefaultBackend:
+    """``resolve_default_backend`` is the single source of truth for the
+    "auto" → concrete-name mapping. Lakebase wins when the runtime has
+    psycopg + PG* env vars; otherwise we stay on Volume.
+    """
+
+    def test_explicit_volume_passes_through(self):
+        assert resolve_default_backend("volume") == "volume"
+
+    def test_explicit_lakebase_passes_through(self):
+        # Honoured even when the runtime probe would say "no" — operators
+        # may pin Lakebase deliberately and prefer a clear failure at
+        # connection time over a silent downgrade to Volume.
+        assert resolve_default_backend("lakebase") == "lakebase"
+
+    def test_unknown_value_falls_back_to_volume(self):
+        # Defensive: never crash on operator typos in REGISTRY_BACKEND.
+        assert resolve_default_backend("nope") == "volume"
+
+    @staticmethod
+    def _patch_runtime(monkeypatch, available: bool) -> None:
+        """Patch the module-level ``_lakebase_runtime_available`` probe.
+
+        ``__init__.py`` re-exports the *class* ``RegistryService`` under the
+        same dotted path as the submodule, so ``getattr(package,
+        'RegistryService')`` resolves to the class and shadows the module.
+        Pull the actual module out of :data:`sys.modules` to keep the
+        monkeypatch unambiguous.
+        """
+        import sys
+
+        mod = sys.modules["back.objects.registry.RegistryService"]
+        monkeypatch.setattr(mod, "_lakebase_runtime_available", lambda: available)
+
+    def test_auto_with_lakebase_runtime_picks_lakebase(self, monkeypatch):
+        self._patch_runtime(monkeypatch, True)
+        assert resolve_default_backend("auto") == "lakebase"
+
+    def test_empty_string_with_lakebase_runtime_picks_lakebase(self, monkeypatch):
+        # Empty / None must behave identically to the explicit ``"auto"``
+        # sentinel — both mean "unset".
+        self._patch_runtime(monkeypatch, True)
+        assert resolve_default_backend("") == "lakebase"
+        assert resolve_default_backend(None) == "lakebase"
+
+    def test_auto_without_lakebase_runtime_falls_back(self, monkeypatch):
+        self._patch_runtime(monkeypatch, False)
+        assert resolve_default_backend("auto") == "volume"
+
+    def test_auto_is_case_insensitive(self, monkeypatch):
+        self._patch_runtime(monkeypatch, True)
+        assert resolve_default_backend("AUTO") == "lakebase"
+        assert resolve_default_backend(" Auto ") == "lakebase"
+
+
+class TestRegistryCfgFromDomainAuto:
+    """``Settings.registry_backend = 'auto'`` (the new default) must flow
+    through :meth:`RegistryCfg.from_domain` so a fresh deployment without
+    a saved UI choice picks Lakebase when the runtime supports it.
+    """
+
+    def test_auto_settings_with_lakebase_runtime_picks_lakebase(self, monkeypatch):
+        TestResolveDefaultBackend._patch_runtime(monkeypatch, True)
+        domain = _make_domain()
+        settings = _make_settings(registry_backend="auto")
+        assert RegistryCfg.from_domain(domain, settings).backend == "lakebase"
+
+    def test_auto_settings_without_lakebase_runtime_falls_back(self, monkeypatch):
+        TestResolveDefaultBackend._patch_runtime(monkeypatch, False)
+        domain = _make_domain()
+        settings = _make_settings(registry_backend="auto")
+        assert RegistryCfg.from_domain(domain, settings).backend == "volume"
+
+    def test_session_volume_pin_beats_auto_default(self, monkeypatch):
+        # Admin explicitly chose Volume in the UI — must stick even when
+        # Lakebase is available (otherwise the backend chooser is a lie).
+        TestResolveDefaultBackend._patch_runtime(monkeypatch, True)
+        domain = _make_domain(registry={"backend": "volume"})
+        settings = _make_settings(registry_backend="auto")
+        assert RegistryCfg.from_domain(domain, settings).backend == "volume"
+
+    def test_session_auto_inherits_runtime_default(self, monkeypatch):
+        # ``"auto"`` saved into the session means "no explicit choice yet"
+        # — go through the resolver, don't silently freeze on Volume.
+        TestResolveDefaultBackend._patch_runtime(monkeypatch, True)
+        domain = _make_domain(registry={"backend": "auto"})
+        settings = _make_settings(registry_backend="volume")
+        assert RegistryCfg.from_domain(domain, settings).backend == "lakebase"
 
 
 # ==================================================================
@@ -372,6 +607,126 @@ class TestInitialize:
 
         assert ok is False
         assert "failed" in msg.lower()
+
+
+class TestInitializeLakebase:
+    """Lakebase backend Initialize: must create the binary Volume on UC
+    *and* upsert the ``registries`` row from the cfg the service was
+    built with.
+
+    Regressions covered:
+
+    1. Re-running Initialize after re-binding the Volume resource must
+       propagate the new ``(catalog, schema, volume)`` triplet into the
+       row — the cfg fed to the store must be the *current* Volume
+       binding, not a triplet snapshot from the (stale) row.
+       ``SettingsService.initialize_registry_result`` now passes
+       ``prefer_volume_binding=True`` to ``RegistryService.from_context``
+       to make that the case; this test pins the contract end-to-end
+       via the constructor path.
+    2. Volume creation result is surfaced in the message instead of
+       silently swallowed as a warning, so the admin sees whether
+       ``CREATE VOLUME`` worked or whether the SP needs the privilege
+       granted out-of-band.
+    """
+
+    @staticmethod
+    def _lb_cfg():
+        return RegistryCfg(
+            catalog="benoit_cayla",
+            schema="ontobricks_deployed_test",
+            volume="registry_test",
+            backend="lakebase",
+            lakebase_schema="ontobricks_registry",
+        )
+
+    def test_creates_volume_when_missing_and_upserts_row_from_cfg(self):
+        cfg = self._lb_cfg()
+        store = MagicMock()
+        store.initialize.return_value = (
+            True,
+            "Lakebase registry initialized at host/db (schema=ontobricks_registry)",
+        )
+        client = MagicMock()
+        client.list_volumes.return_value = []
+        client.create_volume.return_value = True
+
+        svc = RegistryService(cfg, _make_uc(), store=store)
+        ok, msg = svc.initialize(client)
+
+        assert ok is True
+        client.list_volumes.assert_called_once_with(
+            "benoit_cayla", "ontobricks_deployed_test"
+        )
+        client.create_volume.assert_called_once_with(
+            "benoit_cayla", "ontobricks_deployed_test", "registry_test"
+        )
+        # Row upsert is delegated to the store, which writes from
+        # ``self._cfg`` — pinning that we forwarded the cfg verbatim.
+        store.initialize.assert_called_once_with()
+        # Surface both the schema-init message and the Volume creation
+        # so the admin can confirm both halves landed.
+        assert "Lakebase registry initialized" in msg
+        assert (
+            "Created binary volume "
+            "benoit_cayla.ontobricks_deployed_test.registry_test"
+        ) in msg
+
+    def test_skips_creation_when_volume_already_exists_and_says_so(self):
+        cfg = self._lb_cfg()
+        store = MagicMock()
+        store.initialize.return_value = (True, "Lakebase registry initialized")
+        client = MagicMock()
+        client.list_volumes.return_value = ["registry_test"]
+
+        svc = RegistryService(cfg, _make_uc(), store=store)
+        ok, msg = svc.initialize(client)
+
+        assert ok is True
+        client.create_volume.assert_not_called()
+        assert (
+            "already exists"
+        ) in msg
+
+    def test_volume_creation_failure_warns_but_still_initialises_schema(self):
+        # CREATE VOLUME requires its own UC privilege. If the SP lacks
+        # it, surface a clear warning but keep the Lakebase schema/row
+        # creation so the admin can grant the volume privilege out-of-
+        # band and retry.
+        cfg = self._lb_cfg()
+        store = MagicMock()
+        store.initialize.return_value = (True, "Lakebase registry initialized")
+        client = MagicMock()
+        client.list_volumes.return_value = []
+        client.create_volume.return_value = False
+
+        svc = RegistryService(cfg, _make_uc(), store=store)
+        ok, msg = svc.initialize(client)
+
+        assert ok is True
+        store.initialize.assert_called_once_with()
+        assert "WARNING" in msg
+        assert "CREATE VOLUME" in msg
+        assert "registry_test" in msg
+
+    def test_volume_probe_exception_is_reported_not_swallowed(self):
+        cfg = self._lb_cfg()
+        store = MagicMock()
+        store.initialize.return_value = (True, "Lakebase registry initialized")
+        client = MagicMock()
+        client.list_volumes.side_effect = RuntimeError("uc 503")
+
+        svc = RegistryService(cfg, _make_uc(), store=store)
+        ok, msg = svc.initialize(client)
+
+        assert ok is True
+        # Schema initialise still runs even when the volume probe
+        # explodes — Volume permissions are orthogonal to the Lakebase
+        # schema state, so we don't want a transient UC outage to block
+        # registry initialisation.
+        store.initialize.assert_called_once_with()
+        assert "WARNING" in msg
+        assert "uc 503" in msg
 
 
 # ==================================================================

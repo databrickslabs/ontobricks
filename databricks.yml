@@ -73,10 +73,10 @@ variables:
     default: "benoit_cayla"
   registry_schema:
     description: "Unity Catalog schema for the domain registry"
-    default: "ontobricks_deployed"
+    default: "ontobricks_deployed_test"
   registry_volume:
     description: "Volume name for the domain registry"
-    default: "registry"
+    default: "registry_test"
 
   # ── Lakebase resource binding (Autoscaling-only) ────────────────
   # OntoBricks targets **Lakebase Autoscaling** exclusively (the
@@ -91,12 +91,17 @@ variables:
   # /database/instances`` show up as Autoscaling projects with a
   # default branch named ``production`` (NOT ``main``).
   #
-  # Defaults match the dev sandbox instance ``ontobricks-app``;
+  # Defaults match the dev sandbox project ``ontobricks-test``;
   # override at deploy time with e.g.
   # ``-t dev-lakebase --var=lakebase_branch=...``.
+  #
+  # ``ontobricks-test`` currently exposes only the default Lakebase
+  # database (``databricks_postgres``). The registry schema
+  # (``ontobricks_registry``) lives *inside* that database — created
+  # on first ``Initialize`` by ``LakebaseRegistryStore._apply_ddl``.
   lakebase_branch:
     description: "Full Lakebase Autoscaling branch resource path (e.g. ``projects/<project>/branches/production``)"
-    default: "projects/ontobricks-app/branches/production"
+    default: "projects/ontobricks-test/branches/production"
   lakebase_database_resource:
     description: |
       Full Lakebase Autoscaling database resource path (e.g.
@@ -105,7 +110,7 @@ variables:
       /api/2.0/postgres/projects/<project>/branches/<branch>/databases``
       and pick the entry whose ``status.postgres_database`` matches
       the human-readable database name you want bound.
-    default: "projects/ontobricks-app/branches/production/databases/db-8u4l-0na72ub5sp"
+    default: "projects/ontobricks-test/branches/production/databases/db-tvs3-r0yrbvtunp"
 
 resources:
   apps:

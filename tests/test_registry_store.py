@@ -857,3 +857,146 @@ class TestMigration:
         assert "errors=3" in msg
         assert "boom" in msg
         assert "+2 more" in msg
+
+
+class TestFetchLakebaseRegistryTriplet:
+    """``fetch_lakebase_registry_triplet`` is the source of truth used by
+    :meth:`RegistryCfg.from_domain` to align catalog/schema/volume with
+    the Lakebase row. It must:
+
+    - return the row triplet on success,
+    - cache positive results (no second SELECT),
+    - return ``None`` on Postgres / auth errors and on missing rows,
+    - cache negative results briefly so we don't hammer Lakebase on
+      every page render during a cold start.
+    """
+
+    def setup_method(self):
+        # Each test starts from a clean cache so positive results from
+        # one case don't leak into the next (the cache is process-wide).
+        from back.objects.registry.store.lakebase.store import (
+            reset_lakebase_triplet_cache,
+        )
+
+        reset_lakebase_triplet_cache()
+
+    def _patch_pool(self, monkeypatch, cur):
+        """Replace ``_get_pool`` with a stub that yields ``cur`` on
+        ``connection()``. Avoids any real Lakebase / psycopg call.
+        """
+        from contextlib import contextmanager
+        from back.objects.registry.store.lakebase import store as _lb_store
+
+        @contextmanager
+        def fake_connection():
+            yield _ScriptedConn(cur)
+
+        class _FakePool:
+            def connection(self):
+                return fake_connection()
+
+        monkeypatch.setattr(_lb_store, "_get_pool", lambda *a, **kw: _FakePool())
+        monkeypatch.setattr(
+            _lb_store, "get_lakebase_auth", lambda: object()
+        )
+
+    def test_returns_row_triplet(self, monkeypatch):
+        from back.objects.registry.store.lakebase.store import (
+            fetch_lakebase_registry_triplet,
+        )
+
+        cur = _ScriptedCursor(
+            [
+                {
+                    "contains": "registries",
+                    "fetchone": (
+                        "benoit_cayla",
+                        "ontobricks",
+                        "OntoBricksRegistry",
+                    ),
+                }
+            ]
+        )
+        self._patch_pool(monkeypatch, cur)
+
+        out = fetch_lakebase_registry_triplet("ontobricks_registry")
+        assert out == ("benoit_cayla", "ontobricks", "OntoBricksRegistry")
+
+    def test_caches_positive_result(self, monkeypatch):
+        from back.objects.registry.store.lakebase.store import (
+            fetch_lakebase_registry_triplet,
+        )
+
+        cur = _ScriptedCursor(
+            [{"contains": "registries", "fetchone": ("c", "s", "v")}]
+        )
+        self._patch_pool(monkeypatch, cur)
+
+        fetch_lakebase_registry_triplet("schema_a")
+        fetch_lakebase_registry_triplet("schema_a")
+        fetch_lakebase_registry_triplet("schema_a")
+        # Second & third call must hit the cache, not the database.
+        # ``_ScriptedCursor.executed`` records every SELECT; only the
+        # first call should have landed.
+        assert len(cur.executed) == 1
+
+    def test_returns_none_when_row_missing(self, monkeypatch):
+        from back.objects.registry.store.lakebase.store import (
+            fetch_lakebase_registry_triplet,
+        )
+
+        cur = _ScriptedCursor([])  # no scripted entry → fetchone() → None
+        self._patch_pool(monkeypatch, cur)
+
+        out = fetch_lakebase_registry_triplet("schema_b")
+        assert out is None
+
+    def test_returns_none_on_pool_failure(self, monkeypatch):
+        from back.objects.registry.store.lakebase import store as _lb_store
+        from back.objects.registry.store.lakebase.store import (
+            fetch_lakebase_registry_triplet,
+        )
+
+        def _boom(*a, **kw):
+            raise RuntimeError("Lakebase cold-start timeout")
+
+        monkeypatch.setattr(_lb_store, "_get_pool", _boom)
+        monkeypatch.setattr(_lb_store, "get_lakebase_auth", lambda: object())
+
+        # Must NOT raise — ``RegistryCfg.from_domain`` calls this on
+        # every request and a hard failure here would 500 the whole app.
+        assert fetch_lakebase_registry_triplet("schema_c") is None
+
+    def test_returns_none_on_auth_failure(self, monkeypatch):
+        from back.objects.registry.store.lakebase import store as _lb_store
+        from back.objects.registry.store.lakebase.store import (
+            fetch_lakebase_registry_triplet,
+        )
+
+        def _boom():
+            raise RuntimeError("LakebaseAuth: PG* env vars missing")
+
+        monkeypatch.setattr(_lb_store, "get_lakebase_auth", _boom)
+        assert fetch_lakebase_registry_triplet("schema_d") is None
+
+    def test_distinct_databases_have_distinct_cache_entries(self, monkeypatch):
+        from back.objects.registry.store.lakebase.store import (
+            fetch_lakebase_registry_triplet,
+        )
+
+        cur = _ScriptedCursor(
+            [
+                {"contains": "registries", "fetchone": ("c1", "s1", "v1")},
+                {"contains": "registries", "fetchone": ("c2", "s2", "v2")},
+            ]
+        )
+        self._patch_pool(monkeypatch, cur)
+
+        first = fetch_lakebase_registry_triplet("schema_e", database="db_a")
+        # Cache is keyed on ``(schema, database)`` so a different
+        # database must trigger a fresh SELECT (consuming the second
+        # scripted entry above).
+        second = fetch_lakebase_registry_triplet("schema_e", database="db_b")
+
+        assert first == ("c1", "s1", "v1")
+        assert second == ("c2", "s2", "v2")
