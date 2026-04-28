@@ -1,52 +1,44 @@
 """Authentication helper for Databricks Lakebase (Postgres) connections.
 
+OntoBricks targets **Lakebase Autoscaling exclusively**. The legacy
+Provisioned tier and the Database Instance API
+(``WorkspaceClient.database.list_database_instances`` /
+``generate_database_credential``) are deliberately not used here —
+Autoscaling-only projects are invisible to that API and any code path
+that touches it is a foot-gun on a sandbox bound to such a project.
+
 When OntoBricks runs inside a Databricks App with a ``database``
-resource bound to a Lakebase instance, the platform injects the
-following environment variables into the app process:
+resource bound to a Lakebase Autoscaling project, the platform injects:
 
 - ``PGHOST``      — Lakebase endpoint hostname
+  (``ep-<id>.database.<region>.cloud.databricks.com``)
 - ``PGPORT``      — Postgres port (typically ``5432``)
-- ``PGDATABASE``  — database name (canonical: ``ontobricks_registry``)
+- ``PGDATABASE``  — the bound database name (e.g. ``databricks_postgres``)
 - ``PGUSER``      — Postgres role (the app's service principal)
 
-The Postgres password is *not* injected: instead, the app mints a
-short-lived **Lakebase-scoped JWT** via
-``WorkspaceClient().database.generate_database_credential(
-instance_names=[<name>])`` and uses it as the password. The plain
+The Postgres password is *not* injected. Instead, the app mints a
+short-lived Lakebase JWT via the Postgres API
+(``POST /api/2.0/postgres/credentials`` with the matching
+``endpoint`` resource) and uses it as the password. The plain
 workspace bearer token returned by ``config.authenticate()`` is
 **not** accepted by Lakebase — it's not a JWT.
 
-The Lakebase instance name is sourced from (in order):
-
-1. ``DATABASE_INSTANCE_NAME`` env var (if you set it explicitly).
-2. A one-time SDK lookup that matches ``PGHOST`` against
-   ``read_write_dns`` / ``read_only_dns`` of the workspace's
-   database instances (legacy Database Instance API — works for
-   projects created via the Lakehouse/Provisioned UI or DABs).
-3. **Lakebase Autoscaling fallback.** When step 2 returns no match
-   (typical for projects created via the Autoscaling UI / Postgres
-   API, whose regional ``ep-<id>.database.<region>.cloud.databricks.com``
-   hostnames are not exposed on the legacy ``DatabaseInstance``),
-   walk ``/api/2.0/postgres/projects`` → branches → endpoints and
-   match ``status.hosts.host`` / ``status.hosts.read_only_host``
-   against ``PGHOST``. The project_id is then used as the instance
-   name (the two namespaces are aliased — ``generate_database_credential``
-   accepts the project_id as ``instance_names=[<project_id>]``).
-   Result is cached for the process lifetime.
+Endpoint resolution walks ``GET /api/2.0/postgres/projects`` →
+branches → endpoints and matches ``status.hosts.host`` /
+``status.hosts.read_only_host`` against ``PGHOST``. The matched
+endpoint's full resource path
+(``projects/<project_id>/branches/<branch_id>/endpoints/<endpoint_id>``)
+is cached on the instance and used as the ``endpoint`` body of the
+credential mint.
 
 ``PGAPPNAME`` is **not** consulted — it's libpq's
-``application_name`` (a free-form connection tracing label) and
-the Databricks Apps runtime populates it with the *app's* name
-(e.g. ``ontobricks-dev``), which has nothing to do with the
-Lakebase instance.
+``application_name`` (a free-form connection tracing label) and the
+Databricks Apps runtime populates it with the *app's* name (e.g.
+``ontobricks-dev``), which has nothing to do with the Lakebase
+project.
 
-Tokens are valid for ~1 hour, so :class:`LakebaseAuth` refreshes
-them ~5 minutes before expiry.
-
-OntoBricks targets **Lakebase Autoscaling** exclusively (the default
-tier for every instance created after 2026-03-12). Provisioned
-instances are not supported — the deployment YAML and the runtime
-auth code both assume an Autoscaling project resource.
+Tokens are valid for ~1 h, so :class:`LakebaseAuth` refreshes them
+~5 minutes before expiry.
 """
 
 from __future__ import annotations
@@ -63,18 +55,6 @@ logger = get_logger(__name__)
 _TOKEN_TTL_S = 3300  # refresh ~5 min before the 1h expiry
 
 
-def _looks_like_instance_not_found(exc: BaseException) -> bool:
-    """Return True for legacy-API errors meaning "project not in this API".
-
-    Heuristic match against the message — the SDK does not surface a
-    typed ``ResourceDoesNotExist`` for this case consistently across
-    versions, but the wire error always contains the literal
-    ``Database instance '<name>' not found``.
-    """
-    msg = str(exc).lower()
-    return "not found" in msg and "database instance" in msg
-
-
 class LakebaseAuth:
     """Source ``PG*`` env vars and mint refreshing OAuth tokens.
 
@@ -89,13 +69,13 @@ class LakebaseAuth:
         self._w = None  # WorkspaceClient, lazily constructed
         self._token: str = ""
         self._token_ts: float = 0.0
-        self._instance_name: Optional[str] = None  # cached lookup
+        # Project_id (final segment of ``projects/<id>``) — populated
+        # by the Postgres API endpoint walk.
+        self._instance_name: Optional[str] = None
         # Full endpoint resource path
         # (``projects/<project_id>/branches/<branch_id>/endpoints/<endpoint_id>``)
-        # populated when :meth:`_lookup_via_postgres_api` resolves PGHOST.
-        # Required by :meth:`password` to mint via the Postgres API for
-        # Autoscaling-only projects, which the legacy Database Instance
-        # API does not see.
+        # — populated alongside ``_instance_name`` and required by
+        # :meth:`password` to mint a JWT scoped to that endpoint.
         self._endpoint_resource: Optional[str] = None
 
     # ------------------------------------------------------------------
@@ -145,96 +125,63 @@ class LakebaseAuth:
 
     @property
     def instance_name(self) -> str:
-        """Resolve the Lakebase instance name (cached).
+        """Resolve the Lakebase Autoscaling project_id (cached).
 
-        Order:
-        1. ``DATABASE_INSTANCE_NAME`` env var (explicit override).
-        2. Database Instance API: match ``PGHOST`` against
-           ``read_write_dns`` / ``read_only_dns`` of the workspace's
-           Lakebase instances. Covers Provisioned and Autoscaling
-           projects whose endpoints are exposed on the legacy API.
-        3. Postgres API fallback: walk projects → branches →
-           endpoints and match ``status.hosts.host`` /
-           ``status.hosts.read_only_host``. Required for Autoscaling
-           projects whose regional ``ep-<id>...`` hostnames are not
-           surfaced on the Database Instance API.
+        Walks ``GET /api/2.0/postgres/projects`` → branches →
+        endpoints and matches ``status.hosts.host`` /
+        ``status.hosts.read_only_host`` against ``PGHOST``. On a hit
+        we cache both the project_id and the matched endpoint
+        resource path; the latter is consumed by :meth:`password`.
 
-        ``PGAPPNAME`` is intentionally **not** consulted — Databricks
-        Apps sets it to the app name (e.g. ``ontobricks-dev``) which
-        is unrelated to the Lakebase instance and would cause
-        ``generate_database_credential`` to fail with
-        ``Database instance '<app-name>' not found``.
+        Raises :class:`ValidationError` if no endpoint matches —
+        that's the canonical "the bundle is binding the wrong
+        project" failure and must surface loudly rather than
+        silently fall back to a different code path.
+
+        ``PGAPPNAME`` is intentionally **not** consulted: Databricks
+        Apps populates it with the app's name (e.g. ``ontobricks-dev``)
+        which is unrelated to the Lakebase project.
         """
         if self._instance_name:
-            return self._instance_name
-
-        explicit = os.environ.get("DATABASE_INSTANCE_NAME")
-        if explicit:
-            self._instance_name = explicit
             return self._instance_name
 
         host = self.host.strip().lower()
         try:
             self._ensure_workspace()
-            name = self._lookup_via_database_instances(host)
-            if name:
-                self._instance_name = name
-                logger.info(
-                    "Resolved Lakebase instance name %r from PGHOST=%s "
-                    "via Database Instance API",
-                    name,
-                    host,
-                )
-                return self._instance_name
-
-            name = self._lookup_via_postgres_api(host)
-            if name:
-                self._instance_name = name
-                logger.info(
-                    "Resolved Lakebase project_id %r from PGHOST=%s "
-                    "via Postgres API endpoint walk",
-                    name,
-                    host,
-                )
-                return self._instance_name
+            project_id = self._lookup_via_postgres_api(host)
         except Exception as exc:  # noqa: BLE001
             raise ValidationError(
-                f"Could not resolve Lakebase instance name from PGHOST={host!r}: {exc}. "
-                f"Set DATABASE_INSTANCE_NAME explicitly."
+                f"Could not resolve Lakebase Autoscaling project from "
+                f"PGHOST={host!r}: {exc}"
             ) from exc
 
-        raise ValidationError(
-            f"No Lakebase instance matched PGHOST={host!r}. "
-            f"Set DATABASE_INSTANCE_NAME to the instance name."
+        if not project_id:
+            raise ValidationError(
+                f"No Lakebase Autoscaling endpoint matched PGHOST={host!r}. "
+                f"Confirm the Apps ``postgres`` resource binding points "
+                f"at an Autoscaling project (legacy Provisioned "
+                f"instances are not supported)."
+            )
+
+        self._instance_name = project_id
+        logger.info(
+            "Resolved Lakebase Autoscaling project %r from PGHOST=%s",
+            project_id,
+            host,
         )
-
-    def _lookup_via_database_instances(self, host: str) -> Optional[str]:
-        """Match ``host`` against the legacy Database Instance API.
-
-        Returns the instance name on a hit, ``None`` on no match.
-        Raises if the SDK call itself fails — the caller wraps it.
-        """
-        for inst in self._w.database.list_database_instances():
-            rw = (getattr(inst, "read_write_dns", "") or "").strip().lower()
-            ro = (getattr(inst, "read_only_dns", "") or "").strip().lower()
-            if host in (rw, ro):
-                return getattr(inst, "name", None)
-        return None
+        return self._instance_name
 
     def _lookup_via_postgres_api(self, host: str) -> Optional[str]:
-        """Match ``host`` against the Autoscaling Postgres API.
+        """Match ``host`` against Lakebase Autoscaling endpoints.
 
         Walks ``/api/2.0/postgres/projects`` → branches → endpoints
         and compares ``status.hosts.host`` / ``status.hosts.read_only_host``
-        against ``PGHOST``. Returns the project_id (final segment of
+        against ``host``. Returns the project_id (final segment of
         the resource name ``projects/<id>``) on a hit, ``None`` otherwise.
 
-        On a hit, also caches the matched endpoint's full resource path
-        on ``self._endpoint_resource`` so :meth:`password` can mint via
-        ``POST /api/2.0/postgres/credentials`` — the legacy Database
-        Instance API does not see Autoscaling-only projects, so a JWT
-        scoped to ``instance_names=[<project_id>]`` would fail with
-        ``Database instance '<project_id>' not found``.
+        On a hit, also caches the matched endpoint's full resource
+        path on ``self._endpoint_resource`` so :meth:`password` can
+        mint via ``POST /api/2.0/postgres/credentials``.
 
         Uses ``WorkspaceClient.api_client.do`` directly so we work
         across SDK versions that may or may not have ``w.postgres``
@@ -289,29 +236,14 @@ class LakebaseAuth:
     def password(self) -> str:
         """Return a (cached) Lakebase JWT suitable as PG password.
 
-        Two minting paths, picked based on how :attr:`instance_name`
-        was resolved:
+        Mints via ``POST /api/2.0/postgres/credentials`` with the
+        endpoint resource discovered by :attr:`instance_name`. This is
+        the single supported path — the legacy Database Instance API
+        (``WorkspaceClient.database.generate_database_credential``)
+        cannot mint credentials for Autoscaling-only projects and is
+        deliberately not called.
 
-        1. **Postgres API** (``POST /api/2.0/postgres/credentials``) —
-           used when ``self._endpoint_resource`` is populated by the
-           Postgres-API endpoint walk. This is the only path that
-           works for Autoscaling-only projects (created via the
-           Autoscaling UI / Postgres API), whose endpoints are
-           invisible to the legacy Database Instance API.
-
-        2. **Database Instance API** (legacy
-           ``WorkspaceClient.database.generate_database_credential``)
-           — used when the project was resolved via the legacy
-           ``list_database_instances`` API or via an explicit
-           ``DATABASE_INSTANCE_NAME`` override. Covers Provisioned
-           instances and Autoscaling projects also exposed on the
-           legacy API.
-
-        If the legacy mint fails with a ``not found`` error (typical
-        signal that the project is Autoscaling-only), we fall through
-        to a Postgres-API endpoint walk and retry the mint there.
-
-        The resulting token is a Lakebase-issued JWT (valid ~1h) —
+        The resulting token is a Lakebase-issued JWT (valid ~1 h) —
         distinct from the plain workspace bearer token, which Lakebase
         rejects with ``Provided authentication token is not a valid
         JWT encoding``.
@@ -321,47 +253,25 @@ class LakebaseAuth:
             return self._token
 
         self._ensure_workspace()
-        # Force ``instance_name`` resolution first so the endpoint
-        # resource path is populated when applicable. ``instance_name``
-        # caches; this is cheap on subsequent calls.
-        name = self.instance_name
+        # Force project resolution so the endpoint resource path is
+        # populated. ``instance_name`` caches; this is cheap on
+        # subsequent calls.
+        _ = self.instance_name
+        if not self._endpoint_resource:
+            # Defensive: ``instance_name`` either populates the
+            # endpoint or raises. Reaching here means a future
+            # refactor broke that invariant.
+            raise ValidationError(
+                "Lakebase endpoint resource was not populated during "
+                "project resolution; cannot mint JWT."
+            )
 
-        token = ""
         try:
-            if self._endpoint_resource:
-                token = self._mint_via_postgres_api(self._endpoint_resource)
-            else:
-                try:
-                    token = self._mint_via_database_instances(name)
-                except Exception as exc:  # noqa: BLE001
-                    if not _looks_like_instance_not_found(exc):
-                        raise
-                    # Legacy API doesn't know this project — try the
-                    # Postgres API endpoint walk and retry with the
-                    # resolved endpoint resource.
-                    logger.info(
-                        "Legacy generate_database_credential failed for %r "
-                        "(%s); falling back to Postgres API endpoint walk",
-                        name,
-                        exc,
-                    )
-                    project_id = self._lookup_via_postgres_api(
-                        self.host.strip().lower()
-                    )
-                    if project_id and self._endpoint_resource:
-                        # Lock in the project_id discovered via the
-                        # Postgres API so future calls bypass the legacy
-                        # path entirely.
-                        self._instance_name = project_id
-                        token = self._mint_via_postgres_api(
-                            self._endpoint_resource
-                        )
-                    else:
-                        raise
+            token = self._mint_via_postgres_api(self._endpoint_resource)
         except Exception as exc:  # noqa: BLE001
             raise ValidationError(
-                f"Failed to mint Lakebase JWT for instance "
-                f"{self._instance_name or '?'!r}: {exc}"
+                f"Failed to mint Lakebase JWT for project "
+                f"{self._instance_name!r}: {exc}"
             ) from exc
 
         if not token:
@@ -370,19 +280,11 @@ class LakebaseAuth:
         self._token = token
         self._token_ts = now
         logger.debug(
-            "Minted fresh Lakebase JWT for instance %s via %s",
+            "Minted fresh Lakebase JWT for project %s (endpoint=%s)",
             self._instance_name,
-            "postgres-api" if self._endpoint_resource else "database-api",
+            self._endpoint_resource,
         )
         return self._token
-
-    def _mint_via_database_instances(self, name: str) -> str:
-        """Mint a JWT via the legacy Database Instance API."""
-        cred = self._w.database.generate_database_credential(
-            instance_names=[name],
-            request_id="ontobricks-registry",
-        )
-        return cred.token or ""
 
     def _mint_via_postgres_api(self, endpoint_resource: str) -> str:
         """Mint a JWT via ``POST /api/2.0/postgres/credentials``.

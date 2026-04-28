@@ -316,14 +316,26 @@ document.addEventListener('DOMContentLoaded', function () {
                     // explicitly avoids the misleading "0 rows /
                     // not initialised" trap when data is actually
                     // present but the SP can't see it.
+                    //
+                    // For ``no_usage`` we prefer the backend ``message``
+                    // verbatim because it now carries the live
+                    // ``(database, role, schema_exists)`` triplet the
+                    // probe ran against — operators need that to spot
+                    // grants that landed on a different database than
+                    // the one bound by the Apps ``postgres`` resource.
                     const reason = data.reason || '';
                     const detail = data.message || '';
                     let inner;
                     if (reason === 'no_usage') {
-                        inner = '<i class="bi bi-shield-exclamation text-danger me-1"></i> Schema <code>'
-                            + escapeHtml(data.schema || '') + '</code> visible but the app service principal '
-                            + 'lacks <code>USAGE</code>. Run <code>scripts/bootstrap-lakebase-perms.sh</code> '
-                            + '(or grant manually) and refresh.';
+                        if (detail) {
+                            inner = '<i class="bi bi-shield-exclamation text-danger me-1"></i> '
+                                + escapeHtml(detail);
+                        } else {
+                            inner = '<i class="bi bi-shield-exclamation text-danger me-1"></i> Schema <code>'
+                                + escapeHtml(data.schema || '') + '</code> visible but the app service principal '
+                                + 'lacks <code>USAGE</code>. Run <code>scripts/bootstrap-lakebase-perms.sh</code> '
+                                + '(or grant manually) and refresh.';
+                        }
                     } else if (reason === 'connect_failed' || reason === 'table_count_failed') {
                         inner = '<i class="bi bi-x-circle text-danger me-1"></i> '
                             + escapeHtml(detail || 'Could not reach Lakebase.');

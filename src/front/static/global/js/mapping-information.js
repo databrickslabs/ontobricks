@@ -841,11 +841,19 @@ async function exportR2RMLToUC() {
     });
 }
 
-// Initialize Import/Export buttons and wire reset button
-setupImportExportButtons();
-var _resetBtn = document.getElementById('resetMappingsBtn');
-if (_resetBtn) {
-    _resetBtn.addEventListener('click', function() { confirmResetMappings(); });
+function _initMappingInformationButtons() {
+    setupImportExportButtons();
+    var _resetBtn = document.getElementById('resetMappingsBtn');
+    if (_resetBtn && !_resetBtn.dataset.obResetWired) {
+        _resetBtn.addEventListener('click', function() { confirmResetMappings(); });
+        _resetBtn.dataset.obResetWired = '1';
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initMappingInformationButtons);
+} else {
+    _initMappingInformationButtons();
 }
 
 // Expose functions to global scope for mapping-core.js

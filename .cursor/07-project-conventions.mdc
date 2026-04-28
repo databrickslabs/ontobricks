@@ -48,11 +48,15 @@ scope:
 
 ### Subpackage Patterns (reference)
 
-**`back/objects/registry/`** — service + scheduler + permissions (reference pattern for multi-concern domain areas):
-- `service.py` — `RegistryService` owns all CRUD against UC Volume-backed registry. Constructor receives `RegistryCfg` (dataclass).
+**`back/objects/registry/`** — service + scheduler + permissions + pluggable store (reference pattern for multi-concern domain areas):
+- `RegistryService.py` — owns all CRUD; delegates persistence to a `RegistryStore`. Constructor receives `RegistryCfg` (dataclass).
 - `permissions.py` — `PermissionService` encapsulates permission checks. Role constants are module-level.
 - `scheduler.py` — `BuildScheduler` wraps APScheduler. Module-level `get_scheduler()` returns singleton.
-- When to add here: persisting/loading domains from UC, permissions, scheduling.
+- `store/` — backend abstraction. Two concrete stores, selected by `RegistryFactory.from_cfg(...)`:
+  - `store/volume/VolumeRegistryStore.py` — JSON-on-Volume, full registry (metadata + documents + binaries).
+  - `store/lakebase/LakebaseRegistryStore.py` — metadata/indexes in Lakebase Postgres (autoscaling only); documents/binaries (e.g. `.lbug`) **must still go to the UC Volume** via the same `VolumeFileService`. **Default backend whenever a Lakebase database is bound to the App.**
+- Backend coordinates (volume path, Lakebase host/db/schema) come from the Databricks App config — never hard-coded in code; user-visible only through **Settings → Registry**.
+- When to add here: persisting/loading domains, permissions, scheduling, or a new registry storage backend (subclass `RegistryStore` and register it in `RegistryFactory`).
 
 **`back/objects/session/`** — middleware + managers + domain state:
 - `FileSessionMiddleware.py` — ASGI middleware + `get_session` helper.

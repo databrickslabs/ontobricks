@@ -553,20 +553,48 @@ class LakebaseRegistryStore(RegistryStore):
         """
         try:
             with self._connect() as conn, conn.cursor() as cur:
+                # Probe the live session context so the error message can
+                # tell the operator exactly which (database, role, schema)
+                # the check ran against — this is the only reliable way
+                # to spot grants that landed on a different database
+                # than the one the Apps ``postgres`` resource binds.
                 cur.execute(
-                    "SELECT has_schema_privilege(current_user, %s, 'USAGE')",
-                    (self._schema,),
+                    "SELECT current_database(), current_user, "
+                    "       has_schema_privilege(current_user, %s, 'USAGE'), "
+                    "       EXISTS (SELECT 1 FROM pg_namespace "
+                    "               WHERE nspname = %s)",
+                    (self._schema, self._schema),
                 )
                 row = cur.fetchone()
-                has_usage = bool(row[0]) if row else False
+                if not row:
+                    has_usage = False
+                    cur_db = self._effective_database
+                    cur_user = "?"
+                    schema_exists = False
+                else:
+                    cur_db, cur_user, has_usage_raw, schema_exists = row
+                    has_usage = bool(has_usage_raw)
                 if not has_usage:
-                    msg = (
-                        f"Service principal lacks USAGE on schema "
-                        f"'{self._schema}'. Run "
-                        f"scripts/bootstrap-lakebase-perms.sh or "
-                        f"GRANT USAGE ON SCHEMA "
-                        f"\"{self._schema}\" to the app SP."
-                    )
+                    if schema_exists:
+                        msg = (
+                            f"Role '{cur_user}' lacks USAGE on schema "
+                            f"'{self._schema}' in database '{cur_db}'. "
+                            f"Run scripts/bootstrap-lakebase-perms.sh "
+                            f"-i <instance> -d {cur_db} -s {self._schema} "
+                            f"-a <app-name>, or GRANT USAGE ON SCHEMA "
+                            f"\"{self._schema}\" TO \"{cur_user}\" "
+                            f"directly in database '{cur_db}'."
+                        )
+                    else:
+                        msg = (
+                            f"Schema '{self._schema}' does not exist in "
+                            f"database '{cur_db}' (role '{cur_user}'). "
+                            f"Either initialize it from Settings > "
+                            f"Registry, or check that bundle "
+                            f"``lakebase_database_resource`` points at "
+                            f"the database where the schema actually "
+                            f"lives."
+                        )
                     logger.warning("Lakebase init probe: %s", msg)
                     return {
                         "initialized": False,

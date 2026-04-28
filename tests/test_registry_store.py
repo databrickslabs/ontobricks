@@ -585,7 +585,12 @@ class TestLakebaseInitStatus:
         """Schema USAGE missing — must NOT report "not initialised"."""
         store = _make_lakebase_store(monkeypatch)
         cur = _ScriptedCursor(
-            [{"contains": "has_schema_privilege", "fetchone": (False,)}]
+            [
+                {
+                    "contains": "has_schema_privilege",
+                    "fetchone": ("databricks_postgres", "sp-uuid", False, True),
+                }
+            ]
         )
         self._patch_connect(monkeypatch, store, cur)
 
@@ -593,6 +598,29 @@ class TestLakebaseInitStatus:
         assert status["initialized"] is False
         assert status["reason"] == "no_usage"
         assert "USAGE" in status["error"]
+        # New diagnostic surface — error must name the live db + role so
+        # operators can spot grants that landed on a different database.
+        assert "databricks_postgres" in status["error"]
+        assert "sp-uuid" in status["error"]
+
+    def test_no_usage_when_schema_missing_in_bound_database(self, monkeypatch):
+        """Schema absent from the bound DB — surfaces a different hint."""
+        store = _make_lakebase_store(monkeypatch)
+        cur = _ScriptedCursor(
+            [
+                {
+                    "contains": "has_schema_privilege",
+                    "fetchone": ("databricks_postgres", "sp-uuid", False, False),
+                }
+            ]
+        )
+        self._patch_connect(monkeypatch, store, cur)
+
+        status = store.init_status()
+        assert status["initialized"] is False
+        assert status["reason"] == "no_usage"
+        assert "does not exist" in status["error"]
+        assert "databricks_postgres" in status["error"]
         # Must short-circuit — no ``to_regclass`` query when the
         # SP can't even see the schema.
         assert not any("to_regclass" in s for s, _ in cur.executed)
@@ -601,7 +629,10 @@ class TestLakebaseInitStatus:
         store = _make_lakebase_store(monkeypatch)
         cur = _ScriptedCursor(
             [
-                {"contains": "has_schema_privilege", "fetchone": (True,)},
+                {
+                    "contains": "has_schema_privilege",
+                    "fetchone": ("databricks_postgres", "sp-uuid", True, True),
+                },
                 {"contains": "to_regclass", "fetchone": (False,)},
             ]
         )
@@ -615,7 +646,10 @@ class TestLakebaseInitStatus:
         store = _make_lakebase_store(monkeypatch)
         cur = _ScriptedCursor(
             [
-                {"contains": "has_schema_privilege", "fetchone": (True,)},
+                {
+                    "contains": "has_schema_privilege",
+                    "fetchone": ("databricks_postgres", "sp-uuid", True, True),
+                },
                 {"contains": "to_regclass", "fetchone": (True,)},
                 # ``_fetch_registry_id`` runs after — both queries return
                 # nothing, so the schema is initialised but unseeded.
@@ -633,7 +667,10 @@ class TestLakebaseInitStatus:
         store = _make_lakebase_store(monkeypatch)
         cur = _ScriptedCursor(
             [
-                {"contains": "has_schema_privilege", "fetchone": (True,)},
+                {
+                    "contains": "has_schema_privilege",
+                    "fetchone": ("databricks_postgres", "sp-uuid", True, True),
+                },
                 {"contains": "to_regclass", "fetchone": (True,)},
                 {"contains": "WHERE name = %s", "fetchone": ("rid-42",)},
             ]
@@ -648,7 +685,10 @@ class TestLakebaseInitStatus:
         store._registry_id = None
         cur2 = _ScriptedCursor(
             [
-                {"contains": "has_schema_privilege", "fetchone": (True,)},
+                {
+                    "contains": "has_schema_privilege",
+                    "fetchone": ("databricks_postgres", "sp-uuid", True, True),
+                },
                 {"contains": "to_regclass", "fetchone": (True,)},
                 {"contains": "WHERE name = %s", "fetchone": ("rid-42",)},
             ]

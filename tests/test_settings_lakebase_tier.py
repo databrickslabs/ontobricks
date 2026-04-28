@@ -146,6 +146,101 @@ class TestLakebaseBranchInfo:
         assert info == {}
 
 
+class TestLakebaseInstanceMetadataPostgresApi:
+    """``_lakebase_instance_metadata`` walks the Postgres API only —
+    the legacy ``list_database_instances`` SDK call must never fire.
+    """
+
+    PROJECT = "ontobricks-test"
+    PROJECT_PATH = f"projects/{PROJECT}"
+    BRANCH_PATH = f"{PROJECT_PATH}/branches/production"
+    ENDPOINT_PATH = f"{BRANCH_PATH}/endpoints/primary"
+    HOST = "ep-damp-art-d1l8gclo.database.us-west-2.cloud.databricks.com"
+    RO_HOST = "ep-damp-art-d1l8gclo-ro.database.us-west-2.cloud.databricks.com"
+
+    def _autoscaling_workspace(self):
+        responses = {
+            "/api/2.0/postgres/projects": {
+                "projects": [{"name": self.PROJECT_PATH}]
+            },
+            f"/api/2.0/postgres/{self.PROJECT_PATH}/branches": {
+                "branches": [{"name": self.BRANCH_PATH}]
+            },
+            f"/api/2.0/postgres/{self.BRANCH_PATH}/endpoints": {
+                "endpoints": [
+                    {
+                        "name": self.ENDPOINT_PATH,
+                        "status": {
+                            "hosts": {
+                                "host": self.HOST,
+                                "read_only_host": self.RO_HOST,
+                            }
+                        },
+                    }
+                ]
+            },
+            f"/api/2.0/postgres/projects/{self.PROJECT}": {
+                "name": self.PROJECT_PATH,
+                "status": {
+                    "default_branch": self.BRANCH_PATH,
+                    "default_endpoint_settings": {
+                        "autoscaling_limit_min_cu": 0.5,
+                        "autoscaling_limit_max_cu": 8,
+                    },
+                },
+            },
+        }
+        w = MagicMock()
+        # Legacy API must not be touched.
+        w.database.list_database_instances.side_effect = AssertionError(
+            "Legacy Database Instance API must not be called"
+        )
+
+        def _do(method, path, *args, **kwargs):
+            if path not in responses:
+                raise AssertionError(f"unexpected api call: {method} {path}")
+            return responses[path]
+
+        w.api_client.do.side_effect = _do
+        return w
+
+    def test_returns_payload_for_matching_host(self, monkeypatch):
+        from databricks.sdk import WorkspaceClient as _WC  # noqa: F401
+
+        w = self._autoscaling_workspace()
+        monkeypatch.setattr(
+            "databricks.sdk.WorkspaceClient", lambda *a, **kw: w
+        )
+        meta = SettingsService._lakebase_instance_metadata(self.HOST)
+        assert meta is not None
+        assert meta["name"] == self.PROJECT
+        assert meta["endpoint"] == self.HOST
+        assert meta["read_only_endpoint"] == self.RO_HOST
+        # Provisioned-only fields stay empty for an Autoscaling project.
+        assert meta["capacity"] == ""
+        assert meta["pg_version"] == ""
+        assert meta["node_count"] is None
+        # Branch + autoscaling CU range come from
+        # ``_lakebase_branch_info``.
+        assert meta["branch"] == "production"
+        assert meta["branch_resource"] == self.BRANCH_PATH
+        assert meta["autoscaling_min_cu"] == 0.5
+        assert meta["autoscaling_max_cu"] == 8
+
+    def test_returns_none_when_no_endpoint_matches(self, monkeypatch):
+        w = self._autoscaling_workspace()
+        monkeypatch.setattr(
+            "databricks.sdk.WorkspaceClient", lambda *a, **kw: w
+        )
+        meta = SettingsService._lakebase_instance_metadata(
+            "ep-other.database.us-west-2.cloud.databricks.com"
+        )
+        assert meta is None
+
+    def test_empty_host_short_circuits(self):
+        assert SettingsService._lakebase_instance_metadata("") is None
+
+
 class TestLakebaseActiveBranch:
     def test_returns_default_when_bound_database_is_empty(self):
         # Empty bound_database short-circuits to the default branch

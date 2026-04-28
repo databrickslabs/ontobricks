@@ -8,7 +8,7 @@ import re
 import shutil
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from back.core.errors import (
     AuthorizationError,
@@ -44,26 +44,6 @@ LADYBUG_BASE_DIR = "/tmp/ontobricks"
 # (no quoted identifiers) so we never have to worry about quoting it
 # in dynamic SQL or in libpq conninfo strings.
 _SAFE_DBNAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_-]*$")
-
-
-def _enum_short(value: Any) -> str:
-    """Return the short name of an SDK enum (or pass strings through).
-
-    The Databricks SDK serialises ``DatabaseInstanceState`` and friends
-    as ``ClassName.MEMBER``. The admin UI only needs ``MEMBER``.
-    """
-    if value is None or value == "":
-        return ""
-    s = str(value)
-    return s.split(".", 1)[1] if "." in s else s
-
-
-def _pg_version_short(value: Any) -> str:
-    """Reduce ``PG_VERSION_16`` (SDK enum string) to ``"16"``."""
-    s = _enum_short(value)
-    if s.upper().startswith("PG_VERSION_"):
-        return s[len("PG_VERSION_"):]
-    return s
 
 
 class SettingsService:
@@ -558,22 +538,24 @@ class SettingsService:
     def _lakebase_instance_metadata(
         host: str, bound_database: str = ""
     ) -> Optional[Dict[str, Any]]:
-        """Look up Databricks metadata for the Lakebase instance at ``host``.
+        """Look up Databricks metadata for the Lakebase project at ``host``.
 
-        Matches by ``read_write_dns`` (and falls back to ``read_only_dns``)
-        and returns a small JSON-friendly dict suitable for the admin UI.
-        Returns ``None`` on any failure — the caller will still show the
-        raw connection params (PGHOST/PGPORT/PGDATABASE/PGUSER), so this
-        is purely additive.
+        OntoBricks targets **Lakebase Autoscaling exclusively**. This
+        helper walks ``/api/2.0/postgres/projects`` → branches →
+        endpoints and matches ``status.hosts.host`` /
+        ``status.hosts.read_only_host`` against ``host``. The legacy
+        Database Instance API (``list_database_instances``) is
+        deliberately not consulted — it cannot see Autoscaling-only
+        projects (typical for sandboxes created via the Autoscaling UI
+        or the Postgres API).
 
-        OntoBricks targets **Lakebase Autoscaling** exclusively: every
-        instance is expected to expose the
-        ``/api/2.0/postgres/projects/<name>`` resource. The payload
-        therefore enriches the base instance fields with the active
-        branch (the one hosting the bound ``PGDATABASE``) plus the
-        project's autoscaling CU min/max range. Legacy Provisioned
-        instances are not supported — see ``databricks.yml`` for the
-        deployment configuration.
+        Returns a JSON-friendly dict suitable for the admin UI on a
+        match, or ``None`` on miss / failure. Provisioned-only fields
+        (``capacity``, ``pg_version``, ``node_count``) are returned as
+        empty so the UI degrades to a ``—`` placeholder; the
+        ``autoscaling_min_cu`` / ``autoscaling_max_cu`` pair populated
+        by :meth:`_lakebase_branch_info` is the Autoscaling-native
+        replacement.
         """
         if not host:
             return None
@@ -581,55 +563,97 @@ class SettingsService:
             from databricks.sdk import WorkspaceClient
 
             w = WorkspaceClient()
-            target = host.strip().lower()
-            for inst in w.database.list_database_instances():
-                rw = (getattr(inst, "read_write_dns", "") or "").strip().lower()
-                ro = (getattr(inst, "read_only_dns", "") or "").strip().lower()
-                if target in (rw, ro):
-                    capacity = getattr(inst, "effective_capacity", "") or getattr(
-                        inst, "capacity", ""
-                    ) or ""
-                    state = getattr(inst, "state", "")
-                    pg_version = getattr(inst, "pg_version", "") or ""
-                    name = getattr(inst, "name", "") or ""
-                    payload = {
-                        "name": name,
-                        "uid": getattr(inst, "uid", "") or "",
-                        # SDK enums stringify as e.g. ``DatabaseInstanceState.AVAILABLE``;
-                        # strip the prefix so the UI shows just ``AVAILABLE``.
-                        "state": _enum_short(state),
-                        "stopped": bool(
-                            getattr(inst, "effective_stopped", False)
-                            or getattr(inst, "stopped", False)
-                        ),
-                        "capacity": _enum_short(capacity),
-                        "pg_version": _pg_version_short(pg_version),
-                        "node_count": getattr(inst, "effective_node_count", None)
-                        or getattr(inst, "node_count", None),
-                        "creator": getattr(inst, "creator", "") or "",
-                        "creation_time": getattr(inst, "creation_time", "") or "",
-                        "endpoint": rw or ro,
-                        "read_only_endpoint": ro,
-                        "branch": "",
-                        "branch_resource": "",
-                        "autoscaling_min_cu": None,
-                        "autoscaling_max_cu": None,
-                    }
-                    payload.update(
-                        SettingsService._lakebase_branch_info(
-                            w, name, bound_database
-                        )
-                    )
-                    return payload
-            logger.debug(
-                "No Databricks database instance matched PGHOST=%s "
-                "(searched read_write_dns / read_only_dns)",
-                host,
+            match = SettingsService._find_autoscaling_endpoint_for_host(
+                w, host.strip().lower()
             )
-            return None
+            if not match:
+                logger.debug(
+                    "No Autoscaling project endpoint matched PGHOST=%s "
+                    "(walked /api/2.0/postgres/projects → branches → "
+                    "endpoints)",
+                    host,
+                )
+                return None
+            project_id, primary_host, ro_host = match
+            payload: Dict[str, Any] = {
+                "name": project_id,
+                # ``uid``, ``state``, ``creator``, ``creation_time`` are
+                # not surfaced on the project list endpoint; the admin
+                # UI shows ``—`` placeholders when they're empty. We
+                # could fetch them via ``GET /api/2.0/postgres/projects/<id>``
+                # but ``_lakebase_branch_info`` already does that and
+                # cares only about branch + autoscaling CU range, so
+                # we stay cheap here.
+                "uid": "",
+                "state": "",
+                "stopped": False,
+                # Provisioned-only fields — left empty on Autoscaling.
+                "capacity": "",
+                "pg_version": "",
+                "node_count": None,
+                "creator": "",
+                "creation_time": "",
+                "endpoint": primary_host,
+                "read_only_endpoint": ro_host,
+                "branch": "",
+                "branch_resource": "",
+                "autoscaling_min_cu": None,
+                "autoscaling_max_cu": None,
+            }
+            payload.update(
+                SettingsService._lakebase_branch_info(
+                    w, project_id, bound_database
+                )
+            )
+            return payload
         except Exception as exc:  # noqa: BLE001 -- best-effort enrichment
             logger.debug("Lakebase instance lookup failed: %s", exc)
             return None
+
+    @staticmethod
+    def _find_autoscaling_endpoint_for_host(
+        w: Any, host: str
+    ) -> Optional[Tuple[str, str, str]]:
+        """Walk Lakebase Autoscaling projects/branches/endpoints for ``host``.
+
+        Returns ``(project_id, primary_host, read_only_host)`` on match,
+        ``None`` otherwise. Mirrors the resolution path used at runtime
+        by :class:`back.core.databricks.LakebaseAuth.LakebaseAuth` so the
+        admin UI sees the same project the auth helper authenticates
+        against.
+        """
+        api = getattr(w, "api_client", None)
+        if api is None or not hasattr(api, "do"):
+            return None
+        projects = (api.do("GET", "/api/2.0/postgres/projects") or {}).get(
+            "projects"
+        ) or []
+        for project in projects:
+            project_path = project.get("name") or ""
+            if not project_path:
+                continue
+            branches = (
+                api.do("GET", f"/api/2.0/postgres/{project_path}/branches") or {}
+            ).get("branches") or []
+            for branch in branches:
+                branch_path = branch.get("name") or ""
+                if not branch_path:
+                    continue
+                endpoints = (
+                    api.do("GET", f"/api/2.0/postgres/{branch_path}/endpoints")
+                    or {}
+                ).get("endpoints") or []
+                for endpoint in endpoints:
+                    hosts = (endpoint.get("status") or {}).get("hosts") or {}
+                    primary = (hosts.get("host") or "").strip()
+                    ro = (hosts.get("read_only_host") or "").strip()
+                    if host in (primary.lower(), ro.lower()):
+                        return (
+                            project_path.rsplit("/", 1)[-1],
+                            primary,
+                            ro,
+                        )
+        return None
 
     @staticmethod
     def _lakebase_branch_info(

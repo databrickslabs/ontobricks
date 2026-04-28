@@ -22,12 +22,21 @@ set -euo pipefail
 # Idempotent — re-running is a no-op for objects that already carry the
 # privileges.
 #
+# Defaults match the **dev sandbox** described in ``databricks.yml``:
+# Lakebase Autoscaling project ``ontobricks-test``, default Postgres
+# database ``databricks_postgres`` (the one bound by the Apps
+# ``postgres`` resource — see the ``lakebase_database_resource``
+# variable comment in ``databricks.yml``), schema
+# ``ontobricks_registry``, and a single grantee ``ontobricks-dev``.
+# Pass ``-i`` / ``-d`` / ``-s`` / ``-a`` to retarget any of those when
+# you migrate to a different project, database, schema, or app.
+#
 # Usage:
-#   scripts/bootstrap-lakebase-perms.sh                # default: ontobricks-app + ontobricks-dev,
-#                                                       schema ontobricks_registry, db ontobricks_registry
-#   scripts/bootstrap-lakebase-perms.sh -a ontobricks-dev
+#   scripts/bootstrap-lakebase-perms.sh                # default: dev sandbox
+#                                                       (ontobricks-test → databricks_postgres → ontobricks_registry → ontobricks-dev)
+#   scripts/bootstrap-lakebase-perms.sh -a ontobricks  # production app on the same instance
 #   scripts/bootstrap-lakebase-perms.sh -i ontobricks-app -d ontobricks_registry -s ontobricks_registry \
-#                                       -a ontobricks -a ontobricks-dev
+#                                       -a ontobricks -a ontobricks-dev  # legacy multi-grantee layout
 #
 # Prerequisites:
 #   - Databricks CLI authenticated against the same workspace as the apps
@@ -37,8 +46,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
-INSTANCE="ontobricks-app"
-DATABASE="ontobricks_registry"
+INSTANCE="ontobricks-test"
+DATABASE="databricks_postgres"
 SCHEMA="ontobricks_registry"
 APPS=()
 
@@ -86,24 +95,76 @@ if [[ -z "$PGUSER" ]]; then
     exit 1
 fi
 
-PGHOST="$(databricks api get "/api/2.0/database/instances/${INSTANCE}" 2>/dev/null \
-    | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("read_write_dns") or "")')"
-if [[ -z "$PGHOST" ]]; then
-    echo "ERROR: Could not resolve read_write_dns for Lakebase instance '${INSTANCE}'." >&2
-    echo "       Check 'databricks api get /api/2.0/database/instances/${INSTANCE}'." >&2
+# Resolve the project's primary endpoint via the Postgres API.
+# OntoBricks targets Lakebase Autoscaling exclusively — the legacy
+# ``/api/2.0/database/instances/<name>`` endpoint 404s on Autoscaling-
+# only projects, so we walk projects → branches → endpoints and pick
+# the first endpoint whose ``status.hosts.host`` is populated.
+INSTANCE_NAME="$INSTANCE"
+ENDPOINT_INFO="$(INSTANCE_NAME="$INSTANCE_NAME" python3 - <<'PY'
+import json, os, subprocess, sys
+
+instance = os.environ["INSTANCE_NAME"]
+
+
+def api_get(path):
+    out = subprocess.run(
+        ["databricks", "api", "get", path],
+        capture_output=True,
+        text=True,
+    )
+    if out.returncode != 0 or not out.stdout.strip():
+        return None
+    try:
+        return json.loads(out.stdout)
+    except json.JSONDecodeError:
+        return None
+
+
+branches = (
+    api_get(f"/api/2.0/postgres/projects/{instance}/branches") or {}
+).get("branches") or []
+for branch in branches:
+    branch_path = branch.get("name") or ""
+    if not branch_path:
+        continue
+    endpoints = (
+        api_get(f"/api/2.0/postgres/{branch_path}/endpoints") or {}
+    ).get("endpoints") or []
+    for ep in endpoints:
+        hosts = (ep.get("status") or {}).get("hosts") or {}
+        host = (hosts.get("host") or "").strip()
+        endpoint_path = ep.get("name") or ""
+        if host and endpoint_path:
+            print(host)
+            print(endpoint_path)
+            sys.exit(0)
+sys.exit(1)
+PY
+)"
+if [[ -z "$ENDPOINT_INFO" ]]; then
+    echo "ERROR: Could not resolve a primary endpoint for Lakebase Autoscaling project '${INSTANCE}'." >&2
+    echo "       Check 'databricks api get /api/2.0/postgres/projects/${INSTANCE}/branches'" >&2
+    echo "       and confirm the project name (it must be the Autoscaling project_id)." >&2
     exit 1
 fi
+PGHOST="$(printf '%s\n' "$ENDPOINT_INFO" | sed -n 1p)"
+ENDPOINT_PATH="$(printf '%s\n' "$ENDPOINT_INFO" | sed -n 2p)"
 
 echo "=== OntoBricks — Lakebase Schema Permission Bootstrap ==="
-echo "Instance : ${INSTANCE} (${PGHOST})"
+echo "Project  : ${INSTANCE} (${PGHOST})"
+echo "Endpoint : ${ENDPOINT_PATH}"
 echo "Database : ${DATABASE}"
 echo "Schema   : ${SCHEMA}"
 echo "Acting as: ${PGUSER}"
 echo "Apps     : ${APPS[*]}"
 echo
 
-PGPASSWORD="$(databricks api post /api/2.0/database/credentials \
-    --json "{\"request_id\":\"bootstrap-perms\",\"instance_names\":[\"${INSTANCE}\"]}" \
+# Mint a Lakebase JWT via the Autoscaling Postgres API. The legacy
+# ``/api/2.0/database/credentials`` mint cannot scope tokens to
+# Autoscaling-only project endpoints.
+PGPASSWORD="$(databricks api post /api/2.0/postgres/credentials \
+    --json "{\"endpoint\":\"${ENDPOINT_PATH}\"}" \
     | python3 -c 'import sys,json; print(json.load(sys.stdin).get("token",""))')"
 if [[ -z "$PGPASSWORD" ]]; then
     echo "ERROR: Failed to mint a Lakebase JWT for instance '${INSTANCE}'." >&2

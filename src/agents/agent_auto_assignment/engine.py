@@ -117,6 +117,9 @@ GENERAL RULES
 • Process ALL entities and ALL relationships — do not skip any.
 • If execute_sql fails, read the error and fix the SQL.
 • You may batch multiple independent tool calls in a single response.
+• Only ever pass row-returning queries (SELECT / WITH …) to execute_sql. \
+Never pass DESCRIBE, SHOW, EXPLAIN or other metadata statements — \
+use get_metadata for schema introspection instead.
 • After submitting all mappings, output ONLY a brief text summary of what was mapped."""
 
 
