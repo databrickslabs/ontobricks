@@ -1,35 +1,44 @@
 # OntoBricks Dev Sandbox — Databricks Asset Bundle
 #
-# This bundle deploys the OntoBricks **development sandbox app**
-# (``ontobricks-dev``) only. It is intentionally separate from the
-# production ``ontobricks`` and ``mcp-ontobricks`` apps:
+# This bundle deploys two apps:
 #
-# - Different ``bundle.name`` (``ontobricks_dev_bundle``) so DAB state
-#   does not collide with any prior ``ontobricks_bundle`` deployment.
-# - Different ``workspace.root_path`` so the sync directory and the
+# - ``ontobricks_dev_app`` → app name ``ontobricks-dev`` (FastAPI UI,
+#   ``source_code_path: .``). Uses the repository root as source.
+# - ``mcp_ontobricks_app`` → app name ``mcp-ontobricks`` (FastMCP
+#   server, ``source_code_path: src/mcp-server``). Calls back to
+#   the main app over HTTP.
+#
+# The bundle is intentionally separate from any previous
+# ``ontobricks_bundle`` deployment:
+#
+# - Distinct ``bundle.name`` (``ontobricks_dev_bundle``) so DAB
+#   state does not collide.
+# - Distinct ``workspace.root_path`` so the sync directory and the
 #   ``.bundle/state/`` tracking files live under their own folder
 #   (``/Workspace/Users/<me>/.bundle/ontobricks-dev/<target>``).
-# - Only ``ontobricks_dev_app`` is declared. ``databricks bundle deploy``
-#   here can never touch the production ``ontobricks`` /
-#   ``mcp-ontobricks`` apps because this bundle simply does not know
-#   about them.
 #
-# Source code: shipped straight from the repository root. Because this
-# bundle declares only one app, the "duplicate source_code_path" rule
-# does not apply, so we no longer need a wrapper directory. The
-# sandbox auto-detects its app name (``ontobricks-dev``) from the
-# Databricks-Apps-injected ``DATABRICKS_APP_NAME`` env var — see
-# ``Settings.ontobricks_app_name`` for the alias-chain logic.
+# When this bundle takes over an app that was previously deployed
+# from a different bundle (e.g. ``ontobricks_bundle``), DAB requires
+# a one-time bind step:
+#
+#   databricks bundle deployment bind mcp_ontobricks_app mcp-ontobricks --auto-approve
+#
+# ``scripts/deploy.sh --bind`` does both binds in one go.
+#
+# Source code paths:
+# - The main app is shipped from the repository root. The
+#   sandbox auto-detects its app name (``ontobricks-dev``) from the
+#   Databricks-Apps-injected ``DATABRICKS_APP_NAME`` env var — see
+#   ``Settings.ontobricks_app_name`` for the alias-chain logic.
+# - The MCP server is shipped from ``src/mcp-server`` (its own
+#   ``pyproject.toml`` + ``app.yaml`` + ``server/`` package live there).
 #
 # Usage:
-#   databricks bundle validate                       # validate dev
-#   databricks bundle deploy                         # deploy + register sandbox (Volume backend)
-#   databricks bundle run ontobricks_dev_app         # start the sandbox
-#   databricks bundle deploy -t dev-lakebase         # opt into the Lakebase backend
-#
-# To re-introduce the production apps later, restore the previous
-# ``databricks.yml`` from git history (commit before
-# 2026-04-27 "Carve ontobricks-dev into its own DAB").
+#   databricks bundle validate -t dev-lakebase                  # validate
+#   databricks bundle deploy   -t dev-lakebase                  # deploy both apps + Lakebase binding
+#   databricks bundle run ontobricks_dev_app -t dev-lakebase    # start the UI
+#   databricks bundle run mcp_ontobricks_app -t dev-lakebase    # start the MCP server
+#   databricks bundle deploy   -t dev                           # Volume-only fallback (no postgres)
 
 bundle:
   name: ontobricks_dev_bundle
@@ -114,11 +123,35 @@ variables:
 
 resources:
   apps:
-    # ── Dev sandbox app (the only app this bundle manages) ──────
+    # ── Dev sandbox app (FastAPI UI) ────────────────────────────
     ontobricks_dev_app:
       name: "ontobricks-dev"
       description: "OntoBricks (development sandbox app)"
       source_code_path: .
+      resources:
+        - name: sql-warehouse
+          description: "SQL Warehouse for executing queries and metadata operations"
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: volume
+          description: "Unity Catalog Volume for the OntoBricks domain registry"
+          uc_securable:
+            securable_type: "VOLUME"
+            securable_full_name: "${var.registry_catalog}.${var.registry_schema}.${var.registry_volume}"
+            permission: WRITE_VOLUME
+
+    # ── MCP companion server ────────────────────────────────────
+    # FastMCP server exposing OntoBricks Digital Twin tools to the
+    # Databricks Playground. Deployed from ``src/mcp-server`` (its own
+    # ``pyproject.toml`` + ``app.yaml``). The MCP server's service
+    # principal needs ``CAN_USE`` on ``ontobricks-dev`` so it can call
+    # back into the UI's REST API — ``scripts/deploy.sh`` grants this
+    # automatically after every deploy.
+    mcp_ontobricks_app:
+      name: "mcp-ontobricks"
+      description: "OntoBricks MCP companion server (FastMCP)"
+      source_code_path: ./src/mcp-server
       resources:
         - name: sql-warehouse
           description: "SQL Warehouse for executing queries and metadata operations"
@@ -153,6 +186,14 @@ targets:
     resources:
       apps:
         ontobricks_dev_app:
+          resources:
+            - name: postgres
+              description: "Lakebase Autoscaling Postgres database for the OntoBricks registry"
+              postgres:
+                branch: ${var.lakebase_branch}
+                database: ${var.lakebase_database_resource}
+                permission: "CAN_CONNECT_AND_CREATE"
+        mcp_ontobricks_app:
           resources:
             - name: postgres
               description: "Lakebase Autoscaling Postgres database for the OntoBricks registry"
