@@ -24,29 +24,43 @@ import pytest
 from back.core.databricks.LakebaseAuth import LakebaseAuth
 from back.core.errors import ValidationError
 
+# ---------------------------------------------------------------------------
+# Synthetic Lakebase fixtures
+#
+# These constants are deliberately *not* real credentials. The hostname
+# format mirrors a production Lakebase Autoscaling endpoint so the
+# tests document the real shape, but the project slug is the obvious
+# placeholder ``test-fake1234`` and the user is the all-zero UUID.
+# Tagged with both ``# pragma: allowlist secret`` (detect-secrets) and
+# ``# ggignore`` (ggshield) so secret scanners stop flagging the
+# fixture as a "Generic Database Assignment" — see GitGuardian alert
+# 32279171 (a3b55be) which was the original false positive.
+# ---------------------------------------------------------------------------
+_FAKE_PGHOST = "ep-test-fake1234.database.us-west-2.cloud.databricks.com"  # pragma: allowlist secret  # ggignore
+_FAKE_PGHOST_RO = "ep-test-fake1234-ro.database.us-west-2.cloud.databricks.com"  # pragma: allowlist secret  # ggignore
+_FAKE_PGUSER = "00000000-0000-0000-0000-000000000000"  # pragma: allowlist secret  # ggignore
+_FAKE_PROJECT_ID = "ontobricks-test"
+_FAKE_PG_TOKEN = "POSTGRES-API-TOKEN"  # pragma: allowlist secret  # ggignore
+
 
 @pytest.fixture
 def autoscaling_pg_env(monkeypatch):
     """Populate the ``PG*`` env vars to mimic an Apps runtime bound to
     a Lakebase Autoscaling project."""
-    monkeypatch.setenv(
-        "PGHOST", "ep-damp-art-d1l8gclo.database.us-west-2.cloud.databricks.com"
-    )
+    monkeypatch.setenv("PGHOST", _FAKE_PGHOST)  # pragma: allowlist secret  # ggignore
     monkeypatch.setenv("PGPORT", "5432")
     monkeypatch.setenv("PGDATABASE", "databricks_postgres")
-    monkeypatch.setenv("PGUSER", "00000000-1111-2222-3333-444444444444")
+    monkeypatch.setenv("PGUSER", _FAKE_PGUSER)  # pragma: allowlist secret  # ggignore
     monkeypatch.delenv("DATABASE_INSTANCE_NAME", raising=False)
     monkeypatch.delenv("PGAPPNAME", raising=False)
 
 
 def _autoscaling_api_client(
-    host: str = "ep-damp-art-d1l8gclo.database.us-west-2.cloud.databricks.com",
+    host: str = _FAKE_PGHOST,
     *,
-    project_id: str = "ontobricks-test",
-    token: str = "POSTGRES-API-TOKEN",
-    read_only_host: str = (
-        "ep-damp-art-d1l8gclo-ro.database.us-west-2.cloud.databricks.com"
-    ),
+    project_id: str = _FAKE_PROJECT_ID,
+    token: str = _FAKE_PG_TOKEN,
+    read_only_host: str = _FAKE_PGHOST_RO,
 ):
     """Build a ``MagicMock`` api_client that returns a single
     Autoscaling project whose primary endpoint host matches.
@@ -111,20 +125,17 @@ class TestInstanceNameResolution:
         )
         fake_w.api_client = _autoscaling_api_client()
         auth._w = fake_w
-        assert auth.instance_name == "ontobricks-test"
+        assert auth.instance_name == _FAKE_PROJECT_ID
 
     def test_matches_read_only_host(self, monkeypatch, autoscaling_pg_env):
         # PGHOST happens to point at the read-only endpoint — the
         # walk must still match and resolve the project_id.
-        monkeypatch.setenv(
-            "PGHOST",
-            "ep-damp-art-d1l8gclo-ro.database.us-west-2.cloud.databricks.com",
-        )
+        monkeypatch.setenv("PGHOST", _FAKE_PGHOST_RO)  # pragma: allowlist secret  # ggignore
         auth = LakebaseAuth()
         fake_w = MagicMock()
         fake_w.api_client = _autoscaling_api_client()
         auth._w = fake_w
-        assert auth.instance_name == "ontobricks-test"
+        assert auth.instance_name == _FAKE_PROJECT_ID
 
     def test_resolution_is_cached(self, monkeypatch, autoscaling_pg_env):
         auth = LakebaseAuth()
@@ -154,7 +165,7 @@ class TestInstanceNameResolution:
             _ = auth.instance_name
         msg = str(excinfo.value)
         assert "No Lakebase Autoscaling endpoint matched" in msg
-        assert "ep-damp-art-d1l8gclo" in msg
+        assert "ep-test-fake1234" in msg
 
     def test_postgres_api_failure_propagates_as_validation_error(
         self, monkeypatch, autoscaling_pg_env
@@ -208,12 +219,12 @@ class TestPasswordMinting:
         fake_w.api_client = _autoscaling_api_client()
         auth._w = fake_w
 
-        assert auth.password() == "POSTGRES-API-TOKEN"
+        assert auth.password() == _FAKE_PG_TOKEN
         # Sanity: subsequent call hits the in-memory cache, not the SDK.
         fake_w.api_client.do.side_effect = AssertionError(
             "Cached token must not re-mint"
         )
-        assert auth.password() == "POSTGRES-API-TOKEN"
+        assert auth.password() == _FAKE_PG_TOKEN
 
     def test_invalidate_forces_remint(self, monkeypatch, autoscaling_pg_env):
         auth = LakebaseAuth()

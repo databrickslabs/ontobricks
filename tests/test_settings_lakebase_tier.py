@@ -155,8 +155,8 @@ class TestLakebaseInstanceMetadataPostgresApi:
     PROJECT_PATH = f"projects/{PROJECT}"
     BRANCH_PATH = f"{PROJECT_PATH}/branches/production"
     ENDPOINT_PATH = f"{BRANCH_PATH}/endpoints/primary"
-    HOST = "ep-damp-art-d1l8gclo.database.us-west-2.cloud.databricks.com"
-    RO_HOST = "ep-damp-art-d1l8gclo-ro.database.us-west-2.cloud.databricks.com"
+    HOST = "ep-test-fake1234.database.us-west-2.cloud.databricks.com"  # pragma: allowlist secret  # ggignore
+    RO_HOST = "ep-test-fake1234-ro.database.us-west-2.cloud.databricks.com"  # pragma: allowlist secret  # ggignore
 
     def _autoscaling_workspace(self):
         responses = {
