@@ -44,7 +44,7 @@ src/front/
 
 ```
 back/objects/
-├── registry/         <- UC domain registry, permissions, scheduled builds
+├── registry/         <- Domain registry (Volume or Lakebase+Volume hybrid via store/), permissions, scheduled builds
 ├── session/          <- HTTP session storage, domain state, instance config
 ├── domain/           <- Session-scoped UC/metadata/layout operations
 ├── ontology/         <- Ontology domain class

@@ -44,6 +44,68 @@ _REGISTRY_MARKER = ".registry"
 _DOMAINS_FOLDER = "domains"
 _LEGACY_DOMAINS_FOLDER = "projects"
 
+# Sentinel used by :class:`Settings` (and the env var ``REGISTRY_BACKEND``) to
+# mean "let the runtime pick". When the operator does not pin the backend
+# explicitly we prefer Lakebase if the Apps runtime has injected the Postgres
+# resource binding (PG* env vars) AND the optional ``psycopg`` extra is
+# importable; otherwise we fall back to the JSON-on-Volume backend. Historic
+# code sometimes used the literal ``"volume"`` as the default — that branch
+# is still honoured for back-compat, but new resolutions go through this
+# helper so a single place owns the policy.
+_AUTO_BACKEND = "auto"
+_VALID_BACKENDS = ("volume", "lakebase")
+
+
+def _lakebase_runtime_available() -> bool:
+    """Probe whether the Lakebase backend can be used in this process.
+
+    Returns ``True`` only when *both* preconditions hold:
+
+    1. The optional ``psycopg`` extra is importable. Volume-only deployments
+       intentionally don't install it (see ``pyproject.toml [project.optional-dependencies] lakebase``).
+    2. The Apps runtime has injected the database resource binding env
+       vars (``PGHOST`` / ``PGDATABASE`` / ``PGUSER``). Without them the
+       SDK can't mint a Lakebase JWT and the connection would fail at
+       open time anyway.
+
+    Kept here (rather than in :mod:`SettingsService`) so the registry
+    package has no upward dependency on the FastAPI service layer — the
+    same probe powers config resolution for the scheduler subprocess.
+    """
+    import os
+
+    try:
+        import psycopg  # noqa: F401  -- detect optional dep
+    except ImportError:
+        return False
+    return all(os.environ.get(k) for k in ("PGHOST", "PGDATABASE", "PGUSER"))
+
+
+def resolve_default_backend(raw: Optional[str]) -> str:
+    """Resolve ``raw`` into a concrete backend name (``"volume"`` or ``"lakebase"``).
+
+    ``raw`` may be ``None``, ``""``, ``"auto"`` (case-insensitive), or any
+    of the literal backend names. Anything unrecognised falls back to
+    ``"volume"`` — the safe default that works without optional deps.
+
+    The ``"auto"`` rule:
+
+    * Lakebase wins when :func:`_lakebase_runtime_available` returns
+      ``True`` (psycopg installed *and* PG* env bound). This means a
+      fresh Databricks Apps deployment with the ``database`` resource
+      bound and the ``--extra lakebase`` install flag picks Lakebase
+      out of the box, which matches operator expectations after they
+      went to the trouble of binding the resource.
+    * Otherwise (local dev without psycopg, or App without the
+      database binding) we stay on Volume.
+    """
+    name = (raw or "").strip().lower()
+    if name in _VALID_BACKENDS:
+        return name
+    if name in ("", _AUTO_BACKEND):
+        return "lakebase" if _lakebase_runtime_available() else "volume"
+    return "volume"
+
 
 # ------------------------------------------------------------------
 # RegistryCfg — lightweight value object
@@ -52,42 +114,178 @@ _LEGACY_DOMAINS_FOLDER = "projects"
 
 @dataclass(frozen=True)
 class RegistryCfg:
-    """Immutable registry location triplet (catalog, schema, volume)."""
+    """Immutable registry location triplet (catalog, schema, volume).
+
+    ``backend`` selects the data-store implementation:
+    ``"volume"`` (default) for JSON-on-UC-Volume, ``"lakebase"`` for
+    Postgres-on-Lakebase. Binary artifacts live on the Volume in both
+    cases, so the catalog/schema/volume triplet stays meaningful even
+    when ``backend == "lakebase"``.
+
+    ``lakebase_schema`` is the Postgres schema for registry tables. It
+    is ignored when ``backend == "volume"``.
+
+    ``lakebase_database`` (optional) overrides the bound Postgres
+    database name. When empty (the default), the Lakebase backend uses
+    the ``PGDATABASE`` env var auto-injected by the Databricks Apps
+    runtime from the ``database`` resource binding. Setting this lets
+    an admin point the registry at any other database that lives on
+    the same Lakebase instance — provided the app's service principal
+    has ``CONNECT`` on it. The Lakebase JWT scope is per-instance, so
+    no token re-mint is required.
+    """
 
     catalog: str
     schema: str
     volume: str
+    backend: str = "volume"
+    lakebase_schema: str = "ontobricks_registry"
+    lakebase_database: str = ""
 
     # -- constructors ------------------------------------------------
 
     @classmethod
-    def from_volume_path(cls, path: str) -> RegistryCfg:
+    def from_volume_path(
+        cls,
+        path: str,
+        *,
+        backend: str = "volume",
+        lakebase_schema: str = "ontobricks_registry",
+        lakebase_database: str = "",
+    ) -> RegistryCfg:
         """Parse ``/Volumes/<catalog>/<schema>/<volume>`` into a RegistryCfg."""
         parts = path.strip("/").split("/")
         if len(parts) >= 4 and parts[0].lower() == "volumes":
-            return cls(catalog=parts[1], schema=parts[2], volume=parts[3])
+            return cls(
+                catalog=parts[1],
+                schema=parts[2],
+                volume=parts[3],
+                backend=backend,
+                lakebase_schema=lakebase_schema,
+                lakebase_database=lakebase_database,
+            )
         logger.warning(
             "Cannot parse volume path '%s'; expected /Volumes/<c>/<s>/<v>", path
         )
-        return cls(catalog="", schema="", volume="")
+        return cls(
+            catalog="",
+            schema="",
+            volume="",
+            backend=backend,
+            lakebase_schema=lakebase_schema,
+            lakebase_database=lakebase_database,
+        )
 
     @classmethod
-    def from_domain(cls, domain, settings) -> RegistryCfg:
+    def from_domain(
+        cls,
+        domain,
+        settings,
+        *,
+        prefer_volume_binding: bool = False,
+    ) -> RegistryCfg:
         """Build from a *DomainSession* and *Settings* with env-var fallbacks.
 
-        When the app is deployed with a Volume resource the injected path
-        (``settings.registry_volume_path``) takes highest priority so that
-        admin-level Databricks App resource configuration always wins.
+        Resolution order (highest priority first):
+
+        1. ``domain.settings["registry"]`` — admin choices made from the
+           Settings UI. These ALWAYS win for the *backend chooser* and
+           the Lakebase-side knobs (``lakebase_schema`` /
+           ``lakebase_database``), even on a Databricks Apps deployment
+           where the Volume is bound by the platform. Without this
+           precedence, flipping the backend radio in Settings would be
+           silently discarded on every request, because the Volume path
+           branch below would re-read ``backend`` from the env and
+           overwrite the freshly-saved value.
+        2. **Lakebase ``registries`` row** — when ``backend`` resolves to
+           ``"lakebase"`` and Lakebase is reachable, the
+           catalog/schema/volume triplet is sourced from the row so
+           ``effective_view_table`` and ``uc_version_path`` point at
+           where artefacts were actually built / archived. Otherwise a
+           dev app whose Volume resource is bound to a *different*
+           Volume than the one referenced by the row would resolve every
+           Build-page existence check against the wrong location and
+           silently report all-red badges.
+        3. ``settings.registry_volume_path`` — when present (Databricks
+           Apps with a bound Volume resource) and step 2 didn't fire,
+           the triplet comes from the injected path so the Volume
+           backend is always pinned to the resource binding.
+        4. ``settings.*`` env vars — last-resort fallback for catalog,
+           schema, volume, backend, ``lakebase_schema`` and
+           ``lakebase_database``.
+
+        ``prefer_volume_binding`` (Initialize path only): when ``True``
+        the Lakebase row read in step 2 is skipped. Lets the Initialize
+        flow re-pin the registry triplet to the *current* Volume
+        binding so a re-bind + re-init cycle propagates the new
+        catalog/schema/volume into the ``registries`` row. Without this
+        flag, re-initialising on a re-bound app silently re-upserts the
+        stale triplet that was already in the row, leaving downstream
+        artefact paths pointing at the previous Volume.
         """
+        # ``settings.registry_backend`` may be ``"auto"`` (the new default —
+        # see :data:`_AUTO_BACKEND`), an explicit ``"volume"`` / ``"lakebase"``
+        # pin from the operator, or empty. ``resolve_default_backend`` collapses
+        # all of those to a concrete name with Lakebase preferred when the
+        # Apps runtime has bound it.
+        env_backend = resolve_default_backend(getattr(settings, "registry_backend", None))
+        env_lb_schema = (
+            getattr(settings, "lakebase_schema", "ontobricks_registry")
+            or "ontobricks_registry"
+        )
+        env_lb_database = getattr(settings, "lakebase_database", "") or ""
+
+        reg = domain.settings.get("registry", {}) if domain is not None else {}
+        # UI choice still wins (admins must always be able to pin Volume even
+        # on a Lakebase-bound app), but ``"auto"`` saved into the session
+        # goes through the same resolver so a fresh session that never
+        # touched the radio inherits the env-level default rather than
+        # silently sticking to Volume.
+        backend = resolve_default_backend(reg.get("backend") or env_backend)
+        lb_schema = reg.get("lakebase_schema") or env_lb_schema
+        lb_database = reg.get("lakebase_database") or env_lb_database
+
+        # Lakebase short-circuit: read catalog/schema/volume from the
+        # ``registries`` row so binary-archive paths and Delta view names
+        # point where artefacts actually live, not at whatever Volume the
+        # Apps runtime bound. Fail-soft — if Lakebase is unreachable we
+        # fall through to the regular Volume-binding / env-var chain.
+        # Skipped when ``prefer_volume_binding`` is True (Initialize
+        # path) so re-binding the Volume + re-running Initialize
+        # propagates the new triplet into the row.
+        if backend == "lakebase" and not prefer_volume_binding:
+            from back.objects.registry.store.lakebase.store import (
+                fetch_lakebase_registry_triplet,
+            )
+
+            triplet = fetch_lakebase_registry_triplet(lb_schema, lb_database)
+            if triplet:
+                cat, sch, vol = triplet
+                return cls(
+                    catalog=cat,
+                    schema=sch,
+                    volume=vol or _DEFAULT_VOLUME,
+                    backend=backend,
+                    lakebase_schema=lb_schema,
+                    lakebase_database=lb_database,
+                )
+
         vol_path = getattr(settings, "registry_volume_path", "")
         if vol_path:
-            return cls.from_volume_path(vol_path)
+            return cls.from_volume_path(
+                vol_path,
+                backend=backend,
+                lakebase_schema=lb_schema,
+                lakebase_database=lb_database,
+            )
 
-        reg = domain.settings.get("registry", {})
         return cls(
             catalog=reg.get("catalog") or settings.registry_catalog,
             schema=reg.get("schema") or settings.registry_schema,
             volume=reg.get("volume") or settings.registry_volume or _DEFAULT_VOLUME,
+            backend=backend,
+            lakebase_schema=lb_schema,
+            lakebase_database=lb_database,
         )
 
     @classmethod
@@ -99,22 +297,38 @@ class RegistryCfg:
 
     @classmethod
     def from_dict(cls, d: Dict[str, str]) -> RegistryCfg:
-        """Build from a plain dict (e.g. an existing ``registry_cfg``)."""
+        """Build from a plain dict (e.g. an existing ``registry_cfg``).
+
+        ``backend`` may be ``"auto"``/empty — :func:`resolve_default_backend`
+        picks Lakebase or Volume based on runtime availability.
+        """
         return cls(
             catalog=d.get("catalog", ""),
             schema=d.get("schema", ""),
             volume=d.get("volume", "") or _DEFAULT_VOLUME,
+            backend=resolve_default_backend(d.get("backend")),
+            lakebase_schema=d.get("lakebase_schema") or "ontobricks_registry",
+            lakebase_database=d.get("lakebase_database") or "",
         )
 
     # -- helpers -----------------------------------------------------
 
     @property
     def is_configured(self) -> bool:
+        if self.backend == "lakebase":
+            return bool(self.catalog and self.schema and self.volume)
         return bool(self.catalog and self.schema and self.volume)
 
     def as_dict(self) -> Dict[str, str]:
         """Dict representation for backward compatibility with legacy callers."""
-        return {"catalog": self.catalog, "schema": self.schema, "volume": self.volume}
+        return {
+            "catalog": self.catalog,
+            "schema": self.schema,
+            "volume": self.volume,
+            "backend": self.backend,
+            "lakebase_schema": self.lakebase_schema,
+            "lakebase_database": self.lakebase_database,
+        }
 
 
 # ------------------------------------------------------------------
@@ -123,24 +337,83 @@ class RegistryCfg:
 
 
 class RegistryService:
-    """Encapsulates every UC-Volume registry operation."""
+    """Encapsulates every registry operation regardless of backend.
 
-    def __init__(self, cfg: RegistryCfg, uc: VolumeFileService):
+    All JSON-shaped data (domains, versions, permissions, schedules,
+    global config) is routed through a :class:`RegistryStore` instance
+    (Volume or Lakebase). Binary artifacts (``documents/`` and
+    ``*.lbug.tar.gz``) stay on the Unity Catalog Volume in both backends
+    and are managed via :attr:`uc`.
+    """
+
+    def __init__(
+        self,
+        cfg: RegistryCfg,
+        uc: VolumeFileService,
+        store=None,
+    ):
         self._cfg = cfg
         self._uc = uc
         self._resolved_domains_folder: Optional[str] = None
+        self._store = store or self._build_store(cfg, uc)
 
     # -- factory -----------------------------------------------------
 
     @classmethod
-    def from_context(cls, domain, settings) -> RegistryService:
-        """One-call factory: resolve config + build VolumeFileService."""
+    def from_context(
+        cls,
+        domain,
+        settings,
+        *,
+        prefer_volume_binding: bool = False,
+    ) -> RegistryService:
+        """One-call factory: resolve config + build VolumeFileService + store.
+
+        ``prefer_volume_binding`` (Initialize path only) is forwarded to
+        :meth:`RegistryCfg.from_domain` — see that docstring for why it
+        matters when re-running Initialize against a re-bound app.
+        """
         from back.core.helpers import get_databricks_host_and_token
 
-        cfg = RegistryCfg.from_domain(domain, settings)
+        cfg = RegistryCfg.from_domain(
+            domain, settings, prefer_volume_binding=prefer_volume_binding
+        )
         host, token = get_databricks_host_and_token(domain, settings)
         uc = VolumeFileService(host=host, token=token)
         return cls(cfg, uc)
+
+    @staticmethod
+    def _build_store(cfg: RegistryCfg, uc: VolumeFileService):
+        """Build the right :class:`RegistryStore` for *cfg.backend*.
+
+        For the Volume backend we bypass the factory and instantiate
+        :class:`VolumeRegistryStore` manually so we can reuse the
+        already-built :class:`VolumeFileService` without duplicating
+        host/token credentials.
+
+        For the Lakebase backend we route through
+        :class:`RegistryFactory` and forward both the schema *and the
+        database override* (``cfg.lakebase_database``). Forgetting the
+        latter would silently fall back to the bound ``PGDATABASE``
+        even when the admin picked a different database in Settings,
+        making the Browse list read from the wrong Postgres database.
+        """
+        from back.objects.registry.store import (
+            RegistryFactory,
+            VolumeRegistryStore,
+        )
+
+        if (cfg.backend or "volume").lower() == "lakebase":
+            return RegistryFactory.lakebase(
+                registry_cfg=cfg,
+                schema=cfg.lakebase_schema,
+                database=cfg.lakebase_database,
+            )
+        store = VolumeRegistryStore.__new__(VolumeRegistryStore)
+        store._cfg = cfg
+        store._uc = uc
+        store._resolved_domains_folder = None
+        return store
 
     # -- properties --------------------------------------------------
 
@@ -154,12 +427,25 @@ class RegistryService:
         return self._uc
 
     @property
-    def cache_key(self) -> str:
-        """Build a cache key from the registry config triplet."""
-        c = self._cfg
-        return registry_cache_key(c.catalog, c.schema, c.volume)
+    def store(self):
+        """Underlying :class:`RegistryStore` (for advanced callers)."""
+        return self._store
 
-    # -- path builders -----------------------------------------------
+    @property
+    def cache_key(self) -> str:
+        """Cache key bound to the *store identity* (backend-aware)."""
+        return self._store.cache_key
+
+    # -- path builders (Volume-side, used by both backends) ----------
+    #
+    # Binary artifacts (``documents/`` and ``*.lbug.tar.gz``) always
+    # live on the Unity Catalog Volume regardless of which
+    # :class:`RegistryStore` backs the registry. The path builders
+    # below produce those Volume paths and are therefore safe to call
+    # under both the Volume and Lakebase backends. The same goes for
+    # :meth:`recursive_delete`, :meth:`copy_version_documents` and
+    # :meth:`migrate_domain_layout` further down — they manipulate the
+    # binary tree only and intentionally bypass the store.
 
     def volume_root(self) -> str:
         c = self._cfg
@@ -219,40 +505,92 @@ class RegistryService:
     # -- registry lifecycle ------------------------------------------
 
     def is_initialized(self) -> bool:
-        """Check whether the ``.registry`` marker exists."""
-        ok, _, _ = self._uc.read_file(self.marker_path())
-        return ok
+        """Return ``True`` when the active backend reports a usable registry.
+
+        For the Volume backend this checks the ``.registry`` marker;
+        for the Lakebase backend it probes for the ``registries`` row.
+        """
+        return self._store.is_initialized()
 
     def initialize(self, client) -> Tuple[bool, str]:
-        """Create the registry volume (if missing) and write the marker.
+        """Bring the registry up to a usable state (idempotent).
 
-        *client* must be a ``DatabricksClient`` that supports
-        ``list_volumes`` / ``create_volume``.
+        *client* is a ``DatabricksClient`` used to create the UC Volume
+        on first use. Both backends use it: Volume to host
+        ``.registry`` + ``/domains/``, Lakebase for binary artefacts
+        (``documents/``, ``*.lbug.tar.gz``) that always live on the
+        Volume regardless of where registry rows are stored.
+
+        For the Lakebase backend, callers should construct this service
+        with ``RegistryService.from_context(..., prefer_volume_binding
+        =True)`` so :attr:`cfg` reflects the *current* Volume binding
+        rather than the (potentially stale) Lakebase ``registries``
+        row. Without that flag, re-running Initialize after re-binding
+        the Volume resource silently re-upserts the old triplet.
         """
         c = self._cfg
-        volumes = client.list_volumes(c.catalog, c.schema)
-        if c.volume not in volumes:
-            ok = client.create_volume(c.catalog, c.schema, c.volume)
-            if not ok:
-                return False, f"Failed to create volume {c.volume}"
+        if (c.backend or "volume").lower() == "volume":
+            return self._store.initialize(client=client)
 
-        self._uc.write_file(
-            self.marker_path(),
-            "OntoBricks Domain Registry",
-            overwrite=True,
-        )
-        logger.info("Registry initialized at %s.%s.%s", c.catalog, c.schema, c.volume)
-        return True, f"Registry initialized: {c.catalog}.{c.schema}.{c.volume}"
+        # Lakebase: ensure the binary volume exists. Failures here are
+        # surfaced to the caller (instead of being swallowed as a
+        # warning) so the admin sees exactly what went wrong if the
+        # service principal lacks ``CREATE VOLUME`` on the target
+        # schema. The store's ``initialize`` still runs after a
+        # creation failure so the schema/tables come up regardless —
+        # the Volume can be granted/created out-of-band and a re-run
+        # will be a no-op on the schema side.
+        volume_msg = ""
+        if client is not None and c.catalog and c.schema and c.volume:
+            try:
+                volumes = client.list_volumes(c.catalog, c.schema)
+                if c.volume not in volumes:
+                    if client.create_volume(c.catalog, c.schema, c.volume):
+                        volume_msg = (
+                            f" Created binary volume "
+                            f"{c.catalog}.{c.schema}.{c.volume}."
+                        )
+                        logger.info(
+                            "Created binary volume %s.%s.%s",
+                            c.catalog,
+                            c.schema,
+                            c.volume,
+                        )
+                    else:
+                        volume_msg = (
+                            f" WARNING: could not create binary volume "
+                            f"{c.catalog}.{c.schema}.{c.volume} — check "
+                            f"the app service principal's CREATE VOLUME "
+                            f"privilege on {c.catalog}.{c.schema}."
+                        )
+                        logger.warning(
+                            "Failed to create binary volume %s.%s.%s",
+                            c.catalog,
+                            c.schema,
+                            c.volume,
+                        )
+                else:
+                    volume_msg = (
+                        f" Binary volume "
+                        f"{c.catalog}.{c.schema}.{c.volume} already exists."
+                    )
+            except Exception as exc:  # noqa: BLE001
+                volume_msg = (
+                    f" WARNING: volume probe failed for "
+                    f"{c.catalog}.{c.schema}.{c.volume}: {exc}"
+                )
+                logger.warning(
+                    "Could not ensure binary volume exists: %s", exc
+                )
+
+        ok, store_msg = self._store.initialize()
+        return ok, (store_msg + volume_msg).strip()
 
     # -- domain CRUD -------------------------------------------------
 
     def list_domains(self) -> Tuple[bool, List[str], str]:
         """Return sorted domain folder names (hidden dirs excluded)."""
-        ok, items, msg = self._uc.list_directory(self.domains_path(), dirs_only=True)
-        if not ok:
-            return False, [], msg
-        names = sorted(i["name"] for i in items if not i["name"].startswith("."))
-        return True, names, ""
+        return self._store.list_domain_folders()
 
     def list_domains_cached(self) -> Tuple[bool, List[str], str]:
         """Like :meth:`list_domains` but with an in-memory TTL cache."""
@@ -266,76 +604,17 @@ class RegistryService:
 
     def domain_exists(self, folder: str) -> bool:
         """Check whether a domain folder already exists in the registry."""
-        ok, names, _ = self.list_domains()
-        if not ok:
-            return False
-        return folder in names
+        return self._store.domain_exists(folder)
 
     def list_domain_details(self) -> Tuple[bool, List[Dict[str, Any]], str]:
         """List domains with name, URI, description and enriched version list.
-
-        For each domain folder every version file is opened to extract
-        ``info.mcp_enabled`` (exposed as ``active``).  The latest version
-        also provides description and base URI.
 
         Each entry in ``versions`` is a dict::
 
             {"version": "2", "active": True,
              "last_update": "2025-…", "last_build": "2025-…"}
         """
-        ok, items, msg = self._uc.list_directory(self.domains_path(), dirs_only=True)
-        if not ok:
-            return False, [], msg
-
-        result: List[Dict[str, Any]] = []
-        for item in sorted(items, key=lambda i: i["name"]):
-            name = item["name"]
-            if name.startswith("."):
-                continue
-
-            description = ""
-            base_uri = ""
-            version_objects: List[Dict[str, Any]] = []
-            try:
-                sorted_versions = self.list_versions_sorted(name)
-                for idx, ver in enumerate(sorted_versions):
-                    active = False
-                    last_update = ""
-                    last_build = ""
-                    f_ok, content, _ = self._uc.read_file(
-                        self.version_file_path(name, ver),
-                    )
-                    if f_ok and content:
-                        doc = json.loads(content)
-                        info = doc.get("info", {})
-                        active = bool(info.get("mcp_enabled"))
-                        last_update = info.get("last_update", "")
-                        last_build = info.get("last_build", "")
-                        if idx == 0:
-                            description = info.get("description", "")
-                            ontology = self._extract_latest_ontology(doc)
-                            base_uri = ontology.get("base_uri", "")
-                    version_objects.append(
-                        {
-                            "version": ver,
-                            "active": active,
-                            "last_update": last_update,
-                            "last_build": last_build,
-                        }
-                    )
-            except Exception:
-                logger.debug("Could not read details for domain %s", name)
-
-            result.append(
-                {
-                    "name": name,
-                    "base_uri": base_uri,
-                    "description": description,
-                    "versions": version_objects,
-                }
-            )
-
-        return True, result, ""
+        return self._store.list_domains_with_metadata()
 
     def list_domain_details_cached(self) -> Tuple[bool, List[Dict[str, Any]], str]:
         """Like :meth:`list_domain_details` but with an in-memory TTL cache."""
@@ -439,15 +718,12 @@ class RegistryService:
         ``True`` only domains whose MCP version has a non-empty ``classes``
         list are included.
         """
-        ok, items, msg = self._uc.list_directory(self.domains_path(), dirs_only=True)
+        ok, names, msg = self._store.list_domain_folders()
         if not ok:
             return False, [], msg
 
         result: List[Dict[str, str]] = []
-        for item in sorted(items, key=lambda i: i["name"]):
-            name = item["name"]
-            if name.startswith("."):
-                continue
+        for name in names:
             try:
                 mcp_ver, mcp_data = self.find_mcp_version(name)
                 if not mcp_ver:
@@ -466,8 +742,14 @@ class RegistryService:
         return True, result, ""
 
     def delete_domain(self, folder: str) -> List[str]:
-        """Delete a domain directory and all its contents."""
-        errors = self.recursive_delete(self.domain_path(folder))
+        """Delete a domain (rows + binary directory) and return any errors."""
+        errors: List[str] = list(self._store.delete_domain(folder))
+        # Always wipe the binary directory: documents/ + *.lbug.tar.gz
+        # live on the Volume regardless of backend.
+        try:
+            errors.extend(self.recursive_delete(self.domain_path(folder)))
+        except Exception as exc:  # noqa: BLE001
+            errors.append(str(exc))
         invalidate_registry_cache(self.cache_key)
         return errors
 
@@ -512,22 +794,8 @@ class RegistryService:
     # -- version management ------------------------------------------
 
     def list_versions(self, folder: str) -> Tuple[bool, List[str], str]:
-        """Return version strings (e.g. ``['2', '1']``) for a domain folder.
-
-        Scans ``V{N}/`` subdirectories inside the domain folder.
-        """
-        ok, items, msg = self._uc.list_directory(
-            self.domain_path(folder),
-            dirs_only=True,
-        )
-        if not ok:
-            return False, [], msg
-        versions = [
-            d["name"][1:]
-            for d in items
-            if d["name"].startswith("V") and d["name"][1:].replace(".", "").isdigit()
-        ]
-        return True, versions, ""
+        """Return version strings (e.g. ``['2', '1']``) for a domain folder."""
+        return self._store.list_versions(folder)
 
     def list_versions_sorted(self, folder: str, *, reverse: bool = True) -> List[str]:
         """Convenience: sorted version list (empty on failure)."""
@@ -543,29 +811,50 @@ class RegistryService:
         return vs[0] if vs else None
 
     def read_version(self, folder: str, version: str) -> Tuple[bool, dict, str]:
-        """Read and JSON-parse a version file."""
-        path = self.version_file_path(folder, version)
-        ok, content, msg = self._uc.read_file(path)
-        if not ok:
-            return False, {}, msg
-        try:
-            return True, json.loads(content), ""
-        except json.JSONDecodeError as exc:
-            return False, {}, f"Invalid JSON: {exc}"
+        """Read and parse a version document from the active backend."""
+        return self._store.read_version(folder, version)
 
     def write_version(self, folder: str, version: str, data: str) -> Tuple[bool, str]:
-        """Write a version file (``data`` should be a JSON string)."""
-        path = self.version_file_path(folder, version)
-        return self._uc.write_file(path, data)
+        """Persist a version document.
+
+        ``data`` is accepted as either a JSON string (legacy) or a
+        ``dict`` (new). The store always receives a parsed dict.
+        """
+        if isinstance(data, str):
+            try:
+                payload = json.loads(data) if data else {}
+            except json.JSONDecodeError as exc:
+                return False, f"Invalid JSON: {exc}"
+        else:
+            payload = data
+        ok, msg = self._store.write_version(folder, version, payload)
+        if ok:
+            invalidate_registry_cache(self.cache_key)
+        return ok, msg
 
     def delete_version(self, folder: str, version: str) -> Tuple[bool, str]:
-        """Delete an entire version directory (``V{version}/``) and its contents."""
-        ver_dir = self.version_path(folder, version)
-        errors = self.recursive_delete(ver_dir)
-        if not errors:
-            invalidate_registry_cache(self.cache_key)
-            return True, ""
-        return False, "; ".join(errors)
+        """Delete a version (rows + binary directory)."""
+        ok, msg = self._store.delete_version(folder, version)
+        if not ok:
+            return False, msg
+        # Also remove the binary version dir on the Volume (documents/,
+        # *.lbug.tar.gz). Errors are non-fatal — the JSON side is the
+        # source of truth.
+        try:
+            errors = self.recursive_delete(self.version_path(folder, version))
+            if errors:
+                logger.warning(
+                    "Volume cleanup for %s/V%s left errors: %s",
+                    folder,
+                    version,
+                    "; ".join(errors),
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Volume cleanup raised for %s/V%s: %s", folder, version, exc
+            )
+        invalidate_registry_cache(self.cache_key)
+        return True, ""
 
     # -- load domain from registry (stateless) -----------------------
 
@@ -652,7 +941,10 @@ class RegistryService:
     def list_all_bridges(self) -> Tuple[bool, List[Dict[str, Any]], str]:
         """Collect all bridges across every domain in the registry.
 
-        Iterates over each domain, loads its latest version, and extracts
+        Iterates over each domain (via the active backend's
+        :meth:`RegistryStore.list_domain_folders` so Lakebase
+        registries that have no on-Volume ``domains/`` directory still
+        return their content), loads its latest version, and extracts
         bridges from ``ontology.classes[].bridges``.
 
         Returns ``(ok, domains_with_bridges, error_msg)`` where each entry
@@ -661,13 +953,12 @@ class RegistryService:
         ``target_domain``, ``target_class_name``, ``target_class_uri``,
         ``label``).
         """
-        ok, items, msg = self._uc.list_directory(self.domains_path(), dirs_only=True)
+        ok, names, msg = self._store.list_domain_folders()
         if not ok:
             return False, [], msg
 
         result: List[Dict[str, Any]] = []
-        for item in sorted(items, key=lambda i: i["name"]):
-            name = item["name"]
+        for name in sorted(names):
             if name.startswith("."):
                 continue
 

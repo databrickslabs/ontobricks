@@ -149,9 +149,13 @@ function _applyDtExistence(data) {
         return '<span class="badge bg-secondary bg-opacity-10 text-secondary border"><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
     }
 
-    // Triple-Store card: status badge + card border
     var viewEl = document.getElementById('dtExistView');
-    if (viewEl) viewEl.innerHTML = _badge(data.view_exists, 'Exists', 'Not found', 'Not configured');
+    if (viewEl) {
+        viewEl.innerHTML = _badge(data.view_exists, 'Exists', 'Not found', 'Not configured');
+        if (data.view_check_error) viewEl.title = data.view_check_error;
+        else if (data.view_table) viewEl.title = 'Queried: ' + data.view_table;
+        else viewEl.title = '';
+    }
 
     var zcCard = document.getElementById('dtZeroCopyCard');
     if (zcCard) {
@@ -171,7 +175,12 @@ function _applyDtExistence(data) {
     if (localPathEl) localPathEl.textContent = data.local_lbug_path || '';
 
     var regEl = document.getElementById('dtExistRegistry');
-    if (regEl) regEl.innerHTML = _badge(data.registry_lbug_exists, 'Archived', 'Not archived', 'Not configured');
+    if (regEl) {
+        regEl.innerHTML = _badge(data.registry_lbug_exists, 'Archived', 'Not archived', 'Not configured');
+        if (data.registry_check_error) regEl.title = data.registry_check_error;
+        else if (data.registry_lbug_path) regEl.title = 'Archive: ' + data.registry_lbug_path;
+        else regEl.title = '';
+    }
 
     var reloadBtn = document.getElementById('dtReloadFromRegistry');
     if (reloadBtn) {

@@ -2,14 +2,31 @@
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="mb-1"><i class="bi bi-archive me-2"></i>Registry Location</h4>
-            <p class="text-muted mb-0 small">All domains are stored in a single Unity Catalog Volume (the registry)</p>
+            <p class="text-muted mb-0 small">Choose where registry data lives. Binary artefacts (documents, .lbug archives) always stay on the Unity Catalog Volume.</p>
+        </div>
+    </div>
+
+    <div class="d-flex align-items-center gap-3 mb-3" data-requires-app="admin">
+        <div>
+            <label class="form-label fw-semibold small mb-1">Storage Backend</label>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Registry backend">
+                <input type="radio" class="btn-check" name="registryBackend" id="registryBackendVolume" value="volume" autocomplete="off" checked>
+                <label class="btn btn-outline-primary" for="registryBackendVolume">
+                    <i class="bi bi-hdd-stack me-1"></i> Unity Catalog Volume
+                </label>
+                <input type="radio" class="btn-check" name="registryBackend" id="registryBackendLakebase" value="lakebase" autocomplete="off">
+                <label class="btn btn-outline-primary" for="registryBackendLakebase">
+                    <i class="bi bi-database me-1"></i> Lakebase (Postgres)
+                </label>
+            </div>
+            <small class="text-muted d-block mt-1" id="registryBackendHelp">Volume keeps the JSON-on-Volume layout. Lakebase splits registry data into Postgres tables. Switching does not move existing data automatically.</small>
         </div>
     </div>
 
     <div class="d-flex align-items-center gap-3 mb-3">
-        <div>
-            <label class="form-label fw-semibold small mb-1">Registry Location</label>
-            <div class="d-flex align-items-center gap-2">
+        <div class="flex-grow-1">
+            <label class="form-label fw-semibold small mb-1" id="registryLocationLabelText">Registry Location</label>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
                 <span id="registryLocationLabel" class="font-monospace bg-light px-3 py-2 rounded border">
                     <i class="bi bi-hourglass-split text-muted"></i> <span class="text-muted">Loading...</span>
                 </span>
@@ -19,8 +36,115 @@
                 <button type="button" class="btn btn-sm btn-outline-success" id="btnInitRegistry" style="display:none;" title="Create volume and /domains folder">
                     <i class="bi bi-plus-circle me-1"></i> Initialize
                 </button>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btnMigrateToLakebase" style="display:none;" data-requires-app="admin" title="Copy Volume registry data into Lakebase tables (binaries stay on the Volume)">
+                    <i class="bi bi-arrow-right-circle me-1"></i> Migrate to Lakebase
+                </button>
             </div>
             <small class="text-muted d-block mt-1" id="registryHelp"></small>
+        </div>
+    </div>
+
+    <div id="lakebasePanel" class="mb-3" style="display:none;">
+        <div class="border rounded p-3 bg-body-tertiary">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong class="small"><i class="bi bi-database me-1"></i> Lakebase Connection</strong>
+                <span id="lakebaseStatusBadge" class="badge bg-secondary">unknown</span>
+            </div>
+
+            <div class="mb-3" id="lakebaseInstanceBlock" style="display:none;">
+                <div class="text-uppercase text-muted small fw-semibold mb-1">
+                    <i class="bi bi-hdd-network me-1"></i> Instance
+                </div>
+                <div class="row g-2 small">
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted mb-0">Name</label>
+                        <div class="font-monospace" id="lakebaseInstanceName">—</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-0">State</label>
+                        <div id="lakebaseInstanceState">—</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-0">Capacity</label>
+                        <div class="font-monospace" id="lakebaseInstanceCapacity">—</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-0">Postgres</label>
+                        <div class="font-monospace" id="lakebaseInstancePgVersion">—</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-0">Nodes</label>
+                        <div class="font-monospace" id="lakebaseInstanceNodes">—</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted mb-0">UID</label>
+                        <div class="font-monospace text-truncate" id="lakebaseInstanceUid" title="">—</div>
+                    </div>
+                    <div class="col-md-6" id="lakebaseInstanceBranchCol" style="display:none;">
+                        <label class="form-label small text-muted mb-0">Branch</label>
+                        <div class="font-monospace text-truncate" id="lakebaseInstanceBranch" title="">—</div>
+                    </div>
+                    <div class="col-md-6" id="lakebaseInstanceAutoscaleCol" style="display:none;">
+                        <label class="form-label small text-muted mb-0">Autoscale (CU)</label>
+                        <div class="font-monospace" id="lakebaseInstanceAutoscale">—</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-uppercase text-muted small fw-semibold mb-1">
+                <i class="bi bi-plug me-1"></i> Connection
+            </div>
+            <div class="row g-2 small">
+                <div class="col-md-6">
+                    <label class="form-label small text-muted mb-0">Host (PGHOST)</label>
+                    <div class="font-monospace" id="lakebaseHost">—</div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted mb-0">Port</label>
+                    <div class="font-monospace" id="lakebasePort">—</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted mb-0">Database (effective)</label>
+                    <div class="font-monospace" id="lakebaseDatabase">—</div>
+                    <div class="small text-muted" id="lakebaseDatabaseHint" style="display:none;"></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small text-muted mb-0">User (Service Principal)</label>
+                    <div class="font-monospace" id="lakebaseUser">—</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small text-muted mb-0">Schema</label>
+                    <div class="font-monospace" id="lakebaseSchema">ontobricks_registry</div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mt-3 mb-1">
+                <div class="text-uppercase text-muted small fw-semibold">
+                    <i class="bi bi-table me-1"></i> Registry Tables
+                </div>
+                <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" id="btnRefreshLakebaseStats" title="Re-query row counts">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm small mb-0" id="lakebaseStatsTable">
+                    <thead class="text-muted small">
+                        <tr>
+                            <th class="ps-0">Table</th>
+                            <th class="text-end pe-0">Rows</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lakebaseStatsBody">
+                        <tr><td class="ps-0 text-muted" colspan="2"><i class="bi bi-hourglass-split me-1"></i> Click <em>Refresh</em> to load row counts.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="small text-muted mt-1" id="lakebaseStatsMessage" style="display:none;"></div>
+
+            <small class="text-muted d-block mt-2">
+                <i class="bi bi-info-circle me-1"></i>
+                Connection parameters come from the Databricks App database resource binding (read-only). The OAuth token is minted automatically.
+            </small>
         </div>
     </div>
 
@@ -38,6 +162,10 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+                <div class="alert alert-info small py-2 px-3" id="registryModalBackendHint">
+                    <i class="bi bi-info-circle me-1"></i>
+                    The registry triplet is used for binary artefacts (documents, .lbug archives) and, when backend is <strong>Volume</strong>, for all registry data.
+                </div>
                 <div class="mb-3">
                     <label class="form-label fw-semibold small mb-1">Catalog</label>
                     <select class="form-select form-select-sm" id="registryCatalog">
@@ -53,6 +181,20 @@
                 <div class="mb-3">
                     <label class="form-label fw-semibold small mb-1">Volume</label>
                     <input type="text" class="form-control form-control-sm" id="registryVolume" value="OntoBricksRegistry" placeholder="OntoBricksRegistry">
+                </div>
+                <div class="mb-3" id="registryLakebaseDatabaseWrapper" style="display:none;">
+                    <label class="form-label fw-semibold small mb-1">Lakebase Database</label>
+                    <select class="form-select form-select-sm" id="registryLakebaseDatabase">
+                        <option value="">(default — use bound database)</option>
+                    </select>
+                    <small class="text-muted" id="registryLakebaseDatabaseHelp">
+                        Postgres database the registry talks to. Defaults to the database bound by the Apps resource. Pick another database on the same Lakebase instance to migrate the registry without redeploying — the service principal must already have CONNECT on it.
+                    </small>
+                </div>
+                <div class="mb-3" id="registryLakebaseSchemaWrapper" style="display:none;">
+                    <label class="form-label fw-semibold small mb-1">Lakebase Schema</label>
+                    <input type="text" class="form-control form-control-sm" id="registryLakebaseSchema" value="ontobricks_registry" placeholder="ontobricks_registry">
+                    <small class="text-muted">Postgres schema where registry tables (domains, versions, schedules, …) live.</small>
                 </div>
             </div>
             <div class="modal-footer">

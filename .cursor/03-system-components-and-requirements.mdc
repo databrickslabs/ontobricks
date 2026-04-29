@@ -19,7 +19,10 @@ scope:
 - **External API:** Stateless REST endpoints under `/api/v1/*` (OpenAPI docs at `/api/docs`).
 - **GraphQL API:** Auto-generated Strawberry schema in `back/fastapi/graphql_routes.py`.
 - **Session Management:** `FileSessionMiddleware` + `SessionManager` + `DomainSession` in `back/objects/session/`.
-- **Registry:** UC Volume-backed domain registry with permissions (`RegistryService`, `PermissionService`) and scheduled builds (`BuildScheduler`).
+- **Registry:** Dual-mode domain registry with permissions (`RegistryService`, `PermissionService`) and scheduled builds (`BuildScheduler`). Backend selection happens in `RegistryFactory` (`back/objects/registry/store/`):
+  - **Volume mode** (`VolumeRegistryStore`) — JSON-on-Volume; the only backend when no Lakebase resource is bound.
+  - **Lakebase mode** (`LakebaseRegistryStore`) — registry metadata/indexes in Lakebase Postgres (autoscaling only); documents/binaries (e.g. `.lbug`) stay in the UC Volume. **Default whenever a Lakebase database is configured for the Databricks App.**
+  Volume and Lakebase coordinates come from the Databricks App configuration (resources in `databricks.yml`, surfaced via `LakebaseAuth` and the registry settings). They are read-only for the user; the **Settings → Registry** tab is where the active mode is shown and (when both are available) selected.
 - **Error Handling:** Centralized `OntoBricksError` hierarchy in `back/core/errors/`. Global handler translates errors into uniform `ErrorResponse` JSON with correct HTTP status codes. Never use bare `HTTPException`.
 - **Logging:** Centralized via `back/core/logging/LogManager`. All modules use `from back.core.logging import get_logger; logger = get_logger(__name__)`. Never use `print()`.
 - **Agent Abstraction:** `AgentClient` in `back/core/agents/` provides a single gateway to all LLM agents.

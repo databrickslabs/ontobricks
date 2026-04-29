@@ -46,6 +46,12 @@ scripts/setup.sh
 - Databricks workspace access with a Personal Access Token
 - A SQL Warehouse ID
 - A Unity Catalog Volume for the domain registry
+- *(Optional)* A Databricks Lakebase Postgres database — required only
+  when the admin switches the registry storage backend from
+  **Volume** (default) to **Lakebase** in Settings → Registry.
+  OntoBricks targets **Lakebase Autoscaling** exclusively (Provisioned
+  instances are not supported). Install the optional driver with
+  `uv sync --extra lakebase`.
 
 ## Deploying / Installing the Project
 
@@ -74,6 +80,17 @@ make deploy
 ```
 
 After deployment, bind the **sql-warehouse** and **volume** resources in the Databricks Apps UI (**Compute > Apps > ontobricks > Resources**). If the registry volume is empty, open the app and click **Settings > Registry > Initialize**.
+
+> **Lakebase backend (optional).** To deploy with the Lakebase Postgres
+> backend instead of (in addition to) the Volume, deploy to one of the
+> opt-in DAB targets — `databricks bundle deploy -t dev-lakebase` or
+> `-t prod-lakebase` — and provide the bundle variables
+> `lakebase_database` (default `ontobricks_registry`) and
+> `lakebase_instance`. The DAB binds a `database` Apps resource so the
+> runtime auto-injects `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`; the app
+> mints the OAuth token automatically (no user secret required). The
+> default `dev`/`prod` targets stay Volume-only and keep working as
+> before.
 
 > **First deploy only:** `make deploy` runs `scripts/bootstrap-app-permissions.sh` automatically, which grants each app's service principal `CAN_MANAGE` on itself. Without that grant the middleware cannot read the app's own ACL and every first-time visitor — including the deploying `CAN_MANAGE` user — lands on the access-denied page. If you deploy via `databricks bundle deploy` directly, run `make bootstrap-perms` once afterwards (it is idempotent).
 

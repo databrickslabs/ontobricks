@@ -30,10 +30,16 @@ def tool_execute_sql(ctx: ToolContext, *, sql: str = "", **_kwargs) -> str:
 
     logger.debug("tool_execute_sql: SQL=%s", sql)
 
-    test_sql = (
-        re.sub(r"\bLIMIT\s+\d+\b", "", sql, flags=re.IGNORECASE).strip().rstrip(";")
-    )
-    test_sql_limited = f"{test_sql} LIMIT {_SAMPLE_ROWS}"
+    stripped_sql = sql.strip().rstrip(";").strip()
+    is_row_query = bool(re.match(r"^(SELECT|WITH)\b", stripped_sql, re.IGNORECASE))
+
+    if is_row_query:
+        test_sql = re.sub(
+            r"\bLIMIT\s+\d+\b", "", stripped_sql, flags=re.IGNORECASE
+        ).strip()
+        test_sql_limited = f"{test_sql} LIMIT {_SAMPLE_ROWS}"
+    else:
+        test_sql_limited = stripped_sql
     logger.debug("tool_execute_sql: test_sql=%s", test_sql_limited)
 
     try:

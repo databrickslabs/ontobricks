@@ -1,30 +1,34 @@
 """
 Global configuration service for OntoBricks.
 
-Manages instance-level settings (shared across sessions) in the registry UC
-volume as ``.global_config.json``. Admins (CAN MANAGE) control **warehouse_id**
-(SQL warehouse for UC), **default_base_uri**, and **default_emoji**.
+Manages instance-level settings (shared across sessions). Persisted via
+the active :class:`back.objects.registry.store.RegistryStore`:
 
-In local (non-App) mode the same file applies when a registry exists; env vars
-and fallbacks cover bootstrap and unconfigured deployments.
+- Volume backend → ``.global_config.json`` on the UC Volume.
+- Lakebase backend → ``global_config`` row on Postgres.
+
+Admins (CAN MANAGE) control **warehouse_id** (SQL warehouse for UC),
+**default_base_uri**, **default_emoji**, the registry ``backend``, and
+the Lakebase ``schema`` name.
+
+In local (non-App) mode the same persistence applies when a registry
+exists; env vars and fallbacks cover bootstrap and unconfigured
+deployments.
 """
 
-import json
 import time
 from typing import Any, Dict, Optional, Tuple
 
 from back.core.logging import get_logger
-from back.core.databricks import VolumeFileService
 from back.objects.registry.registry_cache import set_registry_cache_ttl
 
 logger = get_logger(__name__)
 
-_CONFIG_FILENAME = ".global_config.json"
 _CACHE_TTL = 60  # seconds
 
 
 class GlobalConfigService:
-    """Read/write instance-wide configuration stored in the registry UC Volume."""
+    """Read/write instance-wide configuration via the active store."""
 
     def __init__(self):
         self._cache: Optional[Dict[str, Any]] = None
@@ -35,15 +39,13 @@ class GlobalConfigService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _config_path(registry_cfg: Dict[str, str]) -> str:
+    def _store_for(host: str, token: str, registry_cfg: Dict[str, str]):
+        """Build the right :class:`RegistryStore` for *registry_cfg*."""
         from back.objects.registry import RegistryCfg
+        from back.objects.registry.store import RegistryFactory
 
-        c = RegistryCfg.from_dict(registry_cfg)
-        return f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/{_CONFIG_FILENAME}"
-
-    @staticmethod
-    def _new_uc(host: str, token: str) -> VolumeFileService:
-        return VolumeFileService(host=host, token=token)
+        cfg = RegistryCfg.from_dict(registry_cfg)
+        return RegistryFactory.from_cfg(cfg, host=host, token=token)
 
     # ------------------------------------------------------------------
     # Read
@@ -57,7 +59,7 @@ class GlobalConfigService:
         *,
         force: bool = False,
     ) -> Dict[str, Any]:
-        """Load and cache the global config from the registry volume."""
+        """Load and cache the global config from the active store."""
         now = time.time()
         if (
             not force
@@ -69,12 +71,10 @@ class GlobalConfigService:
         if not registry_cfg.get("catalog") or not registry_cfg.get("schema"):
             return self._empty()
 
-        path = self._config_path(registry_cfg)
         try:
-            uc = self._new_uc(host, token)
-            ok, content, msg = uc.read_file(path)
-            if ok and content:
-                data = json.loads(content)
+            store = self._store_for(host, token, registry_cfg)
+            data = store.load_global_config()
+            if data:
                 if "schedule_history" in data:
                     del data["schedule_history"]
                     logger.info("Stripped legacy schedule_history from global config")
@@ -84,9 +84,10 @@ class GlobalConfigService:
                 self._cache_ts = now
                 if "registry_cache_ttl" in data:
                     set_registry_cache_ttl(int(data["registry_cache_ttl"]))
-                logger.info("Loaded global config from %s", path)
+                logger.info(
+                    "Loaded global config (backend=%s)", store.backend
+                )
                 return data
-            logger.debug("Global config not found or empty at %s: %s", path, msg)
         except Exception as e:
             logger.warning("Error loading global config: %s", e)
 
@@ -136,7 +137,7 @@ class GlobalConfigService:
         registry_cfg: Dict[str, str],
         updates: Dict[str, Any],
     ) -> Tuple[bool, str]:
-        """Merge *updates* into the global config and persist to UC Volume."""
+        """Merge *updates* into the global config and persist via the store."""
         if not registry_cfg.get("catalog") or not registry_cfg.get("schema"):
             return (
                 False,
@@ -150,17 +151,18 @@ class GlobalConfigService:
         for _sched in (data.get("schedules") or {}).values():
             _sched.pop("registry_cfg", None)
 
-        path = self._config_path(registry_cfg)
         try:
-            uc = self._new_uc(host, token)
-            ok, msg = uc.write_file(path, json.dumps(data, indent=2), overwrite=True)
+            store = self._store_for(host, token, registry_cfg)
+            ok, msg = store.save_global_config(data)
             if not ok:
-                logger.error("Failed to write global config to %s: %s", path, msg)
+                logger.error("Failed to write global config: %s", msg)
                 return False, f"Failed to save global config: {msg}"
             self._cache = data
             self._cache_ts = time.time()
             logger.info(
-                "Saved global config updates %s to %s", list(updates.keys()), path
+                "Saved global config updates %s (backend=%s)",
+                list(updates.keys()),
+                store.backend,
             )
             return True, "Global configuration saved"
         except Exception as e:

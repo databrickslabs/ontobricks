@@ -108,6 +108,121 @@ class TestUcDomainPath:
             assert ds.uc_version_path == "/Volumes/cat/sch/vol/domains/my_domain/V3"
 
 
+class TestDomainSessionDelta:
+    """``domain.delta`` must follow the same RegistryCfg precedence as
+    ``uc_domain_path`` / ``uc_version_path``. Otherwise the Build-page
+    Triple-Store badge resolves ``effective_view_table`` against
+    whatever was persisted in ``settings["registry"]`` even when the
+    active backend pointed at a *different* triplet (e.g. Lakebase row
+    overrides the Volume binding).
+    """
+
+    def test_delta_uses_registry_volume_path_over_stale_settings(self, mock_session_mgr):
+        # Session has stale catalog/schema saved (carry-over from a
+        # prior backend), but the Apps runtime now binds a different
+        # Volume. ``delta`` must follow the binding, not the stale
+        # session — same precedence as ``uc_domain_path``.
+        data = get_empty_domain()
+        data["settings"]["registry"] = {
+            "catalog": "stale_cat",
+            "schema": "stale_sch",
+            "volume": "stale_vol",
+        }
+        data["domain"]["info"]["name"] = "Cust360Auto"
+        data["domain"]["current_version"] = "4"
+        mock_session_mgr.set("domain_data", data)
+        ds = DomainSession(mock_session_mgr)
+
+        fake_settings = MagicMock()
+        fake_settings.registry_volume_path = (
+            "/Volumes/benoit_cayla/ontobricks_deployed/registry"
+        )
+        fake_settings.registry_backend = "volume"
+        fake_settings.registry_catalog = ""
+        fake_settings.registry_schema = ""
+        fake_settings.registry_volume = ""
+        fake_settings.lakebase_schema = "ontobricks_registry"
+        fake_settings.lakebase_database = ""
+
+        with patch("shared.config.settings.get_settings", return_value=fake_settings):
+            d = ds.delta
+        assert d["catalog"] == "benoit_cayla"
+        assert d["schema"] == "ontobricks_deployed"
+        assert d["table_name"] == "triplestore_cust360auto_V4"
+
+    def test_delta_uses_lakebase_row_when_backend_lakebase(self, mock_session_mgr):
+        # The whole point of the fix: when the active backend is
+        # Lakebase, ``delta`` must pick up the catalog/schema stored
+        # in the Lakebase ``registries`` row, not the Volume binding.
+        data = get_empty_domain()
+        data["settings"]["registry"] = {
+            "catalog": "stale_cat",
+            "schema": "stale_sch",
+            "volume": "stale_vol",
+            "backend": "lakebase",
+        }
+        data["domain"]["info"]["name"] = "Cust360Auto"
+        data["domain"]["current_version"] = "4"
+        mock_session_mgr.set("domain_data", data)
+        ds = DomainSession(mock_session_mgr)
+
+        fake_settings = MagicMock()
+        fake_settings.registry_volume_path = (
+            "/Volumes/benoit_cayla/ontobricks_deployed/registry"
+        )
+        fake_settings.registry_backend = "lakebase"
+        fake_settings.registry_catalog = ""
+        fake_settings.registry_schema = ""
+        fake_settings.registry_volume = ""
+        fake_settings.lakebase_schema = "ontobricks_registry"
+        fake_settings.lakebase_database = ""
+
+        from back.objects.registry.store.lakebase import store as _lb_store
+
+        with patch("shared.config.settings.get_settings", return_value=fake_settings), \
+             patch.object(
+                _lb_store,
+                "fetch_lakebase_registry_triplet",
+                lambda schema, database="": (
+                    "benoit_cayla",
+                    "ontobricks",
+                    "OntoBricksRegistry",
+                ),
+             ):
+            d = ds.delta
+        # Catalog/schema come from the Lakebase row, not the Volume
+        # binding — the existence check now points at where artefacts
+        # actually live.
+        assert d["catalog"] == "benoit_cayla"
+        assert d["schema"] == "ontobricks"
+        assert d["table_name"] == "triplestore_cust360auto_V4"
+
+    def test_delta_falls_back_to_session_when_resolver_raises(self, mock_session_mgr):
+        # Fail-soft contract: ``delta`` must never raise. If
+        # ``RegistryCfg.from_domain`` blows up (e.g. settings module
+        # not importable in some test harness), we degrade to the raw
+        # session values rather than 500-ing the whole Build page.
+        data = get_empty_domain()
+        data["settings"]["registry"] = {
+            "catalog": "fallback_cat",
+            "schema": "fallback_sch",
+            "volume": "fallback_vol",
+        }
+        data["domain"]["info"]["name"] = "Demo"
+        data["domain"]["current_version"] = "1"
+        mock_session_mgr.set("domain_data", data)
+        ds = DomainSession(mock_session_mgr)
+
+        with patch(
+            "shared.config.settings.get_settings",
+            side_effect=RuntimeError("settings broken"),
+        ):
+            d = ds.delta
+        assert d["catalog"] == "fallback_cat"
+        assert d["schema"] == "fallback_sch"
+        assert d["table_name"] == "triplestore_demo_V1"
+
+
 class TestDomainSession:
     def test_init_empty(self, mock_session_mgr):
         ds = DomainSession(mock_session_mgr)

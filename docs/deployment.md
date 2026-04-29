@@ -145,8 +145,9 @@ Edit the workspace-specific values in `app.yaml` (main app) and `src/mcp-server/
 |----------|------|-------------|----------------|
 | `DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT` | `app.yaml` | Fallback SQL Warehouse ID | **SQL Warehouses** > select warehouse > **Connection details** |
 | `DATABRICKS_TRIPLESTORE_TABLE` | `app.yaml` | Default triple store table | Choose or create a `catalog.schema.table` for triple storage |
-| `ONTOBRICKS_APP_NAME` | `app.yaml` | Deployed app name (for permission checks) | Must match the name in `databricks.yml` (default: `ontobricks`) |
 | `ONTOBRICKS_URL` | `src/mcp-server/app.yaml` | Main app URL | Set after first deploy — `databricks apps get ontobricks` |
+
+> **Note** — the deployed app name no longer needs an explicit `ONTOBRICKS_APP_NAME` env var. The runtime auto-detects it from the Databricks-Apps-injected `DATABRICKS_APP_NAME` (e.g. `ontobricks` for prod, `ontobricks-dev` for the sandbox). Set `ONTOBRICKS_APP_NAME` only as an explicit override (e.g. in `.env` for local development).
 
 The `REGISTRY_CATALOG`, `REGISTRY_SCHEMA`, and `REGISTRY_VOLUME` static variables are **only needed for local development**. In a deployed app the `volume` resource binding injects the registry path automatically.
 
@@ -317,10 +318,10 @@ env:
     value: "OntoBricksRegistry"
 
   # ── Permission Management ──────────────────────────────────────
-  # App name used to check CAN_MANAGE permissions via the Databricks API
-  # Must match the deployed app name exactly
-  - name: ONTOBRICKS_APP_NAME
-    value: "ontobricks"
+  # The deployed app name is auto-detected from the Databricks-Apps-
+  # injected DATABRICKS_APP_NAME env var (matches the resource name in
+  # databricks.yml automatically). Set ONTOBRICKS_APP_NAME only as an
+  # explicit override (e.g. in .env for local development).
 
   # ── MLflow ─────────────────────────────────────────────────────
   # Persist agent traces to the workspace tracking server

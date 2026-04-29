@@ -1042,14 +1042,39 @@ class DomainSession:
     def delta(self) -> Dict[str, str]:
         """Derived Delta triplestore location (catalog, schema, table_name).
 
-        The Delta VIEW always lives in the same Unity Catalog catalog.schema
-        as the domain registry, and the view name is computed from the
-        domain name and current version.  Returns a fresh dict on every
-        access; mutations are not persisted.
+        The Delta VIEW always lives in the same Unity Catalog
+        catalog.schema as the domain registry, and the view name is
+        computed from the domain name and current version. Returns a
+        fresh dict on every access; mutations are not persisted.
+
+        catalog/schema are resolved via :class:`RegistryCfg.from_domain`
+        so the same precedence applies here as for ``uc_domain_path``,
+        ``uc_version_path`` and the rest of the registry-aware code:
+        UI override → Lakebase ``registries`` row (when on the Lakebase
+        backend) → bound Volume resource path → env vars → raw
+        ``settings["registry"]``. Without this delegation the Build
+        page resolved ``effective_view_table`` against whatever
+        catalog/schema happened to be persisted in the session, even
+        when the active backend pointed at a *different* triplet — so
+        the Triple-Store badge went red against the wrong catalog
+        while ``uc_version_path`` looked at the right one.
         """
-        reg = self._data["settings"].get("registry", {}) or {}
-        catalog = reg.get("catalog", "") or ""
-        schema = reg.get("schema", "") or ""
+        from shared.config.settings import get_settings
+        from back.objects.registry.RegistryService import RegistryCfg
+
+        try:
+            cfg = RegistryCfg.from_domain(self, get_settings())
+            catalog = cfg.catalog or ""
+            schema = cfg.schema or ""
+        except Exception:  # noqa: BLE001
+            # Fail-soft: fall back to raw session values so a broken
+            # registry (e.g. local dev without env vars) still yields a
+            # usable name shape rather than a hard 500. The downstream
+            # existence check will simply return ``view_exists = False``
+            # which the UI surfaces as a red badge — same as today.
+            reg = self._data["settings"].get("registry", {}) or {}
+            catalog = reg.get("catalog", "") or ""
+            schema = reg.get("schema", "") or ""
         name = (self.info or {}).get("name", "") or ""
         version = self.current_version or "1"
         if name:

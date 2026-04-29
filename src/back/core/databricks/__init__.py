@@ -1,6 +1,10 @@
 """Databricks integration layer — typed facades for every API surface."""
 
 from back.core.databricks.DatabricksAuth import DatabricksAuth  # noqa: F401
+from back.core.databricks.LakebaseAuth import (  # noqa: F401
+    LakebaseAuth,
+    get_lakebase_auth,
+)
 from back.core.databricks.DatabricksClient import DatabricksClient  # noqa: F401
 from back.core.databricks.SQLWarehouse import SQLWarehouse  # noqa: F401
 from back.core.databricks.UnityCatalog import UnityCatalog  # noqa: F401
@@ -26,6 +30,8 @@ load_domain_from_uc = UCDomainIO.load_domain
 
 __all__ = [
     "DatabricksAuth",
+    "LakebaseAuth",
+    "get_lakebase_auth",
     "DatabricksClient",
     "SQLWarehouse",
     "UnityCatalog",
