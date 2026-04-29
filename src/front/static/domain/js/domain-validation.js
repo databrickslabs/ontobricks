@@ -161,17 +161,21 @@ function updateVersionTiles(data) {
             if (vs.success && vs.available_versions) {
                 var count = vs.available_versions.length;
                 setTile('versionsTile', 'success', count + ' version' + (count !== 1 ? 's' : ''));
-                var latest = vs.available_versions[0] || version;
-                setTile('activeVersionTile', vs.is_active ? 'success' : 'warning',
-                    'v' + latest + (vs.is_active ? '' : ' (read-only)'));
+                if (vs.active_version) {
+                    var loadedIsActive = vs.version === vs.active_version;
+                    setTile('activeVersionTile', loadedIsActive ? 'success' : 'warning',
+                        'v' + vs.active_version + (loadedIsActive ? '' : ' (not loaded)'));
+                } else {
+                    setTile('activeVersionTile', 'muted', 'None');
+                }
             } else {
                 setTile('versionsTile', 'muted', '1 version');
-                setTile('activeVersionTile', 'success', 'v' + version);
+                setTile('activeVersionTile', 'muted', 'None');
             }
         })
         .catch(function() {
             setTile('versionsTile', 'muted', '1 version');
-            setTile('activeVersionTile', 'muted', 'v' + version);
+            setTile('activeVersionTile', 'muted', '—');
         });
 }
 

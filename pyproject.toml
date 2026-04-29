@@ -58,6 +58,10 @@ packages = ["src/back", "src/front", "src/shared", "src/agents", "src/api"]
 constraint-dependencies = [
     "mako>=1.3.11",
     "pygments>=2.20.0",
+    # GHSA-rpm5-65cw-6hj4 / SNYK-PYTHON-GITPYTHON-16298057:
+    # command injection via upload_pack / receive_pack kwargs. Pulled in
+    # transitively by mlflow-skinny; force a patched build.
+    "gitpython>=3.1.47",
 ]
 
 [tool.pytest.ini_options]

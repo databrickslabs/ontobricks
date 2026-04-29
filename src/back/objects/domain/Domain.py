@@ -924,11 +924,14 @@ class Domain:
                     return cached
 
             available_versions: List[str] = []
+            active_version: Optional[str] = None
             if has_registry:
                 try:
                     svc = self.build_registry_service()
                     folder = self._s.uc_domain_folder
                     available_versions = svc.list_versions_sorted(folder)
+                    mcp_ver, _ = svc.find_mcp_version(folder)
+                    active_version = mcp_ver
                 except Exception as e:
                     logger.warning("Could not fetch versions from UC: %s", e)
                     available_versions = [version]
@@ -937,12 +940,18 @@ class Domain:
 
             is_latest = not available_versions or version == available_versions[0]
             self._s.is_active_version = is_latest
+            # ``is_active`` keeps its legacy meaning ("loaded version is the
+            # latest, so writes are allowed") because version-check.js uses
+            # it to gate the read-only body class. The MCP-enabled version
+            # is exposed separately via ``active_version`` so the Cockpit
+            # tile can show what's actually live on the API/MCP surface.
             is_active = is_latest
             result = {
                 "success": True,
                 "version": version,
                 "is_active": is_active,
                 "is_latest": is_latest,
+                "active_version": active_version,
                 "available_versions": available_versions,
                 "has_registry": has_registry,
                 "registry": (

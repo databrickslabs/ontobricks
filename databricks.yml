@@ -119,7 +119,7 @@ variables:
       /api/2.0/postgres/projects/<project>/branches/<branch>/databases``
       and pick the entry whose ``status.postgres_database`` matches
       the human-readable database name you want bound.
-    default: "projects/ontobricks-test/branches/production/databases/db-tvs3-r0yrbvtunp"
+    default: "projects/ontobricks-test/branches/production/databases/db-1vw1-34ir9n3vrn"
 
 resources:
   apps:
