@@ -5,6 +5,11 @@
         <div>
             <h4 class="mb-1"><i class="bi bi-clock-history me-2"></i>Versions</h4>
             <p class="text-muted mb-0 small">Manage domain version history</p>
+            <p class="text-muted small mb-0 mt-1">
+                <i class="bi bi-info-circle me-1"></i>
+                To change which version is <strong>Active</strong> (API / MCP), use
+                <a href="/registry/">Registry</a> → <strong>Browse</strong>.
+            </p>
         </div>
         <div class="d-flex align-items-center gap-2">
             <button type="button" class="btn btn-sm btn-outline-secondary" id="btnReloadVersion"
@@ -47,7 +52,7 @@
                     <tr>
                         <th style="width:100px;">Version</th>
                         <th>Description</th>
-                        <th style="width:130px;" class="text-center">Active</th>
+                        <th style="width:130px;" class="text-center" title="Read-only; change Active in Registry → Browse">MCP / API</th>
                         <th style="width:160px;">Author</th>
                         <th style="width:100px;" class="text-center">Actions</th>
                     </tr>

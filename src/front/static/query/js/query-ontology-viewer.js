@@ -36,7 +36,7 @@ const OntologyViewer = (() => {
                 <div class="modal-content">
                     <div class="modal-header py-2">
                         <h5 class="modal-title" id="${MODAL_ID}Label">
-                            <i class="bi bi-diagram-3 me-2"></i>Ontology Model
+                            <i class="bi bi-diagram-3 me-2"></i>Ontology Designer
                             <span id="ontologyViewerName" class="text-muted small ms-2"></span>
                         </h5>
                         <div class="d-flex align-items-center gap-2">

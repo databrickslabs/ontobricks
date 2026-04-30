@@ -2,7 +2,7 @@
   <img src="src/front/static/global/img/ontobricks-icon.svg" alt="OntoBricks Logo" width="120" height="120">
 </p>
 
-<h1 align="center">OntoBricks</h1>
+<h1 align="center">OntoBricks 0.1.2</h1>
 
 <p align="center">
   <strong>Digital Twin Builder for Databricks</strong>
@@ -121,6 +121,16 @@ git push origin main --tags
 | **3** | **Auto-Map** (Mapping > Auto-Map) | LLM generates SQL mappings for every entity and relationship |
 | **4** | **Synchronize** (Digital Twin > Status) | Executes mappings and populates the triple store |
 
+### Domain & registry (0.1.2 UX)
+
+- **Ontology Designer** — the main ontology graph view lives under **Ontology → Designer** (visual canvas + AI Assistant).
+- **Domain Cockpit (Validation)** — **Active Version** shows which registry version is exposed via **API / MCP**; it can differ from the version you have loaded in the editor.
+- **Registry → Browse** — only place to **set the Active (API/MCP) version** for a domain; **Domain → Versions** shows that status as a read-only badge.
+- **New domain** — after **New Domain**, a full-page loading overlay runs until Domain Information finishes its first load.
+- **Domain Information** — triple-store / snapshot / local graph paths update when you **commit** the domain name (blur or change) or change version (aligned with naming rules before save).
+- **Duplicate names** — **Save to Unity Catalog** is blocked if the sanitized domain name already exists in the registry (inline check + confirmation before POST).
+- **Navbar** — domain name and version in the top bar refresh after load, save, clear, import, and version switches (browser cache invalidated on those actions).
+
 ### Manual Workflow
 
 1. **Design** an ontology visually using the OntoViz canvas, or import OWL/RDFS/industry standards (FIBO, CDISC, IOF)
@@ -140,7 +150,7 @@ git push origin main --tags
 
 ### AI Assistant
 
-The Ontology Model view includes a floating AI Assistant (bottom-right of the canvas) that lets you modify your ontology through natural language commands — add entities, remove orphans, list relationships, and more. Conversation history is maintained within the session.
+The **Ontology Designer** view (**Ontology → Designer**) includes a floating AI Assistant (bottom-right of the canvas) that lets you modify your ontology through natural language commands — add entities, remove orphans, list relationships, and more. Conversation history is maintained within the session.
 
 ### Navigation & Performance
 

@@ -500,7 +500,11 @@ async def set_version_mcp(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Toggle the API/MCP flag for a specific version (only one may be active)."""
+    """Toggle the API/MCP flag for a specific version (only one may be active).
+
+    In the web UI, operators change this from **Registry → Browse**; this
+    endpoint remains for integrations and tests that POST JSON directly.
+    """
     data = await request.json()
     version = data.get("version")
     enabled = bool(data.get("enabled", False))

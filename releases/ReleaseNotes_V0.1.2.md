@@ -66,7 +66,14 @@
 - Build sub-menu: fixed unreadable "Mapping" stale-indicator badge.
 - Build sub-menu: stopped reporting "Loaded" for the Graph DB digital twin when nothing had actually been built.
 - Sidebar: fixed the "Teams" icon misalignment.
-- Cockpit: the **Active Version** tile now reflects the version exposed via API/MCP (the one toggled in the Versions table) instead of the latest version on disk, with a `(not loaded)` hint when the loaded version differs. `is_active` keeps its legacy `is_latest` meaning so the read-only body class still gates writes correctly.
+- Cockpit: the **Active Version** tile now reflects the version exposed via API/MCP (the one set in **Registry → Browse**), not merely the latest version on disk, with a `(not loaded)` hint when the loaded version differs. `is_active` keeps its legacy `is_latest` meaning so the read-only body class still gates writes correctly.
+- Navbar: the **Domain name and version** in the top navbar now refresh reliably after every domain mutation (new domain, load from registry, save / rename, version switch / create / rollback, file import). The `/navbar/state` `sessionStorage` cache (15 s TTL) was previously surviving `window.location.reload()`, so the navbar could display the *previous* domain identity for up to 15 s. Every mutation flow now invalidates the cache before navigating; in-place edits (e.g. saving Domain Information) re-fetch the navbar state immediately.
+- Domain → **Versions**: the API/MCP “Active” control is no longer a toggle on this page — it is shown as a **read-only badge**; changing the active version is done only from **Registry → Browse** (consistent with registry-centric operations).
+- Domain creation: **Save to UC is now blocked** when the chosen Domain Name already exists in the registry. The duplicate-name check (`/domain/check-name`) was already running on every keystroke of the name field, but its result was only advisory — the navbar's Save action still POSTed and the user only saw the conflict after a round-trip. The Save flow now re-runs the check synchronously and refuses with a clear notification + focuses the offending field.
+
+## Documentation
+
+- **README**, **docs/features.md**, **docs/INFO.md**, **docs/user-guide.md**, **docs/get-started.md**, **docs/README.md**, and **docs/mcp.md** updated so operator-facing text matches the above: Ontology **Designer**, Domain Cockpit **Active Version** vs loaded vs latest, **Registry → Browse** for MCP/API active version, new-domain loading overlay, Digital Twin path refresh on committed name/version changes, duplicate-name guard, and navbar identity refresh.
 
 ## Tasks & Notifications
 

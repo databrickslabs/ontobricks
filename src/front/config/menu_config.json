@@ -245,7 +245,7 @@
                         },
                         {
                             "id": "map",
-                            "label": "Model",
+                            "label": "Designer",
                             "icon": "bi-diagram-3",
                             "default": false,
                             "requires": null

@@ -304,7 +304,7 @@ The OntoBricks interface has a navigation bar with status indicators:
 | **Information** | Basic ontology settings (name, URI) |
 | **Entities** | Manage classes with form interface |
 | **Relationships** | Manage object properties |
-| **Model** | Interactive force-directed ontology graph |
+| **Designer** | Interactive force-directed ontology graph (OntoViz canvas) |
 | **SWRL Rules** | Define SWRL inference rules |
 | **Data Quality** | SHACL shape-based data quality rules |
 | **Constraints** | Property cardinality and value constraints |

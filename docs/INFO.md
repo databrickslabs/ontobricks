@@ -66,7 +66,7 @@ OntoBricks builds a **materialized knowledge graph** (triple store) from your Da
 
 ## Screenshots
 
-### Ontology Model
+### Ontology Designer
 Design your ontology visually — create entities, relationships, and inheritance hierarchies on an interactive canvas with emoji icons, attributes, constraints, and dashboard integration.
 
 <p align="center">
@@ -90,6 +90,7 @@ Explore your knowledge graph — search, filter, and navigate entities and relat
 ## Features
 
 ### Ontology Design
+- **🎨 Ontology Designer**: Main canvas under **Ontology → Designer** (OntoViz) — drag-and-drop entities, relationships, and attributes; sidebar entry is labelled *Designer*
 - **🎨 Visual Ontology Designer**: Drag-and-drop interface to create entities, relationships, and attributes using OntoViz
 - **📐 Entity-Relationship Diagram**: Interactive canvas with auto-layout, zoom, pan, and centering
 - **🔗 Inheritance Support**: Visual class hierarchies with property inheritance (rdfs:subClassOf)
@@ -114,7 +115,7 @@ Explore your knowledge graph — search, filter, and navigate entities and relat
 - **💾 Two Backends**: **Delta** (Databricks SQL Warehouse) or **LadybugDB** (embedded Cypher-based graph database with automatic UC Volume sync)
 - **📈 Knowledge Graph**: Interactive sigma.js WebGL-powered graph to explore entities and relationships visually with search, filtering, and entity detail panels
 - **🔬 Data Cluster Detection**: Detect communities in the knowledge graph using Louvain, Label Propagation, or Greedy Modularity algorithms — client-side (Graphology) for the visible subgraph, server-side (NetworkX) for the full graph; color-by-cluster visualization, adjustable resolution, cluster collapse/expand into super-nodes with member details on click
-- **🗺️ Ontology Model Viewer**: Read-only D3.js ontology model accessible from Knowledge Graph and GraphQL sections — frozen force-directed graph with pan/zoom in a fullscreen modal
+- **🗺️ Ontology Designer Viewer**: Read-only D3.js ontology model accessible from Knowledge Graph and GraphQL sections — frozen force-directed graph with pan/zoom in a fullscreen modal
 - **📊 Dashboard Integration**: Embed Databricks dashboards with parameter mapping to entities
 - **✅ Async Quality Checks**: Validate data against ontology constraints with background processing and progress tracking
 - **📏 SHACL Data Quality**: Run SHACL-based validation against the triple store — shapes defined in the ontology are compiled to SQL for execution, with violation reporting and PySHACL in-memory validation support
@@ -151,16 +152,22 @@ Explore your knowledge graph — search, filter, and navigate entities and relat
 - **📥 Import/Export**: Import OWL, RDFS ontologies and R2RML mappings; export OWL and R2RML
 - **🏦 Industry-Standard Ontologies**: One-click import of [FIBO](https://spec.edmcouncil.org/fibo/) (Financial), [CDISC](https://www.cdisc.org/) (Clinical), and [IOF](https://www.industrialontologies.org/) (Manufacturing) — see [Ontology import](docs/user-guide.md#ontology-import-merged) in the user guide
 - **☁️ Databricks Apps Ready**: Designed for deployment as a Databricks App
+- **🧭 Domain Cockpit (Validation)**: Tiles for registry readiness; **Active Version** reflects the version **exposed via API/MCP** (set in Registry → Browse), not only the newest file on disk — with a *(not loaded)* hint when the editor session differs
+- **⏳ New domain flow**: Full-page loading overlay until Domain Information completes its first round-trip after **New Domain**
+- **🧱 Save guard**: Duplicate sanitized domain names are rejected before save to the registry (inline + Save-to-UC check)
+- **🧩 Digital Twin field preview**: On Domain Information, triple-store / snapshot / local graph paths refresh when the domain name is committed (blur) or the version changes
 
 ### Registry
 - **📂 Multi-Domain Registry**: Central registry backed by a UC Volume that indexes all domains, their versions, and status
 - **🔄 Scheduled Refresh**: Background scheduler keeps the registry cache up-to-date on a configurable interval
 - **🔗 Entity URI Resolution**: `/resolve` endpoint resolves entity URIs to the correct domain and redirects into the knowledge graph
+- **✅ Active (API/MCP) version**: In **Registry → Browse**, expand a domain and use **Set as Active** on a version row — this is the only UI for changing which version tools and MCP see; **Domain → Versions** shows the result as a read-only badge
 
 ### Navigation & UI
 - **📋 Centralized Menu Configuration**: Top navbar and sidebar menus are driven from a single JSON config (`menu_config.json`)
 - **🔔 Unified Status Indicators**: Ontology, Mapping, and Digital Twin navbar indicators refresh simultaneously via a centralized function
 - **🏷️ Smart Defaults**: Ontology name defaults to the domain name; version displayed in the top navbar
+- **🔁 Navbar domain label**: Domain name and version in the navbar invalidate cached consolidated state after domain lifecycle actions so labels stay in sync with the session
 
 ## Quick Start
 

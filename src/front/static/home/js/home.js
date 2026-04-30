@@ -98,6 +98,7 @@ async function newDomain() {
         
         if (result.success) {
             showDomainStatus('New domain created', 'success');
+            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             setTimeout(() => window.location.reload(), 1000);
         } else {
             showDomainStatus('Error: ' + result.message, 'error');
