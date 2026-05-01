@@ -27,29 +27,27 @@ from back.core.errors import ValidationError
 # ---------------------------------------------------------------------------
 # Synthetic Lakebase fixtures
 #
-# These constants are deliberately *not* real credentials. The hostname
-# format mirrors a production Lakebase Autoscaling endpoint so the
-# tests document the real shape, but the project slug is the obvious
-# placeholder ``test-fake1234`` and the user is the all-zero UUID.
-# Tagged with both ``# pragma: allowlist secret`` (detect-secrets) and
-# ``# ggignore`` (ggshield) so secret scanners stop flagging the
-# fixture as a "Generic Database Assignment" — see GitGuardian alert
-# 32279171 (a3b55be) which was the original false positive.
+# Hostnames must **not** use the real ``*.database.<region>.cloud.databricks.com``
+# shape — secret scanners (e.g. GitGuardian "Generic Database Assignment",
+# alert 32279171) treat that pattern plus ``PGDATABASE``/``PGUSER`` as
+# possible leaked connection material. Use obvious ``.example.invalid``
+# names; behaviour under test only depends on string equality with the
+# mocked Postgres API ``status.hosts`` payloads, not on DNS shape.
 # ---------------------------------------------------------------------------
-_FAKE_PGHOST = "ep-test-fake1234.database.us-west-2.cloud.databricks.com"  # pragma: allowlist secret  # ggignore
-_FAKE_PGHOST_RO = "ep-test-fake1234-ro.database.us-west-2.cloud.databricks.com"  # pragma: allowlist secret  # ggignore
-_FAKE_PGUSER = "00000000-0000-0000-0000-000000000000"  # pragma: allowlist secret  # ggignore
+_FAKE_PGHOST = "lakebase-unit-test-primary.example.invalid"
+_FAKE_PGHOST_RO = "lakebase-unit-test-readonly.example.invalid"
+_FAKE_PGUSER = "sp-test-client-id-not-a-real-uuid"
 _FAKE_PROJECT_ID = "ontobricks-test"
-_FAKE_PG_TOKEN = "POSTGRES-API-TOKEN"  # pragma: allowlist secret  # ggignore
+_FAKE_PG_TOKEN = "lakebase-test-jwt-placeholder-not-secret"
 
 
 @pytest.fixture
 def autoscaling_pg_env(monkeypatch):
     """Populate the ``PG*`` env vars to mimic an Apps runtime bound to
     a Lakebase Autoscaling project."""
-    monkeypatch.setenv("PGHOST", _FAKE_PGHOST)  # pragma: allowlist secret  # ggignore
+    monkeypatch.setenv("PGHOST", _FAKE_PGHOST)
     monkeypatch.setenv("PGPORT", "5432")
-    monkeypatch.setenv("PGDATABASE", "databricks_postgres")
+    monkeypatch.setenv("PGDATABASE", "fake_pg_database_for_unit_tests")
     monkeypatch.setenv("PGUSER", _FAKE_PGUSER)  # pragma: allowlist secret  # ggignore
     monkeypatch.delenv("DATABASE_INSTANCE_NAME", raising=False)
     monkeypatch.delenv("PGAPPNAME", raising=False)
@@ -130,7 +128,7 @@ class TestInstanceNameResolution:
     def test_matches_read_only_host(self, monkeypatch, autoscaling_pg_env):
         # PGHOST happens to point at the read-only endpoint — the
         # walk must still match and resolve the project_id.
-        monkeypatch.setenv("PGHOST", _FAKE_PGHOST_RO)  # pragma: allowlist secret  # ggignore
+        monkeypatch.setenv("PGHOST", _FAKE_PGHOST_RO)
         auth = LakebaseAuth()
         fake_w = MagicMock()
         fake_w.api_client = _autoscaling_api_client()
@@ -157,7 +155,7 @@ class TestInstanceNameResolution:
         auth = LakebaseAuth()
         fake_w = MagicMock()
         fake_w.api_client = _autoscaling_api_client(
-            "ep-other-project.database.us-west-2.cloud.databricks.com",
+            "other-lakebase-host.example.invalid",
             project_id="other-project",
         )
         auth._w = fake_w
@@ -165,7 +163,7 @@ class TestInstanceNameResolution:
             _ = auth.instance_name
         msg = str(excinfo.value)
         assert "No Lakebase Autoscaling endpoint matched" in msg
-        assert "ep-test-fake1234" in msg
+        assert _FAKE_PGHOST in msg
 
     def test_postgres_api_failure_propagates_as_validation_error(
         self, monkeypatch, autoscaling_pg_env
@@ -268,7 +266,7 @@ class TestPasswordMinting:
         auth = LakebaseAuth()
         fake_w = MagicMock()
         fake_w.api_client = _autoscaling_api_client(
-            "ep-other.database.us-west-2.cloud.databricks.com",
+            "mismatch-lakebase-host.example.invalid",
             project_id="other",
         )
         auth._w = fake_w
