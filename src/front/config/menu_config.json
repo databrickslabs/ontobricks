@@ -83,20 +83,6 @@
                             "requires": null
                         }
                     ]
-                },
-                {
-                    "id": "registry-config",
-                    "title": "Configuration",
-                    "icon": "bi-gear",
-                    "items": [
-                        {
-                            "id": "configuration",
-                            "label": "Registry Location",
-                            "icon": "bi-archive",
-                            "default": false,
-                            "requires": null
-                        }
-                    ]
                 }
             ]
         },
@@ -259,7 +245,7 @@
                         },
                         {
                             "id": "map",
-                            "label": "Model",
+                            "label": "Designer",
                             "icon": "bi-diagram-3",
                             "default": false,
                             "requires": null

@@ -80,7 +80,7 @@ function scheduleMapAutoSave(nodes) {
 }
 
 /**
- * Initialize the Ontology Model visualization
+ * Initialize the Ontology Designer visualization
  */
 async function initOntologyMap() {
     // Increment generation counter to cancel any previous in-flight init

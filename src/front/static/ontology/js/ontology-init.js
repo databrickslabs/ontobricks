@@ -26,7 +26,7 @@ function _tryInitMap(retries) {
     } else if (retries < _MAP_RETRY_MAX) {
         setTimeout(function () { _tryInitMap(retries + 1); }, _MAP_RETRY_INTERVAL);
     } else {
-        console.warn('Ontology Model: Force initializing after timeout');
+        console.warn('Ontology Designer: Force initializing after timeout');
         if (typeof initOntologyMap === 'function') initOntologyMap();
     }
 }

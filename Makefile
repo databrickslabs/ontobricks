@@ -1,6 +1,6 @@
 # Makefile for OntoBricks (FastAPI)
 
-.PHONY: help install test run clean format lint deploy deploy-all deploy-mcp deploy-prod deploy-no-run bundle-validate bundle-summary bootstrap-perms
+.PHONY: help install test run clean format lint deploy deploy-volume deploy-no-run bundle-validate bundle-summary bootstrap-perms bootstrap-lakebase
 
 help:
 	@echo "OntoBricks (FastAPI) - Available commands:"
@@ -19,15 +19,14 @@ help:
 	@echo "    make format       - Format code with black"
 	@echo "    make lint         - Lint code with flake8"
 	@echo ""
-	@echo "  Deployment (Databricks Asset Bundles):"
-	@echo "    make deploy              - Deploy + start main app (dev)"
-	@echo "    make deploy-all          - Deploy + start both apps (dev)"
-	@echo "    make deploy-mcp          - Deploy + start MCP server only"
-	@echo "    make deploy-prod         - Deploy both apps (prod)"
-	@echo "    make deploy-no-run       - Deploy without starting apps"
-	@echo "    make bootstrap-perms     - Grant each app's SP CAN_MANAGE on itself (first-run fix)"
-	@echo "    make bundle-validate     - Validate the bundle config"
-	@echo "    make bundle-summary      - Show bundle summary"
+	@echo "  Deployment (Databricks Asset Bundles — dev sandbox only):"
+	@echo "    make deploy              - Deploy + start ontobricks-020 (Lakebase backend)"
+	@echo "    make deploy-volume       - Deploy + start ontobricks-020 (Volume-only backend)"
+	@echo "    make deploy-no-run       - Deploy without starting the app (Lakebase target)"
+	@echo "    make bootstrap-perms     - Grant the app SP CAN_MANAGE on itself (first-run fix)"
+	@echo "    make bootstrap-lakebase  - Grant the app SP USAGE/DML on the Lakebase registry schema"
+	@echo "    make bundle-validate     - Validate the bundle config (Lakebase target)"
+	@echo "    make bundle-summary      - Show bundle summary (Lakebase target)"
 	@echo ""
 	@echo "  Maintenance:"
 	@echo "    make clean        - Remove generated files"
@@ -81,43 +80,44 @@ prod:
 	. .venv/bin/activate && uvicorn app.fastapi.main:app --host 0.0.0.0 --port 8000
 
 # ── Deployment (DAB — Databricks Asset Bundles) ──────────────
+# This bundle (databricks.yml) manages the dev sandbox app
+# `ontobricks-020`. The `dev-lakebase` target binds the Lakebase
+# Postgres database the registry relies on; the bare `dev` target
+# is the Volume-only fallback. The default below is `dev-lakebase`
+# because deploying with `dev` would strip the postgres binding
+# from the live app.
 deploy:
-	@echo "Deploying + starting main app (dev)..."
+	@echo "Deploying + starting ontobricks-020 (target: dev-lakebase)..."
 	chmod +x scripts/deploy.sh
-	scripts/deploy.sh
+	scripts/deploy.sh -t dev-lakebase
 
-deploy-all:
-	@echo "Deploying + starting both apps (dev)..."
+deploy-volume:
+	@echo "Deploying + starting ontobricks-020 (target: dev, Volume-only)..."
 	chmod +x scripts/deploy.sh
-	scripts/deploy.sh --all
-
-deploy-mcp:
-	@echo "Deploying + starting MCP server only..."
-	chmod +x scripts/deploy.sh
-	scripts/deploy.sh --mcp-only
-
-deploy-prod:
-	@echo "Deploying both apps (prod)..."
-	chmod +x scripts/deploy.sh
-	scripts/deploy.sh --all -t prod
+	scripts/deploy.sh -t dev
 
 deploy-no-run:
-	@echo "Deploying without starting apps..."
+	@echo "Deploying without starting the app (target: dev-lakebase)..."
 	chmod +x scripts/deploy.sh
-	scripts/deploy.sh --no-run
+	scripts/deploy.sh -t dev-lakebase --no-run
 
 bootstrap-perms:
 	@echo "Bootstrapping app self-permissions..."
 	chmod +x scripts/bootstrap-app-permissions.sh
-	scripts/bootstrap-app-permissions.sh
+	scripts/bootstrap-app-permissions.sh ontobricks-020 mcp-ontobricks
+
+bootstrap-lakebase:
+	@echo "Granting Lakebase schema USAGE/DML to sandbox apps..."
+	chmod +x scripts/bootstrap-lakebase-perms.sh
+	scripts/bootstrap-lakebase-perms.sh
 
 bundle-validate:
-	@echo "Validating Databricks Asset Bundle..."
-	databricks bundle validate
+	@echo "Validating Databricks Asset Bundle (target: dev-lakebase)..."
+	databricks bundle validate -t dev-lakebase
 
 bundle-summary:
-	@echo "Bundle summary..."
-	databricks bundle summary
+	@echo "Bundle summary (target: dev-lakebase)..."
+	databricks bundle summary -t dev-lakebase
 
 # Check deployment prerequisites
 deploy-check:

@@ -788,7 +788,14 @@ class Domain:
             self._s.save()
             clear_version_status_cache()
             invalidate_registry_cache()
-            graph_warning = self.sync_ladybug_from_volume(svc.uc)
+            # Lazy graph load: skip the eager sync_ladybug_from_volume
+            # download here. The .lbug archive can be tens of MB and the
+            # SQL Warehouse Files API is the slow part of "Load Domain".
+            # LadybugBase._get_connection auto-restores from the registry
+            # on first DT/Build access via the auto_restore callback wired
+            # up by GraphDBFactory, and the explicit "Reload from registry"
+            # admin button (POST /sync/reload-from-registry) remains
+            # available for forced refreshes.
             ts_stats = self._s.triplestore.setdefault("stats", {})
             ts_stats.pop("status", None)
             ts_stats.pop("dt_existence", None)
@@ -796,8 +803,6 @@ class Domain:
             self._s.save()
             status = "Latest" if is_latest else "Read-only"
             msg = f"Domain loaded: {domain_name} v{version} ({status})"
-            if graph_warning:
-                msg += f" (graph sync warning: {graph_warning})"
             return {
                 "success": True,
                 "message": msg,
@@ -919,11 +924,14 @@ class Domain:
                     return cached
 
             available_versions: List[str] = []
+            active_version: Optional[str] = None
             if has_registry:
                 try:
                     svc = self.build_registry_service()
                     folder = self._s.uc_domain_folder
                     available_versions = svc.list_versions_sorted(folder)
+                    mcp_ver, _ = svc.find_mcp_version(folder)
+                    active_version = mcp_ver
                 except Exception as e:
                     logger.warning("Could not fetch versions from UC: %s", e)
                     available_versions = [version]
@@ -932,12 +940,18 @@ class Domain:
 
             is_latest = not available_versions or version == available_versions[0]
             self._s.is_active_version = is_latest
+            # ``is_active`` keeps its legacy meaning ("loaded version is the
+            # latest, so writes are allowed") because version-check.js uses
+            # it to gate the read-only body class. The MCP-enabled version
+            # is exposed separately via ``active_version`` so the Cockpit
+            # tile can show what's actually live on the API/MCP surface.
             is_active = is_latest
             result = {
                 "success": True,
                 "version": version,
                 "is_active": is_active,
                 "is_latest": is_latest,
+                "active_version": active_version,
                 "available_versions": available_versions,
                 "has_registry": has_registry,
                 "registry": (

@@ -15,13 +15,11 @@ Active only in Databricks App mode (DATABRICKS_APP_PORT is set).  In local
 mode every user has unrestricted access.
 """
 
-import json
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.databricks.DatabricksClient import DatabricksClient
-from back.core.databricks import VolumeFileService
 
 logger = get_logger(__name__)
 
@@ -53,7 +51,6 @@ def min_role(a: str, b: str) -> str:
     return a if role_level(a) <= role_level(b) else b
 
 
-_DOMAIN_PERMISSIONS_FILENAME = ".domain_permissions.json"
 _CACHE_TTL_DOMAIN_PERMS = 120  # 2 min – per-domain permission cache
 _CACHE_TTL_ADMIN = 60  # 1 min – keep short to pick up permission changes quickly
 _CACHE_TTL_PRINCIPALS = 600  # 10 min
@@ -66,11 +63,20 @@ class PermissionService:
     def __init__(self):
         self._admin_cache: Dict[str, Tuple[bool, float]] = {}
 
-        self._users_cache: Optional[List[Dict[str, Any]]] = None
-        self._users_cache_ts: float = 0.0
+        # App-scoped principals (users + groups *with permission on the
+        # Databricks App*). Populated by list_app_principals.
+        self._app_users_cache: Optional[List[Dict[str, Any]]] = None
+        self._app_groups_cache: Optional[List[Dict[str, Any]]] = None
+        self._app_principals_ts: float = 0.0
 
-        self._groups_cache: Optional[List[Dict[str, Any]]] = None
-        self._groups_cache_ts: float = 0.0
+        # Workspace-scoped principals (full SCIM listing). Populated by
+        # list_users / list_groups. Kept separate from the app-scoped
+        # caches because the two endpoints return different sets and
+        # mixing them silently corrupted lookups.
+        self._workspace_users_cache: Optional[List[Dict[str, Any]]] = None
+        self._workspace_users_ts: float = 0.0
+        self._workspace_groups_cache: Optional[List[Dict[str, Any]]] = None
+        self._workspace_groups_ts: float = 0.0
 
         # Per-domain permission cache: keyed by domain folder name
         self._domain_perm_cache: Dict[str, Tuple[Dict[str, Any], float]] = {}
@@ -321,22 +327,14 @@ class PermissionService:
     # Domain-level permission file I/O
     # ------------------------------------------------------------------
 
-    def _new_uc(self, host: str, token: str) -> VolumeFileService:
-        return VolumeFileService(host=host, token=token)
+    @staticmethod
+    def _store_for(host: str, token: str, registry_cfg: Dict[str, str]):
+        """Build the right :class:`RegistryStore` for *registry_cfg*."""
+        from back.objects.registry import RegistryCfg
+        from back.objects.registry.store import RegistryFactory
 
-    def _domain_permissions_path(
-        self,
-        registry_cfg: Dict[str, str],
-        domain_folder: str,
-    ) -> str:
-        """Path to .domain_permissions.json inside a domain folder."""
-        from back.objects.registry.RegistryService import RegistryCfg
-
-        c = RegistryCfg.from_dict(registry_cfg)
-        return (
-            f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/domains/"
-            f"{domain_folder}/{_DOMAIN_PERMISSIONS_FILENAME}"
-        )
+        cfg = RegistryCfg.from_dict(registry_cfg)
+        return RegistryFactory.from_cfg(cfg, host=host, token=token)
 
     def load_domain_permissions(
         self,
@@ -347,29 +345,24 @@ class PermissionService:
         *,
         force: bool = False,
     ) -> Dict[str, Any]:
-        """Load and cache per-domain permission file."""
+        """Load and cache per-domain permissions from the active store."""
         now = time.time()
         if not force:
             cached = self._domain_perm_cache.get(domain_folder)
             if cached and (now - cached[1]) < _CACHE_TTL_DOMAIN_PERMS:
                 return cached[0]
 
-        path = self._domain_permissions_path(registry_cfg, domain_folder)
         try:
-            uc = self._new_uc(host, token)
-            ok, content, msg = uc.read_file(path)
-            if ok and content:
-                data = json.loads(content)
-                self._domain_perm_cache[domain_folder] = (data, now)
-                logger.info(
-                    "Loaded %d domain permission entries for %s",
-                    len(data.get("permissions", [])),
-                    domain_folder,
-                )
-                return data
-            logger.debug(
-                "Domain permission file not found for %s: %s", domain_folder, msg
+            store = self._store_for(host, token, registry_cfg)
+            data = store.load_domain_permissions(domain_folder)
+            self._domain_perm_cache[domain_folder] = (data, now)
+            logger.info(
+                "Loaded %d domain permission entries for %s (backend=%s)",
+                len(data.get("permissions", [])),
+                domain_folder,
+                store.backend,
             )
+            return data
         except Exception as e:
             logger.warning(
                 "Error loading domain permissions for %s: %s", domain_folder, e
@@ -387,23 +380,25 @@ class PermissionService:
         domain_folder: str,
         data: Dict[str, Any],
     ) -> Tuple[bool, str]:
-        """Write the per-domain permission file."""
+        """Persist per-domain permissions via the active store."""
         if not registry_cfg.get("catalog") or not registry_cfg.get("schema"):
             return False, "Registry not configured"
-        path = self._domain_permissions_path(registry_cfg, domain_folder)
         try:
-            uc = self._new_uc(host, token)
-            ok, msg = uc.write_file(path, json.dumps(data, indent=2), overwrite=True)
+            store = self._store_for(host, token, registry_cfg)
+            ok, msg = store.save_domain_permissions(domain_folder, data)
             if not ok:
                 logger.error(
-                    "Failed to write domain permissions for %s: %s", domain_folder, msg
+                    "Failed to write domain permissions for %s: %s",
+                    domain_folder,
+                    msg,
                 )
                 return False, f"Failed to save domain permissions: {msg}"
             self._domain_perm_cache[domain_folder] = (data, time.time())
             logger.info(
-                "Saved %d domain permission entries for %s",
+                "Saved %d domain permission entries for %s (backend=%s)",
                 len(data.get("permissions", [])),
                 domain_folder,
+                store.backend,
             )
             return True, "Domain permissions saved"
         except Exception as e:
@@ -785,9 +780,23 @@ class PermissionService:
             self._admin_cache.clear()
 
     def clear_principals_cache(self):  # noqa: D401
-        """Invalidate the cached users/groups so the next call fetches fresh data."""
-        self._users_cache = None
-        self._groups_cache = None
+        """Invalidate every principal-related cache.
+
+        Drops the app-scoped principals (``list_app_principals``), the
+        workspace-scoped users/groups (``list_users`` / ``list_groups``),
+        the per-user admin cache and the SCIM group-membership cache, and
+        resets the bootstrap-403 flag. Used by the Settings UI when the
+        user explicitly asks for a fresh fetch.
+        """
+        self._app_users_cache = None
+        self._app_groups_cache = None
+        self._app_principals_ts = 0.0
+        self._workspace_users_cache = None
+        self._workspace_users_ts = 0.0
+        self._workspace_groups_cache = None
+        self._workspace_groups_ts = 0.0
+        self._admin_cache.clear()
+        self._user_groups_cache.clear()
         self._app_principals_forbidden = False
 
     def list_app_principals(
@@ -803,20 +812,22 @@ class PermissionService:
         """
         now = time.time()
         if (
-            self._users_cache is not None
-            and self._groups_cache is not None
-            and (now - self._users_cache_ts) < _CACHE_TTL_PRINCIPALS
+            self._app_users_cache is not None
+            and self._app_groups_cache is not None
+            and (now - self._app_principals_ts) < _CACHE_TTL_PRINCIPALS
         ):
-            return {"users": self._users_cache, "groups": self._groups_cache}
+            return {
+                "users": self._app_users_cache,
+                "groups": self._app_groups_cache,
+            }
 
         client = DatabricksClient(host=host, token=token)
         result = client.list_app_principals(app_name)
         status = getattr(client, "last_app_permissions_status", 0)
         self._app_principals_forbidden = status == 403
-        self._users_cache = result.get("users", [])
-        self._groups_cache = result.get("groups", [])
-        self._users_cache_ts = now
-        self._groups_cache_ts = now
+        self._app_users_cache = result.get("users", [])
+        self._app_groups_cache = result.get("groups", [])
+        self._app_principals_ts = now
         return result
 
     def is_app_principals_forbidden(self) -> bool:
@@ -829,31 +840,33 @@ class PermissionService:
         return self._app_principals_forbidden
 
     def list_users(self, host: str, token: str) -> List[Dict[str, Any]]:
+        """Return every workspace user via SCIM (full directory)."""
         now = time.time()
         if (
-            self._users_cache is not None
-            and (now - self._users_cache_ts) < _CACHE_TTL_PRINCIPALS
+            self._workspace_users_cache is not None
+            and (now - self._workspace_users_ts) < _CACHE_TTL_PRINCIPALS
         ):
-            return self._users_cache
+            return self._workspace_users_cache
 
         client = DatabricksClient(host=host, token=token)
         users = client.list_workspace_users()
-        self._users_cache = users
-        self._users_cache_ts = now
+        self._workspace_users_cache = users
+        self._workspace_users_ts = now
         return users
 
     def list_groups(self, host: str, token: str) -> List[Dict[str, Any]]:
+        """Return every workspace group via SCIM (full directory)."""
         now = time.time()
         if (
-            self._groups_cache is not None
-            and (now - self._groups_cache_ts) < _CACHE_TTL_PRINCIPALS
+            self._workspace_groups_cache is not None
+            and (now - self._workspace_groups_ts) < _CACHE_TTL_PRINCIPALS
         ):
-            return self._groups_cache
+            return self._workspace_groups_cache
 
         client = DatabricksClient(host=host, token=token)
         groups = client.list_workspace_groups()
-        self._groups_cache = groups
-        self._groups_cache_ts = now
+        self._workspace_groups_cache = groups
+        self._workspace_groups_ts = now
         return groups
 
 

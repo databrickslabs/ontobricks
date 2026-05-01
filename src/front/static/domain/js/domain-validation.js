@@ -161,17 +161,21 @@ function updateVersionTiles(data) {
             if (vs.success && vs.available_versions) {
                 var count = vs.available_versions.length;
                 setTile('versionsTile', 'success', count + ' version' + (count !== 1 ? 's' : ''));
-                var latest = vs.available_versions[0] || version;
-                setTile('activeVersionTile', vs.is_active ? 'success' : 'warning',
-                    'v' + latest + (vs.is_active ? '' : ' (read-only)'));
+                if (vs.active_version) {
+                    var loadedIsActive = vs.version === vs.active_version;
+                    setTile('activeVersionTile', loadedIsActive ? 'success' : 'warning',
+                        'v' + vs.active_version + (loadedIsActive ? '' : ' (not loaded)'));
+                } else {
+                    setTile('activeVersionTile', 'muted', 'None');
+                }
             } else {
                 setTile('versionsTile', 'muted', '1 version');
-                setTile('activeVersionTile', 'success', 'v' + version);
+                setTile('activeVersionTile', 'muted', 'None');
             }
         })
         .catch(function() {
             setTile('versionsTile', 'muted', '1 version');
-            setTile('activeVersionTile', 'muted', 'v' + version);
+            setTile('activeVersionTile', 'muted', '—');
         });
 }
 
@@ -416,9 +420,13 @@ function updateDtwinCard(data) {
         }
     }
 
-    // Triple-Store VIEW card
     var viewEl = document.getElementById('psDtExistView');
-    if (viewEl) viewEl.innerHTML = _dtBadge(dt.view_exists, 'Exists', 'Not found', 'Not configured');
+    if (viewEl) {
+        viewEl.innerHTML = _dtBadge(dt.view_exists, 'Exists', 'Not found', 'Not configured');
+        if (dt.view_check_error) viewEl.title = dt.view_check_error;
+        else if (dt.view_table) viewEl.title = 'Queried: ' + dt.view_table;
+        else viewEl.title = '';
+    }
 
     var zcCard = document.getElementById('psDtZeroCopyCard');
     if (zcCard) {
@@ -429,6 +437,17 @@ function updateDtwinCard(data) {
 
     var viewNameEl = document.getElementById('psDtViewName');
     if (viewNameEl) viewNameEl.textContent = dt.view_table || 'Not configured';
+
+    var viewReasonEl = document.getElementById('psDtViewReason');
+    if (viewReasonEl) {
+        if (dt.view_check_error) {
+            viewReasonEl.textContent = dt.view_check_error;
+            viewReasonEl.style.display = '';
+        } else {
+            viewReasonEl.textContent = '';
+            viewReasonEl.style.display = 'none';
+        }
+    }
 
     // Snapshot
     var snapshotArea = document.getElementById('psDtSnapshotArea');
@@ -454,7 +473,28 @@ function updateDtwinCard(data) {
     }
 
     var regEl = document.getElementById('psDtExistRegistry');
-    if (regEl) regEl.innerHTML = _dtBadge(dt.registry_lbug_exists, 'Archived', 'Not archived', 'Not configured');
+    if (regEl) {
+        regEl.innerHTML = _dtBadge(dt.registry_lbug_exists, 'Archived', 'Not archived', 'Not configured');
+        if (dt.registry_check_error) regEl.title = dt.registry_check_error;
+        else if (dt.registry_lbug_path) regEl.title = 'Archive: ' + dt.registry_lbug_path;
+        else regEl.title = '';
+    }
+
+    var regPathEl = document.getElementById('psDtRegistryPath');
+    if (regPathEl) {
+        regPathEl.textContent = dt.registry_lbug_path || '';
+        regPathEl.style.display = dt.registry_lbug_path ? '' : 'none';
+    }
+    var regReasonEl = document.getElementById('psDtRegistryReason');
+    if (regReasonEl) {
+        if (dt.registry_check_error) {
+            regReasonEl.textContent = dt.registry_check_error;
+            regReasonEl.style.display = '';
+        } else {
+            regReasonEl.textContent = '';
+            regReasonEl.style.display = 'none';
+        }
+    }
 
     // Triple count
     var tripleArea = document.getElementById('psDtTripleArea');

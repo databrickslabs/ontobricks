@@ -25,6 +25,17 @@ function enforceCamelCase(value) {
 // Configure sidebar navigation
 window.SIDEBAR_NAV_MANUAL_INIT = true;
 document.addEventListener('DOMContentLoaded', function() {
+    // Show the global domain-loading overlay while the Domain Information
+    // page boots up after a "New Domain" action. domain-information.js
+    // hides it once its Promise.all (info + version-status + LLM
+    // endpoints) resolves. Flag is set by domainNew() in navbar.js right
+    // before it navigates here.
+    let _creatingNewDomain = false;
+    try { _creatingNewDomain = sessionStorage.getItem('ob_creating_new_domain') === '1'; } catch (e) {}
+    if (_creatingNewDomain && typeof showDomainLoading === 'function') {
+        showDomainLoading('Creating new domain…');
+    }
+
     // Check URL for section parameter
     const urlParams = new URLSearchParams(window.location.search);
     const initialSection = urlParams.get('section');
@@ -214,6 +225,7 @@ async function checkDomainNameAvailability(nameEl) {
     const hintId = 'domainNameDuplicateHint';
     let hint = document.getElementById(hintId);
     if (!name) {
+        if (nameEl) nameEl.classList.remove('is-invalid');
         if (hint) hint.remove();
         return;
     }
@@ -235,6 +247,7 @@ async function checkDomainNameAvailability(nameEl) {
             if (hint) hint.remove();
         }
     } catch (_) {
+        if (nameEl) nameEl.classList.remove('is-invalid');
         if (hint) hint.remove();
     }
 }
@@ -286,10 +299,22 @@ async function saveDomainInfo() {
         
         if (data.success) {
             showNotification('Domain info saved successfully!', 'success');
-            // Update the navbar domain name
-            const currentDomainNameEl = document.getElementById('currentDomainName');
-            if (currentDomainNameEl) {
-                currentDomainNameEl.textContent = domainInfoPayload.name || 'Domain';
+            // ``refreshNavbarIndicators`` invalidates ``/navbar/state``
+            // and ``/domain/info`` then re-fetches — no separate
+            // ``invalidateDomainCaches`` call (would double-invalidate).
+            if (typeof refreshNavbarIndicators === 'function') {
+                refreshNavbarIndicators();
+            } else if (typeof invalidateDomainCaches === 'function') {
+                invalidateDomainCaches();
+                const currentDomainNameEl = document.getElementById('currentDomainName');
+                if (currentDomainNameEl) {
+                    currentDomainNameEl.textContent = domainInfoPayload.name || 'Domain';
+                }
+            } else {
+                const currentDomainNameEl = document.getElementById('currentDomainName');
+                if (currentDomainNameEl) {
+                    currentDomainNameEl.textContent = domainInfoPayload.name || 'Domain';
+                }
             }
         } else {
             showNotification('Error: ' + (data.message || 'Failed to save'), 'error');
@@ -325,6 +350,7 @@ async function handleDomainFileUpload(input) {
         
         if (data.success) {
             showNotification('Domain loaded successfully!', 'success');
+            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             setTimeout(() => location.reload(), 1000);
         } else {
             if (typeof hideDomainLoading === 'function') hideDomainLoading();
@@ -358,6 +384,7 @@ async function newDomain() {
         
         if (data.success) {
             showNotification('New domain started!', 'success');
+            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             setTimeout(() => location.reload(), 1000);
         } else {
             showNotification('Error: ' + data.message, 'error');

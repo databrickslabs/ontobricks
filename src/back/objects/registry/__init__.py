@@ -3,6 +3,7 @@
 from back.objects.registry.RegistryService import (
     RegistryCfg,
     RegistryService,
+    resolve_default_backend,
 )
 from back.objects.registry.PermissionService import (
     PermissionService,
@@ -18,6 +19,7 @@ from back.objects.registry.PermissionService import (
     role_level,
     min_role,
 )
+from back.objects.registry.guards import require
 from back.objects.registry.registry_cache import (
     invalidate_registry_cache,
     get_registry_cache_snapshot,
@@ -28,6 +30,7 @@ from back.objects.registry.registry_cache import (
 __all__ = [
     "RegistryCfg",
     "RegistryService",
+    "resolve_default_backend",
     "PermissionService",
     "permission_service",
     "ROLE_ADMIN",
@@ -40,6 +43,7 @@ __all__ = [
     "ASSIGNABLE_ROLES",
     "role_level",
     "min_role",
+    "require",
     "BuildScheduler",
     "get_scheduler",
     "invalidate_registry_cache",

@@ -193,8 +193,14 @@ async function initializeOntoVizCanvas() {
         return;
     }
     
-    // Check if editing is allowed (active version only)
-    const canEdit = window.isActiveVersion !== false;
+    // Editing is allowed only for editor+ on the current (active)
+    // version. ``window.OB.canEditOntology`` collapses both signals
+    // (active-version + viewer-role) into one check so OntoViz toolbar /
+    // create / update / delete callbacks don't have to repeat the
+    // logic per call site.
+    const canEdit = (window.OB && typeof window.OB.canEditOntology === 'function')
+        ? window.OB.canEditOntology()
+        : window.isActiveVersion !== false;
     
     // Initialize OntoViz with simplified properties (name only, no types or keys)
     // Start in view-only mode by default

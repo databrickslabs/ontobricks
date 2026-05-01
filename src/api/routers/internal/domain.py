@@ -33,58 +33,11 @@ from back.objects.session import (
     sanitize_domain_folder,
 )
 from back.objects.domain import Domain
-from back.objects.registry import (
-    RegistryCfg,
-    ROLE_ADMIN,
-    permission_service,
-)
+from api.routers.internal._permissions import filter_visible_domains
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/domain", tags=["Domain"])
-
-
-def _filter_domains_by_user_access(
-    request: Request,
-    session_mgr: SessionManager,
-    settings: Settings,
-    entries: List[Any],
-) -> List[Any]:
-    """Restrict *entries* (folder names or detail dicts) to those the
-    current user has a role != NONE on. Admins see the full list.
-    No-ops when the user role isn't resolvable (local dev / non-app mode).
-    """
-    if not entries:
-        return list(entries)
-
-    user_role = getattr(request.state, "user_role", "") or ""
-    if not user_role or user_role == ROLE_ADMIN:
-        return list(entries)
-
-    email = (
-        getattr(request.state, "user_email", "")
-        or request.headers.get("x-forwarded-email", "")
-    )
-    if not email:
-        return list(entries)
-
-    from back.core.helpers import get_databricks_host_and_token
-
-    domain = get_domain(session_mgr)
-    host, token = get_databricks_host_and_token(domain, settings)
-    user_token = request.headers.get("x-forwarded-access-token", "") or ""
-    registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
-
-    return permission_service.filter_accessible_domains(
-        email,
-        host,
-        token,
-        registry_cfg,
-        settings.ontobricks_app_name,
-        entries,
-        user_token=user_token,
-        app_role=user_role,
-    )
 
 
 # ===========================================
@@ -461,7 +414,7 @@ async def list_domains(
     domain = get_domain(session_mgr)
     svc = Domain(domain, settings).build_registry_service()
     result = Domain.list_domains_result(svc)
-    result["domains"] = _filter_domains_by_user_access(
+    result["domains"] = filter_visible_domains(
         request, session_mgr, settings, result.get("domains", [])
     )
     return result
@@ -547,7 +500,11 @@ async def set_version_mcp(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Toggle the API/MCP flag for a specific version (only one may be active)."""
+    """Toggle the API/MCP flag for a specific version (only one may be active).
+
+    In the web UI, operators change this from **Registry → Browse**; this
+    endpoint remains for integrations and tests that POST JSON directly.
+    """
     data = await request.json()
     version = data.get("version")
     enabled = bool(data.get("enabled", False))

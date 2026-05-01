@@ -34,6 +34,15 @@ env:
   #- name: REGISTRY_VOLUME
   #  value: "OntoBricksRegistry"
 
+  # ── Lakebase (optional) ───────────────────────────────────────
+  # When deployed to a *-lakebase target the DAB binds a ``database``
+  # resource to the MCP server too — Databricks Apps then auto-injects
+  # PGHOST/PGPORT/PGDATABASE/PGUSER/PGAPPNAME/PGSSLMODE. Without that
+  # binding the env vars stay unset and the MCP server keeps reading
+  # the registry from the Unity Catalog Volume (default behaviour).
+  - name: LAKEBASE_SCHEMA
+    value: "ontobricks_registry"
+
 # Resources that this app uses
 # Configure these resources in the Databricks Apps UI after deployment
 resources:

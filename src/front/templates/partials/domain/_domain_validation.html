@@ -240,6 +240,7 @@
                         <div class="small">
                             <div class="text-muted mb-1">Unity Catalog VIEW</div>
                             <code id="psDtViewName" class="d-block text-break">N/A</code>
+                            <div id="psDtViewReason" class="text-danger small mt-1" style="display:none;"></div>
                         </div>
                         <div class="small mt-2" id="psDtSnapshotArea" style="display:none;">
                             <div class="text-muted mb-1">Incremental Snapshot</div>
@@ -264,6 +265,8 @@
                                 <span class="text-muted">Registry archive</span>
                                 <span id="psDtExistRegistry"></span>
                             </div>
+                            <code id="psDtRegistryPath" class="d-block text-break text-muted mt-1" style="display:none; font-size:.75em;"></code>
+                            <div id="psDtRegistryReason" class="text-danger small mt-1" style="display:none;"></div>
                         </div>
                         <div class="small mt-2" id="psDtTripleArea" style="display:none;">
                             <i class="bi bi-database me-1 text-muted"></i>

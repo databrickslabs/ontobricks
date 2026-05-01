@@ -321,23 +321,27 @@ async function autoGenerateOwl() {
         return;
     }
     
-    // In read-only mode (viewer role or inactive version) we cannot POST to
-    // /ontology/generate-owl because it saves the domain and is blocked by
-    // both the backend PermissionMiddleware and the client-side viewer fetch
-    // guard. Fall back to GET /ontology/export-owl, which renders the same
-    // OWL content server-side without persisting anything.
+    // When the user is viewing an inactive (older) version we cannot POST
+    // to /ontology/generate-owl because it persists the domain and is
+    // blocked by the backend PermissionMiddleware. Fall back to GET
+    // /ontology/export-owl, which renders the same OWL content
+    // server-side without persisting anything.
     //
-    // Note: ``window.isDomainViewer`` / ``window.isActiveVersion`` are set
-    // asynchronously by ``version-check.js`` (checkVersionStatus +
-    // checkDomainRole). Because ``autoGenerateOwl()`` is called from
-    // ``loadOntologyFromSession()`` — a sibling ``DOMContentLoaded`` handler
-    // that runs in parallel — we can lose the race and still think we're
-    // editable on the first call. If the POST comes back 403 we therefore
-    // retry via the read-only endpoint so the OWL preview renders cleanly
-    // instead of showing a "Viewer role does not allow write operations"
-    // server-error box.
-    const isReadOnly = () => window.isDomainViewer === true
-        || window.isActiveVersion === false;
+    // Two read-only paths converge here: an older inactive version
+    // (any role, set asynchronously by ``version-check.js``) and a
+    // viewer on the current domain (no edit role, stamped on <body>
+    // synchronously by ``permissions.js``). Both must use GET
+    // ``/ontology/export-owl`` instead of POST ``/ontology/generate-owl``
+    // — the POST path persists the domain and is 403'd by the backend
+    // ``PermissionMiddleware`` in either case. ``window.OB.canEditOntology``
+    // collapses both signals into a single check; the legacy fallback
+    // keeps older bundles compiling if ``permissions.js`` failed to load.
+    const isReadOnly = () => {
+        if (window.OB && typeof window.OB.canEditOntology === 'function') {
+            return !window.OB.canEditOntology();
+        }
+        return window.isActiveVersion === false;
+    };
 
     const readOnlyFetch = () => fetch('/ontology/export-owl', {
         method: 'GET',
@@ -356,12 +360,6 @@ async function autoGenerateOwl() {
                 body: JSON.stringify(OntologyState.config),
                 credentials: 'same-origin'
             });
-            if (response.status === 403) {
-                // The viewer cascade / backend permission middleware blocked
-                // the write. Fall back to the read-only export endpoint.
-                response = await readOnlyFetch();
-                usedReadOnlyEndpoint = true;
-            }
         }
 
         // Always try to parse the JSON response (even for error status codes)

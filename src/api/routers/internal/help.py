@@ -80,6 +80,11 @@ _DOC_CATEGORIES: List[Dict] = [
                 "title": "Architecture",
             },
             {"slug": "api", "file": "api.md", "title": "API Reference"},
+            {
+                "slug": "data-access",
+                "file": "data-access.md",
+                "title": "Data Access",
+            },
             {"slug": "development", "file": "development.md", "title": "Development"},
             {"slug": "deployment", "file": "deployment.md", "title": "Deployment"},
         ],

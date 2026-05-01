@@ -882,7 +882,7 @@ class DigitalTwin:
 
         result: Dict[str, Any] = {
             "view_exists": None,
-            "local_lbug_exists": os.path.exists(local_path),
+            "local_lbug_exists": bool(last_built) and os.path.exists(local_path),
             "registry_lbug_exists": None,
             "view_table": view_table,
             "graph_name": graph_name,
@@ -892,60 +892,100 @@ class DigitalTwin:
             "last_built": last_built,
             "snapshot_table": snapshot_table,
             "snapshot_exists": None,
+            "view_check_error": None,
+            "snapshot_check_error": None,
+            "registry_check_error": None,
         }
 
-        async def _check_view() -> Optional[bool]:
-            if not (view_table and "." in view_table):
-                return None
+        async def _check_view() -> tuple[Optional[bool], Optional[str]]:
+            if not view_table:
+                return None, "No view name resolved (domain.delta.catalog/schema/name missing)"
+            if "." not in view_table:
+                return None, f"Resolved view name is not fully qualified: {view_table}"
             try:
                 view_store = get_triplestore(domain, settings, backend="view")
-                if view_store:
-                    return await run_blocking(view_store.table_exists, view_table)
+                if not view_store:
+                    return None, (
+                        "No SQL warehouse available "
+                        "(set domain.databricks.sql_warehouse_id or settings.databricks_warehouse_id)"
+                    )
+                exists = await run_blocking(view_store.table_exists, view_table)
+                logger.info(
+                    "DT existence: VIEW %s -> exists=%s", view_table, exists
+                )
+                return exists, None
             except Exception as e:
-                logger.debug("VIEW existence check failed: %s", e)
-            return None
+                logger.warning(
+                    "DT existence: VIEW %s check failed: %s", view_table, e
+                )
+                return None, f"View check failed: {e}"
 
-        async def _check_snapshot() -> Optional[bool]:
+        async def _check_snapshot() -> tuple[Optional[bool], Optional[str]]:
             if not (snapshot_table and "." in snapshot_table):
-                return None
+                return None, None
             try:
-                if host and wh_id:
-                    client = DatabricksClient(
-                        host=host, token=token, warehouse_id=wh_id
-                    )
-                    incr_svc = IncrementalBuildService(client)
-                    return await run_blocking(incr_svc.snapshot_exists, snapshot_table)
+                if not (host and wh_id):
+                    return None, "No SQL warehouse / host configured"
+                client = DatabricksClient(host=host, token=token, warehouse_id=wh_id)
+                incr_svc = IncrementalBuildService(client)
+                exists = await run_blocking(incr_svc.snapshot_exists, snapshot_table)
+                logger.info(
+                    "DT existence: snapshot %s -> exists=%s", snapshot_table, exists
+                )
+                return exists, None
             except Exception as e:
-                logger.debug("Snapshot existence check failed: %s", e)
-            return None
+                logger.warning(
+                    "DT existence: snapshot %s check failed: %s", snapshot_table, e
+                )
+                return None, f"Snapshot check failed: {e}"
 
-        async def _check_registry() -> Optional[bool]:
-            if not (uc_path and registry_lbug_path):
-                return None
+        async def _check_registry() -> tuple[Optional[bool], Optional[str]]:
+            if not uc_path:
+                return None, "Domain has no UC volume version path (uc_version_path/uc_domain_path)"
+            if not registry_lbug_path:
+                return None, "Could not derive registry archive path from uc_path/db_name"
             try:
-                if host and token:
-                    uc = VolumeFileService(host=host, token=token)
-                    parent_dir = registry_lbug_path.rsplit("/", 1)[0]
-                    archive_name = registry_lbug_path.rsplit("/", 1)[1]
-                    ok, items, _ = await run_blocking(
-                        uc.list_directory, parent_dir, extensions=[".tar.gz"]
+                if not (host and token):
+                    return None, "No Databricks host/token available for UC Files API"
+                uc = VolumeFileService(host=host, token=token)
+                parent_dir = registry_lbug_path.rsplit("/", 1)[0]
+                archive_name = registry_lbug_path.rsplit("/", 1)[1]
+                ok, items, msg = await run_blocking(
+                    uc.list_directory, parent_dir, extensions=[".tar.gz"]
+                )
+                if not ok:
+                    logger.info(
+                        "DT existence: registry archive parent %s not listable (%s)",
+                        parent_dir, msg,
                     )
-                    if ok and items:
-                        return any(f["name"] == archive_name for f in items)
-                    return False
+                    return False, f"Cannot list {parent_dir}: {msg}"
+                exists = any(f.get("name") == archive_name for f in (items or []))
+                logger.info(
+                    "DT existence: archive %s -> exists=%s (%d candidates)",
+                    registry_lbug_path, exists, len(items or []),
+                )
+                return exists, None
             except Exception as e:
-                logger.warning("Registry .lbug existence check failed: %s", e)
-            return None
+                logger.warning(
+                    "DT existence: registry archive %s check failed: %s",
+                    registry_lbug_path, e,
+                )
+                return None, f"Registry archive check failed: {e}"
 
-        view_ok, snap_ok, reg_ok = await asyncio.gather(
-            _check_view(),
-            _check_snapshot(),
-            _check_registry(),
+        (view_ok, view_err), (snap_ok, snap_err), (reg_ok, reg_err) = (
+            await asyncio.gather(
+                _check_view(),
+                _check_snapshot(),
+                _check_registry(),
+            )
         )
 
         result["view_exists"] = view_ok
+        result["view_check_error"] = view_err
         result["snapshot_exists"] = snap_ok
+        result["snapshot_check_error"] = snap_err
         result["registry_lbug_exists"] = reg_ok
+        result["registry_check_error"] = reg_err
 
         return result
 

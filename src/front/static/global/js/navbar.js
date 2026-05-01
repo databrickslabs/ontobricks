@@ -26,12 +26,12 @@ document.addEventListener('DOMContentLoaded', function() {
  *
  * Uses the consolidated /navbar/state endpoint so a single HTTP
  * round-trip (with a 15 s sessionStorage TTL cache) replaces four
- * separate requests.  Only /settings/permissions/me stays separate
- * because it involves slower external permission checks.
+ * separate requests. Admin-only nav items are now gated declaratively
+ * via ``[data-requires-app="admin"]`` in ``permissions.css`` so no
+ * extra fetch or JS pass is needed.
  */
 function initNavbar() {
     loadNavbarState();
-    showAdminNavItems();
 }
 
 /**
@@ -52,17 +52,6 @@ async function loadNavbarState() {
 }
 
 
-async function showAdminNavItems() {
-    try {
-        const me = await fetchCached('/settings/permissions/me', 60000);
-        if (me.is_app_admin === true || me.role === 'admin') {
-            document.querySelectorAll('.admin-only-nav').forEach(el => {
-                el.style.display = '';
-            });
-        }
-    } catch (_) { /* non-admin or not in app mode */ }
-}
-
 /**
  * Refresh all three workflow indicators (Ontology, Mapping, Digital Twin)
  * in the top navbar. Call this single function after any change that could
@@ -71,11 +60,30 @@ async function showAdminNavItems() {
  * Invalidates the sessionStorage cache so the next call hits the server.
  */
 async function refreshNavbarIndicators() {
-    fetchCachedInvalidate('/navbar/state');
+    invalidateDomainCaches();
     await loadNavbarState();
 }
 
+/**
+ * Invalidate every browser cache that stores domain identity (name /
+ * version / folder). Call this *before* any ``window.location.reload()``
+ * or ``window.location.href = …`` that follows a mutation on the
+ * server-side domain (clear, load-from-uc, save-to-uc, create-version,
+ * import, /domain/info POST, …). The 15 s ``sessionStorage`` TTL on
+ * ``/navbar/state`` survives reloads, so without this invalidation the
+ * navbar shows the *previous* domain name/version on the next page.
+ */
+function invalidateDomainCaches() {
+    if (typeof fetchCachedInvalidate === 'function') {
+        fetchCachedInvalidate('/navbar/state');
+    }
+    if (typeof fetchOnceInvalidate === 'function') {
+        fetchOnceInvalidate('/domain/info');
+    }
+}
+
 window.refreshNavbarIndicators = refreshNavbarIndicators;
+window.invalidateDomainCaches = invalidateDomainCaches;
 
 /**
  * Apply warehouse icon colour from pre-fetched data (no extra HTTP call).
@@ -281,7 +289,11 @@ async function domainNew() {
         
         if (data.success) {
             showNotification('New domain started', 'success');
-            // Navigate to Domain settings page
+            invalidateDomainCaches();
+            // Hand off the spinner to the next page: domain.js / domain-information.js
+            // pick this flag up on DOMContentLoaded, show the overlay until the
+            // initial Promise.all (info + version-status + LLM endpoints) resolves.
+            try { sessionStorage.setItem('ob_creating_new_domain', '1'); } catch (e) {}
             setTimeout(() => {
                 window.location.href = '/domain/#information';
             }, 1000);
@@ -383,6 +395,7 @@ async function saveDomainInfoBeforeSave() {
                     body: JSON.stringify(domainInfoPayload),
                     credentials: 'same-origin'
                 });
+                invalidateDomainCaches();
             } catch (e) {
                 console.warn('Could not auto-save domain info:', e);
             }
@@ -460,6 +473,26 @@ async function showDomainSaveDialog() {
 
 async function doDomainSave() {
     try {
+        // Belt-and-suspenders duplicate-name guard: domain.js already
+        // checks ``/domain/check-name`` (debounced 500 ms on every
+        // ``input`` event of ``#domainName``) and toggles the
+        // ``is-invalid`` class plus an ``invalid-feedback`` hint. Re-
+        // run that check synchronously here in case the user clicked
+        // Save inside the debounce window or before any input event
+        // fired (e.g. a pre-filled form), then refuse to POST when
+        // the input is still flagged invalid.
+        const _nameEl = document.getElementById('domainName');
+        if (_nameEl && typeof checkDomainNameAvailability === 'function') {
+            await checkDomainNameAvailability(_nameEl);
+        }
+        if (_nameEl && _nameEl.classList.contains('is-invalid')) {
+            const _hint = document.getElementById('domainNameDuplicateHint');
+            const _msg = (_hint && _hint.textContent.trim())
+                || 'A domain with this name already exists in the registry. Please choose a different name.';
+            showNotification(_msg, 'error');
+            try { _nameEl.focus(); } catch (e) {}
+            return;
+        }
         showNotification('Saving domain to registry...', 'info', 5000);
         const response = await fetch('/domain/save-to-uc', {
             method: 'POST',
@@ -689,6 +722,7 @@ async function doDomainLoad(domainSlug, version) {
         const data = await response.json();
         if (data.success) {
             showNotification(data.message || 'Domain loaded successfully!', 'success');
+            invalidateDomainCaches();
             setTimeout(() => location.reload(), 1000);
         } else {
             hideDomainLoading();
@@ -877,6 +911,7 @@ function handleImportResponse(data) {
             }
         }
         showNotification(msg, 'success');
+        invalidateDomainCaches();
         setTimeout(() => location.reload(), 1500);
     } else {
         hideDomainLoading();

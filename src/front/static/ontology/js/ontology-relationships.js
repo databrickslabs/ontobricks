@@ -40,7 +40,11 @@ function updatePropertiesList() {
         return;
     }
     
-    const canEdit = window.isActiveVersion !== false;
+    // Mirrors ontology-entities.js — viewer-role and inactive-version
+    // both must hide write affordances (delete, toggle direction, …).
+    const canEdit = (window.OB && typeof window.OB.canEditOntology === 'function')
+        ? window.OB.canEditOntology()
+        : window.isActiveVersion !== false;
     
     let html = '<ul class="relationship-list">';
     
@@ -109,8 +113,14 @@ function findPropertyIndexByName(propertyName) {
 
 /**
  * Remove property by name
+ *
+ * Defense-in-depth: see ``removeClassByName``.
  */
 async function removePropertyByName(propertyName) {
+    if (window.OB && typeof window.OB.canEditOntology === 'function'
+        && !window.OB.canEditOntology()) {
+        return;
+    }
     const idx = findPropertyIndexByName(propertyName);
     if (idx >= 0) {
         await removeProperty(idx);

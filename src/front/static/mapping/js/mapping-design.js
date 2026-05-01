@@ -25,7 +25,7 @@ function showMappingDesignerLoading(show) {
 }
 
 /**
- * Load saved map layout from the Ontology Model
+ * Load saved map layout from the Ontology Designer
  */
 async function loadMapLayout() {
     try {
@@ -128,7 +128,7 @@ async function initMappingDesigner() {
             return;
         }
         
-        // Load saved layout from Ontology Model
+        // Load saved layout from Ontology Designer
         const savedLayout = await loadMapLayout();
         
         // Get mapping status (only count entries that have a SQL query as truly assigned)
@@ -797,7 +797,7 @@ async function initMappingDesigner() {
         });
         
         document.getElementById('mappingMapResetLayout')?.addEventListener('click', async () => {
-            // Reload saved layout from Ontology Model
+            // Reload saved layout from Ontology Designer
             const layout = await loadMapLayout();
             if (layout && layout.positions) {
                 nodes.forEach((node, idx) => {
@@ -818,7 +818,7 @@ async function initMappingDesigner() {
                 mappingMapSimulation.alpha(0.01).restart();
                 
                 if (typeof showNotification === 'function') {
-                    showNotification('Layout restored from Ontology Model', 'info', 2000);
+                    showNotification('Layout restored from Ontology Designer', 'info', 2000);
                 }
             } else {
                 if (typeof showNotification === 'function') {

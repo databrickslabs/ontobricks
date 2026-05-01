@@ -1,0 +1,245 @@
+/*
+ * permissions.css — declarative role / version gates
+ *
+ * This stylesheet replaces dozens of imperative ``element.style.display = …``
+ * and ``element.disabled = true`` snippets that used to live in
+ * ``navbar.js`` / ``version-check.js``. Permissions and read-only state are
+ * now expressed *declaratively* on the DOM and the rules below do the
+ * gating in the cascade, which means:
+ *
+ *   - markup stays self-documenting (a "needs admin" button literally
+ *     carries ``data-requires-app="admin"`` instead of being toggled by
+ *     someone else's JS),
+ *   - there is no flicker between page paint and JS deciding to hide a
+ *     control (no extra round-trip, no race against
+ *     ``DOMContentLoaded``),
+ *   - role-aware UI is reachable for any markup we add later — no need
+ *     to remember to call ``showAdminNavItems()`` again.
+ *
+ * Inputs (all set by the backend / server-rendered ``base.html``):
+ *
+ *   ``<body data-app-role="…" data-domain-role="…" data-app-mode="…">``
+ *     written from the Jinja globals ``get_user_role``,
+ *     ``get_user_domain_role``, ``is_app_mode``. Mirrors the backend
+ *     authorisation hierarchy (admin > builder > editor > viewer >
+ *     none) and matches ``window.OB.permissions``.
+ *
+ *   ``body.read-only-version``
+ *     added by ``version-check.js`` when the loaded domain version is
+ *     not the active one. The read-only state is determined
+ *     asynchronously after the version-status round-trip.
+ *
+ *   ``body.role-viewer``
+ *     added by ``permissions.js`` synchronously at parse time when a
+ *     non-admin caller has a viewer role on the loaded domain. Re-uses
+ *     the same gates as ``read-only-version``: a viewer should see
+ *     exactly the same UI as someone reading an older version. The
+ *     only differences are the tooltip copy on the navbar READ-ONLY
+ *     pill (see ``base.html`` → ``#readOnlyNavBadge``) and the body
+ *     class — the selectors below match either class via ``:is(...)``.
+ *
+ * Conventions for new gates:
+ *
+ *   ``[data-requires-app="admin"]``   visible only for app-role admin
+ *   ``[data-requires="builder"]``     interactive only for domain-role >= builder
+ *   ``[data-requires="editor"]``      interactive only for domain-role >= editor
+ *
+ * Admins always satisfy the domain-role gates so the cascade matches
+ * the backend ``require(scope='domain')`` dependency, which falls back
+ * to the app role when no per-domain entry is set.
+ */
+
+/* ==========================================================================
+   App-role gates
+   ========================================================================== */
+
+[data-requires-app="admin"] {
+    display: none !important;
+}
+
+body[data-app-role="admin"] [data-requires-app="admin"] {
+    display: revert !important;
+}
+
+/*
+ * ``display: revert`` above falls back to the user-agent default (e.g.
+ * ``inline`` for ``<a>``), bypassing every author rule — including
+ * Bootstrap's ``.dropdown-item { display: block }`` and our own
+ * ``.sidebar-nav .nav-link { display: flex }``. Restore the right display
+ * for admin-gated entries on the surfaces where the natural ``<a>`` /
+ * ``<button>`` ``inline`` would break the layout. Fixes "Teams icon not
+ * aligned with the others" in the retractable sidebar (the Teams entry
+ * is the only ``data-requires-app="admin"`` nav-link, so it loses
+ * ``display: flex`` for admins and the icon falls back to inline
+ * positioning, ignoring ``gap`` and ``align-items``).
+ */
+body[data-app-role="admin"] .sidebar-nav .nav-link[data-requires-app="admin"] {
+    display: flex !important;
+}
+
+body[data-app-role="admin"] .dropdown-item[data-requires-app="admin"] {
+    display: block !important;
+}
+
+/* ==========================================================================
+   Domain-role gates (builder / editor)
+   ========================================================================== */
+
+[data-requires="builder"],
+[data-requires="editor"] {
+    pointer-events: none !important;
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+body[data-app-role="admin"] [data-requires="builder"],
+body[data-app-role="admin"] [data-requires="editor"],
+body[data-domain-role="builder"] [data-requires="builder"],
+body[data-domain-role="builder"] [data-requires="editor"],
+body[data-domain-role="editor"] [data-requires="editor"] {
+    pointer-events: auto !important;
+    opacity: 1 !important;
+    cursor: auto !important;
+}
+
+/* ==========================================================================
+   Older-version (inactive version) read-only mode
+
+   When ``checkVersionStatus`` finds the loaded version is no longer
+   active, it adds ``read-only-version`` to <body>. The rules below
+   collectively replace ``disableEditingForInactiveVersion`` and its
+   13 helpers. New write surfaces should be added to one of the lists
+   below rather than to a JS query-selector sweep.
+   ========================================================================== */
+
+/* --- Domain > Metadata: every write button + ``data-meta-action`` write. */
+body:is(.read-only-version, .role-viewer) #loadMetadataBtn,
+body:is(.read-only-version, .role-viewer) #removeTablesBtn,
+body:is(.read-only-version, .role-viewer) #updateMetadataBtn,
+body:is(.read-only-version, .role-viewer) #importSelectedBtn,
+body:is(.read-only-version, .role-viewer) #loadMetadataConfirmBtn,
+body:is(.read-only-version, .role-viewer) #updateMappingsBtn,
+body:is(.read-only-version, .role-viewer) [data-meta-action="clear-metadata"],
+body:is(.read-only-version, .role-viewer) [data-meta-action="open-ds-modal"],
+body:is(.read-only-version, .role-viewer) [data-meta-action="edit-comment"],
+body:is(.read-only-version, .role-viewer) [data-meta-action="table-details"],
+body:is(.read-only-version, .role-viewer) [data-meta-action="update-from-uc"],
+body:is(.read-only-version, .role-viewer) [data-meta-action="remove-selected-tables"],
+body:is(.read-only-version, .role-viewer) [data-meta-action="update-mappings"],
+body:is(.read-only-version, .role-viewer) [data-meta-action="show-load-modal"],
+body:is(.read-only-version, .role-viewer) button[onclick*="saveTableDetails"],
+body:is(.read-only-version, .role-viewer) button[onclick*="saveTableComment"],
+body:is(.read-only-version, .role-viewer) button[onclick*="clearMetadata"],
+/* --- Domain > Documents: dropzone + delete-file in dynamically rendered list. */
+body:is(.read-only-version, .role-viewer) #docDropZone,
+body:is(.read-only-version, .role-viewer) #docUploadBtn,
+body:is(.read-only-version, .role-viewer) #docClearQueueBtn,
+body:is(.read-only-version, .role-viewer) #docFileInput,
+body:is(.read-only-version, .role-viewer) #docFileList button[onclick*="deleteFile"],
+/* --- Ontology > Import: every "import from …" trigger + module checkboxes. */
+body:is(.read-only-version, .role-viewer) #importOwlLocalBtn,
+body:is(.read-only-version, .role-viewer) #importOwlUCBtn,
+body:is(.read-only-version, .role-viewer) #importRdfsLocalBtn,
+body:is(.read-only-version, .role-viewer) #importRdfsUCBtn,
+body:is(.read-only-version, .role-viewer) #importFiboBtn,
+body:is(.read-only-version, .role-viewer) #importCdiscBtn,
+body:is(.read-only-version, .role-viewer) #importIofBtn,
+body:is(.read-only-version, .role-viewer) #importOwlFileInput,
+body:is(.read-only-version, .role-viewer) #importRdfsFileInput,
+body:is(.read-only-version, .role-viewer) .fibo-domain-cb,
+body:is(.read-only-version, .role-viewer) .cdisc-domain-cb,
+body:is(.read-only-version, .role-viewer) .iof-domain-cb,
+/* --- Mapping > Import: R2RML imports. */
+body:is(.read-only-version, .role-viewer) #importR2rmlLocalBtn,
+body:is(.read-only-version, .role-viewer) #importR2rmlUCBtn,
+body:is(.read-only-version, .role-viewer) #importR2rmlFileInput,
+/* --- Mapping > Designer / Manual: reset, auto-map, save. */
+body:is(.read-only-version, .role-viewer) #resetPanelBtn,
+body:is(.read-only-version, .role-viewer) #autoMapPanelBtn,
+body:is(.read-only-version, .role-viewer) #savePanelBtn,
+body:is(.read-only-version, .role-viewer) #manualResetBtn,
+body:is(.read-only-version, .role-viewer) #manualAutoMapBtn,
+body:is(.read-only-version, .role-viewer) #manualSavePanelBtn,
+/* --- Ontology > Business Views: CRUD buttons (top toolbar) + the
+       empty-state "Create View" CTA shown when no view exists. */
+body:is(.read-only-version, .role-viewer) #createViewBtn,
+body:is(.read-only-version, .role-viewer) #renameViewBtn,
+body:is(.read-only-version, .role-viewer) #deleteViewBtn,
+body:is(.read-only-version, .role-viewer) #createGroupFromViewBtn,
+body:is(.read-only-version, .role-viewer) #emptyStateCreateViewBtn,
+/* --- Ontology > Entity Groups: "New Group" CTA. */
+body:is(.read-only-version, .role-viewer) #newGroupBtn,
+/* --- Ontology > Data Quality: every per-rule action button. */
+body:is(.read-only-version, .role-viewer) .dq-shape-card .btn-group button,
+/* --- Save Domain navbar item: still rendered, but neutralised. */
+body:is(.read-only-version, .role-viewer) #menuSaveDomain {
+    pointer-events: none !important;
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+/* --- Cosmetic toggles: hide rather than just neutralise. */
+body:is(.read-only-version, .role-viewer) .ontology-edit-btn,
+body:is(.read-only-version, .role-viewer) #mapToggleAssistant,
+body:is(.read-only-version, .role-viewer) #mapAutoAssignIcons,
+body:is(.read-only-version, .role-viewer) #designModeToggle,
+body:is(.read-only-version, .role-viewer) .view-mode-hidden {
+    display: none !important;
+}
+
+/* --- Generic form-field disabling on ontology/mapping pages.
+   Search/filter/query inputs stay interactive (viewers must still be
+   able to find things). The exception list also covers every input
+   used purely for navigation, not for mutating content:
+
+     - ``#domainVersionSelect``                    switch to a newer/older version
+     - ``#loadDomainSelect`` / ``#loadVersionSelect`` Load-Domain modal
+       (navbar → Load Domain). Viewers must still be able to navigate
+       between domains and pick a version to load — without this, the
+       Load button stays disabled because the select can't be focused.
+
+   Any future "navigation" select / input should be added here rather
+   than to a per-page override. */
+body:is(.read-only-version, .role-viewer) input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect),
+body:is(.read-only-version, .role-viewer) textarea,
+body:is(.read-only-version, .role-viewer) select:not(#domainVersionSelect):not(#loadDomainSelect):not(#loadVersionSelect) {
+    pointer-events: none !important;
+    background-color: #e9ecef !important;
+    opacity: 0.7 !important;
+    cursor: not-allowed !important;
+}
+
+/* The READ-ONLY indicator is now a navbar pill (see
+   ``base.html`` → ``#readOnlyNavBadge``) instead of a banner under
+   the navbar, so no extra ``margin-top`` is needed on the content
+   wrapper. */
+
+body:is(.read-only-version, .role-viewer) .btn:disabled,
+body:is(.read-only-version, .role-viewer) .btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Navbar role badge
+
+   The badge ships hidden and ``permissions.js`` flips ``.is-visible`` on
+   ``#roleNavBadgeItem`` once it has resolved an effective role. The
+   colour / sizing live here (rule §4: no inline CSS in templates).
+   ========================================================================== */
+
+#roleNavBadgeItem {
+    display: none;
+}
+
+#roleNavBadgeItem.is-visible {
+    display: flex !important;
+}
+
+#roleNavBadge {
+    background-color: #dc3545;
+    color: #fff;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+}

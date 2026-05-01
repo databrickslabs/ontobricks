@@ -45,12 +45,12 @@ async function loadVersionsList() {
                 ? '<span class="badge bg-primary"><i class="bi bi-check-circle me-1"></i>v' + escapeHtml(v.version) + '</span>'
                 : '<span class="badge bg-secondary">v' + escapeHtml(v.version) + '</span>';
 
-            const mcpSwitch = '<div class="form-check form-switch d-flex justify-content-center mb-0">'
-                + '<input class="form-check-input version-mcp-toggle" type="checkbox"'
-                + ' data-version="' + escapeHtml(v.version) + '"'
-                + (v.mcp_enabled ? ' checked' : '')
-                + ' title="Active — expose this version via API/MCP (only one at a time)">'
-                + '</div>';
+            // MCP/API "active" flag is read-only here — changing it is only
+            // supported from Registry → Browse (see registry.js).
+            const mcpBadge = v.mcp_enabled
+                ? '<span class="badge bg-success" title="This version is exposed via API and MCP">'
+                + '<i class="bi bi-broadcast me-1"></i>Active</span>'
+                : '<span class="text-muted small" title="Not the API/MCP-active version">—</span>';
 
             const loadBtn = v.is_current
                 ? ''
@@ -60,7 +60,7 @@ async function loadVersionsList() {
 
             row.innerHTML = '<td class="text-center">' + versionBadge + '</td>'
                 + '<td class="small">' + escapeHtml(v.description || '—') + '</td>'
-                + '<td>' + mcpSwitch + '</td>'
+                + '<td class="text-center">' + mcpBadge + '</td>'
                 + '<td class="small text-muted">' + escapeHtml(v.author || '') + '</td>'
                 + '<td class="text-center">' + loadBtn + '</td>';
 
@@ -69,12 +69,6 @@ async function loadVersionsList() {
 
         wrapper.style.display = '';
         _versionsLoaded = true;
-
-        tbody.querySelectorAll('.version-mcp-toggle').forEach(function (toggle) {
-            toggle.addEventListener('change', function () {
-                onMcpToggleChange(this);
-            });
-        });
     } catch (err) {
         loading.style.display = 'none';
         document.getElementById('versionsErrorMessage').textContent = err.message;
@@ -112,6 +106,7 @@ async function loadVersionFromList(version) {
 
         if (data.success) {
             showNotification(data.message || 'Version loaded!', 'success');
+            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             window.location.reload();
         } else {
             showNotification('Error: ' + data.message, 'error');
@@ -143,6 +138,7 @@ async function addNewVersionFromList() {
 
         if (data.success) {
             showNotification('Version ' + data.new_version + ' created!', 'success');
+            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             window.location.reload();
         } else {
             showNotification('Error: ' + data.message, 'error');
@@ -184,43 +180,12 @@ async function reloadLastSavedVersion() {
 
         if (data.success) {
             showNotification('Version ' + currentVersion + ' reloaded!', 'success');
+            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             window.location.reload();
         } else {
             showNotification('Error: ' + data.message, 'error');
         }
     } catch (err) {
-        showNotification('Error: ' + err.message, 'error');
-    }
-}
-
-async function onMcpToggleChange(toggle) {
-    const version = toggle.dataset.version;
-    const enabled = toggle.checked;
-
-    try {
-        const resp = await fetch('/domain/set-version-mcp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ version: version, enabled: enabled }),
-            credentials: 'same-origin'
-        });
-        const data = await resp.json();
-
-        if (!data.success) {
-            toggle.checked = !enabled;
-            showNotification('Error: ' + data.message, 'error');
-            return;
-        }
-
-        if (enabled) {
-            document.querySelectorAll('.version-mcp-toggle').forEach(function (other) {
-                if (other !== toggle) other.checked = false;
-            });
-        }
-
-        showNotification('Active ' + (enabled ? 'enabled' : 'disabled') + ' for v' + version, 'success');
-    } catch (err) {
-        toggle.checked = !enabled;
         showNotification('Error: ' + err.message, 'error');
     }
 }

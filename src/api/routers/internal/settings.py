@@ -4,8 +4,6 @@ Internal API -- Settings / configuration JSON endpoints.
 Moved from app/frontend/settings/routes.py during the front/back split.
 """
 
-from typing import Any, List
-
 from fastapi import APIRouter, Request, Depends
 
 from shared.config.settings import get_settings, Settings
@@ -14,11 +12,9 @@ from back.core.errors import ValidationError
 from back.objects.session import SessionManager, get_session_manager
 from back.core.helpers import resolve_default_base_uri, resolve_default_emoji
 from back.objects.session import get_domain
-from back.objects.registry import (
-    RegistryCfg,
-    ROLE_ADMIN,
-    permission_service,
-)
+from back.objects.registry import ROLE_ADMIN, require
+
+from api.routers.internal._permissions import filter_visible_domains
 
 from back.objects.domain.SettingsService import SettingsService as config_service
 
@@ -35,47 +31,6 @@ def _settings_request_identity(request: Request) -> tuple[str, str, str, str, st
     user_role = getattr(request.state, "user_role", "") or ""
     user_domain_role = getattr(request.state, "user_domain_role", "") or ""
     return email, display_name, user_token, user_role, user_domain_role
-
-
-def _filter_registry_domains_by_user_access(
-    request: Request,
-    session_mgr: SessionManager,
-    settings: Settings,
-    entries: List[Any],
-) -> List[Any]:
-    """Restrict *entries* (dicts with ``name``) to those the user has a role
-    != NONE on. Admins keep the full list. No-ops outside App mode."""
-    if not entries:
-        return list(entries)
-
-    user_role = getattr(request.state, "user_role", "") or ""
-    if not user_role or user_role == ROLE_ADMIN:
-        return list(entries)
-
-    email = (
-        getattr(request.state, "user_email", "")
-        or request.headers.get("x-forwarded-email", "")
-    )
-    if not email:
-        return list(entries)
-
-    from back.core.helpers import get_databricks_host_and_token
-
-    domain = get_domain(session_mgr)
-    host, token = get_databricks_host_and_token(domain, settings)
-    user_token = request.headers.get("x-forwarded-access-token", "") or ""
-    registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
-
-    return permission_service.filter_accessible_domains(
-        email,
-        host,
-        token,
-        registry_cfg,
-        settings.ontobricks_app_name,
-        entries,
-        user_token=user_token,
-        app_role=user_role,
-    )
 
 
 # ===========================================
@@ -248,13 +203,31 @@ async def save_registry(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Persist registry catalog / schema / volume in settings.registry."""
-    if config_service.is_registry_locked(settings):
-        raise ValidationError(
-            "Registry is configured via Databricks App resources and cannot be changed here.",
-        )
+    """Persist registry catalog / schema / volume in settings.registry.
 
+    When the registry is "locked" (i.e. the Volume is supplied by a
+    Databricks App resource), the bound triplet
+    ``catalog/schema/volume`` is read-only — those fields come from
+    the platform and editing them in-app would silently desync from
+    the actual binding. The **backend choice** (Volume ↔ Lakebase)
+    and the Lakebase-side knobs (``lakebase_schema``,
+    ``lakebase_database``) remain editable, since toggling the
+    backend only changes which storage layer the registry writes
+    JSON into; it does not move the bound resource around.
+    """
     data = await request.json()
+
+    if config_service.is_registry_locked(settings):
+        locked_keys = {"catalog", "schema", "volume"}
+        attempted = locked_keys.intersection(k for k, v in data.items() if v)
+        if attempted:
+            raise ValidationError(
+                "Registry catalog/schema/volume are configured via Databricks "
+                "App resources and cannot be changed here. You can still switch "
+                "between Volume and Lakebase backends.",
+            )
+        data = {k: v for k, v in data.items() if k not in locked_keys}
+
     return config_service.apply_registry_save(data, session_mgr)
 
 
@@ -265,6 +238,60 @@ async def initialize_registry(
 ):
     """Create the registry Volume (and root marker) if they do not exist."""
     return config_service.initialize_registry_result(session_mgr, settings)
+
+
+@router.get(
+    "/registry/lakebase-databases",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def list_lakebase_databases(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List Postgres databases on the bound Lakebase instance (admin only).
+
+    Lets the Registry Location modal populate a "Lakebase Database"
+    picker so the admin can switch the registry to a different
+    database on the same instance without redeploying. ``connectable``
+    flags databases the service principal does not have ``CONNECT``
+    on, so the UI can disable them. Returns ``success=False`` (with a
+    ``message``) when Lakebase is not bound or psycopg is missing.
+    """
+    return config_service.list_lakebase_databases_result(session_mgr, settings)
+
+
+@router.post(
+    "/registry/migrate-to-lakebase",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def migrate_registry_to_lakebase(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Copy Volume registry data into Lakebase tables (admin only).
+
+    Binaries (``documents/``, ``*.lbug.tar.gz``) stay on the Unity
+    Catalog Volume. Idempotent at the Lakebase side.
+    """
+    return config_service.migrate_to_lakebase_result(session_mgr, settings)
+
+
+@router.get(
+    "/registry/lakebase-stats",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def get_lakebase_stats(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return per-table row counts for the Lakebase registry schema.
+
+    Powers the read-only inventory grid in the Registry Location
+    panel. Returns ``success=False`` with a human-readable
+    ``message`` when the Lakebase resource is not bound or the
+    backend is not installed.
+    """
+    return config_service.lakebase_stats_result(session_mgr, settings)
 
 
 @router.get("/registry/domains")
@@ -278,7 +305,7 @@ async def list_registry_domains(
     Non-admin users only see domains they have a role on; admins see all.
     """
     result = config_service.list_registry_domains_result(session_mgr, settings)
-    result["domains"] = _filter_registry_domains_by_user_access(
+    result["domains"] = filter_visible_domains(
         request, session_mgr, settings, result.get("domains", [])
     )
     return result
@@ -472,7 +499,10 @@ async def permissions_diag(
     )
 
 
-@router.get("/permissions")
+@router.get(
+    "/permissions",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def list_app_permissions(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
@@ -485,7 +515,10 @@ async def list_app_permissions(
     return config_service.list_app_principals_result(session_mgr, settings)
 
 
-@router.get("/permissions/principals")
+@router.get(
+    "/permissions/principals",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def list_principals(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
@@ -498,7 +531,10 @@ async def list_principals(
     return config_service.list_principals_result(session_mgr, settings)
 
 
-@router.get("/permissions/search")
+@router.get(
+    "/permissions/search",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def search_principals(
     q: str = "",
     type: str = "user",
@@ -522,7 +558,10 @@ async def search_principals(
 # ===========================================
 
 
-@router.get("/domain-permissions/{domain_name}")
+@router.get(
+    "/domain-permissions/{domain_name}",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def list_domain_permissions(
     domain_name: str,
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -534,7 +573,10 @@ async def list_domain_permissions(
     )
 
 
-@router.post("/domain-permissions/{domain_name}")
+@router.post(
+    "/domain-permissions/{domain_name}",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def add_domain_permission(
     domain_name: str,
     request: Request,
@@ -548,7 +590,10 @@ async def add_domain_permission(
     )
 
 
-@router.delete("/domain-permissions/{domain_name}/{principal:path}")
+@router.delete(
+    "/domain-permissions/{domain_name}/{principal:path}",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def delete_domain_permission(
     domain_name: str,
     principal: str,
@@ -566,7 +611,10 @@ async def delete_domain_permission(
 # ===========================================
 
 
-@router.get("/teams")
+@router.get(
+    "/teams",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def teams_matrix(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
@@ -575,7 +623,10 @@ async def teams_matrix(
     return config_service.build_teams_matrix_result(session_mgr, settings)
 
 
-@router.post("/teams")
+@router.post(
+    "/teams",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
 async def teams_save_batch(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),

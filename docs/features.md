@@ -1,6 +1,7 @@
 # OntoBricks Features
 
 ## Ontology Design
+- **Ontology Designer (menu)**: Primary visual ontology workspace under **Ontology → Designer** — OntoViz canvas, toolbar, and floating AI Assistant (the sidebar label is *Designer*, not “Model”).
 - **Visual Ontology Editor (OntoViz)**: Drag-and-drop canvas to create entities, relationships, and inheritance hierarchies with icons and attributes.
 - **Class Hierarchies**: Define rdfs:subClassOf relationships with automatic property inheritance from parent to child entities.
 - **SWRL Rules**: Create inference rules using a **graphical D3-based editor** — fullscreen modal with IF/THEN atom builders, ontology-aware context menu, live SWRL preview, and raw-edit mode for advanced users.
@@ -8,7 +9,7 @@
 - **SHACL Data Quality Shapes**: Define data quality rules using W3C SHACL — six categories (completeness, cardinality, uniqueness, consistency, conformance, structural), Turtle round-trip (generate/import), PySHACL in-memory validation, and SQL compilation for triple store execution.
 - **OWL Axioms**: Express class relationships, property chains, and complex expressions (equivalent, disjoint, union, intersection).
 - **OWL Generation**: Automatic generation of W3C-compliant OWL/Turtle from visual design.
-- **LLM-Powered Auto-Map Icons**: Automatically assign emoji icons to entities based on their names using the project's configured LLM serving endpoint (Ontology Model toolbar).
+- **LLM-Powered Auto-Map Icons**: Automatically assign emoji icons to entities based on their names using the project's configured LLM serving endpoint (Ontology Designer toolbar).
 - **Dashboard Mapping**: Assign Databricks dashboards to entity types with parameter mapping for embedded display in the Knowledge Graph.
 
 ## Data Mapping
@@ -41,7 +42,12 @@
 
 ## Project Management
 - **Unity Catalog Storage**: Save and load projects from Databricks Unity Catalog Volumes.
-- **Version Control**: Create, list, and load multiple versions of a project with automatic versioning.
+- **Version Control**: Create, list, and load multiple versions of a project with automatic versioning. Which version is **Active** (exposed via API / MCP) is managed from **Registry → Browse**; the Domain → Versions page shows that status as a read-only badge.
+- **Domain Cockpit (Validation)**: Readiness tiles including **Active Version** — the version currently exposed via API/MCP (from the registry), with a *(not loaded)* hint when it differs from the version open in the session. Distinct from “latest on disk” vs read-only UI gating (still driven by whether the loaded version is the latest).
+- **New-domain loading**: After **New Domain** from the navbar, a full-page spinner runs until Domain Information has finished its initial fetches (LLM endpoints, version status, domain info).
+- **Domain Information — Digital Twin fields**: Triple-store FQN, snapshot table name, and local Ladybug path refresh when the domain name is **committed** (blur / `change`) or the version changes, so previews match naming rules before save.
+- **Duplicate domain names**: Save to registry is blocked when the sanitized name already exists (`/domain/check-name` + guard on **Save to UC**); inline validation clears when the name is cleared or the check errors.
+- **Navbar domain identity**: Top bar name/version invalidate cached `/navbar/state` (and related caches) after domain mutations so reloads and navigations do not show stale labels for up to 15 seconds.
 - **Import/Export**: Import OWL and RDFS ontologies, import industry-standard ontologies (FIBO, CDISC, IOF), import/export R2RML mappings, and export OWL files.
 - **Project Save/Load**: Save and load projects as JSON for backup or sharing.
 
@@ -69,6 +75,7 @@
 
 ## Navigation & UX
 - **Deep-Linkable Sections**: Sidebar section changes push `?section=<id>` to browser history — sections are bookmarkable and navigable with Back/Forward.
+- **Registry Browse for “Active” version**: Expand a domain in **Registry → Browse** to set which version is **Active** (API/MCP); the Domain app no longer exposes a per-version toggle on **Domain → Versions** (badge only).
 - **Breadcrumb Navigation**: Auto-generated breadcrumb bar below the navbar shows Registry > Domain > Ontology > Section context.
 - **Keyboard Shortcuts**: `Cmd/Ctrl+S` to save domain, `Cmd/Ctrl+K` to focus sidebar search, `?` for a shortcut overlay.
 - **Toast Notifications**: All user feedback uses non-blocking toast notifications (no `alert()` dialogs).

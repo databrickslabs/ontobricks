@@ -617,6 +617,8 @@ The **Global** tab in the Domain Information section contains the main domain se
 | **Triple-Store** | *(Delta only)* Read-only. The Delta VIEW is always created in the domain's registry `catalog.schema`, and its name is derived as `triplestore_<domain>_V<version>`. |
 | **Graph Name** | *(LadybugDB)* Logical name for the embedded graph database (defaults to domain name). |
 
+When you **commit** the domain name (blur the field or trigger `change`) or change the **Version**, the Triple Store, snapshot table FQN, and local Ladybug path fields are **recomputed** so they match the naming rules the server will use on save — without waiting for a round-trip.
+
 **Backend details:**
 
 | Backend | Storage | Sync | Best for |
@@ -640,6 +642,8 @@ The **Global** tab in the Domain Information section contains the main domain se
 3. Select **Catalog** and **Schema** for storage
 4. Click **Save to Unity Catalog**
 
+If a domain with the **same sanitized folder name** already exists in the registry, the save is **blocked** (inline validation on the domain name and a final check when you confirm save) — pick a different CamelCase name.
+
 OntoBricks will:
 1. Create a volume named after your domain (if it doesn't exist)
 2. Save the domain as `v{version}.json`
@@ -650,52 +654,37 @@ When you save an existing domain:
 - The current version file is **overwritten**
 - Use **Create New Version** to preserve history
 
-### Version Management
+### Domain Cockpit (Validation)
 
-#### Listing Versions
+Under **Domain → Validation** (Cockpit), tiles summarise registry and build readiness. The **Active Version** tile shows which registry version is currently **exposed via API and MCP** (the “MCP-enabled” version). That can differ from the version you have **loaded** in the editor; when it does, the tile adds a *(not loaded)* hint. This is **not** the same as “you are on the latest writable version” — read-only UI for ontology/mapping is still driven by whether the loaded version is the **latest** on disk (see **Version status** below).
 
-1. Go to **Domain** → **Actions** tab
-2. Select catalog/schema containing your domain
-3. Click **Load versions** to see all saved versions
+### Version Management (Domain → Versions)
 
-The version list shows:
-- Version number (e.g., 1, 2, 3)
-- File name (e.g., `v1.json`, `v2.json`)
-- Active version indicator
+1. Open **Domain** in the sidebar and go to the **Versions** section.
+2. The table lists every saved version with description, author, and actions.
+3. **MCP / API** column: read-only — a green **Active** badge marks the single version currently exposed through the REST catalogue and MCP tools. To **change** which version is Active, go to **Registry → Browse**, expand the domain, and click **Set as Active** on the desired version (Domain → Versions no longer includes a toggle).
+4. **Load** loads another version from the registry (confirms; unsaved work is lost).
+5. **New Version** copies the current state to the next version number; **Reload Saved** discards local edits and reloads the current version from the registry.
 
 #### Creating a New Version
 
-To create a new version (preserving the current state):
-
-1. Go to **Domain** → **Actions** tab
-2. Click **Create New Version**
-3. OntoBricks will:
-   - Increment the version number (e.g., 1 → 2)
-   - Save the new version to Unity Catalog
-   - Keep previous versions intact
-
-**Example version progression:**
-```
-my_domain/
-├── v1.json    (initial version)
-├── v2.json    (after first "Create New Version")
-└── v3.json    (after second "Create New Version")
-```
+1. **Domain** → **Versions** → **New Version**.
+2. OntoBricks increments the version number, saves under `/domains/<folder>/V<n>/`, and keeps prior versions.
 
 #### Loading a Domain from Registry
 
-1. Click **Load Domain** in the top menu
-2. Select a domain from the dropdown
-3. The **active (latest) version** is automatically selected
-4. Change the version if needed, then click **Load**
+1. Use **Load Domain** in the top navbar (or **Registry → Browse** → **Load** on a version row).
+2. Pick domain and version in the dialog. Loading an **older** than latest version enables read-only mode for edits that require the tip version — create a new version or switch back to the latest to edit freely.
 
-**Note**: Loading an older version puts you in "read-only" mode. Create a new version to make changes.
+### Version status (loaded vs latest vs MCP-active)
 
-### Version Status
+Three related ideas:
 
-The Domain page shows the current version status:
-- **Active Version**: You're working on the latest version
-- **Historical Version**: You've loaded an older version (read-only for new versions)
+| Concept | Meaning |
+|---------|---------|
+| **Loaded version** | The `v{n}` document currently in your browser session. |
+| **Latest on disk** | Highest version number in the registry folder. When your loaded version is **not** the latest, the UI treats many writes as read-only. |
+| **Active (API/MCP)** | The one version flagged for external tools and MCP — shown on the Cockpit **Active Version** tile and as a badge on **Domain → Versions**; changed only from **Registry → Browse**. |
 
 ### Domain Save/Load
 
@@ -1552,4 +1541,4 @@ After import you can:
 - **Start small**: When importing a large standard like FIBO, start with the required foundation module and one domain to evaluate the result before adding more.
 - **Network access**: Industry-standard imports require outbound internet access to fetch modules from their public repositories. If running in Databricks Apps with restricted egress, download the files manually and use the OWL file import instead.
 - **Incremental import**: Each import replaces the current ontology. If you need to combine multiple standards, export after each import and merge the OWL files externally.
-- **Layout reset**: After importing a large ontology, use **Auto-Layout** in the Model view to arrange entities automatically.
+- **Layout reset**: After importing a large ontology, use **Auto-Layout** in the **Ontology Designer** view to arrange entities automatically.

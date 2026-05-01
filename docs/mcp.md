@@ -18,6 +18,8 @@ The MCP server follows a **two-step workflow**:
 1. **Choose a domain** — call `list_domains` to see available knowledge graphs with descriptions, then `select_domain` to activate one. Only domains with the **API / MCP** flag enabled in OntoBricks are listed.
 2. **Query the knowledge graph** — use `list_entity_types`, `describe_entity`, or `get_status` on the selected domain.
 
+**Which version?** For each domain folder, the registry stores exactly one **Active** (MCP/API-enabled) version at a time. Operators set that version in the main OntoBricks app under **Registry → Browse** (expand the domain, then **Set as Active** on a row). **Domain → Versions** shows the outcome as a read-only badge but does not change it.
+
 **Advanced — GraphQL querying:**
 
 After selecting a domain, the LLM can also leverage GraphQL for structured data retrieval:

@@ -15,7 +15,9 @@ OntoBricks is a **Python FastAPI** web application designed to run as a **Databr
 - **Mapping:** Entity/relationship mapping CRUD, R2RML generation/parsing, SQL validation, LLM-assisted auto-assign. Managed by the `Mapping` domain class.
 - **Digital Twin:** Knowledge graph build, sync, SPARQL query, quality checks, graph visualization, community detection. Managed by the `DigitalTwin` domain class.
 - **Domain Management:** Unity Catalog save/load, version status, metadata, design layout persistence. Managed by the `Domain` domain class.
-- **Registry:** UC Volume-backed domain registry with permissions and scheduled builds.
+- **Registry:** Dual-mode domain registry with permissions and scheduled builds. Two storage modes, picked from the Databricks App config and surfaced in the **Settings → Registry** tab:
+  1. **Volume-only** — everything (metadata, indexes, documents, binaries) lives in a UC Volume.
+  2. **Lakebase + Volume hybrid** *(default when a Lakebase resource is bound to the App)* — registry metadata and indexes live in **Lakebase Postgres** (autoscaling only); the UC Volume is used **strictly** for documents and binary artifacts (e.g. `.lbug` files).
 - **Reasoning:** OWL 2 RL inference, SWRL rule execution, decision tables, SPARQL CONSTRUCT rules, aggregate rules.
 - **GraphQL API:** Auto-generated Strawberry GraphQL schema from ontology metadata.
 - **Graph DB:** Pluggable graph database engine abstraction (currently LadybugDB, extensible to others).

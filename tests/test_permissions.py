@@ -163,12 +163,86 @@ class TestAdminCache:
 
 
 class TestPrincipalsCache:
-    def test_clear(self, svc):
-        svc._users_cache = [{"email": "a"}]
-        svc._groups_cache = [{"name": "g"}]
+    def test_clear_drops_app_and_workspace_caches(self, svc):
+        svc._app_users_cache = [{"email": "a"}]
+        svc._app_groups_cache = [{"name": "g"}]
+        svc._workspace_users_cache = [{"email": "ws"}]
+        svc._workspace_groups_cache = [{"name": "wsg"}]
+        svc._admin_cache["a@b.com"] = (True, time.time())
+        svc._user_groups_cache["a@b.com"] = (["g1"], time.time())
+        svc._app_principals_forbidden = True
+
         svc.clear_principals_cache()
-        assert svc._users_cache is None
-        assert svc._groups_cache is None
+
+        assert svc._app_users_cache is None
+        assert svc._app_groups_cache is None
+        assert svc._workspace_users_cache is None
+        assert svc._workspace_groups_cache is None
+        assert svc._admin_cache == {}
+        assert svc._user_groups_cache == {}
+        assert svc.is_app_principals_forbidden() is False
+
+    def test_app_and_workspace_caches_are_isolated(self, svc):
+        """``list_app_principals`` (app-scoped ACL) and ``list_users`` /
+        ``list_groups`` (full SCIM directory) must not share storage —
+        otherwise one call poisons the other and admin/user lookups
+        return the wrong set.
+        """
+
+        class _AppFakeClient:
+            def list_app_principals(self, _app_name):
+                return {
+                    "users": [{"email": "alice@app"}],
+                    "groups": [{"display_name": "app-admins"}],
+                }
+
+            @property
+            def last_app_permissions_status(self):
+                return 200
+
+        class _DirFakeClient:
+            def list_workspace_users(self):
+                return [
+                    {"email": "alice@app"},
+                    {"email": "bob@workspace"},
+                ]
+
+            def list_workspace_groups(self):
+                return [
+                    {"display_name": "app-admins"},
+                    {"display_name": "everyone"},
+                ]
+
+        with patch(
+            "back.objects.registry.PermissionService.DatabricksClient",
+            return_value=_AppFakeClient(),
+        ):
+            app = svc.list_app_principals("h", "t", "ontobricks")
+
+        with patch(
+            "back.objects.registry.PermissionService.DatabricksClient",
+            return_value=_DirFakeClient(),
+        ):
+            ws_users = svc.list_users("h", "t")
+            ws_groups = svc.list_groups("h", "t")
+
+        # App-scoped result is unchanged (would be 2 users / 2 groups
+        # if the workspace fetch had overwritten the same cache).
+        assert len(app["users"]) == 1
+        assert len(app["groups"]) == 1
+        # Workspace fetch returns the larger directory.
+        assert len(ws_users) == 2
+        assert len(ws_groups) == 2
+
+        # A second call to list_app_principals must come from the
+        # app-scoped cache and still report the small set.
+        with patch(
+            "back.objects.registry.PermissionService.DatabricksClient",
+            side_effect=AssertionError("should hit cache, not the API"),
+        ):
+            app_again = svc.list_app_principals("h", "t", "ontobricks")
+        assert len(app_again["users"]) == 1
+        assert len(app_again["groups"]) == 1
 
 
 # ===================================================================
@@ -176,19 +250,19 @@ class TestPrincipalsCache:
 # ===================================================================
 
 
-class TestDomainPermissionsPath:
-    def test_path(self, svc):
-        path = svc._domain_permissions_path(REGISTRY_CFG, DOMAIN)
-        assert (
-            path
-            == f"/Volumes/cat/sch/OntoBricksRegistry/domains/{DOMAIN}/.domain_permissions.json"
-        )
-
-
 class TestLoadDomainPermissions:
+    """Per-domain permissions are now read/written through the active
+    :class:`RegistryStore`. The tests mock ``_store_for`` to keep the
+    coverage independent from the storage backend.
+    """
+
     def test_load_empty_when_missing(self, svc):
-        with patch.object(svc, "_new_uc") as mock_uc:
-            mock_uc.return_value.read_file.return_value = (False, "", "Not found")
+        store = type("S", (), {})()
+        store.load_domain_permissions = lambda folder: {
+            "version": 1,
+            "permissions": [],
+        }
+        with patch.object(PermissionService, "_store_for", return_value=store):
             data = svc.load_domain_permissions("h", "t", REGISTRY_CFG, DOMAIN)
             assert data == {"version": 1, "permissions": []}
 
@@ -197,24 +271,35 @@ class TestLoadDomainPermissions:
             "version": 1,
             "permissions": [{"principal": "a@b.com", "role": "viewer"}],
         }
-        with patch.object(svc, "_new_uc") as mock_uc:
-            mock_uc.return_value.read_file.return_value = (True, json.dumps(dp), "ok")
+        store = type("S", (), {})()
+        store.backend = "memory"
+        store.load_domain_permissions = lambda folder: dp
+        with patch.object(PermissionService, "_store_for", return_value=store):
             data = svc.load_domain_permissions("h", "t", REGISTRY_CFG, DOMAIN)
             assert len(data["permissions"]) == 1
 
     def test_caching(self, svc):
-        with patch.object(svc, "_new_uc") as mock_uc:
-            mock_uc.return_value.read_file.return_value = (False, "", "")
+        store = type("S", (), {})()
+        calls = {"n": 0}
+
+        def _load(_folder):
+            calls["n"] += 1
+            return {"version": 1, "permissions": []}
+
+        store.load_domain_permissions = _load
+        with patch.object(PermissionService, "_store_for", return_value=store):
             svc.load_domain_permissions("h", "t", REGISTRY_CFG, DOMAIN)
             svc.load_domain_permissions("h", "t", REGISTRY_CFG, DOMAIN)
-            assert mock_uc.call_count == 1
+        assert calls["n"] == 1
 
 
 class TestSaveDomainPermissions:
     def test_save_success(self, svc):
         data = {"version": 1, "permissions": []}
-        with patch.object(svc, "_new_uc") as mock_uc:
-            mock_uc.return_value.write_file.return_value = (True, "ok")
+        store = type("S", (), {})()
+        store.backend = "memory"
+        store.save_domain_permissions = lambda folder, payload: (True, "ok")
+        with patch.object(PermissionService, "_store_for", return_value=store):
             ok, _msg = svc.save_domain_permissions(
                 "h", "t", REGISTRY_CFG, DOMAIN, data
             )

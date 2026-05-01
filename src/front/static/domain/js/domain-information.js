@@ -103,6 +103,7 @@ async function rollbackVersion() {
         
         if (data.success) {
             showNotification(`Rolled back to version ${currentVersion} successfully!`, 'success');
+            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             // Reload page to refresh all data
             window.location.reload();
         } else {
@@ -146,6 +147,7 @@ async function createNewVersion() {
             // Insert at the beginning (latest first)
             versionSelect.insertBefore(newOption, versionSelect.firstChild);
             versionSelect.value = data.new_version;
+            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             // Reload page to refresh status
             window.location.reload();
         } else {
@@ -198,6 +200,7 @@ async function onVersionChange(version) {
         
         if (data.success) {
             showNotification(data.message || 'Version loaded successfully!', 'success');
+            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             // Reload page to refresh all data
             window.location.reload();
         } else {
@@ -283,12 +286,31 @@ function updateRegistryLocationDisplay(registry, domainFolder) {
 // Fetch and update version status on page load
 document.addEventListener('DOMContentLoaded', async function() {
     try {
-        updateGraphPaths();
+        refreshDtNamesFromForm();
 
-        // Update derived graph paths when the Triple Store tab is shown
+        // Re-derive the DT names whenever the Triple Store tab is shown
+        // (panel is initially hidden) and whenever the user commits a
+        // change to the domain name (on blur / Enter, NOT per-keystroke).
         const tsTab = document.getElementById('tab-triplestore');
         if (tsTab) {
-            tsTab.addEventListener('shown.bs.tab', () => updateGraphPaths());
+            tsTab.addEventListener('shown.bs.tab', refreshDtNamesFromForm);
+        }
+        const nameEl = document.getElementById('domainName');
+        if (nameEl) {
+            nameEl.addEventListener('change', refreshDtNamesFromForm);
+            nameEl.addEventListener('blur', refreshDtNamesFromForm);
+            // Duplicate-name guard runs on blur as well as the
+            // existing debounced ``input`` hook in domain.js, so the
+            // user gets immediate feedback when committing the field.
+            // The check itself, the inline ``invalid-feedback`` hint,
+            // and the ``is-invalid`` class are owned by domain.js.
+            if (typeof checkDomainNameAvailability === 'function') {
+                nameEl.addEventListener('blur', () => checkDomainNameAvailability(nameEl));
+            }
+        }
+        const versionEl = document.getElementById('domainVersionSelect');
+        if (versionEl) {
+            versionEl.addEventListener('change', refreshDtNamesFromForm);
         }
 
         // Load LLM endpoints and version status in parallel
@@ -316,23 +338,94 @@ document.addEventListener('DOMContentLoaded', async function() {
                 setSelectedLlmEndpoint(infoData.info.llm_endpoint);
             }
         }
+
+        // The DT panel reads catalog/schema from the dropdown rendering of
+        // version-status; rerun once after status is applied so the FQNs
+        // line up with the real registry config.
+        refreshDtNamesFromForm();
         
         // Re-enable version selector after a short delay to override any global disabling
         setTimeout(enableVersionSelector, 100);
     } catch (e) {
         console.log('Could not fetch domain status:', e);
+    } finally {
+        // Hand-off from navbar.js domainNew(): hide the overlay once the
+        // initial info round-trips have resolved.
+        try {
+            if (sessionStorage.getItem('ob_creating_new_domain') === '1') {
+                sessionStorage.removeItem('ob_creating_new_domain');
+                if (typeof hideDomainLoading === 'function') hideDomainLoading();
+            }
+        } catch (e) {}
     }
 });
 
 
-function updateGraphPaths() {
-    const nameEl = document.getElementById('domainName');
-    const domainSlug = nameEl ? nameEl.value.trim().toLowerCase() : '';
-    const versionEl = document.getElementById('domainVersionSelect');
-    const version = versionEl ? versionEl.value.trim() : '1';
-    const versionSuffix = '_V' + (version || '1');
-    const localEl = document.getElementById('ladybugLocalPath');
-    if (localEl && domainSlug) {
-        localEl.textContent = '/tmp/ontobricks/' + domainSlug + versionSuffix + '.lbug';
+/**
+ * Lowercase slug with non ``[a-z0-9_]`` replaced by ``_`` — matches
+ * the triple-store / snapshot *table* naming helpers in the backend.
+ * The **registry folder** slug uses ``sanitize_domain_folder`` instead
+ * (non-alphanumerics stripped, not replaced); with CamelCase-only
+ * domain names the two coincide; they can diverge if validation ever
+ * loosens.
+ */
+function _safeDomainSlug(name) {
+    return (name || '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+}
+
+/**
+ * Best-effort split of an existing FQN ("catalog.schema.table") into
+ * its catalog/schema parts so we can keep the registry prefix while
+ * rewriting the table portion. Returns ``null`` when the value is
+ * empty or not a 3-part dotted name (i.e. registry not configured).
+ */
+function _splitFqnPrefix(fqn) {
+    const parts = (fqn || '').split('.');
+    if (parts.length === 3 && parts[0] && parts[1]) {
+        return { catalog: parts[0], schema: parts[1] };
     }
+    return null;
+}
+
+/**
+ * Recompute the Triple-Store FQN, Snapshot FQN, and local Ladybug
+ * path from the current domain name + version inputs. Mirrors the
+ * backend naming rules so the user sees what UC objects *will be*
+ * called once they save the domain — without round-tripping to the
+ * server. Bound to the domain-name ``change``/``blur`` event so it
+ * runs once per committed name change, not on every keystroke.
+ */
+function refreshDtNamesFromForm() {
+    const nameEl = document.getElementById('domainName');
+    const versionEl = document.getElementById('domainVersionSelect');
+    const name = nameEl ? nameEl.value.trim() : '';
+    const safe = _safeDomainSlug(name);
+    const version = versionEl ? versionEl.value.trim() : '1';
+    const v = version || '1';
+    const safeVersion = _safeDomainSlug(v);
+
+    const tsEl = document.getElementById('domainTriplestoreFullName');
+    if (tsEl) {
+        const prefix = _splitFqnPrefix(tsEl.value);
+        const tsName = 'triplestore_' + safe + '_V' + v;
+        tsEl.value = prefix ? prefix.catalog + '.' + prefix.schema + '.' + tsName : (safe ? tsName : '');
+    }
+
+    const snapEl = document.getElementById('domainSnapshotTableName');
+    if (snapEl) {
+        const prefix = _splitFqnPrefix(snapEl.value);
+        const snapName = '_ob_snapshot_' + safe + '_v' + safeVersion;
+        snapEl.value = prefix ? prefix.catalog + '.' + prefix.schema + '.' + snapName : (safe ? snapName : '');
+    }
+
+    const localEl = document.getElementById('ladybugLocalPath');
+    if (localEl && safe) {
+        localEl.textContent = '/tmp/ontobricks/' + safe + '_V' + v + '.lbug';
+    }
+}
+
+// Backwards-compatible alias: callers and tests still reference the
+// old name; keep it working as a thin wrapper over the new function.
+function updateGraphPaths() {
+    refreshDtNamesFromForm();
 }
