@@ -13,7 +13,7 @@ resource bound to a Lakebase Autoscaling project, the platform injects:
 - ``PGHOST``      — Lakebase endpoint hostname
   (``ep-<id>.database.<region>.cloud.databricks.com``)
 - ``PGPORT``      — Postgres port (typically ``5432``)
-- ``PGDATABASE``  — the bound database name (e.g. ``databricks_postgres``)
+- ``PGDATABASE``  — the bound database name (e.g. ``ontobricks_registry`` or ``databricks_postgres``)
 - ``PGUSER``      — Postgres role (the app's service principal)
 
 The Postgres password is *not* injected. Instead, the app mints a

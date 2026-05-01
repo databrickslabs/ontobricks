@@ -20,8 +20,8 @@ help:
 	@echo "    make lint         - Lint code with flake8"
 	@echo ""
 	@echo "  Deployment (Databricks Asset Bundles — dev sandbox only):"
-	@echo "    make deploy              - Deploy + start ontobricks-dev (Lakebase backend)"
-	@echo "    make deploy-volume       - Deploy + start ontobricks-dev (Volume-only backend)"
+	@echo "    make deploy              - Deploy + start ontobricks-020 (Lakebase backend)"
+	@echo "    make deploy-volume       - Deploy + start ontobricks-020 (Volume-only backend)"
 	@echo "    make deploy-no-run       - Deploy without starting the app (Lakebase target)"
 	@echo "    make bootstrap-perms     - Grant the app SP CAN_MANAGE on itself (first-run fix)"
 	@echo "    make bootstrap-lakebase  - Grant the app SP USAGE/DML on the Lakebase registry schema"
@@ -80,19 +80,19 @@ prod:
 	. .venv/bin/activate && uvicorn app.fastapi.main:app --host 0.0.0.0 --port 8000
 
 # ── Deployment (DAB — Databricks Asset Bundles) ──────────────
-# This bundle (databricks.yml) only manages the dev sandbox app
-# `ontobricks-dev`. The `dev-lakebase` target binds the Lakebase
+# This bundle (databricks.yml) manages the dev sandbox app
+# `ontobricks-020`. The `dev-lakebase` target binds the Lakebase
 # Postgres database the registry relies on; the bare `dev` target
 # is the Volume-only fallback. The default below is `dev-lakebase`
 # because deploying with `dev` would strip the postgres binding
 # from the live app.
 deploy:
-	@echo "Deploying + starting ontobricks-dev (target: dev-lakebase)..."
+	@echo "Deploying + starting ontobricks-020 (target: dev-lakebase)..."
 	chmod +x scripts/deploy.sh
 	scripts/deploy.sh -t dev-lakebase
 
 deploy-volume:
-	@echo "Deploying + starting ontobricks-dev (target: dev, Volume-only)..."
+	@echo "Deploying + starting ontobricks-020 (target: dev, Volume-only)..."
 	chmod +x scripts/deploy.sh
 	scripts/deploy.sh -t dev
 
@@ -104,12 +104,12 @@ deploy-no-run:
 bootstrap-perms:
 	@echo "Bootstrapping app self-permissions..."
 	chmod +x scripts/bootstrap-app-permissions.sh
-	scripts/bootstrap-app-permissions.sh ontobricks-dev
+	scripts/bootstrap-app-permissions.sh ontobricks-020 mcp-ontobricks
 
 bootstrap-lakebase:
-	@echo "Granting Lakebase schema USAGE/DML to ontobricks-dev..."
+	@echo "Granting Lakebase schema USAGE/DML to sandbox apps..."
 	chmod +x scripts/bootstrap-lakebase-perms.sh
-	scripts/bootstrap-lakebase-perms.sh -a ontobricks-dev
+	scripts/bootstrap-lakebase-perms.sh
 
 bundle-validate:
 	@echo "Validating Databricks Asset Bundle (target: dev-lakebase)..."

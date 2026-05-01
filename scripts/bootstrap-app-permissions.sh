@@ -12,8 +12,8 @@ set -euo pipefail
 # CAN_MANAGE on its own app. It is idempotent and safe to re-run.
 #
 # Usage:
-#   scripts/bootstrap-app-permissions.sh                 # bootstrap the dev sandbox app
-#   scripts/bootstrap-app-permissions.sh ontobricks-dev  # explicit
+#   scripts/bootstrap-app-permissions.sh                        # bootstrap default sandbox apps
+#   scripts/bootstrap-app-permissions.sh ontobricks-020       # explicit
 #   scripts/bootstrap-app-permissions.sh a b c           # bootstrap several apps
 #
 # Prerequisites:
@@ -26,7 +26,7 @@ cd "$SCRIPT_DIR/.."
 # This bundle only manages the dev sandbox app. The production
 # ``ontobricks`` and ``mcp-ontobricks`` apps were carved out on
 # 2026-04-27 and live in a different repo/bundle.
-DEFAULT_APPS=("ontobricks-dev")
+DEFAULT_APPS=("ontobricks-020" "mcp-ontobricks")
 
 if [[ $# -gt 0 ]]; then
     APPS=("$@")

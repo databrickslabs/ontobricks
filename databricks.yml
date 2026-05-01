@@ -2,7 +2,7 @@
 #
 # This bundle deploys two apps:
 #
-# - ``ontobricks_dev_app`` → app name ``ontobricks-dev`` (FastAPI UI,
+# - ``ontobricks_dev_app`` → app name ``ontobricks-020`` (FastAPI UI,
 #   ``source_code_path: .``). Uses the repository root as source.
 # - ``mcp_ontobricks_app`` → app name ``mcp-ontobricks`` (FastMCP
 #   server, ``source_code_path: src/mcp-server``). Calls back to
@@ -15,7 +15,7 @@
 #   state does not collide.
 # - Distinct ``workspace.root_path`` so the sync directory and the
 #   ``.bundle/state/`` tracking files live under their own folder
-#   (``/Workspace/Users/<me>/.bundle/ontobricks-dev/<target>``).
+#   (``/Workspace/Users/<me>/.bundle/ontobricks-020/<target>``).
 #
 # When this bundle takes over an app that was previously deployed
 # from a different bundle (e.g. ``ontobricks_bundle``), DAB requires
@@ -27,7 +27,7 @@
 #
 # Source code paths:
 # - The main app is shipped from the repository root. The
-#   sandbox auto-detects its app name (``ontobricks-dev``) from the
+#   sandbox auto-detects its app name (``ontobricks-020``) from the
 #   Databricks-Apps-injected ``DATABRICKS_APP_NAME`` env var — see
 #   ``Settings.ontobricks_app_name`` for the alias-chain logic.
 # - The MCP server is shipped from ``src/mcp-server`` (its own
@@ -46,7 +46,7 @@ bundle:
 workspace:
   # Sandbox path — distinct from any other ``ontobricks*`` bundle so
   # we cannot share/clobber sync state with the production apps.
-  root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/ontobricks-dev/${bundle.target}
+  root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/ontobricks-020/${bundle.target}
 
 sync:
   exclude:
@@ -82,10 +82,10 @@ variables:
     default: "benoit_cayla"
   registry_schema:
     description: "Unity Catalog schema for the domain registry"
-    default: "ontobricks_deployed_test"
+    default: "ontobricks_020"
   registry_volume:
     description: "Volume name for the domain registry"
-    default: "registry_test"
+    default: "registry"
 
   # ── Lakebase resource binding (Autoscaling-only) ────────────────
   # OntoBricks targets **Lakebase Autoscaling** exclusively (the
@@ -100,32 +100,70 @@ variables:
   # /database/instances`` show up as Autoscaling projects with a
   # default branch named ``production`` (NOT ``main``).
   #
-  # Defaults match the dev sandbox project ``ontobricks-test``;
-  # override at deploy time with e.g.
-  # ``-t dev-lakebase --var=lakebase_branch=...``.
+  # Override defaults for your Autoscaling project / branch / database.
+  # Example: ``-t dev-lakebase --var=lakebase_project=my-project``.
   #
-  # ``ontobricks-test`` currently exposes only the default Lakebase
-  # database (``databricks_postgres``). The registry schema
-  # (``ontobricks_registry``) lives *inside* that database — created
-  # on first ``Initialize`` by ``LakebaseRegistryStore._apply_ddl``.
+  # The Apps ``postgres`` binding requires **full** branch and database
+  # resource paths. The bundle composes them as
+  # ``projects/<project>/branches/<branch>`` and
+  # ``…/databases/<lakebase_database_resource_segment>``.
+  #
+  # **Important:** The final segment must be the Lakebase **resource id**
+  # (``db-…``) from the API ``name`` field — **not** the Postgres
+  # ``datname`` / ``status.postgres_database`` string (e.g. you cannot use
+  # ``databricks_postgres`` or ``ontobricks_registry`` here even though
+  # those appear in the SQL UI). Resolve the id with::
+  #
+  #   databricks postgres list-databases \
+  #     "projects/<project>/branches/<branch>" -o json
+  #
+  # Pick the row whose ``status.postgres_database`` matches the database
+  # you want, then set ``lakebase_database_resource_segment`` to the
+  # substring after ``…/databases/`` in that row's ``name``.
+  #
+  # Caveat — **resource id** vs **registry schema**: ``ontobricks_registry``
+  # in OntoBricks is usually the **schema** (``lakebase_registry_schema`` /
+  # ``LAKEBASE_SCHEMA``), not the ``db-…`` segment. A separate Postgres
+  # database named ``ontobricks_registry`` would show both in
+  # ``status.postgres_database`` and as its own ``db-…`` row — do not
+  # confuse schema name with resource id.
+  #
+  # ``lakebase_registry_schema`` is the OntoBricks registry **Postgres
+  # schema** (default ``ontobricks_registry``). Mirror it in
+  # ``app.yaml`` / ``src/mcp-server/app.yaml`` as ``LAKEBASE_SCHEMA``.
+  lakebase_project:
+    description: "Lakebase Autoscaling project id (``projects/<this>/…``)"
+    default: "ontobricks-app"
   lakebase_branch:
-    description: "Full Lakebase Autoscaling branch resource path (e.g. ``projects/<project>/branches/production``)"
-    default: "projects/ontobricks-test/branches/production"
-  lakebase_database_resource:
-    description: |
-      Full Lakebase Autoscaling database resource path (e.g.
-      ``projects/<project>/branches/production/databases/db-xxx-yyy``).
-      Look it up with ``databricks api get
-      /api/2.0/postgres/projects/<project>/branches/<branch>/databases``
-      and pick the entry whose ``status.postgres_database`` matches
-      the human-readable database name you want bound.
-    default: "projects/ontobricks-test/branches/production/databases/db-1vw1-34ir9n3vrn"
+    description: "Branch id within the project (resource segment after ``…/branches/``, e.g. ``production``)"
+    default: "production"
+  lakebase_database_resource_segment:
+    description: "Final segment of Postgres API ``name`` (``db-…``) for the Apps ``postgres.database`` path — from ``list-databases``, not ``datname``"
+    # Example: row with ``status.postgres_database`` ``ontobricks_registry`` (or
+    # ``databricks_postgres`` on older single-DB layouts) on
+    # ``ontobricks-app`` / ``production`` — replace when your project/branch/DB differs.
+    #
+    # Print each ``db-…`` segment next to ``postgres_database`` (pick the row, use the first column)::
+    #
+    #   databricks postgres list-databases \
+    #     "projects/ontobricks-app/branches/production" -o json \
+    #     | jq -r '.[] | [.name | split("/") | last, .status.postgres_database] | @tsv'
+    #
+    # Same without ``jq`` (one line)::
+    #
+    #   databricks postgres list-databases "projects/ontobricks-app/branches/production" -o json | python3 -c "import json,sys;[print(r['name'].split('/')[-1], (r.get('status')or{}).get('postgres_database')) for r in json.load(sys.stdin)]"
+    #
+    # Replace ``ontobricks-app`` / ``production`` with your ``lakebase_project`` / ``lakebase_branch`` when they differ.
+    default: "db-8u4l-0na72ub5sp"
+  lakebase_registry_schema:
+    description: "OntoBricks registry schema inside Postgres (``LAKEBASE_SCHEMA`` in app.yaml)"
+    default: "ontobricks_registry"
 
 resources:
   apps:
     # ── Dev sandbox app (FastAPI UI) ────────────────────────────
     ontobricks_dev_app:
-      name: "ontobricks-dev"
+      name: "ontobricks-020"
       description: "OntoBricks (development sandbox app)"
       source_code_path: .
       resources:
@@ -145,7 +183,7 @@ resources:
     # FastMCP server exposing OntoBricks Digital Twin tools to the
     # Databricks Playground. Deployed from ``src/mcp-server`` (its own
     # ``pyproject.toml`` + ``app.yaml``). The MCP server's service
-    # principal needs ``CAN_USE`` on ``ontobricks-dev`` so it can call
+    # principal needs ``CAN_USE`` on ``ontobricks-020`` so it can call
     # back into the UI's REST API — ``scripts/deploy.sh`` grants this
     # automatically after every deploy.
     mcp_ontobricks_app:
@@ -175,7 +213,7 @@ targets:
   # (Autoscaling-only). Uses the Apps ``postgres`` resource type
   # with ``branch`` + ``database`` resource paths — both must be
   # full project-relative paths, not bare names. See the
-  # ``lakebase_*`` variables above for the lookup recipe.
+  # ``lakebase_*`` variables above; paths are composed automatically.
   #
   # The Apps runtime injects PGHOST / PGPORT / PGDATABASE /
   # PGUSER / PGAPPNAME / PGSSLMODE for the bound database, so the
@@ -190,14 +228,14 @@ targets:
             - name: postgres
               description: "Lakebase Autoscaling Postgres database for the OntoBricks registry"
               postgres:
-                branch: ${var.lakebase_branch}
-                database: ${var.lakebase_database_resource}
+                branch: projects/${var.lakebase_project}/branches/${var.lakebase_branch}
+                database: projects/${var.lakebase_project}/branches/${var.lakebase_branch}/databases/${var.lakebase_database_resource_segment}
                 permission: "CAN_CONNECT_AND_CREATE"
         mcp_ontobricks_app:
           resources:
             - name: postgres
               description: "Lakebase Autoscaling Postgres database for the OntoBricks registry"
               postgres:
-                branch: ${var.lakebase_branch}
-                database: ${var.lakebase_database_resource}
+                branch: projects/${var.lakebase_project}/branches/${var.lakebase_branch}
+                database: projects/${var.lakebase_project}/branches/${var.lakebase_branch}/databases/${var.lakebase_database_resource_segment}
                 permission: "CAN_CONNECT_AND_CREATE"

@@ -196,19 +196,20 @@ class TestRegistryCfgConstruction:
 
 
 class TestRegistryCfgFromDomainLakebaseTriplet:
-    """``backend == "lakebase"`` must read catalog/schema/volume from the
-    Lakebase ``registries`` row so artefact paths point at where domains
-    were *actually* archived, not at whatever Volume the Apps runtime
-    happened to bind. Without this the Build page renders all-red badges
-    on a deployment whose ``volume`` resource drifted from the original
-    archive location.
+    """``backend == "lakebase"`` reads catalog/schema/volume from the
+    Lakebase ``registries`` row when no Apps Volume path is injected.
+    When ``REGISTRY_VOLUME_PATH`` parses successfully, that binding wins
+    for the UC triplet so binary paths match the mounted resource even if
+    the row still holds a stale default (e.g. ``OntoBricksRegistry`` from
+    an older init). Operators should run *Initialize* to upsert the row
+    for consistency.
     """
 
-    def test_lakebase_row_overrides_volume_binding(self, monkeypatch):
+    def test_volume_binding_overrides_lakebase_row_triplet(self, monkeypatch):
         from back.objects.registry.store.lakebase import store as _lb_store
 
-        # Pretend Lakebase says the registry lives at a *different*
-        # catalog/schema/volume than the one the Apps runtime bound.
+        # Lakebase row disagrees with the Apps-bound Volume resource path.
+        # The binding must win so UC paths match the mount.
         monkeypatch.setattr(
             _lb_store,
             "fetch_lakebase_registry_triplet",
@@ -222,8 +223,8 @@ class TestRegistryCfgFromDomainLakebaseTriplet:
         c = RegistryCfg.from_domain(domain, settings)
         assert c.backend == "lakebase"
         assert c.catalog == "benoit_cayla"
-        assert c.schema == "ontobricks"
-        assert c.volume == "OntoBricksRegistry"
+        assert c.schema == "ontobricks_deployed"
+        assert c.volume == "registry"
 
     def test_lakebase_unreachable_falls_back_to_volume_binding(self, monkeypatch):
         # ``fetch_lakebase_registry_triplet`` returns ``None`` when the
@@ -1268,6 +1269,24 @@ class TestSchedulerResolveCredsBackend:
         assert cfg["backend"] == "lakebase"
         assert cfg["lakebase_schema"] == "ontobricks_registry"
         assert cfg["lakebase_database"] == "ontobricks_other"
+
+    def test_registry_volume_path_overrides_static_env_triplet(self):
+        """Scheduler boot must not use ``REGISTRY_VOLUME`` alone when the
+        Apps runtime injects ``REGISTRY_VOLUME_PATH``."""
+        from back.objects.registry.scheduler import BuildScheduler
+
+        settings = _make_settings(
+            registry_catalog="env_c",
+            registry_schema="env_s",
+            registry_volume="OntoBricksRegistry",
+            registry_volume_path="/Volumes/acme/prod/custom_registry_vol",
+            registry_backend="lakebase",
+        )
+        _h, _t, cfg = BuildScheduler._resolve_creds(settings)
+        assert cfg["catalog"] == "acme"
+        assert cfg["schema"] == "prod"
+        assert cfg["volume"] == "custom_registry_vol"
+        assert cfg["backend"] == "lakebase"
 
 
 # ==================================================================

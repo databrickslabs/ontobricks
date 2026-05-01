@@ -199,17 +199,21 @@ class RegistryCfg:
            overwrite the freshly-saved value.
         2. **Lakebase ``registries`` row** — when ``backend`` resolves to
            ``"lakebase"`` and Lakebase is reachable, the
-           catalog/schema/volume triplet is sourced from the row so
-           ``effective_view_table`` and ``uc_version_path`` point at
-           where artefacts were actually built / archived. Otherwise a
-           dev app whose Volume resource is bound to a *different*
-           Volume than the one referenced by the row would resolve every
-           Build-page existence check against the wrong location and
-           silently report all-red badges.
+           catalog/schema/volume triplet is *initially* read from the row
+           so ``effective_view_table`` and ``uc_version_path`` follow
+           where artefacts were archived. **However**, when step 3's
+           bound Volume path is present and parses successfully, its
+           catalog/schema/volume **replace** the row values for the UC
+           triplet. Otherwise a Databricks Apps deployment whose bundle
+           Volume name changed (or whose ``registries`` row still holds
+           the env default ``OntoBricksRegistry``) would keep resolving
+           binary paths against the wrong Volume while the platform had
+           mounted the resource named in ``REGISTRY_VOLUME_PATH``.
         3. ``settings.registry_volume_path`` — when present (Databricks
-           Apps with a bound Volume resource) and step 2 didn't fire,
-           the triplet comes from the injected path so the Volume
-           backend is always pinned to the resource binding.
+           Apps with a bound Volume resource) and parses as
+           ``/Volumes/<c>/<s>/<v>``, that triplet is the authoritative UC
+           location for this process (merged into step 2 when Lakebase
+           is active; used alone when step 2 does not return a row).
         4. ``settings.*`` env vars — last-resort fallback for catalog,
            schema, volume, backend, ``lakebase_schema`` and
            ``lakebase_database``.
@@ -245,14 +249,28 @@ class RegistryCfg:
         lb_schema = reg.get("lakebase_schema") or env_lb_schema
         lb_database = reg.get("lakebase_database") or env_lb_database
 
+        vol_path = getattr(settings, "registry_volume_path", "")
+        bound_cfg: Optional[RegistryCfg] = None
+        if vol_path:
+            parsed = cls.from_volume_path(
+                vol_path,
+                backend=backend,
+                lakebase_schema=lb_schema,
+                lakebase_database=lb_database,
+            )
+            if parsed.catalog and parsed.schema and parsed.volume:
+                bound_cfg = parsed
+
         # Lakebase short-circuit: read catalog/schema/volume from the
         # ``registries`` row so binary-archive paths and Delta view names
-        # point where artefacts actually live, not at whatever Volume the
-        # Apps runtime bound. Fail-soft — if Lakebase is unreachable we
-        # fall through to the regular Volume-binding / env-var chain.
-        # Skipped when ``prefer_volume_binding`` is True (Initialize
-        # path) so re-binding the Volume + re-running Initialize
-        # propagates the new triplet into the row.
+        # point where artefacts actually live. When ``bound_cfg`` is set
+        # (Databricks Apps Volume resource binding), its triplet replaces
+        # the row's so UC paths match the mounted Volume. Fail-soft — if
+        # Lakebase is unreachable we fall through to the regular
+        # Volume-binding / env-var chain. Skipped when
+        # ``prefer_volume_binding`` is True (Initialize path) so
+        # re-binding the Volume + re-running Initialize propagates the new
+        # triplet into the row.
         if backend == "lakebase" and not prefer_volume_binding:
             from back.objects.registry.store.lakebase.store import (
                 fetch_lakebase_registry_triplet,
@@ -261,6 +279,12 @@ class RegistryCfg:
             triplet = fetch_lakebase_registry_triplet(lb_schema, lb_database)
             if triplet:
                 cat, sch, vol = triplet
+                if bound_cfg is not None:
+                    cat, sch, vol = (
+                        bound_cfg.catalog,
+                        bound_cfg.schema,
+                        bound_cfg.volume,
+                    )
                 return cls(
                     catalog=cat,
                     schema=sch,
@@ -270,7 +294,6 @@ class RegistryCfg:
                     lakebase_database=lb_database,
                 )
 
-        vol_path = getattr(settings, "registry_volume_path", "")
         if vol_path:
             return cls.from_volume_path(
                 vol_path,

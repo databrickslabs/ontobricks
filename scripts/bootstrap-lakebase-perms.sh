@@ -23,18 +23,23 @@ set -euo pipefail
 # privileges.
 #
 # Defaults match the **dev sandbox** described in ``databricks.yml``:
-# Lakebase Autoscaling project ``ontobricks-test``, default Postgres
-# database ``databricks_postgres`` (the one bound by the Apps
-# ``postgres`` resource — see the ``lakebase_database_resource``
-# variable comment in ``databricks.yml``), schema
-# ``ontobricks_registry``, and a single grantee ``ontobricks-dev``.
+# Lakebase Autoscaling project ``ontobricks-app``, Postgres database
+# ``ontobricks_registry`` (the dedicated ``datname`` bound by the Apps
+# ``postgres`` resource when the bundle targets that DB — see
+# ``lakebase_database_resource_segment`` in ``databricks.yml``), schema
+# ``ontobricks_registry``, and grantees ``ontobricks-020`` +
+# ``mcp-ontobricks``. If your instance still uses the shared default DB
+# ``databricks_postgres`` with a registry **schema** named
+# ``ontobricks_registry`` inside it, pass ``-d databricks_postgres``.
 # Pass ``-i`` / ``-d`` / ``-s`` / ``-a`` to retarget any of those when
 # you migrate to a different project, database, schema, or app.
 #
 # Usage:
 #   scripts/bootstrap-lakebase-perms.sh                # default: dev sandbox
-#                                                       (ontobricks-test → databricks_postgres → ontobricks_registry → ontobricks-dev)
+#                                                       (ontobricks-app → ontobricks_registry DB → ontobricks_registry schema → apps)
 #   scripts/bootstrap-lakebase-perms.sh -a ontobricks  # production app on the same instance
+#   scripts/bootstrap-lakebase-perms.sh -i ontobricks-app -d databricks_postgres -s ontobricks_registry \
+#                                       -a ontobricks-020   # shared default Postgres database
 #   scripts/bootstrap-lakebase-perms.sh -i ontobricks-app -d ontobricks_registry -s ontobricks_registry \
 #                                       -a ontobricks -a ontobricks-dev  # legacy multi-grantee layout
 #
@@ -46,8 +51,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
-INSTANCE="ontobricks-test"
-DATABASE="databricks_postgres"
+INSTANCE="ontobricks-app"
+DATABASE="ontobricks_registry"
 SCHEMA="ontobricks_registry"
 APPS=()
 
@@ -72,7 +77,7 @@ if [[ ${#APPS[@]} -eq 0 ]]; then
     # ``ontobricks`` app currently runs on the Volume backend and
     # would not benefit from these grants — pass ``-a ontobricks``
     # explicitly when you migrate it.
-    APPS=("ontobricks-dev")
+    APPS=("ontobricks-020" "mcp-ontobricks")
 fi
 
 for cmd in databricks psql python3; do

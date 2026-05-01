@@ -1050,8 +1050,9 @@ class DomainSession:
         catalog/schema are resolved via :class:`RegistryCfg.from_domain`
         so the same precedence applies here as for ``uc_domain_path``,
         ``uc_version_path`` and the rest of the registry-aware code:
-        UI override → Lakebase ``registries`` row (when on the Lakebase
-        backend) → bound Volume resource path → env vars → raw
+        UI override for backend/Lakebase knobs → Lakebase ``registries``
+        row merged with bound Volume path (when ``REGISTRY_VOLUME_PATH``
+        parses) → bound path alone → env vars → raw
         ``settings["registry"]``. Without this delegation the Build
         page resolved ``effective_view_table`` against whatever
         catalog/schema happened to be persisted in the session, even

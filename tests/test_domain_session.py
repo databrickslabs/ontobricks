@@ -150,10 +150,11 @@ class TestDomainSessionDelta:
         assert d["schema"] == "ontobricks_deployed"
         assert d["table_name"] == "triplestore_cust360auto_V4"
 
-    def test_delta_uses_lakebase_row_when_backend_lakebase(self, mock_session_mgr):
-        # The whole point of the fix: when the active backend is
-        # Lakebase, ``delta`` must pick up the catalog/schema stored
-        # in the Lakebase ``registries`` row, not the Volume binding.
+    def test_delta_uses_volume_binding_when_backend_lakebase(self, mock_session_mgr):
+        # When the Apps runtime injects ``REGISTRY_VOLUME_PATH``, that
+        # triplet wins for ``RegistryCfg`` (even on Lakebase) so Delta
+        # resolution matches the mounted Volume. A stale Lakebase row
+        # must not override.
         data = get_empty_domain()
         data["settings"]["registry"] = {
             "catalog": "stale_cat",
@@ -190,11 +191,8 @@ class TestDomainSessionDelta:
                 ),
              ):
             d = ds.delta
-        # Catalog/schema come from the Lakebase row, not the Volume
-        # binding — the existence check now points at where artefacts
-        # actually live.
         assert d["catalog"] == "benoit_cayla"
-        assert d["schema"] == "ontobricks"
+        assert d["schema"] == "ontobricks_deployed"
         assert d["table_name"] == "triplestore_cust360auto_V4"
 
     def test_delta_falls_back_to_session_when_resolver_raises(self, mock_session_mgr):

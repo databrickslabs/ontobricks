@@ -2,7 +2,7 @@
   <img src="src/front/static/global/img/ontobricks-icon.svg" alt="OntoBricks Logo" width="120" height="120">
 </p>
 
-<h1 align="center">OntoBricks 0.1.2</h1>
+<h1 align="center">OntoBricks 0.2.0</h1>
 
 <p align="center">
   <strong>Digital Twin Builder for Databricks</strong>
@@ -82,11 +82,14 @@ make deploy
 After deployment, bind the **sql-warehouse** and **volume** resources in the Databricks Apps UI (**Compute > Apps > ontobricks > Resources**). If the registry volume is empty, open the app and click **Settings > Registry > Initialize**.
 
 > **Lakebase backend (optional).** To deploy with the Lakebase Postgres
-> backend instead of (in addition to) the Volume, deploy to one of the
-> opt-in DAB targets — `databricks bundle deploy -t dev-lakebase` or
-> `-t prod-lakebase` — and provide the bundle variables
-> `lakebase_database` (default `ontobricks_registry`) and
-> `lakebase_instance`. The DAB binds a `database` Apps resource so the
+> backend instead of (in addition to) the Volume, deploy to the
+> `dev-lakebase` target (`databricks bundle deploy -t dev-lakebase`) and
+> tune the bundle variables `lakebase_project`, `lakebase_branch`,
+> `lakebase_database_resource_segment` (the `db-…` id from
+> `databricks postgres list-databases "projects/<id>/branches/<branch>" -o json`,
+> **not** the Postgres database name shown in the SQL UI), and
+> `lakebase_registry_schema` (mirror in `app.yaml` as `LAKEBASE_SCHEMA`).
+> The DAB composes the full Apps `postgres.database` path. The DAB binds a `database` Apps resource so the
 > runtime auto-injects `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`; the app
 > mints the OAuth token automatically (no user secret required). The
 > default `dev`/`prod` targets stay Volume-only and keep working as

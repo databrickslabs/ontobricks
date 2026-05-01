@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ── OntoBricks Deployment Script ────────────────────────────────────
 # Wraps ``databricks bundle`` for the **dev sandbox bundle**
-# (``databricks.yml``), which exposes a single app: ``ontobricks-dev``
+# (``databricks.yml``), which exposes the dev sandbox app ``ontobricks-020``
 # (resource key ``ontobricks_dev_app``).
 #
 # The production ``ontobricks`` app and the ``mcp-ontobricks`` MCP
@@ -34,7 +34,9 @@ NO_RUN=false
 DO_BIND=false
 
 APP_RESOURCE_KEY="ontobricks_dev_app"
-APP_NAME="ontobricks-dev"
+# Must match ``resources.apps.ontobricks_dev_app.name`` in ``databricks.yml``
+# (used for ``databricks apps get`` / Lakebase bootstrap SP lookup).
+APP_NAME="ontobricks-020"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in

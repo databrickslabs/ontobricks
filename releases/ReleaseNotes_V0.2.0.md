@@ -1,6 +1,6 @@
-# OntoBricks — Release Notes V0.1.2
+# OntoBricks — Release Notes V0.2.0
 
-**Release window:** April 20 – April 29, 2026
+**Release window:** May, 2026
 **Test status:** all changes shipped with the suite green (≥ 1892 passing).
 
 ---
@@ -11,6 +11,8 @@
 - **Graph Chat** (formerly *Digital Twin*): natural-language chat with the knowledge graph, now session-aware and stable behind the deployed reverse proxy.
 - New in-app **Help Center** accessible from the navbar, including a Starter Guide, Workflow / FAQ accordions, a Data Access / GraphDB engine map (LadybugDB as default), and a refreshed About page.
 - **Lakebase registry backend** wired end-to-end.
+- **Databricks dev sandbox bundle** (`databricks.yml`): deploys **`ontobricks-020`** (main UI) and **`mcp-ontobricks`** (MCP); targets **`dev`** (Volume-only) and **`dev-lakebase`** (Volume + Lakebase Autoscaling `postgres` binding). Lakebase variables include **`lakebase_database_resource_segment`** (the `db-…` suffix from `databricks postgres list-databases … -o json`, not the Postgres `datname`) and **`lakebase_registry_schema`** (keep in sync with **`LAKEBASE_SCHEMA`** in `app.yaml`).
+- **Deploy & bootstrap scripts** aligned with the bundle: **`scripts/deploy.sh`** uses **`APP_NAME=ontobricks-020`**; **`make bootstrap-perms`** / **`make bootstrap-lakebase`** and the underlying shell scripts default to **`ontobricks-020`**, **`mcp-ontobricks`**, and the documented Lakebase project / schema-grant flow.
 - Major **domain-switching robustness** improvements (no more stale state, full-page loading overlay everywhere, including cross-domain bridges).
 - **Security**: patched two GitPython advisories (GHSA-rpm5-65cw-6hj4 and GHSA-x2qx-6953-8485 / CVE-2026-42284) by pinning `gitpython>=3.1.47` via uv constraint — transitive vuln only, no code-path exposure.
 
@@ -74,14 +76,20 @@
 ## Documentation
 
 - **README**, **docs/features.md**, **docs/INFO.md**, **docs/user-guide.md**, **docs/get-started.md**, **docs/README.md**, and **docs/mcp.md** updated so operator-facing text matches the above: Ontology **Designer**, Domain Cockpit **Active Version** vs loaded vs latest, **Registry → Browse** for MCP/API active version, new-domain loading overlay, Digital Twin path refresh on committed name/version changes, duplicate-name guard, and navbar identity refresh.
+- **`docs/deployment.md`** rewritten for the current DAB: **`dev` / `dev-lakebase`** targets, correct **`bundle deployment bind`** / **`bundle run`** resource keys and app names, **`scripts/deploy.sh`** flags (no legacy `--all` / `--mcp-only`), **Lakebase** variable summary, **Step 5b** for **`bootstrap-lakebase-perms.sh`**, full deployment checklist, MCP and troubleshooting sections, and **§9 DAB reference** aligned with the **`Makefile`**.
+- **README** Lakebase paragraph: documents **`lakebase_database_resource_segment`** and the `list-databases` lookup pattern.
 
 ## Tasks & Notifications
 
 - Tasks panel now shows only currently running tasks; finished tasks are moved to the Notifications drawer.
 
-## Backend
+## Backend & Databricks Apps bundle (operator-facing)
 
-- Lakebase registry backend wired end-to-end.
+- Lakebase **registry** backend wired end-to-end (runtime + optional Volume toggle unchanged).
+- **`databricks.yml`**: `ontobricks_dev_app` / `mcp_ontobricks_app` resource keys; workspace app names **`ontobricks-020`** and **`mcp-ontobricks`**; `dev-lakebase` target adds the Apps **`postgres`** resource whose `database` path ends with **`lakebase_database_resource_segment`** (`db-…` from the Postgres API `name` field).
+- **`scripts/deploy.sh`**: default target **`dev-lakebase`**; **`APP_NAME`** set to **`ontobricks-020`** so post-deploy **`bootstrap-app-permissions.sh`** and **`bootstrap-lakebase-perms.sh`** resolve the correct service principal.
+- **`scripts/bootstrap-lakebase-perms.sh`**: default Lakebase project **`ontobricks-app`**, default Postgres DB **`ontobricks_registry`** (dedicated `datname` aligned with the bundle bind), schema **`ontobricks_registry`**; default grantees **`ontobricks-020`** and **`mcp-ontobricks`**. Use **`-d databricks_postgres`** if the registry schema still lives in the shared default DB. Retarget with **`-i` / `-d` / `-s` / `-a`** when your workspace differs.
+- **`scripts/bootstrap-app-permissions.sh`**: default app list **`ontobricks-020`** **`mcp-ontobricks`** (matches the bundle).
 
 ## Security
 
@@ -103,6 +111,8 @@
 
 ## Upgrade notes
 
-- No breaking config changes for existing deployments.
-- First-time deploys benefit from the new SP-self-permission bootstrap; existing deployments are unaffected.
+- **Databricks Apps sandbox name:** if you still point scripts or docs at **`ontobricks-dev`**, switch to **`ontobricks-020`** (the name in `databricks.yml` for `ontobricks_dev_app`) for `databricks apps get`, **`bootstrap-app-permissions.sh`**, and **`bootstrap-lakebase-perms.sh -a …`**, or pass **`-a`** explicitly.
+- **Lakebase bundle variables:** the monolithic branch/database path variables are replaced by **`lakebase_project`**, **`lakebase_branch`**, **`lakebase_database_resource_segment`** (must be the **`db-…`** segment from **`databricks postgres list-databases "projects/<id>/branches/<branch>" -o json`** — the Apps API does not accept the Postgres **`datname`** as the path tail), and **`lakebase_registry_schema`**. After each **`dev-lakebase`** deploy, re-run **`scripts/bootstrap-lakebase-perms.sh`** (or **`make bootstrap-lakebase`**) if the postgres resource was rebound, so the app SP keeps **USAGE** on the registry schema.
+- **`Makefile`:** **`make bootstrap-perms`** now passes **`ontobricks-020`** and **`mcp-ontobricks`**; **`make bootstrap-lakebase`** runs the Lakebase script with its built-in defaults (override with script flags when needed).
+- First-time deploys benefit from the SP-self-permission bootstrap; re-run **`make bootstrap-perms`** if the app name changed or bootstrap was skipped.
 - Viewer/Editor/Admin roles are now enforced in both the backend and the UI — verify your Teams matrix after upgrade if you rely on custom role assignments.

@@ -591,7 +591,7 @@ class LakebaseRegistryStore(RegistryStore):
                             f"database '{cur_db}' (role '{cur_user}'). "
                             f"Either initialize it from Settings > "
                             f"Registry, or check that bundle "
-                            f"``lakebase_database_resource`` points at "
+                            f"``lakebase_*`` Postgres binding points at "
                             f"the database where the schema actually "
                             f"lives."
                         )
