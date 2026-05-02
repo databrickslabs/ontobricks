@@ -334,10 +334,17 @@ def _get_auth_headers(mode: str) -> dict:
     2. Databricks SDK ``WorkspaceClient().config.authenticate()`` fallback.
     """
     if mode != "databricks":
+        logger.debug("Auth: mode=%s, no headers attached", mode)
         return {}
 
     now = time.time()
     if _oauth_cache["token"] and (now - _oauth_cache["ts"]) < _OAUTH_TOKEN_TTL:
+        age = int(now - _oauth_cache["ts"])
+        logger.debug(
+            "Auth: reusing cached M2M token (age=%ds, ttl=%ds)",
+            age,
+            _OAUTH_TOKEN_TTL,
+        )
         return {"Authorization": f"Bearer {_oauth_cache['token']}"}
 
     # --- Strategy 1: direct M2M OAuth via OIDC endpoint ---
@@ -412,7 +419,27 @@ def _get_auth_headers(mode: str) -> dict:
 async def _get(
     client: httpx.AsyncClient, path: str, params: dict | None = None
 ) -> dict:
+    """GET *path* on *client* and return the JSON body.
+
+    Logs the full effective URL and response status so deployed-app
+    debugging surfaces auth failures, registry overrides, and silent
+    empty payloads in the Apps log stream. On non-2xx responses we
+    log a body excerpt before re-raising so the caller (and the LLM)
+    sees an actionable error instead of a bare ``HTTPStatusError``.
+    """
+    logger.info("GET %s%s params=%s", client.base_url, path, params or {})
     resp = await client.get(path, params=params, timeout=120)
+    if resp.status_code >= 400:
+        body_excerpt = resp.text[:500].replace("\n", " ") if resp.text else ""
+        logger.warning(
+            "GET %s%s → %s body=%r",
+            client.base_url,
+            path,
+            resp.status_code,
+            body_excerpt,
+        )
+    else:
+        logger.info("GET %s%s → %s", client.base_url, path, resp.status_code)
     resp.raise_for_status()
     return resp.json()
 
@@ -428,6 +455,20 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
     """
     base = _base_url(mode)
     logger.info("Creating MCP server — mode=%s, base_url=%s", mode, base)
+    logger.info(
+        "Env snapshot — REGISTRY_VOLUME_PATH=%r REGISTRY_CATALOG=%r "
+        "REGISTRY_SCHEMA=%r REGISTRY_VOLUME=%r DATABRICKS_HOST=%r "
+        "DATABRICKS_CLIENT_ID=%s DATABRICKS_CLIENT_SECRET=%s "
+        "DATABRICKS_SQL_WAREHOUSE_ID=%r",
+        os.getenv("REGISTRY_VOLUME_PATH", ""),
+        os.getenv("REGISTRY_CATALOG", ""),
+        os.getenv("REGISTRY_SCHEMA", ""),
+        os.getenv("REGISTRY_VOLUME", ""),
+        os.getenv("DATABRICKS_HOST", ""),
+        "set" if os.getenv("DATABRICKS_CLIENT_ID") else "unset",
+        "set" if os.getenv("DATABRICKS_CLIENT_SECRET") else "unset",
+        os.getenv("DATABRICKS_SQL_WAREHOUSE_ID", ""),
+    )
 
     _selected_domain: dict = {"name": None}
     _registry: dict = {
@@ -549,10 +590,18 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
 
         Always call this first before any other tool.
         """
+        logger.info("Tool list_domains called")
         await _ensure_registry()
+        params = _registry_params()
+        logger.info(
+            "list_domains → calling %s%s with override params=%s",
+            base,
+            API_V1_DOMAINS,
+            params,
+        )
 
         async with _client() as client:
-            data = await _get(client, API_V1_DOMAINS, params=_registry_params())
+            data = await _get(client, API_V1_DOMAINS, params=params)
 
         if not data.get("success"):
             return data.get("message", "Could not retrieve domains.")
