@@ -8,8 +8,14 @@ command:
 
 env:
   # ── Main app URL ──────────────────────────────────────────────
+  # Must point at the SAME OntoBricks app whose UC volume binding
+  # matches this MCP server's REGISTRY_VOLUME_PATH. The MCP forwards
+  # ``registry_catalog/schema/volume`` query params on every
+  # ``/api/v1/...`` call, so a URL pointing at a different app whose
+  # session-default registry differs will silently re-target the wrong
+  # volume and return ``[]`` from ``list_domains``.
   - name: ONTOBRICKS_URL
-    value: "https://ontobricks-2508734981122804.aws.databricksapps.com"
+    value: "https://ontobricks-020-2508734981122804.aws.databricksapps.com"
 
   # ── SQL Warehouse ─────────────────────────────────────────────
   # Injected from the sql-warehouse resource binding.
