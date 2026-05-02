@@ -82,7 +82,7 @@ variables:
     default: "benoit_cayla"
   registry_schema:
     description: "Unity Catalog schema for the domain registry"
-    default: "ontobricks_020"
+    default: "ontobricks_030"
   registry_volume:
     description: "Volume name for the domain registry"
     default: "registry"
@@ -136,7 +136,7 @@ variables:
     default: "ontobricks-app"
   lakebase_branch:
     description: "Branch id within the project (resource segment after ``…/branches/``, e.g. ``production``)"
-    default: "production"
+    default: "v030"
   lakebase_database_resource_segment:
     description: "Final segment of Postgres API ``name`` (``db-…``) for the Apps ``postgres.database`` path — from ``list-databases``, not ``datname``"
     # Example: row with ``status.postgres_database`` ``ontobricks_registry`` (or
