@@ -2,7 +2,7 @@
 #
 # This bundle deploys two apps:
 #
-# - ``ontobricks_dev_app`` → app name ``ontobricks-020`` (FastAPI UI,
+# - ``ontobricks_dev_app`` → app name ``ontobricks-030`` (FastAPI UI,
 #   ``source_code_path: .``). Uses the repository root as source.
 # - ``mcp_ontobricks_app`` → app name ``mcp-ontobricks`` (FastMCP
 #   server, ``source_code_path: src/mcp-server``). Calls back to
@@ -15,7 +15,7 @@
 #   state does not collide.
 # - Distinct ``workspace.root_path`` so the sync directory and the
 #   ``.bundle/state/`` tracking files live under their own folder
-#   (``/Workspace/Users/<me>/.bundle/ontobricks-020/<target>``).
+#   (``/Workspace/Users/<me>/.bundle/ontobricks-030/<target>``).
 #
 # When this bundle takes over an app that was previously deployed
 # from a different bundle (e.g. ``ontobricks_bundle``), DAB requires
@@ -27,7 +27,7 @@
 #
 # Source code paths:
 # - The main app is shipped from the repository root. The
-#   sandbox auto-detects its app name (``ontobricks-020``) from the
+#   sandbox auto-detects its app name (``ontobricks-030``) from the
 #   Databricks-Apps-injected ``DATABRICKS_APP_NAME`` env var — see
 #   ``Settings.ontobricks_app_name`` for the alias-chain logic.
 # - The MCP server is shipped from ``src/mcp-server`` (its own
@@ -46,7 +46,7 @@ bundle:
 workspace:
   # Sandbox path — distinct from any other ``ontobricks*`` bundle so
   # we cannot share/clobber sync state with the production apps.
-  root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/ontobricks-020/${bundle.target}
+  root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/ontobricks-030/${bundle.target}
 
 sync:
   exclude:
@@ -163,7 +163,7 @@ resources:
   apps:
     # ── Dev sandbox app (FastAPI UI) ────────────────────────────
     ontobricks_dev_app:
-      name: "ontobricks-020"
+      name: "ontobricks-030"
       description: "OntoBricks (development sandbox app)"
       source_code_path: .
       resources:
@@ -183,7 +183,7 @@ resources:
     # FastMCP server exposing OntoBricks Digital Twin tools to the
     # Databricks Playground. Deployed from ``src/mcp-server`` (its own
     # ``pyproject.toml`` + ``app.yaml``). The MCP server's service
-    # principal needs ``CAN_USE`` on ``ontobricks-020`` so it can call
+    # principal needs ``CAN_USE`` on ``ontobricks-030`` so it can call
     # back into the UI's REST API — ``scripts/deploy.sh`` grants this
     # automatically after every deploy.
     mcp_ontobricks_app:
